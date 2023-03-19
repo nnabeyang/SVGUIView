@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "svgview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/nnabeyang/SVGView.git",
+      "state" : {
+        "branch" : "fix-objects-visibility",
+        "revision" : "ee58b3544ddd556b1cfbe6f667c0da969404a6ed"
+      }
+    }
+  ],
+  "version" : 2
+}
