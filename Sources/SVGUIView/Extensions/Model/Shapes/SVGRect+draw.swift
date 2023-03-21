@@ -11,15 +11,15 @@ public extension SVGRect {
         let combined = transform.concatenating(trans)
         rect.apply(combined)
         applySVGFill(paint: fill, rect: rect, transform: combined)
-        applySVGStroke(stroke: stroke, rect: rect)
+        applySVGStroke(stroke: stroke, rect: rect, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
     }
 
-    private func applySVGStroke(stroke: SVGStroke?, rect: UIBezierPath) {
+    private func applySVGStroke(stroke: SVGStroke?, rect: UIBezierPath, scaled: CGFloat) {
         guard let stroke = stroke else { return }
         if let color = stroke.fill as? SVGColor {
             color.toUIColor.setStroke()
         }
-        rect.lineWidth = stroke.width
+        rect.lineWidth = stroke.width * scaled
         rect.lineCapStyle = stroke.cap
         rect.lineJoinStyle = stroke.join
         rect.stroke()
