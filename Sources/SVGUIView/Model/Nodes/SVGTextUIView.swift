@@ -8,11 +8,12 @@ public extension SVGText {
 }
 
 public class SVGTextUIView: UITextView {
+    private static let defaultKern = 0.0123475
     var model: SVGText
     init(model: SVGText) {
         self.model = model
         super.init(frame: .zero, textContainer: nil)
-        var attributes: [NSAttributedString.Key: Any] = [:]
+        var attributes: [NSAttributedString.Key: Any] = [.kern: Self.defaultKern]
         if let color = self.model.fill as? SVGColor {
             attributes[.foregroundColor] = color.toUIColor
         }
@@ -34,7 +35,7 @@ public class SVGTextUIView: UITextView {
     }
 
     override public func layoutSubviews() {
-        frame = Self.calcFrame(model: model)
+        frame = calcFrame()
         transform = model.transform
     }
 
@@ -43,14 +44,11 @@ public class SVGTextUIView: UITextView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    fileprivate static func calcFrame(model: SVGText) -> CGRect {
+    private func calcFrame() -> CGRect {
         guard let font = model.font?.toUIFont() else {
             return .zero
         }
-        let textAttributes = [
-            NSAttributedString.Key.font: font,
-        ]
-        let textSize = NSString(string: model.text).size(withAttributes: textAttributes)
+        let textSize = NSString(string: model.text).size(withAttributes: attributedText.attributes(at: 0, effectiveRange: nil))
         return CGRect(origin: CGPoint(x: 0, y: -font.ascender), size: textSize)
     }
 }
