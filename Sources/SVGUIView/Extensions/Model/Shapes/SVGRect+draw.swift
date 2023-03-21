@@ -3,7 +3,8 @@ import UIKit
 
 public extension SVGRect {
     func draw(_ trans: CGAffineTransform) {
-        let rect = UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: CGSize(width: rx, height: ry))
+        let cornerSize = CGSize(width: min(width / 2.0, rx), height: min(height / 2.0, ry))
+        let rect = UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
         let combined = trans.concatenating(transform)
         rect.apply(combined)
         applySVGFill(paint: fill, rect: rect, transform: combined)
