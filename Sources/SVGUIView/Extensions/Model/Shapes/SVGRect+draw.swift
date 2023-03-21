@@ -8,7 +8,7 @@ public extension SVGRect {
         }
         let cornerSize = CGSize(width: min(width / 2.0, rx), height: min(height / 2.0, ry))
         let rect = UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
-        let combined = trans.concatenating(transform)
+        let combined = transform.concatenating(trans)
         rect.apply(combined)
         applySVGFill(paint: fill, rect: rect, transform: combined)
         applySVGStroke(stroke: stroke, rect: rect)
