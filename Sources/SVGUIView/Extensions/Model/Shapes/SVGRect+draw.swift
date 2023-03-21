@@ -3,6 +3,9 @@ import UIKit
 
 public extension SVGRect {
     func draw(_ trans: CGAffineTransform) {
+        if width == 0 || height == 0 {
+            return
+        }
         let cornerSize = CGSize(width: min(width / 2.0, rx), height: min(height / 2.0, ry))
         let rect = UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
         let combined = trans.concatenating(transform)
