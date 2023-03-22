@@ -26,6 +26,7 @@ public extension SVGPolyline {
             color.toUIColor.setStroke()
         }
         path.lineWidth = stroke.width
+        path.miterLimit = stroke.miterLimit
         path.lineCapStyle = stroke.cap
         path.lineJoinStyle = stroke.join
         path.stroke()
