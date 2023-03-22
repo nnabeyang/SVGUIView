@@ -3,6 +3,9 @@ import UIKit
 
 public extension SVGEllipse {
     func draw(_ trans: CGAffineTransform) {
+        if rx == 0 || ry == 0 {
+            return
+        }
         let oval = UIBezierPath(ovalIn: frame())
         oval.apply(trans.concatenating(transform))
         applySVGFill(paint: fill, path: oval)
