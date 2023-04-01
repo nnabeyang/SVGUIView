@@ -12,26 +12,15 @@ extension UIBezierPath {
         let x2 = rect.maxX - rx
         let y2 = rect.maxY - ry
 
-        let cw = 4.0 * (sqrt(2.0) - 1.0) * rx / 3.0
-        let ch = 4.0 * (sqrt(2.0) - 1.0) * ry / 3.0
-
         move(to: CGPoint(x: x1, y: y1 - ry))
         addLine(to: CGPoint(x: x2, y: y1 - ry))
-        addCurve(to: .init(x: x2 + rx, y: y1),
-                 controlPoint1: .init(x: x2 + cw, y: y1 - ry),
-                 controlPoint2: .init(x: x2 + rx, y: y1 - ch))
+        addEllipticalArc(withCenter: .init(x: x2, y: y1), radii: .init(width: rx * 2, height: ry * 2), startAngle: -CGFloat.pi / 2.0, endAngle: 0)
         addLine(to: CGPoint(x: x2 + rx, y: rect.maxY - ry))
-        addCurve(to: .init(x: x2, y: y2 + ry),
-                 controlPoint1: .init(x: x2 + rx, y: y2 + ch),
-                 controlPoint2: .init(x: x2 + cw, y: y2 + ry))
-        addLine(to: CGPoint(x: rect.minX + rx, y: rect.maxY))
-        addCurve(to: .init(x: x1 - rx, y: y2),
-                 controlPoint1: .init(x: x1 - cw, y: y2 + ry),
-                 controlPoint2: .init(x: x1 - rx, y: y2 + ch))
+        addEllipticalArc(withCenter: .init(x: x2, y: y2), radii: .init(width: rx * 2, height: ry * 2), startAngle: 0, endAngle: CGFloat.pi / 2.0)
+        addLine(to: CGPoint(x: x1, y: y2 + ry))
+        addEllipticalArc(withCenter: .init(x: x1, y: y2), radii: .init(width: rx * 2, height: ry * 2), startAngle: CGFloat.pi / 2.0, endAngle: CGFloat.pi)
         addLine(to: CGPoint(x: x1 - rx, y: y1))
-        addCurve(to: .init(x: x1, y: y1 - ry),
-                 controlPoint1: .init(x: x1 - rx, y: y1 - ch),
-                 controlPoint2: .init(x: x1 - cw, y: y1 - ry))
+        addEllipticalArc(withCenter: .init(x: x1, y: y1), radii: .init(width: rx * 2, height: ry * 2), startAngle: CGFloat.pi, endAngle: CGFloat.pi * 3.0 / 2.0)
         close()
     }
 }
