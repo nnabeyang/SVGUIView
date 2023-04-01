@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nnabeyang/SVGView.git",
       "state" : {
-        "branch" : "fix-objects-visibility",
-        "revision" : "ee58b3544ddd556b1cfbe6f667c0da969404a6ed"
+        "branch" : "svg_uiview",
+        "revision" : "5c445473fc7c3c5b9b82c5aa8febf87c238a6103"
       }
     }
   ],

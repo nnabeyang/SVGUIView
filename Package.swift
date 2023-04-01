@@ -15,7 +15,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/nnabeyang/SVGView.git", branch: "fix-objects-visibility"),
+        .package(url: "https://github.com/nnabeyang/SVGView.git", branch: "svg_uiview"),
     ],
     targets: [
         .target(
