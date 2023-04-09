@@ -32,18 +32,39 @@ public extension SVGRect {
                 let colors = p.stops.map(\.color.toUIColor.cgColor) as CFArray
                 let space = CGColorSpaceCreateDeviceRGB()
                 let locations: [CGFloat] = p.stops.map(\.offset)
-
                 let gradient = CGGradient(colorsSpace: space, colors: colors, locations: locations)!
 
                 let context = UIGraphicsGetCurrentContext()!
+                context.saveGState()
                 context.addPath(path.cgPath)
                 context.clip()
-                let x1 = p.x1 * width
-                let y1 = p.y1 * height
-                let x2 = p.x2 * width
-                let y2 = p.y2 * height
-                context.drawLinearGradient(gradient, start: CGPoint(x: x + x1, y: y + y1), end: CGPoint(x: x + x2, y: y + y2), options: [])
-                context.resetClip()
+                let rect = CGRect(x: p.x1, y: p.y1, width: p.x2 - p.x1, height: p.y2 - p.y1).applying(transform)
+                let (sx, sy): (CGFloat, CGFloat) = {
+                    if p.userSpace {
+                        return (1.0, 1.0)
+                    }
+                    if p.x1 == p.x2 || p.y1 == p.y2 {
+                        return (width, height)
+                    }
+                    let s = min(width, height)
+                    return (s, s)
+                }()
+                let rx = p.userSpace ? 1.0 : sx / width
+                let ry = p.userSpace ? 1.0 : sy / height
+                let x1 = rect.minX * sx
+                let y1 = rect.minY * sy
+                let x2 = rect.maxX * sx
+                let y2 = rect.maxY * sy
+                let x = x * rx
+                let y = y * ry
+
+                let start = CGPoint(x: x + x1, y: y + y1)
+                let end = CGPoint(x: x + x2, y: y + y2)
+                if sx == sy {
+                    context.scaleBy(x: 1.0 / rx, y: 1.0 / ry)
+                }
+                context.drawLinearGradient(gradient, start: start, end: end, options: [])
+                context.restoreGState()
             case let p as SVGRadialGradient:
                 let colors = p.stops.map(\.color.toUIColor.cgColor) as CFArray
                 let space = CGColorSpaceCreateDeviceRGB()
