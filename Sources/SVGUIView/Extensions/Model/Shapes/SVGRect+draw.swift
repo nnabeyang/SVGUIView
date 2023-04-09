@@ -10,7 +10,7 @@ public extension SVGRect {
         let rect = UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
         let combined = transform.concatenating(trans)
         rect.apply(combined)
-        applySVGFill(paint: fill, rect: rect, transform: combined)
+        applySVGFill(paint: fill, path: rect, transform: combined)
         applySVGStroke(stroke: stroke, rect: rect, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
     }
 
@@ -25,7 +25,7 @@ public extension SVGRect {
         rect.stroke()
     }
 
-    private func applySVGFill(paint: SVGPaint?, rect: UIBezierPath, transform: CGAffineTransform) {
+    private func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform) {
         if let paint = paint {
             switch paint {
             case let p as SVGLinearGradient:
@@ -36,7 +36,7 @@ public extension SVGRect {
                 let gradient = CGGradient(colorsSpace: space, colors: colors, locations: locations)!
 
                 let context = UIGraphicsGetCurrentContext()!
-                context.addPath(rect.cgPath)
+                context.addPath(path.cgPath)
                 context.clip()
                 let x1 = p.x1 * width
                 let y1 = p.y1 * height
@@ -53,7 +53,7 @@ public extension SVGRect {
 
                 let context = UIGraphicsGetCurrentContext()!
                 context.saveGState()
-                context.addPath(rect.cgPath)
+                context.addPath(path.cgPath)
                 context.clip()
 
                 let pp = CGPointApplyAffineTransform(CGPoint(x: p.cx, y: p.cy), transform)
@@ -90,7 +90,7 @@ public extension SVGRect {
                 context.restoreGState()
             case let color as SVGColor:
                 color.toUIColor.setFill()
-                rect.fill()
+                path.fill()
             default:
                 fatalError("Base SVGPaint is not convertable to UIView")
             }
