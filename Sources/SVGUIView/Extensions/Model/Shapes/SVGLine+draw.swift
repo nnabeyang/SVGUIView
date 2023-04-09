@@ -1,15 +1,12 @@
 import SVGView
 import UIKit
 
-public extension SVGLine {
+extension SVGLine {
     func draw(_ trans: CGAffineTransform) {
         let line = UIBezierPath()
-
         line.move(to: CGPoint(x: x1, y: y1))
         line.addLine(to: CGPoint(x: x2, y: y2))
-
         line.apply(trans.concatenating(transform))
-        applySVGFill(paint: fill, path: line)
         applySVGStroke(stroke: stroke, path: line)
     }
 
@@ -22,12 +19,5 @@ public extension SVGLine {
         path.lineCapStyle = stroke.cap
         path.lineJoinStyle = stroke.join
         path.stroke()
-    }
-
-    private func applySVGFill(paint: SVGPaint?, path: UIBezierPath) {
-        if let p = paint as? SVGColor {
-            p.toUIColor.setFill()
-            path.fill()
-        }
     }
 }

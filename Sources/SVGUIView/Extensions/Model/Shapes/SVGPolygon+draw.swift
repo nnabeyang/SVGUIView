@@ -1,11 +1,12 @@
 import SVGView
 import UIKit
 
-public extension SVGPolygon {
+extension SVGPolygon: SVGDrawer {
     func draw(_ trans: CGAffineTransform) {
         guard let poly = path else { return }
-        poly.apply(trans.concatenating(transform))
-        applySVGFill(paint: fill, path: poly)
+        let combined = transform.concatenating(trans)
+        poly.apply(combined)
+        applySVGFill(paint: fill, path: poly, transform: combined, frame: frame())
         applySVGStroke(stroke: stroke, path: poly)
     }
 
@@ -18,13 +19,6 @@ public extension SVGPolygon {
         path.lineCapStyle = stroke.cap
         path.lineJoinStyle = stroke.join
         path.stroke()
-    }
-
-    private func applySVGFill(paint: SVGPaint?, path: UIBezierPath) {
-        if let p = paint as? SVGColor {
-            p.toUIColor.setFill()
-            path.fill()
-        }
     }
 
     private var path: MBezierPath? {

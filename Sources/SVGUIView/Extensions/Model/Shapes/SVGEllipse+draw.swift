@@ -1,14 +1,15 @@
 import SVGView
 import UIKit
 
-public extension SVGEllipse {
+extension SVGEllipse: SVGDrawer {
     func draw(_ trans: CGAffineTransform) {
         if rx == 0 || ry == 0 {
             return
         }
         let oval = UIBezierPath(ovalIn: frame())
-        oval.apply(trans.concatenating(transform))
-        applySVGFill(paint: fill, path: oval)
+        let combined = transform.concatenating(trans)
+        oval.apply(combined)
+        applySVGFill(paint: fill, path: oval, transform: combined, frame: frame())
         applySVGStroke(stroke: stroke, path: oval)
     }
 
@@ -21,12 +22,5 @@ public extension SVGEllipse {
         path.lineCapStyle = stroke.cap
         path.lineJoinStyle = stroke.join
         path.stroke()
-    }
-
-    private func applySVGFill(paint: SVGPaint?, path: UIBezierPath) {
-        if let p = paint as? SVGColor {
-            p.toUIColor.setFill()
-            path.fill()
-        }
     }
 }
