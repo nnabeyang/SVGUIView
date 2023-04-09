@@ -46,28 +46,48 @@ public extension SVGRect {
                 context.resetClip()
             case let p as SVGRadialGradient:
                 let colors = p.stops.map(\.color.toUIColor.cgColor) as CFArray
-                p.stops.last?.color.toUIColor.setFill()
-                rect.fill()
                 let space = CGColorSpaceCreateDeviceRGB()
                 let locations: [CGFloat] = p.stops.map(\.offset)
 
                 let gradient = CGGradient(colorsSpace: space, colors: colors, locations: locations)!
 
                 let context = UIGraphicsGetCurrentContext()!
+                context.saveGState()
                 context.addPath(rect.cgPath)
                 context.clip()
 
                 let pp = CGPointApplyAffineTransform(CGPoint(x: p.cx, y: p.cy), transform)
 
-                let cx = pp.x
-                let cy = pp.y
+                let s = p.userSpace ? 1.0 : min(width, height)
+                let rx = p.userSpace ? 1.0 : s / width
+                let ry = p.userSpace ? 1.0 : s / height
+                let cx = (pp.x * s + (p.userSpace ? 0 : x * rx))
+                let cy = (pp.y * s + (p.userSpace ? 0 : y * ry))
+                let r = p.r * s
+
+                if !p.userSpace, width != height {
+                    context.scaleBy(x: width / s, y: height / s)
+                }
+
                 context.drawRadialGradient(gradient,
                                            startCenter: .init(x: cx, y: cy),
                                            startRadius: 0,
                                            endCenter: .init(x: cx, y: cy),
-                                           endRadius: p.r,
+                                           endRadius: r,
                                            options: [])
-                context.resetClip()
+
+                if let color = p.stops.last?.color.toUIColor.cgColor {
+                    let space = CGColorSpaceCreateDeviceRGB()
+                    let gradient = CGGradient(colorsSpace: space, colors: [color] as CFArray, locations: [1.0])!
+                    context.drawRadialGradient(gradient,
+                                               startCenter: .init(x: cx, y: cy),
+                                               startRadius: r,
+                                               endCenter: .init(x: cx, y: cy),
+                                               endRadius: max(width, height),
+                                               options: [])
+                }
+
+                context.restoreGState()
             case let color as SVGColor:
                 color.toUIColor.setFill()
                 rect.fill()
