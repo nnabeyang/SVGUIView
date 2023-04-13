@@ -1,54 +1,69 @@
 import SVGView
 import UIKit
 
-public extension SVGText {
-    func uiView() -> SVGTextUIView {
-        SVGTextUIView(model: self)
-    }
-}
+extension SVGText {
+    func draw(_: CGAffineTransform, rect: CGRect) {
+        var attributes: [CFString: Any] = [:]
 
-public class SVGTextUIView: UITextView {
-    private static let defaultKern = 0.0123475
-    var model: SVGText
-    init(model: SVGText) {
-        self.model = model
-        super.init(frame: .zero, textContainer: nil)
-        var attributes: [NSAttributedString.Key: Any] = [.kern: Self.defaultKern]
-        if let color = self.model.fill as? SVGColor {
-            attributes[.foregroundColor] = color.toUIColor
+        if let color = fill as? SVGColor {
+            attributes[kCTForegroundColorAttributeName] = color.toUIColor
         }
-        if let stroke = model.stroke {
+
+        if let stroke = stroke {
             if let color = stroke.fill as? SVGColor {
-                attributes[.strokeColor] = color.toUIColor
+                attributes[kCTStrokeColorAttributeName] = color.toUIColor
             } else {
-                attributes[.strokeColor] = UIColor.clear
+                attributes[kCTStrokeColorAttributeName] = UIColor.clear
             }
-            attributes[.strokeWidth] = stroke.width
+            attributes[kCTStrokeWidthAttributeName] = stroke.width
         }
 
-        attributedText = NSAttributedString(string: model.text, attributes: attributes)
-        font = model.font?.toUIFont()
-        textContainer.maximumNumberOfLines = 1
-        textContainerInset = .zero
-        textContainer.lineFragmentPadding = 0
-        backgroundColor = .clear
-    }
-
-    override public func layoutSubviews() {
-        frame = calcFrame()
-        transform = model.transform
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    private func calcFrame() -> CGRect {
-        guard let font = model.font?.toUIFont() else {
-            return .zero
+        if let font = font?.toUIFont() {
+            let descriptor = font.fontDescriptor as CTFontDescriptor
+            let ctFont = CTFontCreateWithFontDescriptor(descriptor, 0.0, nil)
+            attributes[kCTFontAttributeName] = ctFont
         }
-        let textSize = NSString(string: model.text).size(withAttributes: attributedText.attributes(at: 0, effectiveRange: nil))
-        return CGRect(origin: CGPoint(x: 0, y: -font.ascender), size: textSize)
+
+        let alignment: CTTextAlignment
+        switch textAnchor {
+        case .center:
+            alignment = .center
+        case .leading:
+            alignment = .left
+        case .trailing:
+            alignment = .right
+        default:
+            alignment = .left
+        }
+
+        let paragraph: CTParagraphStyle = withUnsafeBytes(of: alignment) { alignmentBytes in
+            CTParagraphStyleCreate([
+                CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: alignmentBytes.baseAddress!),
+            ], 1)
+        }
+
+        attributes[kCTParagraphStyleAttributeName] = paragraph
+
+        guard let attributedText = CFAttributedStringCreate(kCFAllocatorDefault,
+                                                            text as NSString,
+                                                            attributes as CFDictionary) else { return }
+        let context = UIGraphicsGetCurrentContext()!
+        context.saveGState()
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
+        let frameSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(), nil, CGSize(width: CGFloat(Int32.max), height: CGFloat(Int32.max)), nil)
+        let path = CGMutablePath()
+        guard let uiFont = font?.toUIFont() else { return }
+        let bounds = CGRect(origin: .init(x: 0, y: 0), size: .init(width: max(rect.width, frameSize.width), height: frameSize.height))
+        path.addRect(bounds)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(), path, nil)
+        context.scaleBy(x: 1.0, y: -1.0)
+
+        if case .center = textAnchor {
+            context.translateBy(x: 0, y: -self.transform.ty - bounds.height + uiFont.ascender)
+        } else {
+            context.translateBy(x: transform.tx, y: -transform.ty - bounds.height + uiFont.ascender)
+        }
+        CTFrameDraw(frame, context)
+        context.restoreGState()
     }
 }

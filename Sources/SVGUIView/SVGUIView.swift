@@ -25,23 +25,9 @@ public class SVGUIView: UIView {
         let viewBox = getViewBox(size: size)
         bounds = viewBox
         transform = getTransform(viewBox: viewBox, size: size)
-
-        for text in model.contents.filter({ $0 is SVGText }) {
-            let view = text.toUIKit()
-            view.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(view)
-            view.topAnchor.constraint(equalTo: topAnchor).isActive = true
-            view.bottomAnchor.constraint(equalTo: bottomAnchor).isActive = true
-            view.leftAnchor.constraint(equalTo: leftAnchor).isActive = true
-            view.rightAnchor.constraint(equalTo: rightAnchor).isActive = true
-        }
-
-        for group in model.contents.compactMap({ $0 as? SVGGroup }) {
-            group.append(to: self)
-        }
     }
 
-    override public func draw(_: CGRect) {
+    override public func draw(_ rect: CGRect) {
         for node in model.contents {
             switch node {
             case let content as SVGLine:
@@ -59,9 +45,9 @@ public class SVGUIView: UIView {
             case let content as SVGPolygon:
                 content.draw(.identity)
             case let content as SVGGroup:
-                content.draw(.identity)
-            case _ as SVGText:
-                break
+                content.draw(.identity, rect: rect)
+            case let content as SVGText:
+                content.draw(.identity, rect: rect)
             default:
                 fatalError("not implemented: \(type(of: node))")
             }
@@ -94,8 +80,6 @@ public extension SVGNode {
         switch self {
         case let model as SVGViewport:
             return SVGUIView(model: model)
-        case let model as SVGText:
-            return SVGTextUIView(model: model)
         default:
             fatalError("Base SVGNode is not convertable to UIKit:\(type(of: self))")
         }
