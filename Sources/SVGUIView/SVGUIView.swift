@@ -74,14 +74,3 @@ public class SVGUIView: UIView {
         return transform.translatedBy(x: viewBox.width / 2.0, y: viewBox.height / 2.0)
     }
 }
-
-public extension SVGNode {
-    func toUIKit() -> UIView {
-        switch self {
-        case let model as SVGViewport:
-            return SVGUIView(model: model)
-        default:
-            fatalError("Base SVGNode is not convertable to UIKit:\(type(of: self))")
-        }
-    }
-}
