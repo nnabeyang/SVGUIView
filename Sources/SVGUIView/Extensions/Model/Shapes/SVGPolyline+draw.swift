@@ -7,7 +7,7 @@ extension SVGPolyline: SVGDrawer {
         let combined = transform.concatenating(trans)
         poly.apply(combined)
         applySVGFill(paint: fill, path: poly, transform: combined, frame: frame())
-        applySVGStroke(stroke: stroke, path: poly)
+        applySVGStroke(stroke: stroke, path: poly, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
     }
 
     private var path: MBezierPath? {
@@ -19,17 +19,5 @@ extension SVGPolyline: SVGDrawer {
             path.addLine(to: CGPoint(x: point.x, y: point.y))
         }
         return path
-    }
-
-    private func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath) {
-        guard let stroke = stroke else { return }
-        if let color = stroke.fill as? SVGColor {
-            color.toUIColor.setStroke()
-        }
-        path.lineWidth = stroke.width
-        path.miterLimit = stroke.miterLimit
-        path.lineCapStyle = stroke.cap
-        path.lineJoinStyle = stroke.join
-        path.stroke()
     }
 }

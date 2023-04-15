@@ -10,17 +10,6 @@ extension SVGEllipse: SVGDrawer {
         let combined = transform.concatenating(trans)
         oval.apply(combined)
         applySVGFill(paint: fill, path: oval, transform: combined, frame: frame())
-        applySVGStroke(stroke: stroke, path: oval)
-    }
-
-    private func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath) {
-        guard let stroke = stroke else { return }
-        if let color = stroke.fill as? SVGColor {
-            color.toUIColor.setStroke()
-        }
-        path.lineWidth = stroke.width
-        path.lineCapStyle = stroke.cap
-        path.lineJoinStyle = stroke.join
-        path.stroke()
+        applySVGStroke(stroke: stroke, path: oval, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
     }
 }

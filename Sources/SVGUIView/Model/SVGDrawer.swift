@@ -1,8 +1,25 @@
 import SVGView
 import UIKit
 
-protocol SVGDrawer {
+protocol SVG1DDrawer {
     func draw(_ trans: CGAffineTransform)
+    func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat)
+}
+
+extension SVG1DDrawer {
+    func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat) {
+        guard let stroke = stroke else { return }
+        if let color = stroke.fill as? SVGColor {
+            color.toUIColor.setStroke()
+        }
+        path.lineWidth = stroke.width * scaled
+        path.lineCapStyle = stroke.cap
+        path.lineJoinStyle = stroke.join
+        path.stroke()
+    }
+}
+
+protocol SVGDrawer: SVG1DDrawer {
     func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform, frame: CGRect)
 }
 
