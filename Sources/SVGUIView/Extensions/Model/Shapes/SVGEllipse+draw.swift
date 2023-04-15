@@ -2,14 +2,10 @@ import SVGView
 import UIKit
 
 extension SVGEllipse: SVGDrawer {
-    func draw(_ trans: CGAffineTransform) {
+    var path: UIBezierPath? {
         if rx == 0 || ry == 0 {
-            return
+            return nil
         }
-        let oval = UIBezierPath(ovalIn: frame())
-        let combined = transform.concatenating(trans)
-        oval.apply(combined)
-        applySVGFill(paint: fill, path: oval, transform: combined, frame: frame())
-        applySVGStroke(stroke: stroke, path: oval, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
+        return UIBezierPath(ovalIn: frame())
     }
 }

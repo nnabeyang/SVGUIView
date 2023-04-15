@@ -2,11 +2,21 @@ import SVGView
 import UIKit
 
 protocol SVG1DDrawer {
+    var path: UIBezierPath? { get }
+    var transform: CGAffineTransform { get }
+    var stroke: SVGStroke? { get }
     func draw(_ trans: CGAffineTransform)
     func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat)
 }
 
 extension SVG1DDrawer {
+    func draw(_ trans: CGAffineTransform) {
+        guard let path = path else { return }
+        let combined = transform.concatenating(trans)
+        path.apply(combined)
+        applySVGStroke(stroke: stroke, path: path, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
+    }
+
     func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat) {
         guard let stroke = stroke else { return }
         if let color = stroke.fill as? SVGColor {
@@ -20,10 +30,20 @@ extension SVG1DDrawer {
 }
 
 protocol SVGDrawer: SVG1DDrawer {
+    var fill: SVGPaint? { get }
+    func frame() -> CGRect
     func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform, frame: CGRect)
 }
 
 extension SVGDrawer {
+    func draw(_ trans: CGAffineTransform) {
+        guard let path = path else { return }
+        let combined = transform.concatenating(trans)
+        path.apply(combined)
+        applySVGFill(paint: fill, path: path, transform: combined, frame: frame())
+        applySVGStroke(stroke: stroke, path: path, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
+    }
+
     func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform, frame: CGRect) {
         if let paint = paint {
             switch paint {
