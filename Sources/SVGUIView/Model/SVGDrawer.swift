@@ -5,11 +5,16 @@ protocol SVG1DDrawer {
     var path: UIBezierPath? { get }
     var transform: CGAffineTransform { get }
     var stroke: SVGStroke? { get }
+    var eoFill: Bool? { get }
     func draw(_ trans: CGAffineTransform)
     func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat)
 }
 
 extension SVG1DDrawer {
+    var eoFill: Bool? {
+        nil
+    }
+
     func draw(_ trans: CGAffineTransform) {
         guard let path = path else { return }
         let combined = transform.concatenating(trans)
@@ -46,6 +51,10 @@ extension SVGDrawer {
     }
 
     func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform, frame: CGRect) {
+        if let eoFill = eoFill {
+            path.usesEvenOddFillRule = eoFill
+        }
+
         if let paint = paint {
             switch paint {
             case let p as SVGLinearGradient:
