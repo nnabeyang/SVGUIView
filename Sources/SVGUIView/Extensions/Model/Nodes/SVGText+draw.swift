@@ -23,27 +23,6 @@ extension SVGText {
             let ctFont = CTFontCreateWithFontDescriptor(descriptor, 0.0, nil)
             attributes[kCTFontAttributeName] = ctFont
         }
-
-        let alignment: CTTextAlignment
-        switch textAnchor {
-        case .center:
-            alignment = .center
-        case .leading:
-            alignment = .left
-        case .trailing:
-            alignment = .right
-        default:
-            alignment = .left
-        }
-
-        let paragraph: CTParagraphStyle = withUnsafeBytes(of: alignment) { alignmentBytes in
-            CTParagraphStyleCreate([
-                CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: alignmentBytes.baseAddress!),
-            ], 1)
-        }
-
-        attributes[kCTParagraphStyleAttributeName] = paragraph
-
         guard let attributedText = CFAttributedStringCreate(kCFAllocatorDefault,
                                                             text as NSString,
                                                             attributes as CFDictionary) else { return }
@@ -58,7 +37,7 @@ extension SVGText {
         context.scaleBy(x: 1.0, y: -1.0)
 
         if case .center = textAnchor {
-            context.translateBy(x: 0, y: -combined.ty - bounds.height + uiFont.ascender)
+            context.translateBy(x: combined.tx - frameSize.width / 2.0, y: -combined.ty - bounds.height + uiFont.ascender)
         } else {
             context.translateBy(x: combined.tx, y: -combined.ty - bounds.height + uiFont.ascender)
         }
