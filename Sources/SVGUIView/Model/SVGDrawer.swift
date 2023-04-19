@@ -67,7 +67,6 @@ extension SVGDrawer {
                 context.saveGState()
                 context.addPath(path.cgPath)
                 context.clip()
-                let rect = CGRect(x: p.x1, y: p.y1, width: p.x2 - p.x1, height: p.y2 - p.y1).applying(transform)
                 let (sx, sy): (CGFloat, CGFloat) = {
                     if p.userSpace {
                         return (1.0, 1.0)
@@ -78,12 +77,13 @@ extension SVGDrawer {
                     let s = min(frame.width, frame.height)
                     return (s, s)
                 }()
+                let rect = CGRect(x: p.x1, y: p.y1, width: (p.x2 - p.x1) * sx, height: (p.y2 - p.y1) * sy).applying(transform)
                 let rx = p.userSpace ? 1.0 : sx / frame.width
                 let ry = p.userSpace ? 1.0 : sy / frame.height
-                let x1 = rect.minX * sx
-                let y1 = rect.minY * sy
-                let x2 = rect.maxX * sx
-                let y2 = rect.maxY * sy
+                let x1 = rect.minX
+                let y1 = rect.minY
+                let x2 = rect.maxX
+                let y2 = rect.maxY
                 let x = frame.minX * rx
                 let y = frame.minY * ry
 
