@@ -51,11 +51,9 @@ extension SVGText {
         context.saveGState()
         let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
         let frameSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(), nil, CGSize(width: CGFloat(Int32.max), height: CGFloat(Int32.max)), nil)
-        let path = CGMutablePath()
         guard let uiFont = font?.toUIFont() else { return }
         let bounds = CGRect(origin: .init(x: 0, y: 0), size: .init(width: max(rect.width, frameSize.width), height: frameSize.height))
-        path.addRect(bounds)
-        let frame = CTFramesetterCreateFrame(framesetter, CFRange(), path, nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(), CGPath(rect: bounds, transform: nil), nil)
         context.scaleBy(x: 1.0, y: -1.0)
 
         if case .center = textAnchor {
