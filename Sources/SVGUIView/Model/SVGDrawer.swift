@@ -27,7 +27,7 @@ extension SVG1DDrawer {
         if let color = stroke.fill as? SVGColor {
             color.toUIColor.setStroke()
         }
-        path.setLineDash(stroke.dashes, count: stroke.dashes.count, phase: stroke.offset)
+        path.setLineDash(stroke.dashes.map { $0 * scaled }, count: stroke.dashes.count, phase: stroke.offset * scaled)
         path.lineWidth = stroke.width * scaled
         path.lineCapStyle = stroke.cap
         path.lineJoinStyle = stroke.join
