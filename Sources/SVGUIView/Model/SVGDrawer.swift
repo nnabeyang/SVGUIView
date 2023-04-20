@@ -31,6 +31,7 @@ extension SVG1DDrawer {
         path.lineWidth = stroke.width * scaled
         path.lineCapStyle = stroke.cap
         path.lineJoinStyle = stroke.join
+        path.miterLimit = stroke.miterLimit
         path.stroke()
     }
 }
