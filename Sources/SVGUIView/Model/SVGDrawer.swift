@@ -42,7 +42,7 @@ extension SVG1DDrawer {
 protocol SVGDrawer: SVG1DDrawer {
     var fill: SVGPaint? { get }
     func frame() -> CGRect
-    func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform, frame: CGRect)
+    func applySVGFill(paint: SVGPaint?, path: UIBezierPath, frame: CGRect)
 }
 
 extension SVGDrawer {
@@ -52,12 +52,12 @@ extension SVGDrawer {
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
         context.concatenate(combined)
-        applySVGFill(paint: fill, path: path, transform: .identity, frame: frame())
+        applySVGFill(paint: fill, path: path, frame: frame())
         applySVGStroke(stroke: stroke, path: path, scaled: 1.0)
         context.restoreGState()
     }
 
-    func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform, frame: CGRect) {
+    func applySVGFill(paint: SVGPaint?, path: UIBezierPath, frame: CGRect) {
         if let eoFill = eoFill {
             path.usesEvenOddFillRule = eoFill
         }
@@ -84,7 +84,7 @@ extension SVGDrawer {
                     let s = min(frame.width, frame.height)
                     return (s, s)
                 }()
-                let rect = CGRect(x: p.x1, y: p.y1, width: (p.x2 - p.x1) * sx, height: (p.y2 - p.y1) * sy).applying(transform)
+                let rect = CGRect(x: p.x1, y: p.y1, width: (p.x2 - p.x1) * sx, height: (p.y2 - p.y1) * sy)
                 let rx = p.userSpace ? 1.0 : sx / frame.width
                 let ry = p.userSpace ? 1.0 : sy / frame.height
                 let x1 = rect.minX
@@ -113,7 +113,7 @@ extension SVGDrawer {
                 context.addPath(path.cgPath)
                 context.clip()
 
-                let pp = CGPointApplyAffineTransform(CGPoint(x: p.cx, y: p.cy), transform)
+                let pp = CGPoint(x: p.cx, y: p.cy)
 
                 let s = p.userSpace ? 1.0 : min(frame.width, frame.height)
                 let rx = p.userSpace ? 1.0 : s / frame.width
