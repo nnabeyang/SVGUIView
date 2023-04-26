@@ -18,8 +18,11 @@ extension SVG1DDrawer {
     func draw(_ trans: CGAffineTransform) {
         guard let path = path else { return }
         let combined = transform.concatenating(trans)
-        path.apply(combined)
-        applySVGStroke(stroke: stroke, path: path, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
+        let context = UIGraphicsGetCurrentContext()!
+        context.saveGState()
+        context.concatenate(combined)
+        applySVGStroke(stroke: stroke, path: path, scaled: 1.0)
+        context.restoreGState()
     }
 
     func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat) {
@@ -46,9 +49,12 @@ extension SVGDrawer {
     func draw(_ trans: CGAffineTransform) {
         guard let path = path else { return }
         let combined = transform.concatenating(trans)
-        path.apply(combined)
-        applySVGFill(paint: fill, path: path, transform: combined, frame: frame())
-        applySVGStroke(stroke: stroke, path: path, scaled: sqrt(combined.a * combined.a + combined.b * combined.b))
+        let context = UIGraphicsGetCurrentContext()!
+        context.saveGState()
+        context.concatenate(combined)
+        applySVGFill(paint: fill, path: path, transform: .identity, frame: frame())
+        applySVGStroke(stroke: stroke, path: path, scaled: 1.0)
+        context.restoreGState()
     }
 
     func applySVGFill(paint: SVGPaint?, path: UIBezierPath, transform: CGAffineTransform, frame: CGRect) {
