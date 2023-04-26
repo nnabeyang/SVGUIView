@@ -3,7 +3,7 @@ import UIKit
 
 public extension SVGGroup {
     func draw(_ trans: CGAffineTransform, rect: CGRect) {
-        let combined = trans.concatenating(transform)
+        let combined = transform.concatenating(trans)
         for node in contents {
             switch node {
             case let content as SVGLine:
