@@ -7,7 +7,7 @@ protocol SVG1DDrawer {
     var stroke: SVGStroke? { get }
     var eoFill: Bool? { get }
     func draw(_ trans: CGAffineTransform)
-    func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat)
+    func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath)
 }
 
 extension SVG1DDrawer {
@@ -21,17 +21,17 @@ extension SVG1DDrawer {
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
         context.concatenate(combined)
-        applySVGStroke(stroke: stroke, path: path, scaled: 1.0)
+        applySVGStroke(stroke: stroke, path: path)
         context.restoreGState()
     }
 
-    func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath, scaled: CGFloat) {
+    func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath) {
         guard let stroke = stroke else { return }
         if let color = stroke.fill as? SVGColor {
             color.toUIColor.setStroke()
         }
-        path.setLineDash(stroke.dashes.map { $0 * scaled }, count: stroke.dashes.count, phase: stroke.offset * scaled)
-        path.lineWidth = stroke.width * scaled
+        path.setLineDash(stroke.dashes, count: stroke.dashes.count, phase: stroke.offset)
+        path.lineWidth = stroke.width
         path.lineCapStyle = stroke.cap
         path.lineJoinStyle = stroke.join
         path.miterLimit = stroke.miterLimit
@@ -53,7 +53,7 @@ extension SVGDrawer {
         context.saveGState()
         context.concatenate(combined)
         applySVGFill(paint: fill, path: path, frame: frame())
-        applySVGStroke(stroke: stroke, path: path, scaled: 1.0)
+        applySVGStroke(stroke: stroke, path: path)
         context.restoreGState()
     }
 
