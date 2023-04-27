@@ -2,7 +2,7 @@ import SVGView
 import UIKit
 
 extension SVGText {
-    func draw(_ trans: CGAffineTransform, rect: CGRect) {
+    func draw(rect: CGRect) {
         var attributes: [CFString: Any] = [:]
 
         if let color = fill as? SVGColor {
@@ -31,14 +31,11 @@ extension SVGText {
         let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
         let frameSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(), nil, CGSize(width: CGFloat(Int32.max), height: CGFloat(Int32.max)), nil)
         guard let uiFont = font?.toUIFont() else { return }
-        let combined = trans.concatenating(transform)
-        let scaled = sqrt(combined.a * combined.a + combined.b * combined.b)
         let bounds = CGRect(origin: .init(x: 0, y: 0), size: .init(width: max(rect.width, frameSize.width), height: frameSize.height))
         let frame = CTFramesetterCreateFrame(framesetter, CFRange(), CGPath(rect: bounds, transform: nil), nil)
-        context.translateBy(x: trans.tx, y: trans.ty)
-        context.scaleBy(x: scaled, y: -scaled)
+        context.scaleBy(x: 1.0, y: -1.0)
         if case .center = textAnchor {
-            context.translateBy(x: transform.tx - scaled * frameSize.width / 2.0, y: -transform.ty + uiFont.descender)
+            context.translateBy(x: transform.tx - frameSize.width / 2.0, y: -transform.ty + uiFont.descender)
         } else {
             context.translateBy(x: transform.tx, y: -transform.ty + uiFont.descender)
         }

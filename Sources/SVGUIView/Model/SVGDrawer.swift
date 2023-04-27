@@ -6,7 +6,7 @@ protocol SVG1DDrawer {
     var transform: CGAffineTransform { get }
     var stroke: SVGStroke? { get }
     var eoFill: Bool? { get }
-    func draw(_ trans: CGAffineTransform)
+    func draw()
     func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath)
 }
 
@@ -15,12 +15,11 @@ extension SVG1DDrawer {
         nil
     }
 
-    func draw(_ trans: CGAffineTransform) {
+    func draw() {
         guard let path = path else { return }
-        let combined = transform.concatenating(trans)
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
-        context.concatenate(combined)
+        context.concatenate(transform)
         applySVGStroke(stroke: stroke, path: path)
         context.restoreGState()
     }
@@ -46,12 +45,11 @@ protocol SVGDrawer: SVG1DDrawer {
 }
 
 extension SVGDrawer {
-    func draw(_ trans: CGAffineTransform) {
+    func draw() {
         guard let path = path else { return }
-        let combined = transform.concatenating(trans)
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
-        context.concatenate(combined)
+        context.concatenate(transform)
         applySVGFill(paint: fill, path: path, frame: frame())
         applySVGStroke(stroke: stroke, path: path)
         context.restoreGState()

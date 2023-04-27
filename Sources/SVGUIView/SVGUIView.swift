@@ -31,23 +31,23 @@ public class SVGUIView: UIView {
         for node in model.contents {
             switch node {
             case let content as SVGLine:
-                content.draw(.identity)
+                content.draw()
             case let content as SVGCircle:
-                content.draw(.identity)
+                content.draw()
             case let content as SVGEllipse:
-                content.draw(.identity)
+                content.draw()
             case let content as SVGRect:
-                content.draw(.identity)
+                content.draw()
             case let content as SVGPolyline:
-                content.draw(.identity)
+                content.draw()
             case let content as SVGPath:
-                content.draw(.identity)
+                content.draw()
             case let content as SVGPolygon:
-                content.draw(.identity)
+                content.draw()
             case let content as SVGGroup:
-                content.draw(.identity, rect: rect)
+                content.draw(rect: rect)
             case let content as SVGText:
-                content.draw(.identity, rect: rect)
+                content.draw(rect: rect)
             default:
                 fatalError("not implemented: \(type(of: node))")
             }
