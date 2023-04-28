@@ -27,7 +27,7 @@ public class SVGUIView: UIView {
         transform = getTransform(viewBox: viewBox, size: size)
     }
 
-    override public func draw(_ rect: CGRect) {
+    override public func draw(_: CGRect) {
         for node in model.contents {
             switch node {
             case let content as SVGLine:
@@ -45,7 +45,7 @@ public class SVGUIView: UIView {
             case let content as SVGPolygon:
                 content.draw()
             case let content as SVGGroup:
-                content.draw(rect: rect)
+                content.draw()
             case let content as SVGText:
                 content.draw()
             default:

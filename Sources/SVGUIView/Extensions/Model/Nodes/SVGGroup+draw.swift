@@ -2,7 +2,7 @@ import SVGView
 import UIKit
 
 public extension SVGGroup {
-    func draw(rect: CGRect) {
+    func draw() {
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
         context.concatenate(transform)
@@ -23,7 +23,7 @@ public extension SVGGroup {
             case let content as SVGPolygon:
                 content.draw()
             case let content as SVGGroup:
-                content.draw(rect: rect)
+                content.draw()
             case let content as SVGText:
                 content.draw()
             default:
