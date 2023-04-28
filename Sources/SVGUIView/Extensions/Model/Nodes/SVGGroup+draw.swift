@@ -25,7 +25,7 @@ public extension SVGGroup {
             case let content as SVGGroup:
                 content.draw(rect: rect)
             case let content as SVGText:
-                content.draw(rect: rect)
+                content.draw()
             default:
                 fatalError("not implemented: \(type(of: node))")
             }

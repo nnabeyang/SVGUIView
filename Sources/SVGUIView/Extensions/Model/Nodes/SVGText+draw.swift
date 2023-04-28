@@ -1,30 +1,14 @@
 import SVGView
 import UIKit
 
-extension SVGText {
-    func draw(rect _: CGRect) {
+extension SVGText: SVGDrawer {
+    func draw() {
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
-
+        context.concatenate(transform)
         guard let path = path else { return }
-        if let color = fill as? SVGColor {
-            color.toUIColor.setFill()
-        }
-        path.fill()
-
-        if let stroke = stroke {
-            if let color = stroke.fill as? SVGColor {
-                color.toUIColor.setStroke()
-            }
-            path.setLineDash(stroke.dashes, count: stroke.dashes.count, phase: stroke.offset)
-            path.lineWidth = stroke.width
-            path.lineCapStyle = stroke.cap
-            path.lineJoinStyle = stroke.join
-            path.miterLimit = stroke.miterLimit
-        } else {
-            path.lineWidth = 0
-        }
-        path.stroke()
+        applySVGFill(paint: fill, path: path, frame: path.cgPath.boundingBoxOfPath)
+        applySVGStroke(stroke: stroke, path: path)
         context.restoreGState()
     }
 
@@ -44,9 +28,7 @@ extension SVGText {
 
         context.scaleBy(x: 1.0, y: -1.0)
         if case .center = textAnchor {
-            context.translateBy(x: transform.tx - frameSize.width / 2.0, y: -transform.ty)
-        } else {
-            context.translateBy(x: transform.tx, y: -transform.ty)
+            context.translateBy(x: -frameSize.width / 2.0, y: 0)
         }
 
         let letters = CGMutablePath()
