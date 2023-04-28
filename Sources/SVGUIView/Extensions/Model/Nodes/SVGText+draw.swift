@@ -2,14 +2,8 @@ import SVGView
 import UIKit
 
 extension SVGText: SVGDrawer {
-    func draw() {
-        let context = UIGraphicsGetCurrentContext()!
-        context.saveGState()
-        context.concatenate(transform)
-        guard let path = path else { return }
-        applySVGFill(paint: fill, path: path, frame: path.cgPath.boundingBoxOfPath)
-        applySVGStroke(stroke: stroke, path: path)
-        context.restoreGState()
+    var rect: CGRect? {
+        nil
     }
 
     var path: UIBezierPath? {

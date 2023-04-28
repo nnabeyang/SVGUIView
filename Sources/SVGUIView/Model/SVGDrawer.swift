@@ -43,17 +43,22 @@ extension SVG1DDrawer {
 
 protocol SVGDrawer: SVG1DDrawer {
     var fill: SVGPaint? { get }
+    var rect: CGRect? { get }
     func frame() -> CGRect
     func applySVGFill(paint: SVGPaint?, path: UIBezierPath, frame: CGRect)
 }
 
 extension SVGDrawer {
+    var rect: CGRect? {
+        frame()
+    }
+
     func draw() {
-        guard let path = path else { return }
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
         context.concatenate(transform)
-        applySVGFill(paint: fill, path: path, frame: frame())
+        guard let path = path else { return }
+        applySVGFill(paint: fill, path: path, frame: rect ?? path.cgPath.boundingBoxOfPath)
         applySVGStroke(stroke: stroke, path: path)
         context.restoreGState()
     }
