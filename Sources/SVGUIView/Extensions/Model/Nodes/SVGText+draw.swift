@@ -3,6 +3,32 @@ import UIKit
 
 extension SVGText {
     func draw(rect _: CGRect) {
+        let context = UIGraphicsGetCurrentContext()!
+        context.saveGState()
+
+        guard let path = path else { return }
+        if let color = fill as? SVGColor {
+            color.toUIColor.setFill()
+        }
+        path.fill()
+
+        if let stroke = stroke {
+            if let color = stroke.fill as? SVGColor {
+                color.toUIColor.setStroke()
+            }
+            path.setLineDash(stroke.dashes, count: stroke.dashes.count, phase: stroke.offset)
+            path.lineWidth = stroke.width
+            path.lineCapStyle = stroke.cap
+            path.lineJoinStyle = stroke.join
+            path.miterLimit = stroke.miterLimit
+        } else {
+            path.lineWidth = 0
+        }
+        path.stroke()
+        context.restoreGState()
+    }
+
+    var path: UIBezierPath? {
         var attributes: [CFString: Any] = [:]
         if let font = font?.toUIFont() {
             let descriptor = font.fontDescriptor as CTFontDescriptor
@@ -11,9 +37,8 @@ extension SVGText {
         }
         guard let attributedText = CFAttributedStringCreate(kCFAllocatorDefault,
                                                             text as NSString,
-                                                            attributes as CFDictionary) else { return }
+                                                            attributes as CFDictionary) else { return nil }
         let context = UIGraphicsGetCurrentContext()!
-        context.saveGState()
         let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
         let frameSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(), nil, CGSize(width: CGFloat(Int32.max), height: CGFloat(Int32.max)), nil)
 
@@ -45,25 +70,6 @@ extension SVGText {
             }
         }
 
-        let path = UIBezierPath(cgPath: letters)
-        if let color = fill as? SVGColor {
-            color.toUIColor.setFill()
-        }
-        path.fill()
-
-        if let stroke = stroke {
-            if let color = stroke.fill as? SVGColor {
-                color.toUIColor.setStroke()
-            }
-            path.setLineDash(stroke.dashes, count: stroke.dashes.count, phase: stroke.offset)
-            path.lineWidth = stroke.width
-            path.lineCapStyle = stroke.cap
-            path.lineJoinStyle = stroke.join
-            path.miterLimit = stroke.miterLimit
-        } else {
-            path.lineWidth = 0
-        }
-        path.stroke()
-        context.restoreGState()
+        return UIBezierPath(cgPath: letters)
     }
 }
