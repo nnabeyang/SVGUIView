@@ -26,7 +26,6 @@ extension SVG1DDrawer {
 
     func applySVGStroke(stroke: SVGStroke?, path: UIBezierPath) {
         guard let stroke = stroke else {
-            path.lineWidth = 0.0
             return
         }
         if let color = stroke.fill as? SVGColor {
