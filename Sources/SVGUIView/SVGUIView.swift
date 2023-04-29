@@ -2,7 +2,7 @@ import SVGView
 import UIKit
 
 public class SVGUIView: UIView {
-    var model: SVGViewport
+    let model: SVGViewport
     init(model: SVGViewport) {
         self.model = model
         super.init(frame: .zero)
