@@ -3,8 +3,10 @@ import UIKit
 
 public class SVGUIView: UIView {
     private let model: SVGViewport
+    private let group: SVGGroup
     init(model: SVGViewport) {
         self.model = model
+        group = SVGGroup(contents: model.contents)
         super.init(frame: .zero)
         backgroundColor = .clear
     }
@@ -27,30 +29,7 @@ public class SVGUIView: UIView {
     }
 
     override public func draw(_: CGRect) {
-        for node in model.contents {
-            switch node {
-            case let content as SVGLine:
-                content.draw()
-            case let content as SVGCircle:
-                content.draw()
-            case let content as SVGEllipse:
-                content.draw()
-            case let content as SVGRect:
-                content.draw()
-            case let content as SVGPolyline:
-                content.draw()
-            case let content as SVGPath:
-                content.draw()
-            case let content as SVGPolygon:
-                content.draw()
-            case let content as SVGGroup:
-                content.draw()
-            case let content as SVGText:
-                content.draw()
-            default:
-                fatalError("not implemented: \(type(of: node))")
-            }
-        }
+        group.draw()
     }
 
     @available(*, unavailable)
