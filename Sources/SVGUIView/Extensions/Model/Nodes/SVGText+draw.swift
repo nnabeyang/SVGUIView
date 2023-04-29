@@ -17,14 +17,7 @@ extension SVGText: SVGDrawer {
                                                             text as NSString,
                                                             attributes as CFDictionary) else { return nil }
         let context = UIGraphicsGetCurrentContext()!
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
-        let frameSize = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(), nil, CGSize(width: CGFloat(Int32.max), height: CGFloat(Int32.max)), nil)
-
         context.scaleBy(x: 1.0, y: -1.0)
-        if case .center = textAnchor {
-            context.translateBy(x: -frameSize.width / 2.0, y: 0)
-        }
-
         let letters = CGMutablePath()
         let line = CTLineCreateWithAttributedString(attributedText)
         let runs = CTLineGetGlyphRuns(line)
@@ -46,6 +39,11 @@ extension SVGText: SVGDrawer {
             }
         }
 
-        return UIBezierPath(cgPath: letters)
+        let path = UIBezierPath(cgPath: letters)
+        let rect = path.cgPath.boundingBoxOfPath
+        if case .center = textAnchor {
+            context.translateBy(x: -rect.width / 2.0, y: 0)
+        }
+        return path
     }
 }
