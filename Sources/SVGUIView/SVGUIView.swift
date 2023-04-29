@@ -3,7 +3,6 @@ import UIKit
 
 public class SVGUIView: UIView {
     var model: SVGViewport
-    private var trans: CGAffineTransform?
     init(model: SVGViewport) {
         self.model = model
         super.init(frame: .zero)
