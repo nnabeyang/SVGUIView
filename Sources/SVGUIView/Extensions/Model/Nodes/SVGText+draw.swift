@@ -8,10 +8,8 @@ extension SVGText: SVGDrawer {
 
     var path: UIBezierPath? {
         var attributes: [CFString: Any] = [:]
-        if let font = font?.toUIFont() {
-            let descriptor = font.fontDescriptor as CTFontDescriptor
-            let ctFont = CTFontCreateWithFontDescriptor(descriptor, 0.0, nil)
-            attributes[kCTFontAttributeName] = ctFont
+        if let font = font {
+            attributes[kCTFontAttributeName] = font.toCTFont()
         }
         guard let attributedText = CFAttributedStringCreate(kCFAllocatorDefault,
                                                             text as NSString,
