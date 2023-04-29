@@ -8,14 +8,6 @@ private enum FontType {
 }
 
 extension SVGFont {
-    func toUIFont() -> UIFont {
-        if let font = UIFont(name: name, size: size) {
-            return font
-        }
-
-        return UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
-    }
-
     private static let nameMap: [String: FontType] = [
         "Noto Sans": .normal("Times New Roman"),
         "system-ui": .system,
