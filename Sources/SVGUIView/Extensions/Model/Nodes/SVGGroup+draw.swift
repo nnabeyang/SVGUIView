@@ -24,6 +24,8 @@ public extension SVGGroup {
                 content.draw()
             case let content as SVGGroup:
                 content.draw()
+            case let content as SVGViewport:
+                content.draw()
             case let content as SVGText:
                 content.draw()
             case let content as SVGDataImage:
