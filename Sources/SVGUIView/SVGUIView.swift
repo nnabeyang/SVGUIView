@@ -1,9 +1,11 @@
+import os
 import SVGView
 import UIKit
 
 public class SVGUIView: UIView {
     private let model: SVGViewport
     private let group: SVGGroup
+    static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
     init(model: SVGViewport) {
         self.model = model
         group = SVGGroup(contents: model.contents)

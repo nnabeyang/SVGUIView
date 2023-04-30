@@ -28,6 +28,8 @@ public extension SVGGroup {
                 content.draw()
             case let content as SVGDataImage:
                 content.draw()
+            case _ as SVGURLImage:
+                SVGUIView.logger.debug("SVGUIView currently only support images in base64-encoded format.")
             default:
                 fatalError("not implemented: \(type(of: node))")
             }
