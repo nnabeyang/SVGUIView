@@ -2,10 +2,6 @@ import SVGView
 import UIKit
 
 public extension SVGViewport {
-    func uiView() -> SVGUIView {
-        SVGUIView(model: self)
-    }
-
     func getViewBox(size: CGSize) -> CGRect {
         if let viewBox = viewBox {
             return viewBox
