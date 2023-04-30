@@ -26,6 +26,8 @@ public extension SVGGroup {
                 content.draw()
             case let content as SVGText:
                 content.draw()
+            case let content as SVGDataImage:
+                content.draw()
             default:
                 fatalError("not implemented: \(type(of: node))")
             }
