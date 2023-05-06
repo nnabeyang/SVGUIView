@@ -6,6 +6,8 @@ public extension SVGGroup {
         let context = UIGraphicsGetCurrentContext()!
         context.saveGState()
         context.concatenate(transform)
+        context.setAlpha(opacity)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
         for node in contents {
             switch node {
             case let content as SVGLine:
@@ -36,6 +38,7 @@ public extension SVGGroup {
                 fatalError("not implemented: \(type(of: node))")
             }
         }
+        context.endTransparencyLayer()
         context.restoreGState()
     }
 }
