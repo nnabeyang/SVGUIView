@@ -14,13 +14,11 @@ let package = Package(
             targets: ["SVGUIView"]
         ),
     ],
-    dependencies: [
-        .package(url: "https://github.com/nnabeyang/SVGView.git", branch: "svg_uiview"),
-    ],
+    dependencies: [],
     targets: [
         .target(
             name: "SVGUIView",
-            dependencies: ["SVGView"]
+            dependencies: []
         ),
         .testTarget(
             name: "SVGUIViewTests",
