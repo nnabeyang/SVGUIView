@@ -24,7 +24,8 @@ let package = Package(
         ),
         .testTarget(
             name: "SVGUIViewTests",
-            dependencies: ["SVGUIView"]
+            dependencies: ["SVGUIView"],
+            resources: [.process("assets")]
         ),
     ]
 )

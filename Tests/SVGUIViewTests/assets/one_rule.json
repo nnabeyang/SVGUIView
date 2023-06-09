@@ -1,0 +1,26 @@
+[
+  {
+    "src": "#abc {\n fill: red;\n}",
+    "want": [
+      "qualified",
+      [["id", "abc"]],
+      ["fill", { "type": "fill", "value": ["color", ["named", "red"]] }]
+    ]
+  },
+  {
+    "src": "rect {\n height:160px; \n}",
+    "want": [
+      "qualified",
+      [["tag", "rect"]],
+      ["height", { "type": "height", "value": ["pixel", 160] }]
+    ]
+  },
+  {
+    "src": "rect {\n fill: url(#id);\n}",
+    "want": [
+      "qualified",
+      [["tag", "rect"]],
+      ["fill", { "type": "fill", "value": ["url", "id"] }]
+    ]
+  }
+]

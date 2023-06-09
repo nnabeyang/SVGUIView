@@ -1,0 +1,44 @@
+[
+  {
+    "src": "fill: red;",
+    "want": [{ "type": "fill", "value": ["color", ["named", "red"]] }]
+  },
+  {
+    "src": "fill-opacity:0.35;",
+    "want": [{ "type": "fill-opacity", "value": 0.34999999999999998 }]
+  },
+  {
+    "src": "fill : #2b2b2b;",
+    "want": [{ "type": "fill", "value": ["color", ["hex", "2b2b2b"]] }]
+  },
+  {
+    "src": "height:160px;",
+    "want": [{ "type": "height", "value": ["pixel", 160] }]
+  },
+  {
+    "src": "transform:scale(2);",
+    "want": [{ "type": "transform", "value": [2, 0, 0, 2, 0, 0] }]
+  },
+  {
+    "src": "fill: url(#lg1);",
+    "want": [{ "type": "fill", "value": ["url", "lg1"] }]
+  },
+  {
+    "src": "fill:rgba(43,43,43,.35);",
+    "want": [
+      {
+        "type": "fill",
+        "value": [
+          "color",
+          [
+            "rgba",
+            ["absolute", 43],
+            ["absolute", 43],
+            ["absolute", 43],
+            0.34999999999999998
+          ]
+        ]
+      }
+    ]
+  }
+]
