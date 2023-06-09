@@ -1,21 +1,21 @@
 import os
-import SVGView
 import UIKit
 
 public class SVGUIView: UIView {
-    private let model: SVGViewport
+    private let svg: SVGSVGElement
+    private let pserver: SVGPaintServer
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
-    init(model: SVGViewport) {
-        self.model = model
+
+    init(svg: SVGSVGElement, pserver: SVGPaintServer) {
+        self.svg = svg
+        self.pserver = pserver
         super.init(frame: .zero)
         backgroundColor = .clear
     }
 
     public convenience init?(contentOf url: URL) {
-        guard let data = try? Data(contentsOf: url),
-              let node = SVGParser.parse(data: data),
-              let model = node as? SVGViewport else { return nil }
-        self.init(model: model)
+        guard let (svg, paintServer) = Parser.parse(contentsOf: url) else { return nil }
+        self.init(svg: svg, pserver: paintServer)
     }
 
     override public func layoutSubviews() {
@@ -23,14 +23,21 @@ public class SVGUIView: UIView {
             return
         }
         let size = superview.safeAreaLayoutGuide.layoutFrame.size
-        let viewBox = model.getViewBox(size: size)
-        let transform = model.getTransform(viewBox: viewBox, size: size)
+        let viewBox = svg.getViewBox(size: size)
+        let transform = svg.getTransform(viewBox: viewBox, size: size)
         frame = viewBox.applying(transform)
-        model.transform = model.getTransform(viewBox: viewBox, size: frame.size)
     }
 
-    override public func draw(_: CGRect) {
-        model.draw()
+    override public func draw(_ rect: CGRect) {
+        let viewBox = svg.getViewBox(size: rect.size)
+        let transform = svg.getTransform(viewBox: viewBox, size: rect.size)
+        let context = SVGContext(
+            pserver: pserver,
+            viewBox: viewBox,
+            graphics: UIGraphicsGetCurrentContext()!,
+            transform: transform
+        )
+        svg.draw(context)
     }
 
     @available(*, unavailable)
