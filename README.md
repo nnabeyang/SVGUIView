@@ -33,6 +33,14 @@ let package = Package(
 )
 ```
 
+### CocoaPods
+
+Add the following to your Podfile:
+
+```terminal
+pod 'SVGUIView'
+```
+
 ## License
 
 SVGUIView is published under the MIT License, see LICENSE.
