@@ -6,16 +6,20 @@ public class SVGUIView: UIView {
     private let pserver: SVGPaintServer
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
 
-    init(svg: SVGSVGElement, pserver: SVGPaintServer) {
+    init(frame: CGRect, svg: SVGSVGElement, pserver: SVGPaintServer) {
         self.svg = svg
         self.pserver = pserver
-        super.init(frame: .zero)
+        super.init(frame: frame)
         backgroundColor = .clear
     }
 
     public convenience init?(contentOf url: URL) {
         guard let (svg, paintServer) = Parser.parse(contentsOf: url) else { return nil }
-        self.init(svg: svg, pserver: paintServer)
+        let height = svg.height.value(total: .zero)
+        let width = svg.width.value(total: .zero)
+        self.init(frame: .init(origin: .zero,
+                               size: CGSize(width: width, height: height)),
+                  svg: svg, pserver: paintServer)
     }
 
     override public func draw(_ rect: CGRect) {
