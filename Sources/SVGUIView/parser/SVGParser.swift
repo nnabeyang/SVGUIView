@@ -34,19 +34,32 @@ final class Parser: NSObject {
         return svg.style(with: css) as? SVGSVGElement
     }
 
+    static func parse(data: Data) -> (SVGSVGElement, SVGPaintServer)? {
+        let parser = Parser()
+        return parser.parse(data: data)
+    }
+
     static func parse(contentsOf url: URL) -> (SVGSVGElement, SVGPaintServer)? {
         let parser = Parser()
         return parser.parse(contentsOf: url)
+    }
+
+    private func parse(parser: XMLParser) -> (SVGSVGElement, SVGPaintServer)? {
+        parser.delegate = self
+        parser.parse()
+        guard let root = root else { return nil }
+        return (root, pserver: SVGPaintServer(servers: pservers))
     }
 
     private func parse(contentsOf url: URL) -> (SVGSVGElement, SVGPaintServer)? {
         guard let parser = XMLParser(contentsOf: url) else {
             return nil
         }
-        parser.delegate = self
-        parser.parse()
-        guard let root = root else { return nil }
-        return (root, pserver: SVGPaintServer(servers: pservers))
+        return parse(parser: parser)
+    }
+
+    private func parse(data: Data) -> (SVGSVGElement, SVGPaintServer)? {
+        parse(parser: XMLParser(data: data))
     }
 }
 

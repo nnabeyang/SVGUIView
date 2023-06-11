@@ -19,6 +19,12 @@ public class SVGUIView: UIView {
                   svg: svg, pserver: paintServer)
     }
 
+    public convenience init?(data: Data) {
+        guard let (svg, paintServer) = Parser.parse(data: data) else { return nil }
+        self.init(frame: CGRect(origin: .zero, size: svg.size),
+                  svg: svg, pserver: paintServer)
+    }
+
     override public func draw(_ rect: CGRect) {
         let viewBox = svg.getViewBox(size: rect.size)
         let transform = svg.getTransform(viewBox: viewBox, size: rect.size)
