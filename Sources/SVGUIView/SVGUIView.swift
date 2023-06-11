@@ -18,16 +18,6 @@ public class SVGUIView: UIView {
         self.init(svg: svg, pserver: paintServer)
     }
 
-    override public func layoutSubviews() {
-        guard let superview = superview else {
-            return
-        }
-        let size = superview.safeAreaLayoutGuide.layoutFrame.size
-        let viewBox = svg.getViewBox(size: size)
-        let transform = svg.getTransform(viewBox: viewBox, size: size)
-        frame = viewBox.applying(transform)
-    }
-
     override public func draw(_ rect: CGRect) {
         let viewBox = svg.getViewBox(size: rect.size)
         let transform = svg.getTransform(viewBox: viewBox, size: rect.size)
