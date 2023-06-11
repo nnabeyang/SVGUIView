@@ -81,8 +81,9 @@ struct SVGSVGElement: SVGElement {
     }
 
     var size: CGSize {
-        CGSize(width: width.value(total: .zero),
-               height: height.value(total: .zero))
+        let rect = viewBox?.toCGRect() ?? .zero
+        return CGSize(width: width.value(total: rect.width),
+                      height: height.value(total: rect.height))
     }
 }
 
