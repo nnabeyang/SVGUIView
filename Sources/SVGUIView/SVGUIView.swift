@@ -15,10 +15,7 @@ public class SVGUIView: UIView {
 
     public convenience init?(contentsOf url: URL) {
         guard let (svg, paintServer) = Parser.parse(contentsOf: url) else { return nil }
-        let height = svg.height.value(total: .zero)
-        let width = svg.width.value(total: .zero)
-        self.init(frame: .init(origin: .zero,
-                               size: CGSize(width: width, height: height)),
+        self.init(frame: CGRect(origin: .zero, size: svg.size),
                   svg: svg, pserver: paintServer)
     }
 
