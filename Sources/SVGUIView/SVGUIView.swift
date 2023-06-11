@@ -13,7 +13,7 @@ public class SVGUIView: UIView {
         backgroundColor = .clear
     }
 
-    public convenience init?(contentOf url: URL) {
+    public convenience init?(contentsOf url: URL) {
         guard let (svg, paintServer) = Parser.parse(contentsOf: url) else { return nil }
         let height = svg.height.value(total: .zero)
         let width = svg.width.value(total: .zero)
