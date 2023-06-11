@@ -79,6 +79,11 @@ struct SVGSVGElement: SVGElement {
         gcontext.endTransparencyLayer()
         context.restoreGState()
     }
+
+    var size: CGSize {
+        CGSize(width: width.value(total: .zero),
+               height: height.value(total: .zero))
+    }
 }
 
 extension SVGSVGElement {
