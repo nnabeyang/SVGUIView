@@ -6,7 +6,8 @@ An UIView that displays a single SVG image in your interface.
 
 Creating a SVGUIView:
 ```
-guard let svgView = SVGUIView(contentsOf: Bundle.main.url(forResource: "example", withExtension: "svg")!) else { return }
+let data = Bundle.main.url(forResource: "example", withExtension: "svg")!
+let svgView = SVGUIView(contentsOf: data)!
 view.addSubView(svgView)
 ```
 
