@@ -30,6 +30,7 @@ public class SVGUIView: UIView {
             guard let (svg, paintServer) = Parser.parse(data: data) else { return }
             self.svg = svg
             self.pserver = paintServer
+            self.frame = CGRect(origin: frame.origin, size: svg.size)
             setNeedsDisplay()
         }
     }
