@@ -2,11 +2,12 @@ import os
 import UIKit
 
 public class SVGUIView: UIView {
-    private let svg: SVGSVGElement
-    private let pserver: SVGPaintServer
+    private var svg: SVGSVGElement
+    private var pserver: SVGPaintServer
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
 
-    init(frame: CGRect, svg: SVGSVGElement, pserver: SVGPaintServer) {
+    init(frame: CGRect, data: Data, svg: SVGSVGElement, pserver: SVGPaintServer) {
+        self.data = data
         self.svg = svg
         self.pserver = pserver
         super.init(frame: frame)
@@ -14,15 +15,23 @@ public class SVGUIView: UIView {
     }
 
     public convenience init?(contentsOf url: URL) {
-        guard let (svg, paintServer) = Parser.parse(contentsOf: url) else { return nil }
-        self.init(frame: CGRect(origin: .zero, size: svg.size),
-                  svg: svg, pserver: paintServer)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        self.init(data: data)
     }
 
     public convenience init?(data: Data) {
         guard let (svg, paintServer) = Parser.parse(data: data) else { return nil }
         self.init(frame: CGRect(origin: .zero, size: svg.size),
-                  svg: svg, pserver: paintServer)
+                  data: data, svg: svg, pserver: paintServer)
+    }
+
+    public var data: Data {
+        didSet {
+            guard let (svg, paintServer) = Parser.parse(data: data) else { return }
+            self.svg = svg
+            self.pserver = paintServer
+            setNeedsDisplay()
+        }
     }
 
     override public func draw(_ rect: CGRect) {
