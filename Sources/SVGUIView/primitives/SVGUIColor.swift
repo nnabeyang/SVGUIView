@@ -41,7 +41,7 @@ struct SVGColorName: SVGUIColor {
 
     private static let colors: [String: UInt64] = [
         "aliceblue": 0xF0F8_FF00,
-        "alpha": 0x0000_0000,
+        "alpha": 0x0000_00FF,
         "antiquewhite": 0xFAEB_D700,
         "aqua": 0x00FF_FF00,
         "aquamarine": 0x7FFF_D400,
@@ -183,7 +183,7 @@ struct SVGColorName: SVGUIColor {
         "teal": 0x0080_8000,
         "thistle": 0xD8BF_D800,
         "tomato": 0xFF63_4700,
-        "transparent": 0x0000_0000,
+        "transparent": 0x0000_00FF,
         "turquoise": 0x40E0_D000,
         "violet": 0xEE82_EE00,
         "violetred": 0xD020_9000,
