@@ -19,20 +19,20 @@ struct SVGLinearGradientServer: SVGGradientServer {
     let link: String?
     let userSpace: Bool?
     let spreadMethod: SpreadMethod?
-    let x1: CGFloat?
-    let y1: CGFloat?
-    let x2: CGFloat?
-    let y2: CGFloat?
+    let x1: ElementLength?
+    let y1: ElementLength?
+    let x2: ElementLength?
+    let y2: ElementLength?
 
     private enum CodingKeys: String, CodingKey {
         case stops
     }
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
-        x1 = Double(attributes["x1", default: ""]).flatMap { CGFloat($0) }
-        y1 = Double(attributes["y1", default: ""]).flatMap { CGFloat($0) }
-        x2 = Double(attributes["x2", default: ""]).flatMap { CGFloat($0) }
-        y2 = Double(attributes["y2", default: ""]).flatMap { CGFloat($0) }
+        x1 = ElementLength(attributes["x1"])
+        y1 = ElementLength(attributes["y1"])
+        x2 = ElementLength(attributes["x2"])
+        y2 = ElementLength(attributes["y2"])
         color = Self.parseColor(description: attributes["color", default: ""])
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
@@ -88,10 +88,11 @@ struct SVGLinearGradientServer: SVGGradientServer {
     func draw(path: UIBezierPath, context: SVGContext) {
         let stops = stops ?? []
         let userSpace = userSpace ?? false
-        let x1 = x1 ?? 0
-        let y1 = y1 ?? 0
-        let x2 = x2 ?? 1
-        let y2 = y2 ?? 0
+        let size = context.viewBox.size
+        let x1 = (x1 ?? .percent(0)).value(total: userSpace ? size.width : 1.0)
+        let y1 = (y1 ?? .percent(0)).value(total: userSpace ? size.height : 1.0)
+        let x2 = (x2 ?? .percent(100)).value(total: userSpace ? size.width : 1.0)
+        let y2 = (y2 ?? .percent(0)).value(total: userSpace ? size.height : 1.0)
         let spreadMethod = spreadMethod ?? .pad
 
         let colors = stops.compactMap {
