@@ -131,8 +131,8 @@ struct SVGLinearGradientServer: SVGGradientServer {
         let _y1 = rect.minY
         let _x2 = rect.maxX
         let _y2 = rect.maxY
-        let x = frame.minX * rx
-        let y = frame.minY * ry
+        let x = userSpace ? 0 : frame.minX * rx
+        let y = userSpace ? 0 : frame.minY * ry
 
         if sx == sy {
             gContext.scaleBy(x: 1.0 / rx, y: 1.0 / ry)
