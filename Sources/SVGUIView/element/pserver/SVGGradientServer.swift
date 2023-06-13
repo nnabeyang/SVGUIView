@@ -103,8 +103,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
     }
 
     var parentId: String? {
-        guard stops?.isEmpty ?? true else { return nil }
-        return link
+        link
     }
 
     func draw(path: UIBezierPath, context: SVGContext) {
@@ -288,8 +287,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     }
 
     var parentId: String? {
-        guard stops?.isEmpty ?? true else { return nil }
-        return link
+        link
     }
 
     func draw(path: UIBezierPath, context: SVGContext) {
