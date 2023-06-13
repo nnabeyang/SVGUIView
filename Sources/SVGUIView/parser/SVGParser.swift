@@ -72,12 +72,10 @@ extension Parser: XMLParserDelegate {
             case .svg:
                 let element = SVGSVGElement(attributes: element.attributes,
                                             contents: Array(contents.dropFirst(contents.count - count + 1)))
-                contents = Array(contents.dropLast(count - 1))
                 return element
             case .g:
                 let element = SVGGroupElement(attributes: element.attributes,
                                               contents: Array(contents.dropFirst(contents.count - count + 1)))
-                contents = Array(contents.dropLast(count - 1))
                 return element
             case .text:
                 return SVGTextElement(text: text, attributes: element.attributes)
@@ -102,7 +100,6 @@ extension Parser: XMLParserDelegate {
             case .linearGradient:
                 let pserver = SVGLinearGradientServer(attributes: element.attributes,
                                                       contents: Array(contents.dropFirst(contents.count - count + 1)))
-                contents = Array(contents.dropLast(count - 1))
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
@@ -113,7 +110,6 @@ extension Parser: XMLParserDelegate {
             case .radialGradient:
                 let pserver = SVGRadialGradientServer(attributes: element.attributes,
                                                       contents: Array(contents.dropFirst(contents.count - count + 1)))
-                contents = Array(contents.dropLast(count - 1))
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
@@ -130,6 +126,7 @@ extension Parser: XMLParserDelegate {
                 return nil
             }
         }()
+        contents = Array(contents.dropLast(count - 1))
         text = ""
         content.map {
             contents.append($0)
