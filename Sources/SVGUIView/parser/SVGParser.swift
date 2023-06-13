@@ -20,7 +20,7 @@ enum SVGElementName: String, Equatable {
 }
 
 final class Parser: NSObject {
-    private var pservers: [String: SVGGradientServer] = [:]
+    private var pservers: [String: any SVGGradientServer] = [:]
     private var rules: [CSSRule] = []
     private var contents: [SVGElement] = []
     private var countList = [Int]()

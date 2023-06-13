@@ -1,3 +1,3 @@
 struct SVGPaintServer {
-    let servers: [String: SVGGradientServer]
+    let servers: [String: any SVGGradientServer]
 }

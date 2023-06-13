@@ -9,8 +9,23 @@ enum SpreadMethod: String {
 
 protocol SVGGradientServer {
     var parentId: String? { get }
-    func merged(other: SVGGradientServer) -> (any SVGGradientServer)?
+    func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
     func draw(path: UIBezierPath, context: SVGContext)
+    init(lhs: Self, rhs: SVGLinearGradientServer)
+    init(lhs: Self, rhs: SVGRadialGradientServer)
+}
+
+extension SVGGradientServer {
+    func merged(other: any SVGGradientServer) -> (any SVGGradientServer)? {
+        switch other {
+        case let other as SVGLinearGradientServer:
+            return Self(lhs: self, rhs: other)
+        case let other as SVGRadialGradientServer:
+            return Self(lhs: self, rhs: other)
+        default:
+            fatalError("not implemented")
+        }
+    }
 }
 
 struct SVGLinearGradientServer: SVGGradientServer {
@@ -41,16 +56,23 @@ struct SVGLinearGradientServer: SVGGradientServer {
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""]) ?? .pad
     }
 
-    func merged(other: SVGGradientServer) -> SVGGradientServer? {
-        guard let other = other as? SVGLinearGradientServer else { return nil }
-        return Self(lhs: self, rhs: other)
-    }
-
-    init(lhs: SVGLinearGradientServer, rhs: SVGLinearGradientServer) {
+    init(lhs: Self, rhs: SVGLinearGradientServer) {
         x1 = lhs.x1 ?? rhs.x1
         y1 = lhs.y1 ?? rhs.y1
         x2 = lhs.x2 ?? rhs.x2
         y2 = lhs.y2 ?? rhs.y2
+        color = lhs.color ?? rhs.color
+        stops = lhs.stops ?? rhs.stops
+        link = rhs.link
+        userSpace = lhs.userSpace ?? rhs.userSpace
+        spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
+    }
+
+    init(lhs: Self, rhs: SVGRadialGradientServer) {
+        x1 = lhs.x1
+        y1 = lhs.y1
+        x2 = lhs.x2
+        y2 = lhs.y2
         color = lhs.color ?? rhs.color
         stops = lhs.stops ?? rhs.stops
         link = rhs.link
@@ -217,18 +239,26 @@ struct SVGRadialGradientServer: SVGGradientServer {
         userSpace = attributes["gradientUnits"].flatMap { $0 == "userSpaceOnUse" }
     }
 
-    func merged(other: SVGGradientServer) -> SVGGradientServer? {
-        guard let other = other as? Self else { return nil }
-        return Self(lhs: self, rhs: other)
-    }
-
-    init(lhs: SVGRadialGradientServer, rhs: SVGRadialGradientServer) {
+    init(lhs: Self, rhs: SVGRadialGradientServer) {
         color = lhs.color ?? rhs.color
         cx = lhs.cx ?? rhs.cx
         cy = lhs.cy ?? rhs.cy
         fx = lhs.fx ?? rhs.fx
         fy = lhs.fy ?? rhs.fy
         r = lhs.r ?? rhs.r
+        stops = lhs.stops ?? rhs.stops
+        spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
+        link = rhs.link
+        userSpace = lhs.userSpace ?? rhs.userSpace
+    }
+
+    init(lhs: Self, rhs: SVGLinearGradientServer) {
+        color = lhs.color ?? rhs.color
+        cx = lhs.cx
+        cy = lhs.cy
+        fx = lhs.fx
+        fy = lhs.fy
+        r = lhs.r
         stops = lhs.stops ?? rhs.stops
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
         link = rhs.link

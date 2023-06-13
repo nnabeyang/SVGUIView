@@ -170,7 +170,7 @@ extension SVGDrawableElement {
         }
     }
 
-    func applyPServerFill(server: SVGGradientServer, path: UIBezierPath, context: SVGContext) {
+    func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext) {
         if let id = server.parentId,
            let parent = context.pserver.servers[id],
            let merged = server.merged(other: parent)
