@@ -19,7 +19,7 @@ struct SVGGroupElement: SVGElement {
         case contents
     }
 
-    init(attributes: [String: String], contents: [SVGElement & Encodable]) {
+    init(attributes: [String: String], contents: [SVGElement]) {
         transform = CGAffineTransform(description: attributes["transform", default: ""])
         self.contents = contents
         font = Self.parseFont(attributes: attributes)

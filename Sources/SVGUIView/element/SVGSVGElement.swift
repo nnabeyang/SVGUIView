@@ -9,6 +9,7 @@ struct SVGSVGElement: SVGElement {
     let height: ElementLength
     let viewBox: SVGElementRect?
     let contents: [SVGElement]
+
     let font: SVGUIFont?
 
     private enum CodingKeys: String, CodingKey {
@@ -18,7 +19,7 @@ struct SVGSVGElement: SVGElement {
         case contents
     }
 
-    init(attributes: [String: String], contents: [SVGElement & Encodable]) {
+    init(attributes: [String: String], contents: [SVGElement]) {
         width = .init(attributes["width"]) ?? .percent(100)
         height = .init(attributes["height"]) ?? .percent(100)
         viewBox = Self.parseViewBox(attributes["viewBox"])
