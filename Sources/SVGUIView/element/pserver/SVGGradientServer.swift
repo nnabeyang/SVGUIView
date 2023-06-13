@@ -3,6 +3,7 @@ import UIKit
 
 enum SpreadMethod: String {
     case pad
+    case `repeat`
 }
 
 protocol SVGGradientServer {
@@ -131,17 +132,28 @@ struct SVGLinearGradientServer: SVGGradientServer {
         let x = frame.minX * rx
         let y = frame.minY * ry
 
-        let start = CGPoint(x: x + _x1, y: y + _y1)
-        let end = CGPoint(x: x + _x2, y: y + _y2)
         if sx == sy {
             gContext.scaleBy(x: 1.0 / rx, y: 1.0 / ry)
         }
-        let options: CGGradientDrawingOptions
+
         switch spreadMethod {
         case .pad:
-            options = [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+            let start = CGPoint(x: x + _x1, y: y + _y1)
+            let end = CGPoint(x: x + _x2, y: y + _y2)
+            let options: CGGradientDrawingOptions = [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+            gContext.drawLinearGradient(gradient, start: start, end: end, options: options)
+        case .repeat:
+            let dx = _x2 - _x1
+            let dy = _y2 - _y1
+            let n = min(ceil((x + _x1 - frame.minX) / dx), ceil((y + _y1 - frame.minY) / dy))
+            let base = CGPoint(x: x + _x1 - dx * n, y: y + _y1 - dy * n)
+            let m = min(ceil((frame.maxX - base.x) / dx), ceil((frame.maxY - base.y) / dy))
+            for i in stride(from: 0, to: m, by: 1) {
+                let start = CGPoint(x: base.x + i * dx, y: base.y + i * dy)
+                let end = CGPoint(x: base.x + (i + 1) * dx, y: base.y + (i + 1) * dy)
+                gContext.drawLinearGradient(gradient, start: start, end: end, options: [])
+            }
         }
-        gContext.drawLinearGradient(gradient, start: start, end: end, options: options)
         gContext.restoreGState()
     }
 }
@@ -278,6 +290,8 @@ struct SVGRadialGradientServer: SVGGradientServer {
         switch spreadMethod {
         case .pad:
             options = [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+        default:
+            options = []
         }
         gContext.drawRadialGradient(gradient,
                                     startCenter: .init(x: _cx, y: _cy),
