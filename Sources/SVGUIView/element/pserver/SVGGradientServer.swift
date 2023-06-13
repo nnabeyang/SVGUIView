@@ -31,7 +31,7 @@ extension SVGGradientServer {
 struct SVGLinearGradientServer: SVGGradientServer {
     let color: SVGUIColor?
     let stops: [SVGStopElement]?
-    let link: String?
+    let parentId: String?
     let userSpace: Bool?
     let spreadMethod: SpreadMethod?
     let x1: ElementLength?
@@ -51,7 +51,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         color = Self.parseColor(description: attributes["color", default: ""])
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
-        link = Self.parseLink(description: attributes["xlink:href"])
+        parentId = Self.parseLink(description: attributes["xlink:href"])
         userSpace = attributes["gradientUnits"].flatMap { $0 == "userSpaceOnUse" }
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
     }
@@ -63,7 +63,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         y2 = lhs.y2 ?? rhs.y2
         color = lhs.color ?? rhs.color
         stops = lhs.stops ?? rhs.stops
-        link = rhs.link
+        parentId = rhs.parentId
         userSpace = lhs.userSpace ?? rhs.userSpace
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     }
@@ -75,7 +75,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         y2 = lhs.y2
         color = lhs.color ?? rhs.color
         stops = lhs.stops ?? rhs.stops
-        link = rhs.link
+        parentId = rhs.parentId
         userSpace = lhs.userSpace ?? rhs.userSpace
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     }
@@ -100,10 +100,6 @@ struct SVGLinearGradientServer: SVGGradientServer {
 
     private static func parseSpreadMethod(_ src: String) -> SpreadMethod? {
         SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
-    }
-
-    var parentId: String? {
-        link
     }
 
     func draw(path: UIBezierPath, context: SVGContext) {
@@ -212,7 +208,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     let stops: [SVGStopElement]?
     let spreadMethod: SpreadMethod?
     let userSpace: Bool?
-    let link: String?
+    let parentId: String?
     let cx: ElementLength?
     let cy: ElementLength?
     let fx: ElementLength?
@@ -234,7 +230,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
-        link = Self.parseLink(description: attributes["xlink:href"])
+        parentId = Self.parseLink(description: attributes["xlink:href"])
         userSpace = attributes["gradientUnits"].flatMap { $0 == "userSpaceOnUse" }
     }
 
@@ -247,7 +243,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         r = lhs.r ?? rhs.r
         stops = lhs.stops ?? rhs.stops
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
-        link = rhs.link
+        parentId = rhs.parentId
         userSpace = lhs.userSpace ?? rhs.userSpace
     }
 
@@ -260,7 +256,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         r = lhs.r
         stops = lhs.stops ?? rhs.stops
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
-        link = rhs.link
+        parentId = rhs.parentId
         userSpace = lhs.userSpace ?? rhs.userSpace
     }
 
@@ -284,10 +280,6 @@ struct SVGRadialGradientServer: SVGGradientServer {
             var scanner = SVGColorScanner(bytes: bytes)
             return scanner.scanColor()
         }
-    }
-
-    var parentId: String? {
-        link
     }
 
     func draw(path: UIBezierPath, context: SVGContext) {
