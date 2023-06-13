@@ -53,7 +53,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         self.stops = stops.isEmpty ? nil : stops
         link = Self.parseLink(description: attributes["xlink:href"])
         userSpace = attributes["gradientUnits"].flatMap { $0 == "userSpaceOnUse" }
-        spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""]) ?? .pad
+        spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
     }
 
     init(lhs: Self, rhs: SVGLinearGradientServer) {
