@@ -192,12 +192,11 @@ struct SVGRadialGradientServer: SVGGradientServer {
     let spreadMethod: SpreadMethod?
     let userSpace: Bool?
     let link: String?
-
-    let cx: CGFloat?
-    let cy: CGFloat?
-    let fx: CGFloat?
-    let fy: CGFloat?
-    let r: CGFloat?
+    let cx: ElementLength?
+    let cy: ElementLength?
+    let fx: ElementLength?
+    let fy: ElementLength?
+    let r: ElementLength?
 
     private enum CodingKeys: String, CodingKey {
         case stops
@@ -205,11 +204,11 @@ struct SVGRadialGradientServer: SVGGradientServer {
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
         color = Self.parseColor(description: attributes["color", default: ""])
-        cx = Double(attributes["cx", default: ""]).flatMap { CGFloat($0) }
-        cy = Double(attributes["cy", default: ""]).flatMap { CGFloat($0) }
-        fx = Double(attributes["fx", default: ""]).flatMap { CGFloat($0) }
-        fy = Double(attributes["fy", default: ""]).flatMap { CGFloat($0) }
-        r = Double(attributes["r", default: ""]).flatMap { CGFloat($0) }
+        cx = ElementLength(attributes["cx"])
+        cy = ElementLength(attributes["cy"])
+        fx = ElementLength(attributes["fx"])
+        fy = ElementLength(attributes["fy"])
+        r = ElementLength(attributes["r"])
 
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
@@ -267,9 +266,10 @@ struct SVGRadialGradientServer: SVGGradientServer {
         let stops = stops ?? []
         let userSpace = userSpace ?? false
         let spreadMethod = spreadMethod ?? .pad
-        let cx = cx ?? 0.5
-        let cy = cy ?? 0.5
-        let r = r ?? 0.5
+        let size = context.viewBox.size
+        let cx = (cx ?? .percent(50)).value(total: userSpace ? size.width : 1.0)
+        let cy = (cy ?? .percent(50)).value(total: userSpace ? size.height : 1.0)
+        let r = (r ?? .percent(50)).value(total: userSpace ? sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0) : 1.0)
 
         let colors = stops.compactMap {
             switch $0.color {
