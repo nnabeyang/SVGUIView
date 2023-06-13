@@ -265,7 +265,6 @@ struct SVGRadialGradientServer: SVGGradientServer {
     func draw(path: UIBezierPath, context: SVGContext) {
         let stops = stops ?? []
         let userSpace = userSpace ?? false
-        let spreadMethod = spreadMethod ?? .pad
         let size = context.viewBox.size
         let cx = (cx ?? .percent(50)).value(total: userSpace ? size.width : 1.0)
         let cy = (cy ?? .percent(50)).value(total: userSpace ? size.height : 1.0)
@@ -304,19 +303,12 @@ struct SVGRadialGradientServer: SVGGradientServer {
         if !userSpace, frame.width != frame.height {
             gContext.scaleBy(x: 1.0 / rx, y: 1.0 / ry)
         }
-        let options: CGGradientDrawingOptions
-        switch spreadMethod {
-        case .pad:
-            options = [.drawsBeforeStartLocation, .drawsAfterEndLocation]
-        default:
-            options = []
-        }
         gContext.drawRadialGradient(gradient,
                                     startCenter: .init(x: _cx, y: _cy),
                                     startRadius: 0,
                                     endCenter: .init(x: _cx, y: _cy),
                                     endRadius: _r,
-                                    options: options)
+                                    options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
         context.restoreGState()
     }
 }
