@@ -100,15 +100,6 @@ struct SVGUIStroke {
         return dashes.isEmpty ? nil : dashes
     }
 
-    private static func parseColor(description: String) -> (any SVGUIColor)? {
-        var data = description
-        return data.withUTF8 {
-            let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes)
-            return scanner.scanColor()
-        }
-    }
-
     private static func parseNumber(description: String) -> CGFloat? {
         var data = description
         return data.withUTF8 {

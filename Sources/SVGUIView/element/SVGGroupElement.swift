@@ -25,19 +25,10 @@ struct SVGGroupElement: SVGElement {
         font = Self.parseFont(attributes: attributes)
         style = SVGUIStyle(description: attributes["style", default: ""])
         fill = SVGFill(style: style, attributes: attributes)
-        color = Self.parseColor(description: attributes["color", default: ""])
+        color = SVGColorScanner.parseColor(description: attributes["color", default: ""])
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
-    }
-
-    private static func parseColor(description: String) -> (any SVGUIColor)? {
-        var data = description
-        return data.withUTF8 {
-            let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes)
-            return scanner.scanColor()
-        }
     }
 
     private static func parseFont(attributes: [String: String]) -> SVGUIFont? {

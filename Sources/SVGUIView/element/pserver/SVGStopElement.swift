@@ -50,15 +50,6 @@ struct SVGStopElement: SVGElement {
         }
         color = SVGFill(description: attributes["stop-color", default: "black"])
     }
-
-    private static func parseColor(description: String) -> (any SVGUIColor)? {
-        var data = description
-        return data.withUTF8 {
-            let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes)
-            return scanner.scanColor()
-        }
-    }
 }
 
 extension SVGStopElement: Encodable {

@@ -48,7 +48,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         y1 = ElementLength(attributes["y1"])
         x2 = ElementLength(attributes["x2"])
         y2 = ElementLength(attributes["y2"])
-        color = Self.parseColor(description: attributes["color", default: ""])
+        color = SVGColorScanner.parseColor(description: attributes["color", default: ""])
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
         parentId = Self.parseLink(description: attributes["xlink:href"])
@@ -87,15 +87,6 @@ struct SVGLinearGradientServer: SVGGradientServer {
             return String(hashId.dropFirst())
         }
         return nil
-    }
-
-    private static func parseColor(description: String) -> (any SVGUIColor)? {
-        var data = description
-        return data.withUTF8 {
-            let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes)
-            return scanner.scanColor()
-        }
     }
 
     private static func parseSpreadMethod(_ src: String) -> SpreadMethod? {
@@ -220,7 +211,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     }
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
-        color = Self.parseColor(description: attributes["color", default: ""])
+        color = SVGColorScanner.parseColor(description: attributes["color", default: ""])
         cx = ElementLength(attributes["cx"])
         cy = ElementLength(attributes["cy"])
         fx = ElementLength(attributes["fx"])
@@ -271,15 +262,6 @@ struct SVGRadialGradientServer: SVGGradientServer {
 
     private static func parseSpreadMethod(_ src: String) -> SpreadMethod? {
         SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
-    }
-
-    private static func parseColor(description: String) -> (any SVGUIColor)? {
-        var data = description
-        return data.withUTF8 {
-            let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes)
-            return scanner.scanColor()
-        }
     }
 
     func draw(path: UIBezierPath, context: SVGContext) {
