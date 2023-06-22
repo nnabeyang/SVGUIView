@@ -1,18 +1,25 @@
 import Foundation
 
-struct SVGPathScanner {
+struct SVGAttributeScanner {
     var reader: BufferReader
 
     init(bytes: BufferView<UInt8>) {
         reader = BufferReader(bytes: bytes)
     }
 
-    mutating func scan() -> [any PathSegment] {
-        var segments = [any PathSegment]()
-        while let segment = scanPathSegment() {
-            segments.append(segment)
-        }
-        return segments
+    mutating func consume(ascii: UInt8) -> Bool {
+        guard let ch = reader.consumeWhitespace(),
+              ch == ascii else { return false }
+        reader.advance()
+        return true
+    }
+
+    mutating func scanIdentity() -> String? {
+        if reader.isEOF { return nil }
+        let start = reader.readIndex
+        reader.skipIdentity()
+        let end = reader.readIndex
+        return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
     }
 
     mutating func scanNumber() -> Double? {
@@ -30,6 +37,37 @@ struct SVGPathScanner {
         return Double(prevalidatedBuffer: reader.bytes[start ..< end])
     }
 
+    mutating func scanBool() -> Bool? {
+        guard let ascii = reader.read() else { return nil }
+        switch ascii {
+        case UInt8(ascii: "0"): return false
+        case UInt8(ascii: "1"): return true
+        default:
+            return nil
+        }
+    }
+
+    @discardableResult
+    mutating func consumeWhitespaceIfNext(_ ch: UInt8) -> UInt8? {
+        let cc = reader.consumeWhitespace()
+        if let cc = cc, cc == ch {
+            reader.advance()
+            return reader.consumeWhitespace()
+        }
+        return cc
+    }
+}
+
+// for d attribute of path tag
+extension SVGAttributeScanner {
+    mutating func scanPathSegments() -> [any PathSegment] {
+        var segments = [any PathSegment]()
+        while let segment = scanPathSegment() {
+            segments.append(segment)
+        }
+        return segments
+    }
+
     mutating func scanPoints() -> [CGPoint] {
         var points = [CGPoint]()
         while !reader.isEOF {
@@ -42,28 +80,11 @@ struct SVGPathScanner {
         return points
     }
 
-    mutating func scanBool() -> Bool? {
-        guard let ascii = reader.read() else { return nil }
-        switch ascii {
-        case UInt8(ascii: "0"): return false
-        case UInt8(ascii: "1"): return true
-        default:
-            return nil
-        }
-    }
-
     mutating func readSegmentType() -> PathSegmentType? {
         guard let ch = reader.consumeWhitespace(),
               let type = PathSegmentType(rawValue: ch) else { return nil }
         reader.advance()
         return type
-    }
-
-    mutating func consumeWhitespaceIfNext(_ ch: UInt8) {
-        if let cc = reader.consumeWhitespace(), cc == ch {
-            reader.advance()
-            _ = reader.consumeWhitespace()
-        }
     }
 
     mutating func scanPathSegment() -> (any PathSegment)? {
@@ -210,6 +231,201 @@ struct SVGPathScanner {
             }
             if args.isEmpty { return nil }
             return APathSegment(type: type, args: args)
+        }
+    }
+}
+
+// for stroke attribute
+extension SVGAttributeScanner {
+    mutating func scanDashes() -> [CGFloat] {
+        var dashes = [CGFloat]()
+        guard reader.consumeWhitespace() != nil else { return dashes }
+        while !reader.isEOF {
+            guard let r = scanNumber() else { return dashes }
+            dashes.append(CGFloat(r))
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+        }
+        return dashes
+    }
+
+    mutating func scanHex() -> String? {
+        guard consume(ascii: UInt8(ascii: "#")) else { return nil }
+        let start = reader.readIndex
+        reader.skipHex()
+        let end = reader.readIndex
+        return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
+    }
+}
+
+// for transform attribute
+extension SVGAttributeScanner {
+    mutating func scanTransform() -> [any TransformOperator] {
+        var ops = [any TransformOperator]()
+        while let op = scanSingleTransform() {
+            ops.append(op)
+        }
+        return ops
+    }
+
+    mutating func scanSingleTransform() -> (any TransformOperator)? {
+        consumeWhitespaceIfNext(UInt8(ascii: ","))
+        if reader.isEOF { return nil }
+        guard let ident = scanIdentity(),
+              let name = TransformType(rawValue: ident)
+        else {
+            return nil
+        }
+        if !consume(ascii: UInt8(ascii: "(")) {
+            return nil
+        }
+        _ = reader.consumeWhitespace()
+        let op: any TransformOperator
+        switch name {
+        case .translate:
+            guard let x = scanNumber() else { return nil }
+            let ch = consumeWhitespaceIfNext(UInt8(ascii: ","))
+            let y = ch == UInt8(ascii: ")") ? 0 : scanNumber() ?? 0
+            op = TranslateOperator(x: x, y: y)
+        case .scale:
+            guard let x = scanNumber() else { return nil }
+            let ch = consumeWhitespaceIfNext(UInt8(ascii: ","))
+            let y = ch == UInt8(ascii: ")") ? x : scanNumber() ?? x
+            op = ScaleOperator(x: x, y: y)
+        case .rotate:
+            guard let angle = scanNumber() else { return nil }
+            let ch = consumeWhitespaceIfNext(UInt8(ascii: ","))
+            if ch == UInt8(ascii: ")") {
+                op = RotateOperator(angle: angle, origin: nil)
+            } else {
+                guard let x = scanNumber() else { return nil }
+                consumeWhitespaceIfNext(UInt8(ascii: ","))
+                guard let y = scanNumber() else { return nil }
+                op = RotateOperator(angle: angle, origin: CGPoint(x: x, y: y))
+            }
+        case .skewX:
+            guard let angle = scanNumber() else { return nil }
+            op = SkewXOperator(angle: angle)
+        case .skewY:
+            guard let angle = scanNumber() else { return nil }
+            op = SkewYOperator(angle: angle)
+        case .matrix:
+            guard let a = scanNumber() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let b = scanNumber() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let c = scanNumber() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let d = scanNumber() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let tx = scanNumber() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let ty = scanNumber() else { return nil }
+            op = MatrixOperator(a: a, b: b, c: c, d: d, tx: tx, ty: ty)
+        }
+
+        if !consume(ascii: UInt8(ascii: ")")) {
+            return nil
+        }
+        return op
+    }
+}
+
+// for fill/color attribute
+extension SVGAttributeScanner {
+    mutating func scanColorDimension() -> ColorDimension? {
+        guard let value = scanNumber() else { return nil }
+        if let ch = reader.consumeWhitespace(), ch == UInt8(ascii: "%") {
+            reader.advance()
+            return .percent(value)
+        } else {
+            return .absolute(value)
+        }
+    }
+
+    mutating func scanFill(opacity: Double = 1.0) -> SVGFill? {
+        guard let ascii = reader.consumeWhitespace() else { return nil }
+        if ascii == UInt8(ascii: "#") {
+            guard let hex = scanHex() else { return nil }
+            return .color(color: SVGHexColor(value: hex), opacity: opacity)
+        }
+
+        guard let name = scanIdentity() else {
+            return nil
+        }
+        guard let type = SVGFillType(rawValue: name.lowercased()) else {
+            _ = reader.consumeWhitespace()
+            return reader.isEOF ?
+                .color(color: SVGColorName(name: name), opacity: opacity) :
+                .color(color: SVGColorName(name: "black"), opacity: opacity)
+        }
+        switch type {
+        case .current:
+            return .current
+        case .inherit:
+            return .inherit
+        case .rgb, .rgba:
+            guard let color = scanColor(type: type) else { return nil }
+            return .color(color: color, opacity: opacity)
+        case .url:
+            guard consume(ascii: UInt8(ascii: "(")) else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: "#"))
+            guard let id = scanIdentity() else { return nil }
+            guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+            return .url(id)
+        }
+    }
+
+    mutating func scanColor() -> (any SVGUIColor)? {
+        guard let ascii = reader.consumeWhitespace() else { return nil }
+        if ascii == UInt8(ascii: "#") {
+            guard let hex = scanHex() else { return nil }
+            return SVGHexColor(value: hex)
+        }
+
+        guard let name = scanIdentity() else {
+            return nil
+        }
+        guard let type = SVGFillType(rawValue: name) else {
+            return SVGColorName(name: name)
+        }
+        return scanColor(type: type)
+    }
+
+    private mutating func scanColor(type: SVGFillType) -> (any SVGUIColor)? {
+        switch type {
+        case .rgb:
+            guard consume(ascii: UInt8(ascii: "(")) else { return nil }
+            _ = reader.consumeWhitespace()
+            guard let r = scanColorDimension() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let g = scanColorDimension() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let b = scanColorDimension() else { return nil }
+            guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+            return SVGRGBColor(r: r, g: g, b: b)
+        case .rgba:
+            guard consume(ascii: UInt8(ascii: "(")) else { return nil }
+            _ = reader.consumeWhitespace()
+            guard let r = scanColorDimension() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let g = scanColorDimension() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let b = scanColorDimension() else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+            guard let a = scanNumber() else { return nil }
+            guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+            return SVGRGBAColor(r: r, g: g, b: b, a: a)
+        case .url, .inherit, .current:
+            return nil
+        }
+    }
+
+    static func parseColor(description: String) -> (any SVGUIColor)? {
+        var data = description
+        return data.withUTF8 {
+            let bytes = BufferView(unsafeBufferPointer: $0)!
+            var scanner = SVGAttributeScanner(bytes: bytes)
+            return scanner.scanColor()
         }
     }
 }

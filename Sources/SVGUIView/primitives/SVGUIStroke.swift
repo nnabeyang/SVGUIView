@@ -94,7 +94,7 @@ struct SVGUIStroke {
         var data = description
         let dashes = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGStrokeScanner(bytes: bytes)
+            var scanner = SVGAttributeScanner(bytes: bytes)
             return scanner.scanDashes()
         }
         return dashes.isEmpty ? nil : dashes
@@ -104,7 +104,7 @@ struct SVGUIStroke {
         var data = description
         return data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes)
+            var scanner = SVGAttributeScanner(bytes: bytes)
             return scanner.scanNumber().flatMap { CGFloat($0) }
         }
     }

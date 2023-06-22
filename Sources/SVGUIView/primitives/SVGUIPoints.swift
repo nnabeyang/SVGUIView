@@ -6,7 +6,7 @@ struct SVGUIPoints: Encodable {
         var data = description
         let points = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGPathScanner(bytes: bytes)
+            var scanner = SVGAttributeScanner(bytes: bytes)
             return scanner.scanPoints()
         }
         self.points = points

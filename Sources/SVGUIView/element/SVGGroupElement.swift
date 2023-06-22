@@ -25,7 +25,7 @@ struct SVGGroupElement: SVGElement {
         font = Self.parseFont(attributes: attributes)
         style = SVGUIStyle(description: attributes["style", default: ""])
         fill = SVGFill(style: style, attributes: attributes)
-        color = SVGColorScanner.parseColor(description: attributes["color", default: ""])
+        color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
@@ -115,8 +115,8 @@ extension CGAffineTransform {
         var data = description
         let ops = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var parser = TransformScanner(bytes: bytes)
-            return parser.scan()
+            var parser = SVGAttributeScanner(bytes: bytes)
+            return parser.scanTransform()
         }
         var transform: CGAffineTransform = .identity
         for op in ops {

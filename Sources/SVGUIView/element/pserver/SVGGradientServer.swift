@@ -48,7 +48,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         y1 = ElementLength(attributes["y1"])
         x2 = ElementLength(attributes["x2"])
         y2 = ElementLength(attributes["y2"])
-        color = SVGColorScanner.parseColor(description: attributes["color", default: ""])
+        color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
         parentId = Self.parseLink(description: attributes["xlink:href"])
@@ -211,7 +211,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     }
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
-        color = SVGColorScanner.parseColor(description: attributes["color", default: ""])
+        color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         cx = ElementLength(attributes["cx"])
         cy = ElementLength(attributes["cy"])
         fx = ElementLength(attributes["fx"])

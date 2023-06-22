@@ -16,8 +16,8 @@ struct SVGPathElement: SVGDrawableElement {
         }
         segments = d.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGPathScanner(bytes: bytes)
-            return scanner.scan()
+            var scanner = SVGAttributeScanner(bytes: bytes)
+            return scanner.scanPathSegments()
         }
     }
 

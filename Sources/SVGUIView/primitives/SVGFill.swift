@@ -51,8 +51,8 @@ enum SVGFill {
         var data = attributes["fill", default: ""]
         let fill = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes, opacity: opacity)
-            return scanner.scan()
+            var scanner = SVGAttributeScanner(bytes: bytes)
+            return scanner.scanFill(opacity: opacity)
         }
         guard let fill = fill else {
             return nil
@@ -64,8 +64,8 @@ enum SVGFill {
         var data = description
         let fill = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes)
-            return scanner.scan()
+            var scanner = SVGAttributeScanner(bytes: bytes)
+            return scanner.scanFill()
         }
         guard let fill = fill else {
             return nil
@@ -78,8 +78,8 @@ enum SVGFill {
         var data = attributes["fill", default: ""]
         let fill = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGColorScanner(bytes: bytes, opacity: opacity)
-            return scanner.scan()
+            var scanner = SVGAttributeScanner(bytes: bytes)
+            return scanner.scanFill(opacity: opacity)
         }
         guard let fill = fill else {
             return nil

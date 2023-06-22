@@ -21,7 +21,7 @@ struct SVGBaseElement {
         id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
         className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
         style = SVGUIStyle(description: attributes["style", default: ""])
-        color = SVGColorScanner.parseColor(description: attributes["color", default: ""])
+        color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         fill = SVGFill(style: style, attributes: attributes)
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
