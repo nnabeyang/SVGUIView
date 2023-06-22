@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "SVGUIView"
-  s.version      = "0.2.4"
+  s.version      = "0.3.0"
   s.summary      = "An UIView that displays a single SVG image in your interface."
   s.homepage     = "https://github.com/nnabeyang/SVGUIView"
   s.license               = { :type => "MIT", :file => "LICENSE" }
