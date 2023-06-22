@@ -84,7 +84,6 @@ protocol SVGDrawableElement: SVGElement {
     init(other: Self, css: SVGUIStyle)
     init(other: Self, attributes: [String: String])
     func use(attributes: [String: String]) -> Self
-    func draw(_ context: SVGContext, index: Int)
     func toBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext)
