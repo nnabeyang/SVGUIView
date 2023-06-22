@@ -108,7 +108,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
             case .current:
                 return color?.toUIColor(opacity: 1.0)?.cgColor
             case let .color(color, _):
-                return color.toUIColor(opacity: 1.0)?.cgColor
+                return color?.toUIColor(opacity: 1.0)?.cgColor
             default:
                 fatalError("not implemented")
             }
@@ -277,7 +277,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
             case .current:
                 return color?.toUIColor(opacity: 1.0)?.cgColor
             case let .color(color, _):
-                return color.toUIColor(opacity: 1.0)?.cgColor
+                return color?.toUIColor(opacity: 1.0)?.cgColor
             default:
                 fatalError("not implemented")
             }

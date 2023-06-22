@@ -6,21 +6,21 @@ struct SVGRectElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let x: ElementLength
-    let y: ElementLength
+    let x: ElementLength?
+    let y: ElementLength?
     let rx: ElementLength?
     let ry: ElementLength?
-    let width: ElementLength
-    let height: ElementLength
+    let width: ElementLength?
+    let height: ElementLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
-        x = .init(attributes["x"]) ?? .pixel(0)
-        y = .init(attributes["y"]) ?? .pixel(0)
+        x = .init(attributes["x"])
+        y = .init(attributes["y"])
         rx = .init(attributes["rx"])
         ry = .init(attributes["ry"])
-        width = ElementLength(style: base.style[.width], value: attributes["width"]) ?? .pixel(0)
-        height = ElementLength(style: base.style[.height], value: attributes["height"]) ?? .pixel(0)
+        width = ElementLength(style: base.style[.width], value: attributes["width"])
+        height = ElementLength(style: base.style[.height], value: attributes["height"])
     }
 
     init(other: Self, css: SVGUIStyle) {
@@ -38,14 +38,14 @@ struct SVGRectElement: SVGDrawableElement {
             context.push(color: $0)
         }
         let size = context.viewBox.size
-        let x = x.value(total: size.width)
-        let y = y.value(total: size.height)
+        let x = x?.value(total: size.width) ?? 0
+        let y = y?.value(total: size.height) ?? 0
         let _rx = ((rx ?? ry)?.value(total: size.width)).flatMap { $0 < 0 ? nil : $0 }
         let _ry = ((ry ?? rx)?.value(total: size.height)).flatMap { $0 < 0 ? nil : $0 }
         let rx = _rx ?? _ry ?? 0
         let ry = _ry ?? _rx ?? 0
-        let width = width.value(total: size.width)
-        let height = height.value(total: size.height)
+        let width = width?.value(total: size.width) ?? 0
+        let height = height?.value(total: size.height) ?? 0
         if width == 0 || height == 0 {
             return nil
         }

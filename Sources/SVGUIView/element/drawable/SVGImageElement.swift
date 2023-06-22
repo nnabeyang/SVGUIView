@@ -7,19 +7,19 @@ struct SVGImageElement: SVGDrawableElement {
 
     let base: SVGBaseElement
     let data: Data?
-    let x: ElementLength
-    let y: ElementLength
-    let width: ElementLength
-    let height: ElementLength
+    let x: ElementLength?
+    let y: ElementLength?
+    let width: ElementLength?
+    let height: ElementLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
         let src = (attributes["href"] ?? attributes["xlink:href", default: ""]).split(separator: ",").map { String($0) }
         data = src.last.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
-        x = .init(attributes["x"]) ?? .pixel(0)
-        y = .init(attributes["y"]) ?? .pixel(0)
-        width = ElementLength(style: base.style[.width], value: attributes["width"]) ?? .pixel(0)
-        height = ElementLength(style: base.style[.height], value: attributes["height"]) ?? .pixel(0)
+        x = ElementLength(attributes["x"]) ?? .pixel(0)
+        y = ElementLength(attributes["y"]) ?? .pixel(0)
+        width = ElementLength(style: base.style[.width], value: attributes["width"])
+        height = ElementLength(style: base.style[.height], value: attributes["height"])
     }
 
     init(other: Self, css: SVGUIStyle) {
@@ -36,10 +36,10 @@ struct SVGImageElement: SVGDrawableElement {
         context.saveGState()
 
         let size = svgContext.viewBox.size
-        let x = x.value(total: size.width)
-        let y = y.value(total: size.height)
-        let width = width.value(total: size.width)
-        let height = height.value(total: size.width)
+        let x = x?.value(total: size.width) ?? 0
+        let y = y?.value(total: size.height) ?? 0
+        let width = width?.value(total: size.width) ?? 0
+        let height = height?.value(total: size.width) ?? 0
         if let data = data,
            let image = UIImage(data: data),
            let cgImage = image.cgImage

@@ -1,13 +1,13 @@
 enum SVGFill {
     case inherit
     case current
-    case color(color: any SVGUIColor, opacity: Double)
-    case url(String)
+    case color(color: (any SVGUIColor)?, opacity: Double?)
+    case url(url: String, opacity: Double?)
 
     init?(style: SVGUIStyle) {
-        let opacity: Double = {
+        let opacity: Double? = {
             guard case let .number(value) = style[.fillOpacity] else {
-                return 1
+                return nil
             }
             return value
         }()
@@ -18,19 +18,22 @@ enum SVGFill {
             case .current:
                 self = .current
             case let .url(url):
-                self = .url(url)
+                self = .url(url: url, opacity: opacity ?? 1)
             case let .color(color):
-                self = .color(color: color, opacity: opacity)
+                self = .color(color: color, opacity: opacity ?? 1)
             }
             return
         }
-        return nil
+        guard let opacity = opacity else {
+            return nil
+        }
+        self = .color(color: nil, opacity: opacity)
     }
 
     init?(style: SVGUIStyle, attributes: [String: String]) {
-        let opacity: Double = {
+        let opacity: Double? = {
             guard case let .number(value) = style[.fillOpacity] else {
-                return Double(attributes["fill-opacity", default: ""].trimmingCharacters(in: .whitespaces)) ?? 1
+                return Double(attributes["fill-opacity", default: ""].trimmingCharacters(in: .whitespaces))
             }
             return value
         }()
@@ -41,9 +44,9 @@ enum SVGFill {
             case .current:
                 self = .current
             case let .url(url):
-                self = .url(url)
+                self = .url(url: url, opacity: opacity ?? 1)
             case let .color(color):
-                self = .color(color: color, opacity: opacity)
+                self = .color(color: color, opacity: opacity ?? 1)
             }
             return
         }
@@ -52,10 +55,14 @@ enum SVGFill {
         let fill = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
             var scanner = SVGAttributeScanner(bytes: bytes)
-            return scanner.scanFill(opacity: opacity)
+            return scanner.scanFill(opacity: opacity ?? 1)
         }
         guard let fill = fill else {
-            return nil
+            guard let opacity = opacity else {
+                return nil
+            }
+            self = .color(color: nil, opacity: opacity)
+            return
         }
         self = fill
     }
@@ -86,15 +93,42 @@ enum SVGFill {
         }
         self = fill
     }
+
+    init?(lhs: SVGFill?, rhs: SVGFill?) {
+        guard let rhs = rhs else {
+            guard let lhs = lhs else { return nil }
+            self = lhs
+            return
+        }
+        guard let lhs = lhs else {
+            self = rhs
+            return
+        }
+        switch (lhs, rhs) {
+        case let (.color(rc, lo), .url(ru, ro)):
+            if rc != nil {
+                self = .color(color: rc, opacity: lo ?? ro)
+            } else {
+                self = .url(url: ru, opacity: lo ?? ro)
+            }
+        case let (.url(lu, lo), .color(_, ro)),
+             let (.url(lu, lo), .url(_, ro)):
+            self = .url(url: lu, opacity: lo ?? ro)
+        case let (.color(lc, lo), .color(rc, ro)):
+            self = .color(color: lc ?? rc, opacity: lo ?? ro)
+        default:
+            self = lhs
+        }
+    }
 }
 
 extension SVGFill: Equatable {
     static func == (lhs: SVGFill, rhs: SVGFill) -> Bool {
         switch (lhs, rhs) {
         case let (.color(l, lo), .color(r, ro)):
-            return l.description == r.description && lo == ro
-        case let (.url(l), .url(r)):
-            return l == r
+            return l?.description == r?.description && lo == ro
+        case let (.url(l, lo), .url(r, ro)):
+            return l == r && lo == ro
         default:
             return false
         }
@@ -108,9 +142,13 @@ extension SVGFill: Encodable {
             try "inherit".encode(to: encoder)
         case .current:
             try "currentColor".encode(to: encoder)
-        case let .color(color: color, _):
-            try color.encode(to: encoder)
-        case let .url(str):
+        case let .color(color: color, opacity: opacity):
+            var container = encoder.unkeyedContainer()
+            if let color = color {
+                try container.encode(color)
+            }
+            try container.encode(opacity)
+        case let .url(str, _):
             try "url(\(str))".encode(to: encoder)
         }
     }

@@ -6,17 +6,17 @@ struct SVGEllipseElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let cx: ElementLength
-    let cy: ElementLength
+    let cx: ElementLength?
+    let cy: ElementLength?
     let rx: ElementLength?
     let ry: ElementLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
-        cx = .init(attributes["cx"]) ?? .pixel(0)
-        cy = .init(attributes["cy"]) ?? .pixel(0)
-        rx = .init(attributes["rx"])
-        ry = .init(attributes["ry"])
+        cx = ElementLength(attributes["cx"])
+        cy = ElementLength(attributes["cy"])
+        rx = ElementLength(attributes["rx"])
+        ry = ElementLength(attributes["ry"])
     }
 
     init(other: Self, css: SVGUIStyle) {
@@ -29,8 +29,8 @@ struct SVGEllipseElement: SVGDrawableElement {
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
         let size = context.viewBox.size
-        let cx = cx.value(total: size.width)
-        let cy = cy.value(total: size.height)
+        let cx = cx?.value(total: size.width) ?? 0
+        let cy = cy?.value(total: size.height) ?? 0
         let _rx = ((rx ?? ry)?.value(total: size.width)).flatMap { $0 < 0 ? nil : $0 }
         let _ry = ((ry ?? rx)?.value(total: size.height)).flatMap { $0 < 0 ? nil : $0 }
         let rx = _rx ?? _ry ?? 0

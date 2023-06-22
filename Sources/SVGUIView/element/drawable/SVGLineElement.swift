@@ -6,17 +6,17 @@ struct SVGLineElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let x1: ElementLength
-    let y1: ElementLength
-    let x2: ElementLength
-    let y2: ElementLength
+    let x1: ElementLength?
+    let y1: ElementLength?
+    let x2: ElementLength?
+    let y2: ElementLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
-        x1 = .init(attributes["x1"]) ?? .pixel(0)
-        y1 = .init(attributes["y1"]) ?? .pixel(0)
-        x2 = .init(attributes["x2"]) ?? .pixel(0)
-        y2 = .init(attributes["y2"]) ?? .pixel(0)
+        x1 = .init(attributes["x1"])
+        y1 = .init(attributes["y1"])
+        x2 = .init(attributes["x2"])
+        y2 = .init(attributes["y2"])
     }
 
     init(other: Self, css: SVGUIStyle) {
@@ -29,10 +29,10 @@ struct SVGLineElement: SVGDrawableElement {
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
         let size = context.viewBox.size
-        let x1 = x1.value(total: size.width)
-        let y1 = y1.value(total: size.height)
-        let x2 = x2.value(total: size.width)
-        let y2 = y2.value(total: size.height)
+        let x1 = x1?.value(total: size.width) ?? 0
+        let y1 = y1?.value(total: size.height) ?? 0
+        let x2 = x2?.value(total: size.width) ?? 0
+        let y2 = y2?.value(total: size.height) ?? 0
         let start = CGPoint(x: x1, y: y1)
         let end = CGPoint(x: x2, y: y2)
         guard start != end else { return nil }

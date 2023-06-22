@@ -15,16 +15,16 @@ struct SVGTextElement: SVGDrawableElement {
     let text: String
     let font: SVGUIFont
     let textAnchor: TextAnchor?
-    let x: ElementLength
-    let y: ElementLength
+    let x: ElementLength?
+    let y: ElementLength?
 
     init(base: SVGBaseElement, text: String, attributes: [String: String]) {
         self.base = base
         self.text = text
         font = Self.parseFont(attributes: attributes)
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
-        x = .init(attributes["x"]) ?? .pixel(0)
-        y = .init(attributes["y"]) ?? .pixel(0)
+        x = .init(attributes["x"])
+        y = .init(attributes["y"])
     }
 
     private static func parseFont(attributes: [String: String]) -> SVGUIFont {
@@ -59,7 +59,8 @@ struct SVGTextElement: SVGDrawableElement {
                 path.fill()
             }
         case let .color(color, opacity):
-            if let uiColor = color.toUIColor(opacity: self.opacity * opacity) {
+            let opacity = opacity ?? 1.0
+            if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
                 uiColor.setFill()
                 path.fill()
             }
@@ -70,8 +71,8 @@ struct SVGTextElement: SVGDrawableElement {
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
         let size = context.viewBox.size
-        let x = x.value(total: size.width)
-        let y = y.value(total: size.height)
+        let x = x?.value(total: size.width) ?? 0
+        let y = y?.value(total: size.height) ?? 0
         let transform = CGAffineTransform(translationX: x, y: y)
         context.concatenate(transform)
 

@@ -106,7 +106,8 @@ extension SVGDrawableElement {
                 uiColor.setStroke()
             }
         case let .color(color, colorOpacity):
-            if let uiColor = color.toUIColor(opacity: opacity * colorOpacity) {
+            let colorOpacity = colorOpacity ?? 1.0
+            if let uiColor = color?.toUIColor(opacity: opacity * colorOpacity) {
                 uiColor.setStroke()
             } else {
                 UIColor.clear.setStroke()
@@ -156,26 +157,27 @@ extension SVGDrawableElement {
                 path.fill()
             }
         case let .color(color, opacity):
-            if let uiColor = color.toUIColor(opacity: self.opacity * opacity) {
+            let opacity = opacity ?? 1.0
+            if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
                 uiColor.setFill()
                 path.fill()
             }
-        case let .url(id):
+        case let .url(id, opacity):
             guard let server = context.pserver.servers[id] else {
                 UIColor.black.setFill()
                 path.fill()
                 return
             }
-            applyPServerFill(server: server, path: path, context: context)
+            applyPServerFill(server: server, path: path, context: context, opacity: self.opacity * (opacity ?? 1.0))
         }
     }
 
-    func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext) {
+    func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext, opacity: Double) {
         if let id = server.parentId,
            let parent = context.pserver.servers[id],
            let merged = server.merged(other: parent)
         {
-            applyPServerFill(server: merged, path: path, context: context)
+            applyPServerFill(server: merged, path: path, context: context, opacity: opacity)
             return
         }
         server.draw(path: path, context: context)

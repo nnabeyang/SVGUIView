@@ -371,7 +371,7 @@ extension SVGAttributeScanner {
             consumeWhitespaceIfNext(UInt8(ascii: "#"))
             guard let id = scanIdentity() else { return nil }
             guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-            return .url(id)
+            return .url(url: id, opacity: opacity)
         }
     }
 
