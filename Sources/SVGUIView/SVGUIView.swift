@@ -3,13 +3,13 @@ import UIKit
 
 public class SVGUIView: UIView {
     private var svg: SVGSVGElement
-    private var pserver: SVGPaintServer
+    private var baseContext: SVGBaseContext
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
 
-    init(frame: CGRect, data: Data, svg: SVGSVGElement, pserver: SVGPaintServer) {
+    init(frame: CGRect, data: Data, svg: SVGSVGElement, baseContext: SVGBaseContext) {
         self.data = data
         self.svg = svg
-        self.pserver = pserver
+        self.baseContext = baseContext
         super.init(frame: frame)
         backgroundColor = .clear
     }
@@ -20,31 +20,42 @@ public class SVGUIView: UIView {
     }
 
     public convenience init?(data: Data) {
-        guard let (svg, paintServer) = Parser.parse(data: data) else { return nil }
+        let baseContext = Parser.parse(data: data)
+        guard let svg = baseContext.root else { return nil }
         self.init(frame: CGRect(origin: .zero, size: svg.size),
-                  data: data, svg: svg, pserver: paintServer)
+                  data: data, svg: svg, baseContext: baseContext)
     }
 
     public var data: Data {
         didSet {
-            guard let (svg, paintServer) = Parser.parse(data: data) else { return }
+            self.baseContext = Parser.parse(data: data)
+            guard let svg = baseContext.root else { return }
             self.svg = svg
-            self.pserver = paintServer
             self.frame = CGRect(origin: frame.origin, size: svg.size)
             setNeedsDisplay()
         }
     }
 
     override public func draw(_ rect: CGRect) {
+        guard let svg = baseContext.root else { return }
         let viewBox = svg.getViewBox(size: rect.size)
-        let transform = svg.getTransform(viewBox: viewBox, size: rect.size)
+        let graphics = UIGraphicsGetCurrentContext()!
         let context = SVGContext(
-            pserver: pserver,
-            viewBox: viewBox,
-            graphics: UIGraphicsGetCurrentContext()!,
-            transform: transform
+            base: baseContext,
+            graphics: graphics
         )
-        svg.draw(context)
+        context.saveGState()
+        let transform = getTransform(viewBox: viewBox, size: rect.size)
+        context.concatenate(transform)
+        let height = (svg.height ?? .percent(100)).value(total: viewBox.height)
+        let width = (svg.width ?? .percent(100)).value(total: viewBox.width)
+        let viewPortSize = CGSize(width: width, height: height)
+        let scale = viewBox.size.width / viewPortSize.width
+        context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
+        context.push(viewBox: viewBox)
+        svg.draw(context, index: baseContext.contents.count - 1)
+        context.popViewBox()
+        context.restoreGState()
     }
 
     @available(*, unavailable)
@@ -54,5 +65,10 @@ public class SVGUIView: UIView {
 
     override public var intrinsicContentSize: CGSize {
         svg.size
+    }
+
+    func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {
+        let preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .min, option: .meet)
+        return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
     }
 }

@@ -33,6 +33,16 @@ struct SVGRectElement: SVGDrawableElement {
         height = ElementLength(style: css[.height], value: nil) ?? other.height
     }
 
+    init(other: Self, attributes: [String: String]) {
+        base = SVGBaseElement(other: other.base, attributes: attributes)
+        x = other.x
+        y = other.y
+        rx = other.rx
+        ry = other.ry
+        width = other.width
+        height = other.height
+    }
+
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
         color.map {
             context.push(color: $0)

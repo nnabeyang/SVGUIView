@@ -17,43 +17,45 @@ enum SVGElementName: String, Equatable {
     case linearGradient
     case radialGradient
     case stop
+    case use
+    case defs
+    case unknown
 }
 
 final class Parser: NSObject {
     private var pservers: [String: any SVGGradientServer] = [:]
+    private var contentIdMap: [String: Int] = [:]
     private var rules: [CSSRule] = []
     private var contents: [SVGElement] = []
+    private var contentIds: [Int] = []
     private var countList = [Int]()
     private var stack = [(name: SVGElementName, attributes: [String: String])]()
     private var text: String = ""
     private static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "parser")
-    var root: SVGSVGElement? {
-        guard let element = stack.first, case .svg = element.name else { return nil }
-        let svg = SVGSVGElement(attributes: element.attributes, contents: contents)
-        let css = CSSStyle(rules: rules)
-        return svg.style(with: css) as? SVGSVGElement
-    }
 
-    static func parse(data: Data) -> (SVGSVGElement, SVGPaintServer)? {
+    static func parse(data: Data) -> SVGBaseContext {
         let parser = Parser()
         return parser.parse(data: data)
     }
 
-    private func parse(parser: XMLParser) -> (SVGSVGElement, SVGPaintServer)? {
+    private func parse(parser: XMLParser) -> SVGBaseContext {
         parser.delegate = self
         parser.parse()
-        guard let root = root else { return nil }
-        return (root, pserver: SVGPaintServer(servers: pservers))
+        let css = CSSStyle(rules: rules)
+        contents = contents.map {
+            $0.style(with: css)
+        }
+        return SVGBaseContext(pservers: pservers, contentIdMap: contentIdMap, contents: contents)
     }
 
-    private func parse(data: Data) -> (SVGSVGElement, SVGPaintServer)? {
+    private func parse(data: Data) -> SVGBaseContext {
         parse(parser: XMLParser(data: data))
     }
 }
 
 extension Parser: XMLParserDelegate {
     func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
-        guard let name = SVGElementName(rawValue: elementName) else { return }
+        let name = SVGElementName(rawValue: elementName) ?? .unknown
         if !countList.isEmpty {
             countList[countList.count - 1] += 1
         }
@@ -62,8 +64,8 @@ extension Parser: XMLParserDelegate {
     }
 
     func parser(_: XMLParser, didEndElement elementName: String, namespaceURI _: String?, qualifiedName _: String?) {
-        guard let name = SVGElementName(rawValue: elementName) else { return }
-        guard stack.count > 1,
+        let name = SVGElementName(rawValue: elementName) ?? .unknown
+        guard !stack.isEmpty,
               let element = stack.popLast(),
               let count = countList.popLast() else { return }
         precondition(name == element.name)
@@ -71,11 +73,11 @@ extension Parser: XMLParserDelegate {
             switch element.name {
             case .svg:
                 let element = SVGSVGElement(attributes: element.attributes,
-                                            contents: Array(contents.dropFirst(contents.count - count + 1)))
+                                            contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .g:
                 let element = SVGGroupElement(attributes: element.attributes,
-                                              contents: Array(contents.dropFirst(contents.count - count + 1)))
+                                              contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .text:
                 return SVGTextElement(text: text, attributes: element.attributes)
@@ -97,6 +99,18 @@ extension Parser: XMLParserDelegate {
                 return SVGPolygonElement(text: text, attributes: element.attributes)
             case .stop:
                 return SVGStopElement(attributes: element.attributes)
+            case .use:
+                return SVGUseElement(attributes: element.attributes, contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+            case .unknown:
+                if !countList.isEmpty {
+                    countList[countList.count - 1] -= 1
+                }
+                return nil
+            case .defs:
+                if !countList.isEmpty {
+                    countList[countList.count - 1] -= 1
+                }
+                return nil
             case .linearGradient:
                 let pserver = SVGLinearGradientServer(attributes: element.attributes,
                                                       contents: Array(contents.dropFirst(contents.count - count + 1)))
@@ -123,13 +137,23 @@ extension Parser: XMLParserDelegate {
                     var parser = CSSParser(bytes: bytes)
                     rules.append(contentsOf: parser.parseRules())
                 }
+                if !countList.isEmpty {
+                    countList[countList.count - 1] -= 1
+                }
                 return nil
             }
         }()
-        contents = Array(contents.dropLast(count - 1))
+        contentIds = Array(contentIds.dropLast(count - 1))
         text = ""
         content.map {
+            let idx = contents.count
+            contentIds.append(idx)
             contents.append($0)
+            if let id = ($0 as? (any SVGDrawableElement))?.id,
+               contentIdMap[id] == nil
+            {
+                contentIdMap[id] = idx
+            }
         }
     }
 

@@ -1,16 +1,36 @@
 import UIKit
 
 struct SVGContext {
-    let pserver: SVGPaintServer
-    let viewBox: CGRect
+    let base: SVGBaseContext
     let graphics: CGContext
-    let transform: CGAffineTransform
 
+    private let viewBoxStack: Stack<CGRect> = Stack()
     private let fontStack: Stack<SVGUIFont> = Stack()
     private let fillStack: Stack<SVGFill> = Stack()
     private let colorStack: Stack<SVGUIColor> = Stack()
     private let strokeStack: Stack<SVGUIStroke> = Stack()
     private let textAnchorStack: Stack<TextAnchor> = Stack()
+
+    init(base: SVGBaseContext, graphics: CGContext) {
+        self.base = base
+        self.graphics = graphics
+    }
+
+    var pservers: [String: any SVGGradientServer] {
+        base.pservers
+    }
+
+    var contents: [SVGElement] {
+        base.contents
+    }
+
+    subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
+        base[id]
+    }
+
+    var viewBox: CGRect {
+        viewBoxStack.last!
+    }
 
     var font: SVGUIFont? {
         fontStack.last
@@ -30,6 +50,10 @@ struct SVGContext {
 
     var textAnchor: TextAnchor? {
         textAnchorStack.last
+    }
+
+    func push(viewBox: CGRect) {
+        viewBoxStack.push(viewBox)
     }
 
     func push(font: SVGUIFont) {
@@ -52,6 +76,11 @@ struct SVGContext {
 
     func push(textAnchor: TextAnchor) {
         textAnchorStack.push(textAnchor)
+    }
+
+    @discardableResult
+    func popViewBox() -> CGRect? {
+        viewBoxStack.pop()
     }
 
     @discardableResult

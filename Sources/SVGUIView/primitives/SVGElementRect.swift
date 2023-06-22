@@ -1,8 +1,8 @@
 import Foundation
 
 struct SVGElementRect: Encodable {
-    let x: CGFloat
-    let y: CGFloat
+    let x: Double
+    let y: Double
     let width: Double
     let height: Double
     func toCGRect() -> CGRect {

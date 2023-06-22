@@ -10,7 +10,7 @@ enum SpreadMethod: String {
 protocol SVGGradientServer {
     var parentId: String? { get }
     func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
-    func draw(path: UIBezierPath, context: SVGContext)
+    func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
     init(lhs: Self, rhs: SVGLinearGradientServer)
     init(lhs: Self, rhs: SVGRadialGradientServer)
 }
@@ -93,7 +93,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
     }
 
-    func draw(path: UIBezierPath, context: SVGContext) {
+    func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
         let stops = stops ?? []
         let userSpace = userSpace ?? false
         let size = context.viewBox.size
@@ -106,9 +106,10 @@ struct SVGLinearGradientServer: SVGGradientServer {
         let colors = stops.compactMap {
             switch $0.color {
             case .current:
-                return color?.toUIColor(opacity: 1.0)?.cgColor
-            case let .color(color, _):
-                return color?.toUIColor(opacity: 1.0)?.cgColor
+                return color?.toUIColor(opacity: $0.opacity * opacity)?.cgColor
+            case let .color(color, colorOpacity):
+                let colorOpacity = colorOpacity ?? 1.0
+                return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
             default:
                 fatalError("not implemented")
             }
@@ -264,7 +265,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
     }
 
-    func draw(path: UIBezierPath, context: SVGContext) {
+    func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
         let stops = stops ?? []
         let userSpace = userSpace ?? false
         let size = context.viewBox.size
@@ -275,9 +276,10 @@ struct SVGRadialGradientServer: SVGGradientServer {
         let colors = stops.compactMap {
             switch $0.color {
             case .current:
-                return color?.toUIColor(opacity: 1.0)?.cgColor
-            case let .color(color, _):
-                return color?.toUIColor(opacity: 1.0)?.cgColor
+                return color?.toUIColor(opacity: opacity)?.cgColor
+            case let .color(color, colorOpacity):
+                let colorOpacity = colorOpacity ?? 1.0
+                return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
             default:
                 fatalError("not implemented")
             }

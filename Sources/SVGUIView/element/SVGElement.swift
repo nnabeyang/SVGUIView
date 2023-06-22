@@ -2,8 +2,15 @@ import UIKit
 
 protocol SVGElement: Encodable {
     var type: SVGElementName { get }
-    func draw(_ context: SVGContext)
+    func draw(_ context: SVGContext, index: Int)
     func style(with style: CSSStyle) -> any SVGElement
+    func contains(index: Int, context: SVGContext) -> Bool
+}
+
+extension SVGElement {
+    func contains(index _: Int, context _: SVGContext) -> Bool {
+        false
+    }
 }
 
 struct SVGBaseElement {
@@ -15,6 +22,7 @@ struct SVGBaseElement {
     let fill: SVGFill?
     let stroke: SVGUIStroke
     let color: SVGUIColor?
+    let display: CSSDisplay?
     let style: SVGUIStyle
 
     init(attributes: [String: String]) {
@@ -27,6 +35,22 @@ struct SVGBaseElement {
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
         transform = CGAffineTransform(style: style[.transform], description: attributes["transform", default: ""])
         eoFill = attributes["fill-rule", default: ""].trimmingCharacters(in: .whitespaces) == "evenodd"
+        display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
+    }
+
+    init(other: Self, attributes: [String: String]) {
+        id = other.id
+        className = other.className
+        style = other.style
+        color = other.color ?? SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
+        fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
+        stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
+        opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
+        transform = other.transform.concatenating(
+            CGAffineTransform(description: attributes["transform", default: ""]))
+        eoFill = other.eoFill
+        let display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
+        self.display = display ?? other.display
     }
 
     init(other: Self, css: SVGUIStyle) {
@@ -39,6 +63,7 @@ struct SVGBaseElement {
         opacity = other.opacity
         transform = other.transform
         eoFill = other.eoFill
+        display = other.display
     }
 }
 
@@ -53,10 +78,13 @@ protocol SVGDrawableElement: SVGElement {
     var stroke: SVGUIStroke { get }
     var color: SVGUIColor? { get }
     var style: SVGUIStyle { get }
+    var display: CSSDisplay? { get }
     init(text: String, attributes: [String: String])
     init(base: SVGBaseElement, text: String, attributes: [String: String])
     init(other: Self, css: SVGUIStyle)
-    func draw(_ context: SVGContext)
+    init(other: Self, attributes: [String: String])
+    func use(attributes: [String: String]) -> Self
+    func draw(_ context: SVGContext, index: Int)
     func toBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext)
@@ -72,10 +100,20 @@ extension SVGDrawableElement {
     var stroke: SVGUIStroke { base.stroke }
     var color: SVGUIColor? { base.color }
     var style: SVGUIStyle { base.style }
+    var display: CSSDisplay? { base.display }
 
     init(text: String, attributes: [String: String]) {
         let base = SVGBaseElement(attributes: attributes)
         self.init(base: base, text: text, attributes: attributes)
+    }
+
+    init(other: Self, attributes: [String: String]) {
+        let base = SVGBaseElement(other: other.base, attributes: attributes)
+        self.init(base: base, text: "", attributes: attributes)
+    }
+
+    func use(attributes: [String: String]) -> Self {
+        Self(other: self, attributes: attributes)
     }
 
     func style(with style: CSSStyle) -> any SVGElement {
@@ -86,7 +124,10 @@ extension SVGDrawableElement {
         return Self(other: self, css: SVGUIStyle(decratations: properties))
     }
 
-    func draw(_ context: SVGContext) {
+    func draw(_ context: SVGContext, index _: Int) {
+        if let display = display, case .none = display {
+            return
+        }
         context.saveGState()
         guard let path = toBezierPath(context: context) else { return }
         context.concatenate(transform)
@@ -163,7 +204,7 @@ extension SVGDrawableElement {
                 path.fill()
             }
         case let .url(id, opacity):
-            guard let server = context.pserver.servers[id] else {
+            guard let server = context.pservers[id] else {
                 UIColor.black.setFill()
                 path.fill()
                 return
@@ -174,12 +215,12 @@ extension SVGDrawableElement {
 
     func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext, opacity: Double) {
         if let id = server.parentId,
-           let parent = context.pserver.servers[id],
+           let parent = context.pservers[id],
            let merged = server.merged(other: parent)
         {
             applyPServerFill(server: merged, path: path, context: context, opacity: opacity)
             return
         }
-        server.draw(path: path, context: context)
+        server.draw(path: path, context: context, opacity: opacity)
     }
 }

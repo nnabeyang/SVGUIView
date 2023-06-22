@@ -1,14 +1,26 @@
-import Foundation
+import UIKit
 
-struct SVGSVGElement: SVGElement {
+enum SVGOverflow: String {
+    case visible
+    case hidden
+    case scroll
+    case auto
+}
+
+struct SVGSVGElement: SVGDrawableElement {
     var type: SVGElementName {
         .svg
     }
 
-    let width: ElementLength
-    let height: ElementLength
+    let base: SVGBaseElement
+    let preserveAspectRatio: PreserveAspectRatio?
+    let overflow: SVGOverflow?
+    let x: ElementLength?
+    let y: ElementLength?
+    let width: SVGLength?
+    let height: SVGLength?
     let viewBox: SVGElementRect?
-    let contents: [SVGElement]
+    let contentIds: [Int]
 
     let font: SVGUIFont?
 
@@ -16,27 +28,47 @@ struct SVGSVGElement: SVGElement {
         case width
         case height
         case viewBox
-        case contents
+        case contentIds
     }
 
-    init(attributes: [String: String], contents: [SVGElement]) {
-        width = .init(attributes["width"]) ?? .percent(100)
-        height = .init(attributes["height"]) ?? .percent(100)
+    init(attributes: [String: String], contentIds: [Int]) {
+        base = SVGBaseElement(attributes: attributes)
+
+        x = ElementLength(attributes["x"])
+        y = ElementLength(attributes["y"])
+        width = SVGLength(attributes["width"])
+        height = SVGLength(attributes["height"])
         viewBox = Self.parseViewBox(attributes["viewBox"])
         font = Self.parseFont(attributes: attributes)
-        self.contents = contents
+        preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
+        overflow = SVGOverflow(rawValue: attributes["overflow", default: ""].trimmingCharacters(in: .whitespaces))
+        self.contentIds = contentIds
     }
 
-    init(other: Self, css: CSSStyle) {
-        width = other.width
-        height = other.height
+    init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
+        fatalError()
+    }
+
+    init(other: Self, attributes: [String: String]) {
+        base = SVGBaseElement(other: other.base, attributes: attributes)
+
+        x = other.x
+        y = other.y
+        width = .init(attributes["width"]) ?? other.width
+        height = .init(attributes["height"]) ?? other.height
         viewBox = other.viewBox
         font = other.font
-        contents = other.contents.map { $0.style(with: css) }
+        contentIds = other.contentIds
+        preserveAspectRatio = other.preserveAspectRatio
+        overflow = other.overflow
     }
 
-    func style(with css: CSSStyle) -> any SVGElement {
-        SVGSVGElement(other: self, css: css)
+    init(other: SVGSVGElement, css _: SVGUIStyle) {
+        self = other
+    }
+
+    func style(with _: CSSStyle) -> any SVGElement {
+        self
     }
 
     private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
@@ -63,28 +95,65 @@ struct SVGSVGElement: SVGElement {
         return nil
     }
 
-    func draw(_ context: SVGContext) {
+    func draw(_ context: SVGContext, index _: Int) {
         context.saveGState()
-        context.concatenate(context.transform)
-        let gcontext = context.graphics
-        gcontext.beginTransparencyLayer(auxiliaryInfo: nil)
+        let viewPort = context.viewBox
+        let x = (x ?? .pixel(0)).value(total: viewPort.height)
+        let y = (y ?? .pixel(0)).value(total: viewPort.width)
+        context.concatenate(CGAffineTransform(translationX: x, y: y))
+        let height = (height ?? .percent(100)).value(total: viewPort.height)
+        let width = (width ?? .percent(100)).value(total: viewPort.width)
+        let viewPortSize = CGSize(width: width, height: height)
+        let transform = viewBox.map { getTransform(viewBox: $0.toCGRect(), size: viewPortSize) } ?? .identity
+        context.concatenate(transform)
+        let rect = CGRect(origin: .zero, size: viewPortSize).applying(transform.inverted())
+        if let viewBox = viewBox {
+            context.push(viewBox: viewBox.toCGRect())
+        } else {
+            context.push(viewBox: rect)
+        }
+
+        let gContext = context.graphics
+        let overflow = overflow ?? .hidden
+        switch overflow {
+        case .visible, .auto:
+            break
+        default:
+            if self.width != nil, self.height != nil {
+                gContext.addPath(UIBezierPath(roundedRect: rect, cornerSize: .zero).cgPath)
+                gContext.clip()
+            }
+        }
+
+        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
         font.map {
             context.push(font: $0)
         }
-        for node in contents {
-            node.draw(context)
+        for index in contentIds {
+            context.contents[index].draw(context, index: index)
         }
         font.map { _ in
             _ = context.popFont()
         }
-        gcontext.endTransparencyLayer()
+        context.popViewBox()
+        gContext.endTransparencyLayer()
         context.restoreGState()
+    }
+
+    func contains(index: Int, context _: SVGContext) -> Bool {
+        contentIds.contains(index)
     }
 
     var size: CGSize {
         let rect = viewBox?.toCGRect() ?? .zero
+        let width = width ?? .percent(100)
+        let height = height ?? .percent(100)
         return CGSize(width: width.value(total: rect.width),
                       height: height.value(total: rect.height))
+    }
+
+    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+        nil
     }
 }
 
@@ -94,10 +163,7 @@ extension SVGSVGElement {
         try container.encode(width, forKey: .width)
         try container.encode(height, forKey: .height)
         try container.encodeIfPresent(viewBox, forKey: .viewBox)
-        var contentsContainer = container.nestedUnkeyedContainer(forKey: .contents)
-        for content in contents {
-            try contentsContainer.encode(content)
-        }
+        try container.encode(contentIds, forKey: .contentIds)
     }
 }
 
@@ -106,7 +172,8 @@ extension SVGSVGElement {
         if let viewBox = viewBox {
             return viewBox.toCGRect()
         }
-
+        let width = width ?? .percent(100)
+        let height = height ?? .percent(100)
         return CGRect(x: 0,
                       y: 0,
                       width: width.value(total: size.width),
@@ -114,21 +181,7 @@ extension SVGSVGElement {
     }
 
     func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {
-        let rect = CGRect(origin: .zero, size: viewBox.size)
-
-        let widthRatio = size.width / rect.width
-        let heightRatio = size.height / rect.height
-
-        let newSize: CGSize
-        if heightRatio < widthRatio {
-            newSize = CGSize(width: rect.width * heightRatio, height: size.height)
-        } else {
-            newSize = CGSize(width: size.width, height: rect.height * widthRatio)
-        }
-        let sx = newSize.width / rect.width
-        let sy = newSize.height / rect.height
-        let dx = (size.width - newSize.width) / (2 * sx) - viewBox.minX
-        let dy = (size.height - newSize.height) / (2 * sy) - viewBox.minY
-        return CGAffineTransform(scaleX: sx, y: sy).translatedBy(x: dx, y: dy)
+        let preserveAspectRatio = preserveAspectRatio ?? PreserveAspectRatio()
+        return preserveAspectRatio.getTransform(viewBox: viewBox, size: size)
     }
 }

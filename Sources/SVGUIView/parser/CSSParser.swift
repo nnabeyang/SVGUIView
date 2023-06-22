@@ -1,5 +1,26 @@
 import CoreGraphics
 
+enum CSSDisplay: String {
+    case inline
+    case block
+    case listItem = "list-item"
+    case runIn = "run-in"
+    case compact
+    case marker
+    case table
+    case inlineTable = "inline-table"
+    case tableRowGroup = "table-row-group"
+    case tableHeaderGroup = "table-header-group"
+    case tableFooterGroup = "table-hooter-group"
+    case tableRow = "table-row"
+    case tableColumnGroup = "table-column-group"
+    case tableColumn = "table-column"
+    case tableCell = "table-cell"
+    case tableCaption = "table-caption"
+    case none
+    case inherit
+}
+
 struct CSSDeclaration: Equatable, Codable {
     let type: CSSValueType
     let value: CSSValue

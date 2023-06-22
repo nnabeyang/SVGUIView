@@ -31,7 +31,7 @@ struct SVGStopElement: SVGElement {
         .stop
     }
 
-    func draw(_: SVGContext) {
+    func draw(_: SVGContext, index _: Int) {
         fatalError()
     }
 
@@ -41,6 +41,7 @@ struct SVGStopElement: SVGElement {
 
     let offset: StopDimension
     let color: SVGFill?
+    let opacity: Double
     init(attributes: [String: String]) {
         let attribute = attributes["offset", default: ""].trimmingCharacters(in: .whitespaces)
         if attribute.hasSuffix("%") {
@@ -49,6 +50,7 @@ struct SVGStopElement: SVGElement {
             offset = .absolute(Double(attribute) ?? 0)
         }
         color = SVGFill(description: attributes["stop-color", default: "black"])
+        opacity = Double(attributes["stop-opacity", default: ""].trimmingCharacters(in: .whitespaces)) ?? 1.0
     }
 }
 

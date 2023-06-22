@@ -1,34 +1,53 @@
-import Foundation
+import UIKit
 
-struct SVGGroupElement: SVGElement {
+struct SVGGroupElement: SVGDrawableElement {
     var type: SVGElementName {
         .g
     }
 
-    let transform: CGAffineTransform
-    let contents: [SVGElement]
+    let base: SVGBaseElement
+
+    let contentIds: [Int]
     let font: SVGUIFont?
-    let opacity: Double
-    let fill: SVGFill?
-    let color: SVGUIColor?
-    let stroke: SVGUIStroke?
     let textAnchor: TextAnchor?
-    let style: SVGUIStyle
 
     private enum CodingKeys: String, CodingKey {
-        case contents
+        case contentIds
     }
 
-    init(attributes: [String: String], contents: [SVGElement]) {
-        transform = CGAffineTransform(description: attributes["transform", default: ""])
-        self.contents = contents
+    init(attributes: [String: String], contentIds: [Int]) {
         font = Self.parseFont(attributes: attributes)
-        style = SVGUIStyle(description: attributes["style", default: ""])
-        fill = SVGFill(style: style, attributes: attributes)
-        color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
-        stroke = SVGUIStroke(attributes: attributes)
-        opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
+        base = SVGBaseElement(attributes: attributes)
+        self.contentIds = contentIds
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
+    }
+
+    init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
+        fatalError()
+    }
+
+    init(other: Self, attributes: [String: String]) {
+        base = SVGBaseElement(other: other.base, attributes: attributes)
+        contentIds = other.contentIds
+        font = other.font
+        textAnchor = other.textAnchor
+    }
+
+    init(other: SVGGroupElement, css _: SVGUIStyle) {
+        self = other
+    }
+
+    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+        nil
+    }
+
+    private static func parseColor(description: String) -> (any SVGUIColor)? {
+        var data = description
+        return data.withUTF8 {
+            let bytes = BufferView(unsafeBufferPointer: $0)!
+            var scanner = SVGAttributeScanner(bytes: bytes)
+            return scanner.scanColor()
+        }
     }
 
     private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
@@ -48,7 +67,7 @@ struct SVGGroupElement: SVGElement {
         self
     }
 
-    func draw(_ context: SVGContext) {
+    func draw(_ context: SVGContext, index _: Int) {
         context.saveGState()
         context.concatenate(transform)
         let gcontext = context.graphics
@@ -63,14 +82,12 @@ struct SVGGroupElement: SVGElement {
         color.map {
             context.push(color: $0)
         }
-        stroke.map {
-            context.push(stroke: $0)
-        }
+        context.push(stroke: stroke)
         textAnchor.map {
             context.push(textAnchor: $0)
         }
-        for node in contents {
-            node.draw(context)
+        for index in contentIds {
+            context.contents[index].draw(context, index: index)
         }
         font.map { _ in
             _ = context.popFont()
@@ -81,24 +98,23 @@ struct SVGGroupElement: SVGElement {
         color.map { _ in
             _ = context.popColor()
         }
-        stroke.map { _ in
-            _ = context.popStroke()
-        }
+        _ = context.popStroke()
         textAnchor.map { _ in
             _ = context.popTextAnchor()
         }
         gcontext.endTransparencyLayer()
         context.restoreGState()
     }
+
+    func contains(index: Int, context _: SVGContext) -> Bool {
+        contentIds.contains(index)
+    }
 }
 
 extension SVGGroupElement {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys)
-        var contentsContainer = container.nestedUnkeyedContainer(forKey: .contents)
-        for content in contents {
-            try contentsContainer.encode(content)
-        }
+        try container.encode(contentIds, forKey: .contentIds)
     }
 }
 

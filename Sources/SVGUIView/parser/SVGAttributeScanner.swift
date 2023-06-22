@@ -430,6 +430,50 @@ extension SVGAttributeScanner {
     }
 }
 
+// for preserveAspectRatio attribute
+extension SVGAttributeScanner {
+    mutating func scanPreserveAspectRatio() -> PreserveAspectRatio? {
+        _ = reader.consumeWhitespace()
+        if reader.isEOF { return nil }
+        guard let alignValue = scanIdentity(),
+              let type = PreserveAspectRatio.AlignType(rawValue: alignValue)
+        else {
+            return nil
+        }
+        _ = reader.consumeWhitespace()
+        let option: PreserveAspectRatio.Option = {
+            guard !reader.isEOF,
+                  let optionValue = scanIdentity()
+            else {
+                return .meet
+            }
+            return PreserveAspectRatio.Option(rawValue: optionValue) ?? .meet
+        }()
+        switch type {
+        case .xMinYMin:
+            return .normal(x: .min, y: .min, option: option)
+        case .xMidYMin:
+            return .normal(x: .mid, y: .min, option: option)
+        case .xMaxYMin:
+            return .normal(x: .max, y: .min, option: option)
+        case .xMinYMid:
+            return .normal(x: .min, y: .mid, option: option)
+        case .xMidYMid:
+            return .normal(x: .mid, y: .mid, option: option)
+        case .xMaxYMid:
+            return .normal(x: .max, y: .mid, option: option)
+        case .xMinYMax:
+            return .normal(x: .min, y: .max, option: option)
+        case .xMidYMax:
+            return .normal(x: .mid, y: .max, option: option)
+        case .xMaxYMax:
+            return .normal(x: .max, y: .max, option: option)
+        case .none:
+            return PreserveAspectRatio.none
+        }
+    }
+}
+
 extension Double {
     init?(prevalidatedBuffer buffer: BufferView<UInt8>) {
         let value = buffer.withUnsafePointer { nptr, count -> Double? in

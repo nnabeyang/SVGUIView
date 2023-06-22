@@ -31,7 +31,7 @@ struct SVGImageElement: SVGDrawableElement {
         height = other.height
     }
 
-    func draw(_ svgContext: SVGContext) {
+    func draw(_ svgContext: SVGContext, index _: Int) {
         let context = svgContext.graphics
         context.saveGState()
 
