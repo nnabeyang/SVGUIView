@@ -53,7 +53,7 @@ public class SVGUIView: UIView {
         let scale = viewBox.size.width / viewPortSize.width
         context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
         context.push(viewBox: viewBox)
-        svg.draw(context, index: baseContext.contents.count - 1)
+        svg.draw(context, index: baseContext.contents.count - 1, depth: 1)
         context.popViewBox()
         context.restoreGState()
     }

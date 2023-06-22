@@ -67,7 +67,8 @@ struct SVGGroupElement: SVGDrawableElement {
         self
     }
 
-    func draw(_ context: SVGContext, index _: Int) {
+    func draw(_ context: SVGContext, index _: Int, depth: Int) {
+        guard !context.detectCycles(type: type, depth: depth) else { return }
         context.saveGState()
         context.concatenate(transform)
         let gcontext = context.graphics
@@ -87,7 +88,7 @@ struct SVGGroupElement: SVGDrawableElement {
             context.push(textAnchor: $0)
         }
         for index in contentIds {
-            context.contents[index].draw(context, index: index)
+            context.contents[index].draw(context, index: index, depth: depth + 1)
         }
         font.map { _ in
             _ = context.popFont()

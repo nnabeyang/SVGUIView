@@ -61,7 +61,8 @@ struct SVGUseElement: SVGDrawableElement {
         nil
     }
 
-    func draw(_ context: SVGContext, index: Int) {
+    func draw(_ context: SVGContext, index: Int, depth: Int) {
+        guard !context.detectCycles(type: type, depth: depth) else { return }
         guard let parentId = parentId,
               let (newIndex, element) = context[parentId],
               !element.contains(index: index, context: context) else { return }
@@ -76,7 +77,7 @@ struct SVGUseElement: SVGDrawableElement {
         let transform = CGAffineTransform(translationX: x, y: y)
         context.concatenate(transform)
         let newElement = element.use(attributes: attributes)
-        newElement.draw(context, index: newIndex)
+        newElement.draw(context, index: newIndex, depth: depth + 1)
     }
 
     func contains(index: Int, context: SVGContext) -> Bool {

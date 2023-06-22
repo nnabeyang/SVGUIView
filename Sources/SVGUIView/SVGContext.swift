@@ -4,6 +4,7 @@ struct SVGContext {
     let base: SVGBaseContext
     let graphics: CGContext
 
+    private let startDetectingCyclesAfter: Int
     private let viewBoxStack: Stack<CGRect> = Stack()
     private let fontStack: Stack<SVGUIFont> = Stack()
     private let fillStack: Stack<SVGFill> = Stack()
@@ -11,9 +12,10 @@ struct SVGContext {
     private let strokeStack: Stack<SVGUIStroke> = Stack()
     private let textAnchorStack: Stack<TextAnchor> = Stack()
 
-    init(base: SVGBaseContext, graphics: CGContext) {
+    init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000) {
         self.base = base
         self.graphics = graphics
+        self.startDetectingCyclesAfter = startDetectingCyclesAfter
     }
 
     var pservers: [String: any SVGGradientServer] {
@@ -26,6 +28,14 @@ struct SVGContext {
 
     subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
         base[id]
+    }
+
+    func detectCycles(type: SVGElementName, depth: Int) -> Bool {
+        let maybeCycling = depth >= startDetectingCyclesAfter
+        if maybeCycling {
+            SVGUIView.logger.debug("encountered a cycle via \(type.rawValue)")
+        }
+        return maybeCycling
     }
 
     var viewBox: CGRect {

@@ -95,7 +95,8 @@ struct SVGSVGElement: SVGDrawableElement {
         return nil
     }
 
-    func draw(_ context: SVGContext, index _: Int) {
+    func draw(_ context: SVGContext, index _: Int, depth: Int) {
+        guard !context.detectCycles(type: type, depth: depth) else { return }
         context.saveGState()
         let viewPort = context.viewBox
         let x = (x ?? .pixel(0)).value(total: viewPort.height)
@@ -130,7 +131,7 @@ struct SVGSVGElement: SVGDrawableElement {
             context.push(font: $0)
         }
         for index in contentIds {
-            context.contents[index].draw(context, index: index)
+            context.contents[index].draw(context, index: index, depth: depth + 1)
         }
         font.map { _ in
             _ = context.popFont()
