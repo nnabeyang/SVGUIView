@@ -2,6 +2,7 @@ import Foundation
 
 enum PreserveAspectRatio {
     case normal(x: Align, y: Align, option: Option)
+    case simple(x: Align, y: Align)
     case none
 
     enum Align: String {
@@ -58,6 +59,10 @@ enum PreserveAspectRatio {
         self = .normal(x: xAlign, y: yAlign, option: option)
     }
 
+    init(xAlign: Align, yAlign: Align) {
+        self = .simple(x: xAlign, y: yAlign)
+    }
+
     init?(description: String) {
         var data = description
         let value = data.withUTF8 {
@@ -80,6 +85,11 @@ enum PreserveAspectRatio {
             sy = size.height / viewBox.height
             dx = 0
             dy = 0
+        case let .simple(xAlign, yAlign):
+            sx = 1.0
+            sy = 1.0
+            dx = xAlign.align(outer: size.width, inner: viewBox.width)
+            dy = yAlign.align(outer: size.height, inner: viewBox.height)
         case let .normal(xAlign, yAlign, option):
             let newSize = option.fit(size: viewBox.size, into: size)
             sx = newSize.width / viewBox.width

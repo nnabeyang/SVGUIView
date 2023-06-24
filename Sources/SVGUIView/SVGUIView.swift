@@ -45,13 +45,26 @@ public class SVGUIView: UIView {
             graphics: graphics
         )
         context.saveGState()
-        let transform = getTransform(viewBox: viewBox, size: rect.size)
-        context.concatenate(transform)
         let height = (svg.height ?? .percent(100)).value(total: viewBox.height)
         let width = (svg.width ?? .percent(100)).value(total: viewBox.width)
-        let viewPortSize = CGSize(width: width, height: height)
-        let scale = viewBox.size.width / viewPortSize.width
-        context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
+        switch contentMode {
+        case .scaleToFill:
+            let scaleX = viewBox.width / width
+            let scaleY = viewBox.height / height
+            context.concatenate(CGAffineTransform(scaleX: scaleX, y: scaleY))
+        default:
+            break
+        }
+
+        let transform = getTransform(viewBox: viewBox, size: rect.size)
+        context.concatenate(transform)
+        switch contentMode {
+        case .scaleAspectFill, .scaleAspectFit, .scaleToFill:
+            let scale = viewBox.width / width
+            context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
+        default:
+            break
+        }
         context.push(viewBox: viewBox)
         svg.draw(context, index: baseContext.contents.count - 1, depth: 1)
         context.popViewBox()
@@ -68,7 +81,35 @@ public class SVGUIView: UIView {
     }
 
     func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {
-        let preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .min, option: .meet)
+        let preserveAspectRatio: PreserveAspectRatio
+        switch contentMode {
+        case .scaleToFill, .redraw:
+            preserveAspectRatio = .none
+        case .scaleAspectFit:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet)
+        case .scaleAspectFill:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .slice)
+        case .center:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .mid)
+        case .top:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .min)
+        case .bottom:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .max)
+        case .left:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .min, yAlign: .mid)
+        case .right:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .max, yAlign: .mid)
+        case .topLeft:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .min, yAlign: .min)
+        case .topRight:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .max, yAlign: .min)
+        case .bottomLeft:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .min, yAlign: .max)
+        case .bottomRight:
+            preserveAspectRatio = PreserveAspectRatio(xAlign: .max, yAlign: .max)
+        @unknown default:
+            preserveAspectRatio = .none
+        }
         return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
     }
 }
