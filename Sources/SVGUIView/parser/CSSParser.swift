@@ -21,6 +21,13 @@ enum CSSDisplay: String {
     case inherit
 }
 
+enum CSSVisibility: String {
+    case visible
+    case hidden
+    case collapse
+    case inherit
+}
+
 struct CSSDeclaration: Equatable, Codable {
     let type: CSSValueType
     let value: CSSValue

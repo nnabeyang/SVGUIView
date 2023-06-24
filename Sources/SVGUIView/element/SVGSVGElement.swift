@@ -130,9 +130,22 @@ struct SVGSVGElement: SVGDrawableElement {
         font.map {
             context.push(font: $0)
         }
+        context.pushClipIdStack()
+        if case let .url(id) = clipPath,
+           let clipPath = context.clipPaths[id],
+           context.check(clipId: id)
+        {
+            let bezierPath = clipPath.toBezierPath(context: context, frame: rect)
+            context.remove(clipId: id)
+            if bezierPath.isEmpty {
+                return
+            }
+            bezierPath.addClip()
+        }
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1)
         }
+        context.popClipIdStack()
         font.map { _ in
             _ = context.popFont()
         }
@@ -143,6 +156,12 @@ struct SVGSVGElement: SVGDrawableElement {
 
     func contains(index: Int, context _: SVGContext) -> Bool {
         contentIds.contains(index)
+    }
+
+    func clip(context: inout SVGBaseContext) {
+        for index in contentIds {
+            context.contents[index].clip(context: &context)
+        }
     }
 
     var size: CGSize {

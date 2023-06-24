@@ -5,24 +5,30 @@ protocol SVGElement: Encodable {
     func draw(_ context: SVGContext, index: Int, depth: Int)
     func style(with style: CSSStyle) -> any SVGElement
     func contains(index: Int, context: SVGContext) -> Bool
+    func clip(context: inout SVGBaseContext)
 }
 
 extension SVGElement {
     func contains(index _: Int, context _: SVGContext) -> Bool {
         false
     }
+
+    func clip(context _: inout SVGBaseContext) {}
 }
 
 struct SVGBaseElement {
     let id: String?
     let opacity: Double
     let eoFill: Bool
+    let clipRule: Bool?
     let className: String?
     let transform: CGAffineTransform
     let fill: SVGFill?
     let stroke: SVGUIStroke
     let color: SVGUIColor?
+    let clipPath: SVGClipPath?
     let display: CSSDisplay?
+    let visibility: CSSVisibility?
     let style: SVGUIStyle
 
     init(attributes: [String: String]) {
@@ -30,12 +36,15 @@ struct SVGBaseElement {
         className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
         style = SVGUIStyle(description: attributes["style", default: ""])
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
+        clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
         fill = SVGFill(style: style, attributes: attributes)
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
         transform = CGAffineTransform(style: style[.transform], description: attributes["transform", default: ""])
         eoFill = attributes["fill-rule", default: ""].trimmingCharacters(in: .whitespaces) == "evenodd"
+        clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
         display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
+        visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
     }
 
     init(other: Self, attributes: [String: String]) {
@@ -43,14 +52,18 @@ struct SVGBaseElement {
         className = other.className
         style = other.style
         color = other.color ?? SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
+        clipPath = other.clipPath
         fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
         stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
         opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
         transform = other.transform.concatenating(
             CGAffineTransform(description: attributes["transform", default: ""]))
         eoFill = other.eoFill
+        clipRule = other.clipRule
         let display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
         self.display = display ?? other.display
+        let visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
+        self.visibility = visibility ?? other.visibility
     }
 
     init(other: Self, css: SVGUIStyle) {
@@ -58,12 +71,15 @@ struct SVGBaseElement {
         style = other.style
         className = other.className
         fill = SVGFill(style: css) ?? other.fill
+        clipPath = other.clipPath
         color = other.color
         stroke = other.stroke
         opacity = other.opacity
         transform = other.transform
         eoFill = other.eoFill
+        clipRule = other.clipRule
         display = other.display
+        visibility = other.visibility
     }
 }
 
@@ -72,6 +88,7 @@ protocol SVGDrawableElement: SVGElement {
     var base: SVGBaseElement { get }
     var opacity: Double { get }
     var eoFill: Bool { get }
+    var clipRule: Bool? { get }
     var className: String? { get }
     var transform: CGAffineTransform { get }
     var fill: SVGFill? { get }
@@ -79,6 +96,7 @@ protocol SVGDrawableElement: SVGElement {
     var color: SVGUIColor? { get }
     var style: SVGUIStyle { get }
     var display: CSSDisplay? { get }
+    var visibility: CSSVisibility? { get }
     func frame(context: SVGContext) -> CGRect
     init(text: String, attributes: [String: String])
     init(base: SVGBaseElement, text: String, attributes: [String: String])
@@ -86,6 +104,7 @@ protocol SVGDrawableElement: SVGElement {
     init(other: Self, attributes: [String: String])
     func use(attributes: [String: String]) -> Self
     func toBezierPath(context: SVGContext) -> UIBezierPath?
+    func toClipedBezierPath(context: SVGContext, isRoot: Bool) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext)
 }
@@ -94,13 +113,16 @@ extension SVGDrawableElement {
     var id: String? { base.id }
     var opacity: Double { base.opacity }
     var eoFill: Bool { base.eoFill }
+    var clipRule: Bool? { base.clipRule }
     var className: String? { base.className }
     var transform: CGAffineTransform { base.transform }
     var fill: SVGFill? { base.fill }
     var stroke: SVGUIStroke { base.stroke }
+    var clipPath: SVGClipPath? { base.clipPath }
     var color: SVGUIColor? { base.color }
     var style: SVGUIStyle { base.style }
     var display: CSSDisplay? { base.display }
+    var visibility: CSSVisibility? { base.visibility }
 
     init(text: String, attributes: [String: String]) {
         let base = SVGBaseElement(attributes: attributes)
@@ -128,14 +150,43 @@ extension SVGDrawableElement {
         toBezierPath(context: context)?.cgPath.boundingBoxOfPath ?? .zero
     }
 
+    func toClipedBezierPath(context: SVGContext, isRoot: Bool = false) -> UIBezierPath? {
+        if isRoot {
+            context.pushClipIdStack()
+        }
+        let frame = frame(context: context)
+        guard let path = toBezierPath(context: context) else { return nil }
+        let result: UIBezierPath
+        if case let .url(id) = clipPath,
+           let clipPath = context.clipPaths[id],
+           context.check(clipId: id)
+        {
+            let bezierPath = clipPath.toBezierPath(context: context, frame: frame)
+            context.remove(clipId: id)
+            if bezierPath.isEmpty {
+                return nil
+            }
+            let clipRule = clipRule ?? false
+            let lcgPath = path.cgPath.xnormalized(using: clipRule ? .evenOdd : .winding)
+            let cgPath = lcgPath.xintersection(bezierPath.cgPath)
+            result = UIBezierPath(cgPath: cgPath)
+        } else {
+            result = path
+        }
+        if isRoot {
+            context.popClipIdStack()
+        }
+        return result
+    }
+
     func draw(_ context: SVGContext, index _: Int, depth: Int) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         if let display = display, case .none = display {
             return
         }
         context.saveGState()
-        guard let path = toBezierPath(context: context) else { return }
         context.concatenate(transform)
+        guard let path = toClipedBezierPath(context: context, isRoot: true) else { return }
         applySVGFill(fill: fill, path: path, context: context)
         applySVGStroke(stroke: stroke, path: path, context: context)
         context.restoreGState()

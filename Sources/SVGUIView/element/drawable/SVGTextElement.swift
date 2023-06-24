@@ -96,7 +96,16 @@ struct SVGTextElement: SVGDrawableElement {
 
     func frame(context: SVGContext) -> CGRect {
         guard let line = getLine(context: context) else { return .zero }
-        return CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
+        let size = context.viewBox.size
+        let x = x?.value(total: size.width) ?? 0
+        let y = y?.value(total: size.height) ?? 0
+        var transform = CGAffineTransform(translationX: x, y: y)
+            .scaledBy(x: 1.0, y: -1.0)
+        let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
+        if case .middle = textAnchor ?? context.textAnchor ?? .start {
+            transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
+        }
+        return rect.applying(transform)
     }
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {

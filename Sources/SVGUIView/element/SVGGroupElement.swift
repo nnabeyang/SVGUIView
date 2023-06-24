@@ -71,9 +71,9 @@ struct SVGGroupElement: SVGDrawableElement {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         context.saveGState()
         context.concatenate(transform)
-        let gcontext = context.graphics
         context.setAlpha(opacity)
-        gcontext.beginTransparencyLayer(auxiliaryInfo: nil)
+        let gContext = context.graphics
+        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
         font.map {
             context.push(font: $0)
         }
@@ -87,9 +87,22 @@ struct SVGGroupElement: SVGDrawableElement {
         textAnchor.map {
             context.push(textAnchor: $0)
         }
+        context.pushClipIdStack()
+        if case let .url(id) = clipPath,
+           let clipPath = context.clipPaths[id],
+           context.check(clipId: id)
+        {
+            let bezierPath = clipPath.toBezierPath(context: context, frame: context.viewBox)
+            context.remove(clipId: id)
+            if bezierPath.isEmpty {
+                return
+            }
+            bezierPath.addClip()
+        }
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1)
         }
+        context.popClipIdStack()
         font.map { _ in
             _ = context.popFont()
         }
@@ -103,8 +116,20 @@ struct SVGGroupElement: SVGDrawableElement {
         textAnchor.map { _ in
             _ = context.popTextAnchor()
         }
-        gcontext.endTransparencyLayer()
+        gContext.endTransparencyLayer()
         context.restoreGState()
+    }
+
+    func clip(context: inout SVGBaseContext) {
+        clipRule.map {
+            context.push(clipRule: $0)
+        }
+        for index in contentIds {
+            context.contents[index].clip(context: &context)
+        }
+        clipRule.map { _ in
+            _ = context.popClipRule()
+        }
     }
 
     func contains(index: Int, context _: SVGContext) -> Bool {

@@ -19,6 +19,7 @@ enum SVGElementName: String, Equatable {
     case stop
     case use
     case defs
+    case clipPath
     case unknown
 }
 
@@ -45,7 +46,11 @@ final class Parser: NSObject {
         contents = contents.map {
             $0.style(with: css)
         }
-        return SVGBaseContext(pservers: pservers, contentIdMap: contentIdMap, contents: contents)
+        var context = SVGBaseContext(pservers: pservers, contentIdMap: contentIdMap, contents: contents)
+        contents.last.map {
+            $0.clip(context: &context)
+        }
+        return context
     }
 
     private func parse(data: Data) -> SVGBaseContext {
@@ -79,6 +84,10 @@ extension Parser: XMLParserDelegate {
                 let element = SVGGroupElement(attributes: element.attributes,
                                               contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
+            case .clipPath:
+                let element = SVGClipPathElement(attributes: element.attributes,
+                                                 contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return element
             case .text:
                 return SVGTextElement(text: text, attributes: element.attributes)
             case .image:
@@ -107,10 +116,9 @@ extension Parser: XMLParserDelegate {
                 }
                 return nil
             case .defs:
-                if !countList.isEmpty {
-                    countList[countList.count - 1] -= 1
-                }
-                return nil
+                let element = SVGDefsElement(attributes: element.attributes,
+                                             contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return element
             case .linearGradient:
                 let pserver = SVGLinearGradientServer(attributes: element.attributes,
                                                       contents: Array(contents.dropFirst(contents.count - count + 1)))

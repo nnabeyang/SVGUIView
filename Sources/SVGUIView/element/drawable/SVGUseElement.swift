@@ -57,8 +57,21 @@ struct SVGUseElement: SVGDrawableElement {
         self
     }
 
-    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
-        nil
+    func toBezierPath(context: SVGContext) -> UIBezierPath? {
+        guard let parentId = parentId,
+              let (_, element) = context[parentId] else { return nil }
+        let gContext = context.graphics
+        gContext.saveGState()
+        defer {
+            gContext.restoreGState()
+        }
+        let size = context.viewBox.size
+        let x = x?.value(total: size.width) ?? 0
+        let y = y?.value(total: size.height) ?? 0
+        let transform = CGAffineTransform(translationX: x, y: y)
+        context.concatenate(transform)
+        let newElement = element.use(attributes: attributes)
+        return newElement.toBezierPath(context: context)
     }
 
     func draw(_ context: SVGContext, index: Int, depth: Int) {
