@@ -119,7 +119,7 @@ struct SVGTextElement: SVGDrawableElement {
         }
 
         let path = UIBezierPath(cgPath: letters)
-        let rect = path.cgPath.boundingBoxOfPath
+        let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
         if case .middle = textAnchor ?? context.textAnchor ?? .start {
             gContext.translateBy(x: -rect.width / 2.0, y: 0)
         }
