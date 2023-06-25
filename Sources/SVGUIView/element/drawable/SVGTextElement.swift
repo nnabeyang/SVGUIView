@@ -91,14 +91,7 @@ struct SVGTextElement: SVGDrawableElement {
     }
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
-        let size = context.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
-        let transform = CGAffineTransform(translationX: x, y: y)
-        context.concatenate(transform)
         guard let line = getLine(context: context) else { return nil }
-        let gContext = context.graphics
-        gContext.scaleBy(x: 1.0, y: -1.0)
         let letters = CGMutablePath()
         let runs = CTLineGetGlyphRuns(line)
         for i in 0 ..< CFArrayGetCount(runs) {
@@ -119,10 +112,18 @@ struct SVGTextElement: SVGDrawableElement {
         }
 
         let path = UIBezierPath(cgPath: letters)
+
+        let size = context.viewBox.size
+        let x = x?.value(total: size.width) ?? 0
+        let y = y?.value(total: size.height) ?? 0
+        var transform = CGAffineTransform(translationX: x, y: y)
+            .scaledBy(x: 1.0, y: -1.0)
+
         let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
         if case .middle = textAnchor ?? context.textAnchor ?? .start {
-            gContext.translateBy(x: -rect.width / 2.0, y: 0)
+            transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
         }
+        path.apply(transform)
         return path
     }
 }
