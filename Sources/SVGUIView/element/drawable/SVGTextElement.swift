@@ -27,6 +27,15 @@ struct SVGTextElement: SVGDrawableElement {
         y = .init(attributes["y"])
     }
 
+    init(other: Self, attributes: [String: String]) {
+        base = SVGBaseElement(other: other.base, attributes: attributes)
+        text = other.text
+        font = SVGUIFont(lhs: other.font, rhs: Self.parseFont(attributes: attributes))
+        textAnchor = other.textAnchor ?? TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
+        x = other.x
+        y = other.y
+    }
+
     private static func parseFont(attributes: [String: String]) -> SVGUIFont {
         let name = attributes["font-family"]
         let size = Double(attributes["font-size", default: ""]).flatMap { CGFloat($0) }
