@@ -69,13 +69,7 @@ struct SVGTextElement: SVGDrawableElement {
         }
     }
 
-    func toBezierPath(context: SVGContext) -> UIBezierPath? {
-        let size = context.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
-        let transform = CGAffineTransform(translationX: x, y: y)
-        context.concatenate(transform)
-
+    private func getLine(context: SVGContext) -> CTLine? {
         var attributes: [CFString: Any] = [:]
         let ctFont: CTFont = {
             if let contextFont = context.font {
@@ -88,10 +82,24 @@ struct SVGTextElement: SVGDrawableElement {
         guard let attributedText = CFAttributedStringCreate(kCFAllocatorDefault,
                                                             text as NSString,
                                                             attributes as CFDictionary) else { return nil }
+        return CTLineCreateWithAttributedString(attributedText)
+    }
+
+    func frame(context: SVGContext) -> CGRect {
+        guard let line = getLine(context: context) else { return .zero }
+        return CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
+    }
+
+    func toBezierPath(context: SVGContext) -> UIBezierPath? {
+        let size = context.viewBox.size
+        let x = x?.value(total: size.width) ?? 0
+        let y = y?.value(total: size.height) ?? 0
+        let transform = CGAffineTransform(translationX: x, y: y)
+        context.concatenate(transform)
+        guard let line = getLine(context: context) else { return nil }
         let gContext = context.graphics
         gContext.scaleBy(x: 1.0, y: -1.0)
         let letters = CGMutablePath()
-        let line = CTLineCreateWithAttributedString(attributedText)
         let runs = CTLineGetGlyphRuns(line)
         for i in 0 ..< CFArrayGetCount(runs) {
             let run = unsafeBitCast(CFArrayGetValueAtIndex(runs, i), to: CTRun.self)

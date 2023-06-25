@@ -79,6 +79,7 @@ protocol SVGDrawableElement: SVGElement {
     var color: SVGUIColor? { get }
     var style: SVGUIStyle { get }
     var display: CSSDisplay? { get }
+    func frame(context: SVGContext) -> CGRect
     init(text: String, attributes: [String: String])
     init(base: SVGBaseElement, text: String, attributes: [String: String])
     init(other: Self, css: SVGUIStyle)
@@ -121,6 +122,10 @@ extension SVGDrawableElement {
             properties.merge(rule.declarations) { current, _ in current }
         }
         return Self(other: self, css: SVGUIStyle(decratations: properties))
+    }
+
+    func frame(context: SVGContext) -> CGRect {
+        toBezierPath(context: context)?.cgPath.boundingBoxOfPath ?? .zero
     }
 
     func draw(_ context: SVGContext, index _: Int, depth: Int) {
