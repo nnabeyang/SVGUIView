@@ -12,7 +12,7 @@ struct SVGContext {
     private let strokeStack: Stack<SVGUIStroke> = Stack()
     private let textAnchorStack: Stack<TextAnchor> = Stack()
     private let clipRuleStack: Stack<Bool> = Stack()
-    private let clipIdsStack = ClipIdStack()
+    private let clipIdStack = ElementIdStack()
 
     init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000) {
         self.base = base
@@ -69,19 +69,19 @@ struct SVGContext {
     }
 
     func pushClipIdStack() {
-        clipIdsStack.push()
+        clipIdStack.push()
     }
 
     func check(clipId: String) -> Bool {
-        clipIdsStack.check(clipId: clipId)
+        clipIdStack.check(elementId: clipId)
     }
 
     func remove(clipId: String) {
-        clipIdsStack.remove(clipId: clipId)
+        clipIdStack.remove(elementId: clipId)
     }
 
     func popClipIdStack() {
-        clipIdsStack.pop()
+        clipIdStack.pop()
     }
 
     func push(viewBox: CGRect) {
@@ -210,20 +210,20 @@ private class Stack<T> {
     }
 }
 
-private class ClipIdStack {
+private class ElementIdStack {
     var values = [[String]]()
 
-    func check(clipId: String) -> Bool {
-        if values.last?.contains(clipId) ?? false {
+    func check(elementId: String) -> Bool {
+        if values.last?.contains(elementId) ?? false {
             return false
         }
-        values[values.count - 1].append(clipId)
+        values[values.count - 1].append(elementId)
         return true
     }
 
-    func remove(clipId: String) {
+    func remove(elementId: String) {
         guard var value = values.last,
-              let index = value.lastIndex(of: clipId) else { return }
+              let index = value.lastIndex(of: elementId) else { return }
         value.remove(at: index)
         values[values.count - 1] = value
     }
