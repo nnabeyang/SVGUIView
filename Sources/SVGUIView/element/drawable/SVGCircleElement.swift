@@ -17,8 +17,8 @@ struct SVGCircleElement: SVGDrawableElement {
         r = .init(attributes["r"])
     }
 
-    init(other: Self, css: SVGUIStyle) {
-        base = SVGBaseElement(other: other.base, css: css)
+    init(other: Self, index: Int, css: SVGUIStyle) {
+        base = SVGBaseElement(other: other.base, index: index, css: css)
         cx = other.cx
         cy = other.cy
         r = other.r

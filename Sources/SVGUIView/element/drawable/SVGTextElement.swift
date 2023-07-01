@@ -43,8 +43,8 @@ struct SVGTextElement: SVGDrawableElement {
         return SVGUIFont(name: name, size: size, weight: weight)
     }
 
-    init(other: Self, css: SVGUIStyle) {
-        base = SVGBaseElement(other: other.base, css: css)
+    init(other: Self, index: Int, css: SVGUIStyle) {
+        base = SVGBaseElement(other: other.base, index: index, css: css)
         text = other.text
         font = other.font
         textAnchor = other.textAnchor
@@ -94,7 +94,7 @@ struct SVGTextElement: SVGDrawableElement {
         return CTLineCreateWithAttributedString(attributedText)
     }
 
-    func frame(context: SVGContext) -> CGRect {
+    func frame(context: SVGContext, path _: UIBezierPath) -> CGRect {
         guard let line = getLine(context: context) else { return .zero }
         let size = context.viewBox.size
         let x = x?.value(total: size.width) ?? 0

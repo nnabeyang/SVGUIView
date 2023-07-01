@@ -35,7 +35,7 @@ struct SVGStopElement: SVGElement {
         fatalError()
     }
 
-    func style(with _: CSSStyle) -> SVGElement {
+    func style(with _: CSSStyle, at _: Int) -> any SVGElement {
         self
     }
 

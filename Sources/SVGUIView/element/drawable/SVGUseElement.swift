@@ -40,8 +40,15 @@ struct SVGUseElement: SVGDrawableElement {
         contentIds = other.contentIds
     }
 
-    init(other: SVGUseElement, css _: SVGUIStyle) {
-        self = other
+    init(other: SVGUseElement, index: Int, css: SVGUIStyle) {
+        base = SVGBaseElement(other: other.base, index: index, css: css)
+        x = other.x
+        y = other.y
+        width = other.width
+        height = other.height
+        parentId = other.parentId
+        attributes = other.attributes
+        contentIds = other.contentIds
     }
 
     private static func parseLink(description: String?) -> String? {
@@ -53,53 +60,49 @@ struct SVGUseElement: SVGDrawableElement {
         return nil
     }
 
-    func style(with _: CSSStyle) -> SVGElement {
-        self
+    func style(with _: CSSStyle, at index: Int) -> any SVGElement {
+        Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
-    func toBezierPath(context: SVGContext) -> UIBezierPath? {
-        guard let parentId = parentId,
-              let (_, element) = context[parentId] else { return nil }
-        let gContext = context.graphics
-        gContext.saveGState()
-        defer {
-            gContext.restoreGState()
-        }
-        let size = context.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
-        let transform = CGAffineTransform(translationX: x, y: y)
-        context.concatenate(transform)
-        let newElement = element.use(attributes: attributes)
-        return newElement.toBezierPath(context: context)
-    }
-
-    func draw(_ context: SVGContext, index: Int, depth: Int, isRoot: Bool) {
-        guard !context.detectCycles(type: type, depth: depth) else { return }
-        if isRoot {
-            context.pushTagIdStack()
-        }
+    private func getParent(context: SVGContext, index: Int) -> (Int, any SVGDrawableElement)? {
         _ = context.check(tagId: index)
         guard let parentId = parentId,
               let (newIndex, element) = context[parentId],
               context.check(tagId: newIndex),
               !element.contains(index: index, context: context)
         else {
-            context.popTagIdStack()
-            return
+            return nil
         }
 
-        let gContext = context.graphics
-        gContext.saveGState()
-        defer {
-            gContext.restoreGState()
-        }
         let size = context.viewBox.size
         let x = x?.value(total: size.width) ?? 0
         let y = y?.value(total: size.height) ?? 0
         let transform = CGAffineTransform(translationX: x, y: y)
         context.concatenate(transform)
-        let newElement = element.use(attributes: attributes)
+        let parentElement = element.use(attributes: attributes)
+        return (newIndex, parentElement)
+    }
+
+    func toBezierPath(context: SVGContext) -> UIBezierPath? {
+        guard let index = index,
+              let (_, element) = getParent(context: context, index: index)
+        else {
+            return nil
+        }
+        return element.toBezierPath(context: context)
+    }
+
+    func draw(_ context: SVGContext, index: Int, depth: Int, isRoot: Bool) {
+        guard !context.detectCycles(type: type, depth: depth) else { return }
+        let gContext = context.graphics
+        gContext.saveGState()
+        defer {
+            gContext.restoreGState()
+        }
+        if isRoot {
+            context.pushTagIdStack()
+        }
+        guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
         newElement.draw(context, index: newIndex, depth: depth + 1, isRoot: false)
         if isRoot {
             context.popTagIdStack()

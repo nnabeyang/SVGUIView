@@ -22,8 +22,8 @@ struct SVGImageElement: SVGDrawableElement {
         height = ElementLength(style: base.style[.height], value: attributes["height"])
     }
 
-    init(other: Self, css: SVGUIStyle) {
-        base = SVGBaseElement(other: other.base, css: css)
+    init(other: Self, index: Int, css: SVGUIStyle) {
+        base = SVGBaseElement(other: other.base, index: index, css: css)
         data = other.data
         x = other.x
         y = other.y

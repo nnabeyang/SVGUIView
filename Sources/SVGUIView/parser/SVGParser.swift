@@ -43,8 +43,8 @@ final class Parser: NSObject {
         parser.delegate = self
         parser.parse()
         let css = CSSStyle(rules: rules)
-        contents = contents.map {
-            $0.style(with: css)
+        contents = contents.enumerated().map { index, element in
+            element.style(with: css, at: index)
         }
         var context = SVGBaseContext(pservers: pservers, contentIdMap: contentIdMap, contents: contents)
         contents.last.map {

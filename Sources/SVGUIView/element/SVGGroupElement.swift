@@ -33,7 +33,7 @@ struct SVGGroupElement: SVGDrawableElement {
         textAnchor = other.textAnchor
     }
 
-    init(other: SVGGroupElement, css _: SVGUIStyle) {
+    init(other: SVGGroupElement, index _: Int, css _: SVGUIStyle) {
         self = other
     }
 
@@ -63,8 +63,8 @@ struct SVGGroupElement: SVGDrawableElement {
         return SVGUIFont(name: name, size: size, weight: weight)
     }
 
-    func style(with _: CSSStyle) -> any SVGElement {
-        self
+    func style(with _: CSSStyle, at index: Int) -> any SVGElement {
+        Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
     func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot: Bool) {
@@ -87,7 +87,9 @@ struct SVGGroupElement: SVGDrawableElement {
         textAnchor.map {
             context.push(textAnchor: $0)
         }
-        context.pushClipIdStack()
+        if isRoot {
+            context.pushClipIdStack()
+        }
         if case let .url(id) = clipPath,
            let clipPath = context.clipPaths[id],
            context.check(clipId: id)
@@ -102,7 +104,9 @@ struct SVGGroupElement: SVGDrawableElement {
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1, isRoot: isRoot)
         }
-        context.popClipIdStack()
+        if isRoot {
+            context.popClipIdStack()
+        }
         font.map { _ in
             _ = context.popFont()
         }

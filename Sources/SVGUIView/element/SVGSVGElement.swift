@@ -63,12 +63,12 @@ struct SVGSVGElement: SVGDrawableElement {
         overflow = other.overflow
     }
 
-    init(other: SVGSVGElement, css _: SVGUIStyle) {
+    init(other: SVGSVGElement, index _: Int, css _: SVGUIStyle) {
         self = other
     }
 
-    func style(with _: CSSStyle) -> any SVGElement {
-        self
+    func style(with _: CSSStyle, at index: Int) -> any SVGElement {
+        Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
     private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
@@ -130,7 +130,9 @@ struct SVGSVGElement: SVGDrawableElement {
         font.map {
             context.push(font: $0)
         }
-        context.pushClipIdStack()
+        if isRoot {
+            context.pushClipIdStack()
+        }
         if case let .url(id) = clipPath,
            let clipPath = context.clipPaths[id],
            context.check(clipId: id)
@@ -145,7 +147,9 @@ struct SVGSVGElement: SVGDrawableElement {
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1, isRoot: isRoot)
         }
-        context.popClipIdStack()
+        if isRoot {
+            context.popClipIdStack()
+        }
         font.map { _ in
             _ = context.popFont()
         }

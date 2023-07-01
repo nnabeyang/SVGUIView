@@ -19,8 +19,8 @@ struct SVGLineElement: SVGDrawableElement {
         y2 = .init(attributes["y2"])
     }
 
-    init(other: Self, css: SVGUIStyle) {
-        base = SVGBaseElement(other: other.base, css: css)
+    init(other: Self, index: Int, css: SVGUIStyle) {
+        base = SVGBaseElement(other: other.base, index: index, css: css)
         x1 = other.x1
         y1 = other.y1
         x2 = other.x2

@@ -11,9 +11,11 @@ struct SVGClipPathElement: SVGElement {
     let clipRule: Bool?
     let clipPath: SVGClipPath?
     let id: String?
+    let index: Int?
 
     init(attributes: [String: String], contentIds: [Int]) {
         id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
+        index = nil
         userSpace = attributes["clipPathUnits"].flatMap { $0 == "userSpaceOnUse" }
         clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
         clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
@@ -21,12 +23,19 @@ struct SVGClipPathElement: SVGElement {
         self.contentIds = contentIds
     }
 
-    init(other: Self, css _: SVGUIStyle) {
-        self = other
+    init(other: Self, index: Int, css _: SVGUIStyle) {
+        id = other.id
+        self.index = index
+        userSpace = other.userSpace
+        clipRule = other.clipRule
+        clipPath = other.clipPath
+        transform = other.transform
+        contentIds = other.contentIds
     }
 
     init(other: Self, clipRule: Bool?) {
         id = other.id
+        index = other.index
         userSpace = other.userSpace
         self.clipRule = other.clipRule ?? clipRule
         clipPath = other.clipPath
@@ -75,6 +84,7 @@ struct SVGClipPathElement: SVGElement {
                 rootPath = rootPath?.xunion(tpath, using: clipRule ? .evenOdd : .winding)
             }
         }
+
         if case let .url(id) = clipPath,
            context.check(clipId: id),
            let path = context.clipPaths[id]?.toBezierPath(context: context, frame: frame)
@@ -87,8 +97,8 @@ struct SVGClipPathElement: SVGElement {
 
     func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {}
 
-    func style(with _: CSSStyle) -> SVGElement {
-        self
+    func style(with _: CSSStyle, at index: Int) -> any SVGElement {
+        Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
     func clip(context: inout SVGBaseContext) {

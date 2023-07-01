@@ -27,8 +27,9 @@ struct SVGDefsElement: SVGDrawableElement {
         contentIds = other.contentIds
     }
 
-    init(other: Self, css _: SVGUIStyle) {
-        self = other
+    init(other: Self, index: Int, css: SVGUIStyle) {
+        base = SVGBaseElement(other: other.base, index: index, css: css)
+        contentIds = other.contentIds
     }
 
     func toBezierPath(context _: SVGContext) -> UIBezierPath? {
@@ -57,8 +58,8 @@ struct SVGDefsElement: SVGDrawableElement {
         return SVGUIFont(name: name, size: size, weight: weight)
     }
 
-    func style(with _: CSSStyle) -> any SVGElement {
-        self
+    func style(with _: CSSStyle, at index: Int) -> any SVGElement {
+        Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
     func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {}
