@@ -26,6 +26,11 @@ struct SVGPathElement: SVGDrawableElement {
         segments = other.segments
     }
 
+    init(other: Self, attributes: [String: String]) {
+        base = SVGBaseElement(other: other.base, attributes: attributes)
+        segments = other.segments
+    }
+
     func toBezierPath(context _: SVGContext) -> UIBezierPath? {
         let pathContext = SVGPathContext()
         for segment in segments {
