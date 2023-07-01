@@ -31,7 +31,6 @@ public class SVGUIView: UIView {
             self.baseContext = Parser.parse(data: data)
             guard let svg = baseContext.root else { return }
             self.svg = svg
-            self.frame = CGRect(origin: frame.origin, size: svg.size)
             setNeedsDisplay()
         }
     }
