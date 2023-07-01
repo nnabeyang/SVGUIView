@@ -12,7 +12,8 @@ struct SVGContext {
     private let strokeStack: Stack<SVGUIStroke> = Stack()
     private let textAnchorStack: Stack<TextAnchor> = Stack()
     private let clipRuleStack: Stack<Bool> = Stack()
-    private let clipIdStack = ElementIdStack()
+    private let clipIdStack = ElementIdStack<String>()
+    private let tagIdStack = ElementIdStack<Int>()
 
     init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000) {
         self.base = base
@@ -81,6 +82,22 @@ struct SVGContext {
     }
 
     func popClipIdStack() {
+        clipIdStack.pop()
+    }
+
+    func pushTagIdStack() {
+        tagIdStack.push()
+    }
+
+    func check(tagId: Int) -> Bool {
+        tagIdStack.check(elementId: tagId)
+    }
+
+    func remove(tagId: Int) {
+        tagIdStack.remove(elementId: tagId)
+    }
+
+    func popTagIdStack() {
         clipIdStack.pop()
     }
 
@@ -210,10 +227,10 @@ private class Stack<T> {
     }
 }
 
-private class ElementIdStack {
-    var values = [[String]]()
+private class ElementIdStack<T: Equatable> {
+    var values = [[T]]()
 
-    func check(elementId: String) -> Bool {
+    func check(elementId: T) -> Bool {
         if values.last?.contains(elementId) ?? false {
             return false
         }
@@ -221,7 +238,7 @@ private class ElementIdStack {
         return true
     }
 
-    func remove(elementId: String) {
+    func remove(elementId: T) {
         guard var value = values.last,
               let index = value.lastIndex(of: elementId) else { return }
         value.remove(at: index)
@@ -233,7 +250,7 @@ private class ElementIdStack {
     }
 
     @discardableResult
-    func pop() -> [String]? {
+    func pop() -> [T]? {
         values.popLast()
     }
 }

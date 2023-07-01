@@ -61,7 +61,7 @@ struct SVGDefsElement: SVGDrawableElement {
         self
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int) {}
+    func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {}
 
     func clip(context: inout SVGBaseContext) {
         clipRule.map {

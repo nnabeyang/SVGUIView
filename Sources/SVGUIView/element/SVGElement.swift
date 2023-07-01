@@ -2,7 +2,7 @@ import UIKit
 
 protocol SVGElement: Encodable {
     var type: SVGElementName { get }
-    func draw(_ context: SVGContext, index: Int, depth: Int)
+    func draw(_ context: SVGContext, index: Int, depth: Int, isRoot: Bool)
     func style(with style: CSSStyle) -> any SVGElement
     func contains(index: Int, context: SVGContext) -> Bool
     func clip(context: inout SVGBaseContext)
@@ -179,7 +179,7 @@ extension SVGDrawableElement {
         return result
     }
 
-    func draw(_ context: SVGContext, index _: Int, depth: Int) {
+    func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot _: Bool) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         if let display = display, case .none = display {
             return

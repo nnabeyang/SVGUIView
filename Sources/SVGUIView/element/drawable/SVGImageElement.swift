@@ -31,7 +31,7 @@ struct SVGImageElement: SVGDrawableElement {
         height = other.height
     }
 
-    func draw(_ svgContext: SVGContext, index _: Int, depth: Int) {
+    func draw(_ svgContext: SVGContext, index _: Int, depth: Int, isRoot _: Bool) {
         guard !svgContext.detectCycles(type: type, depth: depth) else { return }
         let context = svgContext.graphics
         context.saveGState()

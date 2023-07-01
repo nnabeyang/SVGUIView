@@ -95,7 +95,7 @@ struct SVGSVGElement: SVGDrawableElement {
         return nil
     }
 
-    func draw(_ context: SVGContext, index _: Int, depth: Int) {
+    func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot: Bool) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         context.saveGState()
         let viewPort = context.viewBox
@@ -143,7 +143,7 @@ struct SVGSVGElement: SVGDrawableElement {
             bezierPath.addClip()
         }
         for index in contentIds {
-            context.contents[index].draw(context, index: index, depth: depth + 1)
+            context.contents[index].draw(context, index: index, depth: depth + 1, isRoot: isRoot)
         }
         context.popClipIdStack()
         font.map { _ in

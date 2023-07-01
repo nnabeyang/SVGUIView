@@ -74,11 +74,21 @@ struct SVGUseElement: SVGDrawableElement {
         return newElement.toBezierPath(context: context)
     }
 
-    func draw(_ context: SVGContext, index: Int, depth: Int) {
+    func draw(_ context: SVGContext, index: Int, depth: Int, isRoot: Bool) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
+        if isRoot {
+            context.pushTagIdStack()
+        }
+        _ = context.check(tagId: index)
         guard let parentId = parentId,
               let (newIndex, element) = context[parentId],
-              !element.contains(index: index, context: context) else { return }
+              context.check(tagId: newIndex),
+              !element.contains(index: index, context: context)
+        else {
+            context.popTagIdStack()
+            return
+        }
+
         let gContext = context.graphics
         gContext.saveGState()
         defer {
@@ -90,22 +100,14 @@ struct SVGUseElement: SVGDrawableElement {
         let transform = CGAffineTransform(translationX: x, y: y)
         context.concatenate(transform)
         let newElement = element.use(attributes: attributes)
-        newElement.draw(context, index: newIndex, depth: depth + 1)
+        newElement.draw(context, index: newIndex, depth: depth + 1, isRoot: false)
+        if isRoot {
+            context.popTagIdStack()
+        }
     }
 
-    func contains(index: Int, context: SVGContext) -> Bool {
-        guard let parentId = parentId,
-              let (_, element) = context[parentId]
-        else {
-            return false
-        }
-        if let id = id, id == parentId {
-            return true
-        }
-        if let id = id, let (selfIndex, _) = context[id], selfIndex == index {
-            return true
-        }
-        return element.contains(index: index, context: context)
+    func contains(index: Int, context _: SVGContext) -> Bool {
+        contentIds.contains(index)
     }
 }
 
