@@ -53,8 +53,10 @@ struct SVGTextElement: SVGDrawableElement {
     }
 
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext) {
+        let cgContext = context.graphics
         guard let fill = fill else {
-            path.fill()
+            cgContext.addPath(path.cgPath)
+            cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             return
         }
         switch fill {
@@ -64,14 +66,16 @@ struct SVGTextElement: SVGDrawableElement {
             }
         case .current:
             if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-                uiColor.setFill()
-                path.fill()
+                cgContext.setFillColor(uiColor.cgColor)
+                cgContext.addPath(path.cgPath)
+                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case let .color(color, opacity):
             let opacity = opacity ?? 1.0
             if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
-                uiColor.setFill()
-                path.fill()
+                cgContext.setFillColor(uiColor.cgColor)
+                cgContext.addPath(path.cgPath)
+                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case .url:
             fatalError()

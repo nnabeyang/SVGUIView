@@ -201,6 +201,7 @@ extension SVGDrawableElement {
     }
 
     private func applyStrokeFill(fill: SVGFill, opacity: Double, path: UIBezierPath, context: SVGContext) {
+        let cgContext = context.graphics
         switch fill {
         case .inherit:
             if let fill = context.fill {
@@ -208,14 +209,14 @@ extension SVGDrawableElement {
             }
         case .current:
             if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-                uiColor.setStroke()
+                cgContext.setStrokeColor(uiColor.cgColor)
             }
         case let .color(color, colorOpacity):
             let colorOpacity = colorOpacity ?? 1.0
             if let uiColor = color?.toUIColor(opacity: opacity * colorOpacity) {
-                uiColor.setStroke()
+                cgContext.setStrokeColor(uiColor.cgColor)
             } else {
-                UIColor.clear.setStroke()
+                cgContext.setStrokeColor(UIColor.clear.cgColor)
             }
         case .url:
             fatalError()
@@ -228,21 +229,26 @@ extension SVGDrawableElement {
         let dashes = stroke.dashes ?? []
         let offset = stroke.offset ?? 0
         applyStrokeFill(fill: fill, opacity: opacity * (stroke.opacity ?? 1.0), path: path, context: context)
+        let cgContext = context.graphics
         if !dashes.filter({ $0 > 0 }).isEmpty {
-            path.setLineDash(dashes, count: dashes.count, phase: offset)
+            cgContext.setLineDash(phase: offset, lengths: dashes)
         }
-        path.lineWidth = stroke.width ?? 1.0
-        path.lineCapStyle = stroke.cap ?? .butt
-        path.lineJoinStyle = stroke.join ?? .miter
-        path.miterLimit = stroke.miterLimit ?? 4.0
-        path.stroke()
+
+        cgContext.addPath(path.cgPath)
+        cgContext.setLineWidth(stroke.width ?? 1.0)
+        cgContext.setLineCap(stroke.cap ?? .butt)
+        cgContext.setLineJoin(stroke.join ?? .miter)
+        cgContext.setMiterLimit(stroke.miterLimit ?? 4.0)
+        cgContext.drawPath(using: .stroke)
     }
 
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext) {
         path.usesEvenOddFillRule = eoFill
+        let cgContext = context.graphics
         guard let fill = fill ?? context.fill else {
-            UIColor.black.setFill()
-            path.fill()
+            cgContext.setFillColor(UIColor.black.cgColor)
+            cgContext.addPath(path.cgPath)
+            cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             return
         }
         switch fill {
@@ -250,27 +256,30 @@ extension SVGDrawableElement {
             if let fill = context.fill {
                 applySVGFill(fill: fill, path: path, context: context)
             } else {
-                UIColor.black.setFill()
-                path.fill()
+                cgContext.setFillColor(UIColor.black.cgColor)
+                cgContext.addPath(path.cgPath)
+                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case .current:
             if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-                uiColor.setFill()
-                path.fill()
+                cgContext.setFillColor(uiColor.cgColor)
             } else {
-                UIColor.black.setFill()
-                path.fill()
+                cgContext.setFillColor(UIColor.black.cgColor)
             }
+            cgContext.addPath(path.cgPath)
+            cgContext.drawPath(using: eoFill ? .eoFill : .fill)
         case let .color(color, opacity):
             let opacity = opacity ?? 1.0
             if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
-                uiColor.setFill()
-                path.fill()
+                cgContext.setFillColor(uiColor.cgColor)
+                cgContext.addPath(path.cgPath)
+                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case let .url(id, opacity):
             guard let server = context.pservers[id] else {
-                UIColor.black.setFill()
-                path.fill()
+                cgContext.setFillColor(UIColor.black.cgColor)
+                cgContext.addPath(path.cgPath)
+                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
                 return
             }
             applyPServerFill(server: server, path: path, context: context, opacity: self.opacity * (opacity ?? 1.0))
