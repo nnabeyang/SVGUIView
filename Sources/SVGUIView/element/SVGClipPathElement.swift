@@ -43,6 +43,84 @@ struct SVGClipPathElement: SVGElement {
         transform = other.transform
     }
 
+    func maskImage(frame: CGRect, context: SVGContext) -> CGImage? {
+        let size = frame.size
+        let scale = UIScreen.main.scale
+        let frameWidth = Int((size.width * scale).rounded(.up))
+        let frameHeight = Int((size.height * scale).rounded(.up))
+        let bytesPerRow = 4 * frameWidth
+        guard let graphics = CGContext(data: nil,
+                                       width: frameWidth,
+                                       height: frameHeight,
+                                       bitsPerComponent: 8,
+                                       bytesPerRow: bytesPerRow,
+                                       space: CGColorSpaceCreateDeviceRGB(),
+                                       bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
+        else {
+            return nil
+        }
+
+        let transform: CGAffineTransform
+        let userSpace = userSpace ?? true
+        let t = self.transform ?? .identity
+        if userSpace {
+            transform = CGAffineTransform(t.a, t.b, t.c, t.d, t.tx * scale, t.ty * scale)
+                .scaledBy(x: scale, y: scale)
+                .translatedBy(x: -frame.origin.x, y: -frame.origin.y)
+        } else {
+            transform = CGAffineTransform(t.a, t.b, t.c, t.d, t.tx * scale, t.ty * scale)
+                .scaledBy(x: scale * size.width, y: scale * size.height)
+        }
+
+        graphics.concatenate(transform)
+        for index in contentIds {
+            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+            if content is SVGGroupElement ||
+                content is SVGLineElement
+            {
+                continue
+            }
+            if case .hidden = content.visibility {
+                continue
+            }
+            if let display = content.display, case .none = display {
+                continue
+            }
+            guard let bezierPath = content.toBezierPath(context: context) else { continue }
+            graphics.saveGState()
+            graphics.concatenate(content.transform)
+
+            let clipRule = content.clipRule ?? clipRule ?? false
+            if case let .url(id) = content.clipPath,
+               context.check(clipId: id),
+               let clipPath = context.clipPaths[id],
+               let maskImage = clipPath.maskImage(frame: frame, context: context)
+            {
+                context.remove(clipId: id)
+                graphics.clip(to: frame, mask: maskImage)
+            }
+
+            graphics.addPath(bezierPath.cgPath)
+            graphics.drawPath(using: clipRule ? .eoFill : .fill)
+            graphics.restoreGState()
+        }
+
+        if case let .url(id) = clipPath,
+           context.check(clipId: id),
+           let clipPath = context.clipPaths[id],
+           let maskImage = clipPath.maskImage(frame: frame, context: context)
+        {
+            context.remove(clipId: id)
+            let cgContext = context.graphics
+            cgContext.clip(to: frame, mask: maskImage)
+        }
+
+        let image = graphics.makeImage()
+        graphics.restoreGState()
+        return image
+    }
+
+    @available(iOS 16.0, *)
     func toBezierPath(context: SVGContext, frame: CGRect) -> UIBezierPath {
         let transform: CGAffineTransform
         let userSpace = userSpace ?? true

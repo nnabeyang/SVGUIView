@@ -94,12 +94,19 @@ struct SVGGroupElement: SVGDrawableElement {
            let clipPath = context.clipPaths[id],
            context.check(clipId: id)
         {
-            let bezierPath = clipPath.toBezierPath(context: context, frame: context.viewBox)
-            context.remove(clipId: id)
-            if bezierPath.isEmpty {
-                return
+            if #available(iOS 16.0, *) {
+                let bezierPath = clipPath.toBezierPath(context: context, frame: context.viewBox)
+                if !bezierPath.isEmpty {
+                    bezierPath.addClip()
+                }
+            } else {
+                let maskImage = clipPath.maskImage(frame: context.viewBox, context: context)
+                if let maskImage = maskImage {
+                    let cgContext = context.graphics
+                    cgContext.clip(to: context.viewBox, mask: maskImage)
+                }
             }
-            bezierPath.addClip()
+            context.remove(clipId: id)
         }
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1, isRoot: isRoot)

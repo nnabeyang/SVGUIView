@@ -109,6 +109,7 @@ protocol SVGDrawableElement: SVGElement {
     init(other: Self, attributes: [String: String])
     func use(attributes: [String: String]) -> Self
     func toBezierPath(context: SVGContext) -> UIBezierPath?
+    @available(iOS 16.0, *)
     func toClipedBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext)
@@ -156,6 +157,7 @@ extension SVGDrawableElement {
         path.cgPath.boundingBoxOfPath
     }
 
+    @available(iOS 16.0, *)
     func toClipedBezierPath(context: SVGContext) -> UIBezierPath? {
         guard let path = toBezierPath(context: context) else { return nil }
         let frame = frame(context: context, path: path)
@@ -190,13 +192,32 @@ extension SVGDrawableElement {
             context.pushTagIdStack()
             context.pushClipIdStack()
         }
-        guard let path = toClipedBezierPath(context: context) else { return }
+        let path: UIBezierPath?
+        if #available(iOS 16.0, *) {
+            path = toClipedBezierPath(context: context)
+        } else {
+            path = toBezierPath(context: context)
+            if let path = path {
+                let frame = frame(context: context, path: path)
+                if case let .url(id) = clipPath,
+                   context.check(clipId: id),
+                   let clipPath = context.clipPaths[id],
+                   let maskImage = clipPath.maskImage(frame: frame, context: context)
+                {
+                    let cgContext = context.graphics
+                    cgContext.clip(to: frame, mask: maskImage)
+                    context.remove(clipId: id)
+                }
+            }
+        }
         if isRoot {
             context.popTagIdStack()
             context.popClipIdStack()
         }
-        applySVGFill(fill: fill, path: path, context: context)
-        applySVGStroke(stroke: stroke, path: path, context: context)
+        if let path = path {
+            applySVGFill(fill: fill, path: path, context: context)
+            applySVGStroke(stroke: stroke, path: path, context: context)
+        }
         context.restoreGState()
     }
 
