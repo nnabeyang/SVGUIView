@@ -28,7 +28,7 @@ public class SVGUIView: UIView {
 
     public var data: Data {
         didSet {
-            self.baseContext = Parser.parse(data: data)
+            baseContext = Parser.parse(data: data)
             guard let svg = baseContext.root else { return }
             self.svg = svg
             setNeedsDisplay()
