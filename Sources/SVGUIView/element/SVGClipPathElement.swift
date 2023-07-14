@@ -153,13 +153,13 @@ struct SVGClipPathElement: SVGElement {
                context.check(clipId: id),
                let path = context.clipPaths[id]?.toBezierPath(context: context, frame: frame)
             {
-                tpath = tpath.xintersection(path.cgPath, using: .winding)
+                tpath = tpath.intersection(path.cgPath, using: .winding)
                 context.remove(clipId: id)
             }
             if rootPath == nil {
-                rootPath = tpath.xnormalized(using: clipRule ? .evenOdd : .winding)
+                rootPath = tpath.normalized(using: clipRule ? .evenOdd : .winding)
             } else {
-                rootPath = rootPath?.xunion(tpath, using: clipRule ? .evenOdd : .winding)
+                rootPath = rootPath?.union(tpath, using: clipRule ? .evenOdd : .winding)
             }
         }
 
@@ -168,7 +168,7 @@ struct SVGClipPathElement: SVGElement {
            let path = context.clipPaths[id]?.toBezierPath(context: context, frame: frame)
         {
             context.remove(clipId: id)
-            rootPath = rootPath?.xintersection(path.cgPath, using: .winding)
+            rootPath = rootPath?.intersection(path.cgPath, using: .winding)
         }
         return rootPath.map { UIBezierPath(cgPath: $0) } ?? UIBezierPath()
     }

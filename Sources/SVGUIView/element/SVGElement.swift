@@ -172,8 +172,8 @@ extension SVGDrawableElement {
                 return nil
             }
             let clipRule = clipRule ?? false
-            let lcgPath = path.cgPath.xnormalized(using: clipRule ? .evenOdd : .winding)
-            let cgPath = lcgPath.xintersection(bezierPath.cgPath)
+            let lcgPath = path.cgPath.normalized(using: clipRule ? .evenOdd : .winding)
+            let cgPath = lcgPath.intersection(bezierPath.cgPath)
             result = UIBezierPath(cgPath: cgPath)
         } else {
             result = path
