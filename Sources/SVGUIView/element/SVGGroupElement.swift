@@ -94,7 +94,7 @@ struct SVGGroupElement: SVGDrawableElement {
            let clipPath = context.clipPaths[id],
            context.check(clipId: id)
         {
-            if #available(iOS 16.0, *) {
+            if #available(iOS 16.0, *), self.type != .line {
                 let bezierPath = clipPath.toBezierPath(context: context, frame: context.viewBox)
                 if !bezierPath.isEmpty {
                     bezierPath.addClip()

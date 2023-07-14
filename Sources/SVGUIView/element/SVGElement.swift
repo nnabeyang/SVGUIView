@@ -193,7 +193,7 @@ extension SVGDrawableElement {
             context.pushClipIdStack()
         }
         let path: UIBezierPath?
-        if #available(iOS 16.0, *) {
+        if #available(iOS 16.0, *), type != .line {
             path = toClipedBezierPath(context: context)
         } else {
             path = toBezierPath(context: context)

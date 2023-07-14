@@ -41,6 +41,31 @@ struct SVGLineElement: SVGDrawableElement {
         path.addLine(to: end)
         return path
     }
+
+    func frame(context: SVGContext, path: UIBezierPath) -> CGRect {
+        let r = path.cgPath.boundingBoxOfPath
+        if r.width > 0, r.height > 0 {
+            return r
+        }
+        let size = context.viewBox.size
+        let x1 = x1?.value(total: size.width) ?? 0
+        let y1 = y1?.value(total: size.height) ?? 0
+        let x2 = x2?.value(total: size.width) ?? 0
+        let y2 = y2?.value(total: size.height) ?? 0
+        let length = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
+        let lineWidth = stroke.width ?? 0
+        let xmin = min(x1, x2)
+        let ymin = min(y1, y2)
+        if r.width > 0 {
+            let origin = CGPoint(x: xmin, y: ymin - lineWidth / 2.0)
+            return CGRect(origin: origin, size: CGSize(width: length, height: lineWidth))
+        }
+        if r.height > 0 {
+            let origin = CGPoint(x: xmin - lineWidth / 2.0, y: ymin)
+            return CGRect(origin: origin, size: CGSize(width: lineWidth, height: length))
+        }
+        return .zero
+    }
 }
 
 extension SVGLineElement: Encodable {
