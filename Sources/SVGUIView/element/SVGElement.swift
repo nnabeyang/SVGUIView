@@ -199,15 +199,7 @@ extension SVGDrawableElement {
             path = toBezierPath(context: context)
             if let path = path {
                 let frame = frame(context: context, path: path)
-                if case let .url(id) = clipPath,
-                   context.check(clipId: id),
-                   let clipPath = context.clipPaths[id],
-                   let maskImage = clipPath.maskImage(frame: frame, context: context)
-                {
-                    let cgContext = context.graphics
-                    cgContext.clip(to: frame, mask: maskImage)
-                    context.remove(clipId: id)
-                }
+                clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
             }
         }
         if isRoot {

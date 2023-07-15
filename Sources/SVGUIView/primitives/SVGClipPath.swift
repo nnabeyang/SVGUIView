@@ -1,3 +1,5 @@
+import CoreGraphics
+
 enum SVGClipPathType: String {
     case none
     case url
@@ -18,5 +20,16 @@ enum SVGClipPath {
             return nil
         }
         self = clipPath
+    }
+
+    func clipIfNeeded(type: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) {
+        if case let .url(id) = self,
+           context.check(clipId: id),
+           let clipPath = context.clipPaths[id]
+        {
+            if clipPath.clip(type: type, frame: frame, context: context, cgContext: cgContext) {
+                context.remove(clipId: id)
+            }
+        }
     }
 }

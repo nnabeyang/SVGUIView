@@ -133,24 +133,7 @@ struct SVGSVGElement: SVGDrawableElement {
         if isRoot {
             context.pushClipIdStack()
         }
-        if case let .url(id) = clipPath,
-           let clipPath = context.clipPaths[id],
-           context.check(clipId: id)
-        {
-            if #available(iOS 16.0, *), self.type != .line {
-                let bezierPath = clipPath.toBezierPath(context: context, frame: context.viewBox)
-                if !bezierPath.isEmpty {
-                    bezierPath.addClip()
-                }
-            } else {
-                let maskImage = clipPath.maskImage(frame: context.viewBox, context: context)
-                if let maskImage = maskImage {
-                    let cgContext = context.graphics
-                    cgContext.clip(to: context.viewBox, mask: maskImage)
-                }
-            }
-            context.remove(clipId: id)
-        }
+        clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1, isRoot: isRoot)
         }

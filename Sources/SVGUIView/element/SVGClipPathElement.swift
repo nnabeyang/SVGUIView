@@ -43,7 +43,20 @@ struct SVGClipPathElement: SVGElement {
         transform = other.transform
     }
 
-    func maskImage(frame: CGRect, context: SVGContext) -> CGImage? {
+    func clip(type: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) -> Bool {
+        if #available(iOS 16.0, *), type != .line {
+            let bezierPath = toBezierPath(context: context, frame: context.viewBox)
+            guard !bezierPath.isEmpty else { return false }
+            bezierPath.addClip()
+            return true
+        } else {
+            guard let maskImage = maskImage(frame: frame, context: context) else { return false }
+            cgContext.clip(to: frame, mask: maskImage)
+            return true
+        }
+    }
+
+    private func maskImage(frame: CGRect, context: SVGContext) -> CGImage? {
         let size = frame.size
         let scale = UIScreen.main.scale
         let frameWidth = Int((size.width * scale).rounded(.up))
@@ -90,31 +103,13 @@ struct SVGClipPathElement: SVGElement {
             graphics.saveGState()
             graphics.concatenate(content.transform)
 
+            content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
             let clipRule = content.clipRule ?? clipRule ?? false
-            if case let .url(id) = content.clipPath,
-               context.check(clipId: id),
-               let clipPath = context.clipPaths[id],
-               let maskImage = clipPath.maskImage(frame: frame, context: context)
-            {
-                context.remove(clipId: id)
-                graphics.clip(to: frame, mask: maskImage)
-            }
-
             graphics.addPath(bezierPath.cgPath)
             graphics.drawPath(using: clipRule ? .eoFill : .fill)
             graphics.restoreGState()
         }
-
-        if case let .url(id) = clipPath,
-           context.check(clipId: id),
-           let clipPath = context.clipPaths[id],
-           let maskImage = clipPath.maskImage(frame: frame, context: context)
-        {
-            context.remove(clipId: id)
-            let cgContext = context.graphics
-            cgContext.clip(to: frame, mask: maskImage)
-        }
-
+        clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
         let image = graphics.makeImage()
         graphics.restoreGState()
         return image
