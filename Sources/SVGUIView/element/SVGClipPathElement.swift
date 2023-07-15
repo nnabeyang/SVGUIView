@@ -145,7 +145,7 @@ struct SVGClipPathElement: SVGElement {
             if let display = content.display, case .none = display {
                 continue
             }
-            guard let bezierPath = content.toClipedBezierPath(context: context) else { continue }
+            guard let bezierPath = content.toClippedBezierPath(context: context) else { continue }
             bezierPath.apply(content.transform.concatenating(transform))
             var tpath = bezierPath.cgPath
             let clipRule = content.clipRule ?? clipRule ?? false
