@@ -13,6 +13,7 @@ struct SVGContext {
     private let textAnchorStack: Stack<TextAnchor> = Stack()
     private let clipRuleStack: Stack<Bool> = Stack()
     private let clipIdStack = ElementIdStack<String>()
+    private let maskIdStack = ElementIdStack<String>()
     private let tagIdStack = ElementIdStack<Int>()
 
     init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000) {
@@ -31,6 +32,10 @@ struct SVGContext {
 
     var clipPaths: [String: SVGClipPathElement] {
         base.clipPaths
+    }
+
+    var masks: [String: SVGMaskElement] {
+        base.masks
     }
 
     subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
@@ -83,6 +88,22 @@ struct SVGContext {
 
     func popClipIdStack() {
         clipIdStack.pop()
+    }
+
+    func pushMaskIdStack() {
+        maskIdStack.push()
+    }
+
+    func check(maskId: String) -> Bool {
+        maskIdStack.check(elementId: maskId)
+    }
+
+    func remove(maskId: String) {
+        maskIdStack.remove(elementId: maskId)
+    }
+
+    func popMaskIdStack() {
+        maskIdStack.pop()
     }
 
     func pushTagIdStack() {
@@ -180,6 +201,7 @@ struct SVGBaseContext {
     let contents: [SVGElement]
 
     var clipPaths = [String: SVGClipPathElement]()
+    var masks = [String: SVGMaskElement]()
     private let clipRuleStack: Stack<Bool> = Stack()
 
     var root: SVGSVGElement? {
@@ -193,6 +215,12 @@ struct SVGBaseContext {
     mutating func setClipPath(id: String, value: SVGClipPathElement) {
         if clipPaths[id] == nil {
             clipPaths[id] = value
+        }
+    }
+
+    mutating func setMask(id: String, value: SVGMaskElement) {
+        if masks[id] == nil {
+            masks[id] = value
         }
     }
 

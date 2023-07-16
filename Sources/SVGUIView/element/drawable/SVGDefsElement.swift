@@ -76,6 +76,12 @@ struct SVGDefsElement: SVGDrawableElement {
         }
     }
 
+    func mask(context: inout SVGBaseContext) {
+        for index in contentIds {
+            context.contents[index].mask(context: &context)
+        }
+    }
+
     func contains(index: Int, context _: SVGContext) -> Bool {
         contentIds.contains(index)
     }

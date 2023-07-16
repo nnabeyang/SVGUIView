@@ -495,6 +495,27 @@ extension SVGAttributeScanner {
     }
 }
 
+extension SVGAttributeScanner {
+    mutating func scanMask() -> SVGMask? {
+        guard let name = scanIdentity() else {
+            return nil
+        }
+        guard let type = SVGClipPathType(rawValue: name.lowercased()) else {
+            return nil
+        }
+        switch type {
+        case .none:
+            return SVGMask.none
+        case .url:
+            guard consume(ascii: UInt8(ascii: "(")) else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: "#"))
+            guard let id = scanIdentity() else { return nil }
+            guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+            return .url(url: id)
+        }
+    }
+}
+
 extension Double {
     init?(prevalidatedBuffer buffer: BufferView<UInt8>) {
         let value = buffer.withUnsafePointer { nptr, count -> Double? in

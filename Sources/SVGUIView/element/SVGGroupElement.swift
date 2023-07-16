@@ -89,6 +89,7 @@ struct SVGGroupElement: SVGDrawableElement {
         }
         if isRoot {
             context.pushClipIdStack()
+            context.pushMaskIdStack()
         }
         clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
@@ -96,6 +97,7 @@ struct SVGGroupElement: SVGDrawableElement {
         }
         if isRoot {
             context.popClipIdStack()
+            context.popMaskIdStack()
         }
         font.map { _ in
             _ = context.popFont()
@@ -123,6 +125,12 @@ struct SVGGroupElement: SVGDrawableElement {
         }
         clipRule.map { _ in
             _ = context.popClipRule()
+        }
+    }
+
+    func mask(context: inout SVGBaseContext) {
+        for index in contentIds {
+            context.contents[index].mask(context: &context)
         }
     }
 

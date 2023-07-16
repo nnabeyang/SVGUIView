@@ -6,6 +6,7 @@ protocol SVGElement: Encodable {
     func style(with style: CSSStyle, at index: Int) -> any SVGElement
     func contains(index: Int, context: SVGContext) -> Bool
     func clip(context: inout SVGBaseContext)
+    func mask(context: inout SVGBaseContext)
 }
 
 extension SVGElement {
@@ -14,6 +15,7 @@ extension SVGElement {
     }
 
     func clip(context _: inout SVGBaseContext) {}
+    func mask(context _: inout SVGBaseContext) {}
 }
 
 struct SVGBaseElement {
@@ -28,6 +30,7 @@ struct SVGBaseElement {
     let stroke: SVGUIStroke
     let color: SVGUIColor?
     let clipPath: SVGClipPath?
+    let mask: SVGMask?
     let display: CSSDisplay?
     let visibility: CSSVisibility?
     let style: SVGUIStyle
@@ -39,6 +42,7 @@ struct SVGBaseElement {
         style = SVGUIStyle(description: attributes["style", default: ""])
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
+        mask = SVGMask(description: attributes["mask", default: ""])
         fill = SVGFill(style: style, attributes: attributes)
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
@@ -56,6 +60,7 @@ struct SVGBaseElement {
         style = other.style
         color = other.color ?? SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         clipPath = other.clipPath
+        mask = other.mask
         fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
         stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
         opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
@@ -76,6 +81,7 @@ struct SVGBaseElement {
         className = other.className
         fill = SVGFill(style: css) ?? other.fill
         clipPath = other.clipPath
+        mask = other.mask
         color = other.color
         stroke = other.stroke
         opacity = other.opacity
@@ -126,6 +132,7 @@ extension SVGDrawableElement {
     var fill: SVGFill? { base.fill }
     var stroke: SVGUIStroke { base.stroke }
     var clipPath: SVGClipPath? { base.clipPath }
+    var mask: SVGMask? { base.mask }
     var color: SVGUIColor? { base.color }
     var style: SVGUIStyle { base.style }
     var display: CSSDisplay? { base.display }
@@ -191,21 +198,35 @@ extension SVGDrawableElement {
         if isRoot {
             context.pushTagIdStack()
             context.pushClipIdStack()
+            context.pushMaskIdStack()
         }
         let path: UIBezierPath?
         if #available(iOS 16.0, *), type != .line {
             path = toClippedBezierPath(context: context)
+            if let path = toBezierPath(context: context) {
+                let frame = frame(context: context, path: path)
+                mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
+            }
         } else {
             path = toBezierPath(context: context)
             if let path = path {
                 let frame = frame(context: context, path: path)
                 clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
+                let lineWidth = stroke.width ?? 0
+
+                if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
+                    context.graphics.clip(to: .zero)
+                } else {
+                    mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
+                }
             }
         }
         if isRoot {
             context.popTagIdStack()
             context.popClipIdStack()
+            context.popMaskIdStack()
         }
+
         if let path = path {
             applySVGFill(fill: fill, path: path, context: context)
             applySVGStroke(stroke: stroke, path: path, context: context)
