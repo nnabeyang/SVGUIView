@@ -16,13 +16,13 @@ private enum JoinType: String {
 struct SVGUIStroke {
     let fill: SVGFill?
     let opacity: CGFloat?
-    let width: CGFloat?
+    let width: SVGLength?
     let cap: CGLineCap?
     let join: CGLineJoin?
     let miterLimit: CGFloat?
     let dashes: [CGFloat]?
     let offset: CGFloat?
-    init(fill: SVGFill?, opacity: CGFloat?, width: CGFloat?, cap: CGLineCap?, join: CGLineJoin?, miterLimit: CGFloat?, dashes: [CGFloat]?, offset: CGFloat?) {
+    init(fill: SVGFill?, opacity: CGFloat?, width: SVGLength?, cap: CGLineCap?, join: CGLineJoin?, miterLimit: CGFloat?, dashes: [CGFloat]?, offset: CGFloat?) {
         self.fill = fill
         self.opacity = opacity
         self.width = width
@@ -36,7 +36,7 @@ struct SVGUIStroke {
     init(attributes: [String: String]) {
         fill = SVGFill(description: attributes["stroke", default: ""])
         opacity = Self.parseNumber(description: attributes["stroke-opacity", default: ""])
-        width = Self.parseNumber(description: attributes["stroke-width", default: ""])
+        width = SVGLength(attributes["stroke-width", default: ""])
         cap = Self.getCap(attribute: attributes["stroke-linecap", default: ""])
         join = Self.getStrokeJoin(attribute: attributes["stroke-linejoin", default: ""])
         miterLimit = Self.parseNumber(description: attributes["stroke-miterlimit", default: ""])

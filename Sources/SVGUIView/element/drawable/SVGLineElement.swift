@@ -53,7 +53,7 @@ struct SVGLineElement: SVGDrawableElement {
         let x2 = x2?.value(total: size.width) ?? 0
         let y2 = y2?.value(total: size.height) ?? 0
         let length = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
-        let lineWidth = stroke.width ?? 0
+        let lineWidth = stroke.width?.value(total: sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0)) ?? 1.0
         let xmin = min(x1, x2)
         let ymin = min(y1, y2)
         if r.width > 0 {

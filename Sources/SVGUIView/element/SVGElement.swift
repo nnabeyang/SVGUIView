@@ -227,7 +227,8 @@ extension SVGDrawableElement {
             if let path = path {
                 let frame = frame(context: context, path: path)
                 clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
-                let lineWidth = stroke.width ?? 0
+                let size = context.viewBox.size
+                let lineWidth = stroke.width?.value(total: sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0)) ?? 1.0
 
                 if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
                     context.graphics.clip(to: .zero)
@@ -282,9 +283,10 @@ extension SVGDrawableElement {
         if !dashes.filter({ $0 > 0 }).isEmpty {
             cgContext.setLineDash(phase: offset, lengths: dashes)
         }
-
+        let size = context.viewBox.size
+        let lineWidth = stroke.width?.value(total: sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0)) ?? 1.0
         cgContext.addPath(path.cgPath)
-        cgContext.setLineWidth(stroke.width ?? 1.0)
+        cgContext.setLineWidth(lineWidth)
         cgContext.setLineCap(stroke.cap ?? .butt)
         cgContext.setLineJoin(stroke.join ?? .miter)
         cgContext.setMiterLimit(stroke.miterLimit ?? 4.0)
