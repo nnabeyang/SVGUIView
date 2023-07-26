@@ -166,6 +166,12 @@ struct SVGSVGElement: SVGDrawableElement {
         }
     }
 
+    func pattern(context: inout SVGBaseContext) {
+        for index in contentIds {
+            context.contents[index].pattern(context: &context)
+        }
+    }
+
     var size: CGSize {
         let rect = viewBox?.toCGRect() ?? .zero
         let width = width ?? .percent(100)

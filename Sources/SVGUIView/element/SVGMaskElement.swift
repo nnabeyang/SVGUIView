@@ -126,7 +126,7 @@ struct SVGMaskElement: SVGDrawableElement {
             graphics.concatenate(content.transform)
             content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
             content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-            content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext)
+            content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext, isRoot: true)
             graphics.restoreGState()
         }
         clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: graphics)

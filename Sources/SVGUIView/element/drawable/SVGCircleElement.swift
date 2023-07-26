@@ -30,7 +30,9 @@ struct SVGCircleElement: SVGDrawableElement {
         let cy = cy?.value(total: size.height) ?? 0
         let r = r?.value(total: sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0)) ?? 0
         guard r > 0 else { return nil }
-        return UIBezierPath(arcCenter: CGPoint(x: cx, y: cy), radius: r, startAngle: 0, endAngle: CGFloat(Double.pi) * 2, clockwise: true)
+        let path = UIBezierPath(arcCenter: CGPoint(x: cx, y: cy), radius: r, startAngle: 0, endAngle: CGFloat(Double.pi) * 2, clockwise: true)
+        path.apply(scale(context: context))
+        return path
     }
 }
 

@@ -31,12 +31,15 @@ struct SVGPathElement: SVGDrawableElement {
         segments = other.segments
     }
 
-    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+    func toBezierPath(context: SVGContext) -> UIBezierPath? {
         let pathContext = SVGPathContext()
         for segment in segments {
             segment.apply(context: pathContext)
         }
-        return pathContext.path
+        return pathContext.path.map {
+            $0.apply(scale(context: context))
+            return $0
+        }
     }
 }
 

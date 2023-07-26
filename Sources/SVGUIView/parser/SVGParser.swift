@@ -21,6 +21,7 @@ enum SVGElementName: String, Equatable {
     case defs
     case clipPath
     case mask
+    case pattern
     case unknown
 }
 
@@ -51,6 +52,7 @@ final class Parser: NSObject {
         contents.last.map {
             $0.clip(context: &context)
             $0.mask(context: &context)
+            $0.pattern(context: &context)
         }
         return context
     }
@@ -93,6 +95,10 @@ extension Parser: XMLParserDelegate {
             case .mask:
                 let element = SVGMaskElement(attributes: element.attributes,
                                              contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return element
+            case .pattern:
+                let element = SVGPatternElement(attributes: element.attributes,
+                                                contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .text:
                 return SVGTextElement(text: text, attributes: element.attributes)

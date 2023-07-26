@@ -22,4 +22,13 @@ extension CGAffineTransform {
         }
         self = transform
     }
+
+    var scale: CGAffineTransform {
+        let scale = sqrt(pow(a, 2) + pow(b, 2))
+        return CGAffineTransform(scaleX: scale, y: scale)
+    }
+
+    var withoutScaling: CGAffineTransform {
+        concatenating(scale.inverted())
+    }
 }

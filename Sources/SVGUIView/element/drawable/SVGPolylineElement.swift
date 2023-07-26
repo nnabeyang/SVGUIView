@@ -18,8 +18,11 @@ struct SVGPolylineElement: SVGDrawableElement {
         points = other.points
     }
 
-    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
-        points.polyline
+    func toBezierPath(context: SVGContext) -> UIBezierPath? {
+        points.polyline.map {
+            $0.apply(scale(context: context))
+            return $0
+        }
     }
 }
 

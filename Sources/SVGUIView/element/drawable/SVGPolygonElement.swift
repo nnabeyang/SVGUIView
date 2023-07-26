@@ -18,8 +18,11 @@ struct SVGPolygonElement: SVGDrawableElement {
         points = other.points
     }
 
-    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
-        points.polygon
+    func toBezierPath(context: SVGContext) -> UIBezierPath? {
+        points.polygon.map {
+            $0.apply(scale(context: context))
+            return $0
+        }
     }
 }
 

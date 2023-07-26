@@ -36,7 +36,9 @@ struct SVGEllipseElement: SVGDrawableElement {
         let rx = _rx ?? _ry ?? 0
         let ry = _ry ?? _rx ?? 0
         guard rx > 0, ry > 0 else { return nil }
-        return UIBezierPath(ovalIn: CGRect(origin: CGPoint(x: cx - rx, y: cy - ry), size: CGSize(width: 2 * rx, height: 2 * ry)))
+        let path = UIBezierPath(ovalIn: CGRect(origin: CGPoint(x: cx - rx, y: cy - ry), size: CGSize(width: 2 * rx, height: 2 * ry)))
+        path.apply(scale(context: context))
+        return path
     }
 }
 

@@ -60,7 +60,9 @@ struct SVGRectElement: SVGDrawableElement {
             return nil
         }
         let cornerSize = CGSize(width: min(width / 2.0, rx), height: min(height / 2.0, ry))
-        return UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
+        let path = UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
+        path.apply(scale(context: context))
+        return path
     }
 }
 

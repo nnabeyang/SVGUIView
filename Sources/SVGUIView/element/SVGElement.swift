@@ -7,6 +7,7 @@ protocol SVGElement: Encodable {
     func contains(index: Int, context: SVGContext) -> Bool
     func clip(context: inout SVGBaseContext)
     func mask(context: inout SVGBaseContext)
+    func pattern(context: inout SVGBaseContext)
 }
 
 extension SVGElement {
@@ -16,6 +17,7 @@ extension SVGElement {
 
     func clip(context _: inout SVGBaseContext) {}
     func mask(context _: inout SVGBaseContext) {}
+    func pattern(context _: inout SVGBaseContext) {}
 }
 
 struct SVGBaseElement {
@@ -109,6 +111,7 @@ protocol SVGDrawableElement: SVGElement {
     var display: CSSDisplay? { get }
     var visibility: CSSVisibility? { get }
     func frame(context: SVGContext, path: UIBezierPath) -> CGRect
+    func scale(context: SVGContext) -> CGAffineTransform
     init(text: String, attributes: [String: String])
     init(base: SVGBaseElement, text: String, attributes: [String: String])
     init(other: Self, index: Int, css: SVGUIStyle)
@@ -118,7 +121,7 @@ protocol SVGDrawableElement: SVGElement {
     @available(iOS 16.0, *)
     func toClippedBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
-    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext)
+    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, isRoot: Bool)
 }
 
 extension SVGDrawableElement {
@@ -164,6 +167,17 @@ extension SVGDrawableElement {
         path.cgPath.boundingBoxOfPath
     }
 
+    func scale(context: SVGContext) -> CGAffineTransform {
+        let contentUnit = context.patternContentUnit ?? .userSpaceOnUse
+        switch contentUnit {
+        case .userSpaceOnUse:
+            return .identity
+        case .objectBoundingBox:
+            let size = context.viewBox.size
+            return CGAffineTransform(scaleX: size.width, y: size.height)
+        }
+    }
+
     @available(iOS 16.0, *)
     func toClippedBezierPath(context: SVGContext) -> UIBezierPath? {
         guard let path = toBezierPath(context: context) else { return nil }
@@ -199,6 +213,7 @@ extension SVGDrawableElement {
             context.pushTagIdStack()
             context.pushClipIdStack()
             context.pushMaskIdStack()
+            context.pushPatternIdStack()
         }
         let path: UIBezierPath?
         if #available(iOS 16.0, *), type != .line {
@@ -221,15 +236,15 @@ extension SVGDrawableElement {
                 }
             }
         }
+        if let path = path {
+            applySVGFill(fill: fill, path: path, context: context, isRoot: isRoot)
+            applySVGStroke(stroke: stroke, path: path, context: context)
+        }
         if isRoot {
             context.popTagIdStack()
             context.popClipIdStack()
             context.popMaskIdStack()
-        }
-
-        if let path = path {
-            applySVGFill(fill: fill, path: path, context: context)
-            applySVGStroke(stroke: stroke, path: path, context: context)
+            context.popPatternIdStack()
         }
         context.restoreGState()
     }
@@ -276,7 +291,7 @@ extension SVGDrawableElement {
         cgContext.drawPath(using: .stroke)
     }
 
-    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext) {
+    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, isRoot: Bool) {
         path.usesEvenOddFillRule = eoFill
         let cgContext = context.graphics
         guard let fill = fill ?? context.fill else {
@@ -288,7 +303,7 @@ extension SVGDrawableElement {
         switch fill {
         case .inherit:
             if let fill = context.fill {
-                applySVGFill(fill: fill, path: path, context: context)
+                applySVGFill(fill: fill, path: path, context: context, isRoot: isRoot)
             } else {
                 cgContext.setFillColor(UIColor.black.cgColor)
                 cgContext.addPath(path.cgPath)
@@ -310,13 +325,21 @@ extension SVGDrawableElement {
                 cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case let .url(id, opacity):
-            guard let server = context.pservers[id] else {
-                cgContext.setFillColor(UIColor.black.cgColor)
-                cgContext.addPath(path.cgPath)
-                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
+            if let server = context.pservers[id] {
+                applyPServerFill(server: server, path: path, context: context, opacity: self.opacity * (opacity ?? 1.0))
                 return
             }
-            applyPServerFill(server: server, path: path, context: context, opacity: self.opacity * (opacity ?? 1.0))
+            let frame = frame(context: context, path: path)
+            if let pattern = context.patterns[id],
+               context.check(patternId: id)
+            {
+                _ = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, isRoot: isRoot)
+                context.remove(patternId: id)
+                return
+            }
+            cgContext.setFillColor(UIColor.black.cgColor)
+            cgContext.addPath(path.cgPath)
+            cgContext.drawPath(using: eoFill ? .eoFill : .fill)
         }
     }
 

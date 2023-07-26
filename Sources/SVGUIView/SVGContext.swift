@@ -6,6 +6,7 @@ struct SVGContext {
 
     private let startDetectingCyclesAfter: Int
     private let viewBoxStack: Stack<CGRect> = Stack()
+    private let patternContentUnitStack = Stack<SVGPatternContentUnitsType>()
     private let fontStack: Stack<SVGUIFont> = Stack()
     private let fillStack: Stack<SVGFill> = Stack()
     private let colorStack: Stack<SVGUIColor> = Stack()
@@ -14,12 +15,24 @@ struct SVGContext {
     private let clipRuleStack: Stack<Bool> = Stack()
     private let clipIdStack = ElementIdStack<String>()
     private let maskIdStack = ElementIdStack<String>()
+    private let patternIdStack: ElementIdStack<String>
     private let tagIdStack = ElementIdStack<Int>()
+    private let initCtm: CGAffineTransform
 
     init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000) {
         self.base = base
         self.graphics = graphics
+        initCtm = graphics.ctm
         self.startDetectingCyclesAfter = startDetectingCyclesAfter
+        patternIdStack = ElementIdStack<String>()
+    }
+
+    init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000, other: Self) {
+        self.base = base
+        self.graphics = graphics
+        initCtm = graphics.ctm
+        self.startDetectingCyclesAfter = startDetectingCyclesAfter
+        patternIdStack = other.patternIdStack
     }
 
     var pservers: [String: any SVGGradientServer] {
@@ -38,6 +51,15 @@ struct SVGContext {
         base.masks
     }
 
+    var patterns: [String: SVGPatternElement] {
+        base.patterns
+    }
+
+    var transform: CGAffineTransform {
+        graphics.ctm.concatenating(initCtm.inverted())
+            .scaledBy(x: 1 / UIScreen.main.scale, y: 1 / UIScreen.main.scale)
+    }
+
     subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
         base[id]
     }
@@ -52,6 +74,10 @@ struct SVGContext {
 
     var viewBox: CGRect {
         viewBoxStack.last!
+    }
+
+    var patternContentUnit: SVGPatternContentUnitsType? {
+        patternContentUnitStack.last
     }
 
     var font: SVGUIFont? {
@@ -122,8 +148,28 @@ struct SVGContext {
         clipIdStack.pop()
     }
 
+    func pushPatternIdStack() {
+        patternIdStack.push()
+    }
+
+    func check(patternId: String) -> Bool {
+        patternIdStack.check(elementId: patternId)
+    }
+
+    func remove(patternId: String) {
+        patternIdStack.remove(elementId: patternId)
+    }
+
+    func popPatternIdStack() {
+        patternIdStack.pop()
+    }
+
     func push(viewBox: CGRect) {
         viewBoxStack.push(viewBox)
+    }
+
+    func push(patternContentUnit: SVGPatternContentUnitsType) {
+        patternContentUnitStack.push(patternContentUnit)
     }
 
     func push(font: SVGUIFont) {
@@ -151,6 +197,11 @@ struct SVGContext {
     @discardableResult
     func popViewBox() -> CGRect? {
         viewBoxStack.pop()
+    }
+
+    @discardableResult
+    func popPatternContentUnit() -> SVGPatternContentUnitsType? {
+        patternContentUnitStack.pop()
     }
 
     @discardableResult
@@ -202,6 +253,7 @@ struct SVGBaseContext {
 
     var clipPaths = [String: SVGClipPathElement]()
     var masks = [String: SVGMaskElement]()
+    var patterns = [String: SVGPatternElement]()
     private let clipRuleStack: Stack<Bool> = Stack()
 
     var root: SVGSVGElement? {
@@ -221,6 +273,12 @@ struct SVGBaseContext {
     mutating func setMask(id: String, value: SVGMaskElement) {
         if masks[id] == nil {
             masks[id] = value
+        }
+    }
+
+    mutating func setPattern(id: String, value: SVGPatternElement) {
+        if patterns[id] == nil {
+            patterns[id] = value
         }
     }
 
