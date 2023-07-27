@@ -56,7 +56,7 @@ struct SVGRectElement: SVGDrawableElement {
         let ry = _ry ?? _rx ?? 0
         let width = width?.value(total: size.width) ?? 0
         let height = height?.value(total: size.height) ?? 0
-        if width == 0 || height == 0 {
+        guard width > 0, height > 0 else {
             return nil
         }
         let cornerSize = CGSize(width: min(width / 2.0, rx), height: min(height / 2.0, ry))
