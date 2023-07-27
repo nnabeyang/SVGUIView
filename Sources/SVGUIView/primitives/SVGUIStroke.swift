@@ -71,7 +71,6 @@ struct SVGUIStroke {
         case .square:
             return .square
         case .inherit:
-            // FIXME: inheritを実装するためには、独自のLineCap型が必要?
             return .butt
         }
     }

@@ -23,7 +23,6 @@ struct BufferView<Element> {
 
 extension BufferView: Collection {
     typealias Element = Element
-    // typealias Index = BufferViewIndex<Element>
     typealias SubSeqence = Self
 
     var startIndex: Index {

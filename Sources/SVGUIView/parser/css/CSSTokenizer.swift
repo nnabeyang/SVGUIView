@@ -498,7 +498,7 @@ struct CSSScanner {
             let c = reader.peek(offset: size)
             guard c > 0 else {
                 reader.moveReaderIndex(forwardBy: size)
-                let end = reader.readIndex // .readIndex.advanced(by: 1)
+                let end = reader.readIndex
                 return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
             }
             if c.isName {

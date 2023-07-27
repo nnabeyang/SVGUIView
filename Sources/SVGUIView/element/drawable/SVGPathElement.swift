@@ -482,7 +482,6 @@ struct ZPathSegment: PathSegment {
 // lineto
 struct LPathSegment: PathSegment {
     static func == (_: LPathSegment, _: LPathSegment) -> Bool {
-        // FIXME:
         true
     }
 
