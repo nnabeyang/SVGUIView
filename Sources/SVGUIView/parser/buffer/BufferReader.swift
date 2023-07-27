@@ -145,30 +145,6 @@ struct BufferReader {
             }
         }
     }
-
-    mutating func skipIdentity() {
-        guard let ascii = read() else {
-            preconditionFailure()
-        }
-        switch ascii {
-        case allLettersLower, allLettersUpper:
-            break
-        default:
-            preconditionFailure()
-        }
-
-        while true {
-            let byte = peek()
-            guard byte > 0 else { break }
-            switch byte {
-            case allLettersLower, allLettersUpper, asciiNumbers:
-                moveReaderIndex(forwardBy: 1)
-                continue
-            default:
-                return
-            }
-        }
-    }
 }
 
 private extension UInt8 {

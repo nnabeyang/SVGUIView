@@ -16,10 +16,30 @@ struct SVGAttributeScanner {
 
     mutating func scanIdentity() -> String? {
         if reader.isEOF { return nil }
+        return consumeName()
+    }
+
+    mutating func consumeName() -> String {
+        let ch = reader.peek()
+        precondition(ch.isName)
         let start = reader.readIndex
-        reader.skipIdentity()
-        let end = reader.readIndex
-        return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
+        var size = 0
+        while true {
+            let c = reader.peek(offset: size)
+            guard c > 0 else {
+                reader.moveReaderIndex(forwardBy: size)
+                let end = reader.readIndex
+                return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
+            }
+            if c.isName {
+                size += 1
+                continue
+            }
+            reader.moveReaderIndex(forwardBy: size)
+            let end = reader.readIndex
+            return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
+        }
+        fatalError()
     }
 
     mutating func scanNumber() -> Double? {
