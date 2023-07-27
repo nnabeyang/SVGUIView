@@ -50,10 +50,10 @@ struct SVGRectElement: SVGDrawableElement {
         let size = context.viewBox.size
         let x = x?.value(total: size.width) ?? 0
         let y = y?.value(total: size.height) ?? 0
-        let _rx = ((rx ?? ry)?.value(total: size.width)).flatMap { $0 < 0 ? nil : $0 }
-        let _ry = ((ry ?? rx)?.value(total: size.height)).flatMap { $0 < 0 ? nil : $0 }
-        let rx = _rx ?? _ry ?? 0
-        let ry = _ry ?? _rx ?? 0
+        let _rx = (rx?.value(total: size.width)).flatMap { $0 < 0 ? nil : $0 }
+        let _ry = (ry?.value(total: size.height)).flatMap { $0 < 0 ? nil : $0 }
+        let rx: CGFloat = _rx ?? _ry ?? 0
+        let ry: CGFloat = _ry ?? _rx ?? 0
         let width = width?.value(total: size.width) ?? 0
         let height = height?.value(total: size.height) ?? 0
         guard width > 0, height > 0 else {
