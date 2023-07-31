@@ -7,7 +7,15 @@ enum SVGOverflow: String {
     case auto
 }
 
-struct SVGSVGElement: SVGDrawableElement {
+private struct SVGLengthContextProxy: SVGLengthContext {
+    let context: any SVGLengthContext
+    let size: CGSize
+    var viewBoxSize: CGSize { size }
+    var font: SVGUIFont? { context.font }
+    var rootFont: SVGUIFont? { context.rootFont }
+}
+
+struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     var type: SVGElementName {
         .svg
     }
@@ -15,8 +23,8 @@ struct SVGSVGElement: SVGDrawableElement {
     let base: SVGBaseElement
     let preserveAspectRatio: PreserveAspectRatio?
     let overflow: SVGOverflow?
-    let x: ElementLength?
-    let y: ElementLength?
+    let x: SVGLength?
+    let y: SVGLength?
     let width: SVGLength?
     let height: SVGLength?
     let viewBox: SVGElementRect?
@@ -34,8 +42,8 @@ struct SVGSVGElement: SVGDrawableElement {
     init(attributes: [String: String], contentIds: [Int]) {
         base = SVGBaseElement(attributes: attributes)
 
-        x = ElementLength(attributes["x"])
-        y = ElementLength(attributes["y"])
+        x = SVGLength(attributes["x"])
+        y = SVGLength(attributes["y"])
         width = SVGLength(attributes["width"])
         height = SVGLength(attributes["height"])
         viewBox = Self.parseViewBox(attributes["viewBox"])
@@ -95,15 +103,22 @@ struct SVGSVGElement: SVGDrawableElement {
         return nil
     }
 
+    var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
+    var rootFont: SVGUIFont? { font }
+
     func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot: Bool) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         context.saveGState()
-        let viewPort = context.viewBox
-        let x = (x ?? .pixel(0)).value(total: viewPort.height)
-        let y = (y ?? .pixel(0)).value(total: viewPort.width)
+        let x = (x ?? .pixel(0)).value(context: context, mode: .width)
+        let y = (y ?? .pixel(0)).value(context: context, mode: .height)
         context.concatenate(CGAffineTransform(translationX: x, y: y))
-        let height = (height ?? .percent(100)).value(total: viewPort.height)
-        let width = (width ?? .percent(100)).value(total: viewPort.width)
+        let width = (width ?? .percent(100)).value(context: context, mode: .width)
+        let height = (height ?? .percent(100)).value(context: context, mode: .height)
+
+        guard height > 0, width > 0 else {
+            context.restoreGState()
+            return
+        }
         let viewPortSize = CGSize(width: width, height: height)
         let transform = viewBox.map { getTransform(viewBox: $0.toCGRect(), size: viewPortSize) } ?? .identity
         context.concatenate(transform)
@@ -173,11 +188,10 @@ struct SVGSVGElement: SVGDrawableElement {
     }
 
     var size: CGSize {
-        let rect = viewBox?.toCGRect() ?? .zero
         let width = width ?? .percent(100)
         let height = height ?? .percent(100)
-        return CGSize(width: width.value(total: rect.width),
-                      height: height.value(total: rect.height))
+        return CGSize(width: width.value(context: self, mode: .width),
+                      height: height.value(context: self, mode: .height))
     }
 
     func toBezierPath(context _: SVGContext) -> UIBezierPath? {
@@ -200,12 +214,14 @@ extension SVGSVGElement {
         if let viewBox = viewBox {
             return viewBox.toCGRect()
         }
+        let context = SVGLengthContextProxy(context: self, size: size)
         let width = width ?? .percent(100)
         let height = height ?? .percent(100)
+
         return CGRect(x: 0,
                       y: 0,
-                      width: width.value(total: size.width),
-                      height: height.value(total: size.height))
+                      width: width.value(context: context, mode: .width),
+                      height: height.value(context: context, mode: .height))
     }
 
     func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {

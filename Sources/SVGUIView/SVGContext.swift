@@ -1,6 +1,12 @@
 import UIKit
 
-struct SVGContext {
+protocol SVGLengthContext {
+    var viewBoxSize: CGSize { get }
+    var font: SVGUIFont? { get }
+    var rootFont: SVGUIFont? { get }
+}
+
+struct SVGContext: SVGLengthContext {
     let base: SVGBaseContext
     let graphics: CGContext
 
@@ -76,8 +82,16 @@ struct SVGContext {
         viewBoxStack.last!
     }
 
+    var viewBoxSize: CGSize {
+        viewBox.size
+    }
+
     var patternContentUnit: SVGPatternContentUnitsType? {
         patternContentUnitStack.last
+    }
+
+    var rootFont: SVGUIFont? {
+        fontStack.first
     }
 
     var font: SVGUIFont? {
@@ -300,6 +314,11 @@ struct SVGBaseContext {
 
 private class Stack<T> {
     var fonts: [T] = []
+
+    var first: T? {
+        fonts.first
+    }
+
     var last: T? {
         fonts.last
     }

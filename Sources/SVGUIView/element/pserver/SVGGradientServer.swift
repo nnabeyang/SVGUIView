@@ -34,20 +34,20 @@ struct SVGLinearGradientServer: SVGGradientServer {
     let parentId: String?
     let userSpace: Bool?
     let spreadMethod: SpreadMethod?
-    let x1: ElementLength?
-    let y1: ElementLength?
-    let x2: ElementLength?
-    let y2: ElementLength?
+    let x1: SVGLength?
+    let y1: SVGLength?
+    let x2: SVGLength?
+    let y2: SVGLength?
 
     private enum CodingKeys: String, CodingKey {
         case stops
     }
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
-        x1 = ElementLength(attributes["x1"])
-        y1 = ElementLength(attributes["y1"])
-        x2 = ElementLength(attributes["x2"])
-        y2 = ElementLength(attributes["y2"])
+        x1 = SVGLength(attributes["x1"])
+        y1 = SVGLength(attributes["y1"])
+        x2 = SVGLength(attributes["x2"])
+        y2 = SVGLength(attributes["y2"])
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
@@ -96,11 +96,10 @@ struct SVGLinearGradientServer: SVGGradientServer {
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
         let stops = stops ?? []
         let userSpace = userSpace ?? false
-        let size = context.viewBox.size
-        let x1 = (x1 ?? .percent(0)).value(total: userSpace ? size.width : 1.0)
-        let y1 = (y1 ?? .percent(0)).value(total: userSpace ? size.height : 1.0)
-        let x2 = (x2 ?? .percent(100)).value(total: userSpace ? size.width : 1.0)
-        let y2 = (y2 ?? .percent(0)).value(total: userSpace ? size.height : 1.0)
+        let x1 = (x1 ?? .percent(0)).value(context: context, mode: .width, userSpace: userSpace)
+        let y1 = (y1 ?? .percent(0)).value(context: context, mode: .height, userSpace: userSpace)
+        let x2 = (x2 ?? .percent(100)).value(context: context, mode: .width, userSpace: userSpace)
+        let y2 = (y2 ?? .percent(0)).value(context: context, mode: .height, userSpace: userSpace)
         let spreadMethod = spreadMethod ?? .pad
 
         let colors = stops.compactMap {
@@ -201,11 +200,11 @@ struct SVGRadialGradientServer: SVGGradientServer {
     let spreadMethod: SpreadMethod?
     let userSpace: Bool?
     let parentId: String?
-    let cx: ElementLength?
-    let cy: ElementLength?
-    let fx: ElementLength?
-    let fy: ElementLength?
-    let r: ElementLength?
+    let cx: SVGLength?
+    let cy: SVGLength?
+    let fx: SVGLength?
+    let fy: SVGLength?
+    let r: SVGLength?
 
     private enum CodingKeys: String, CodingKey {
         case stops
@@ -213,11 +212,11 @@ struct SVGRadialGradientServer: SVGGradientServer {
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
-        cx = ElementLength(attributes["cx"])
-        cy = ElementLength(attributes["cy"])
-        fx = ElementLength(attributes["fx"])
-        fy = ElementLength(attributes["fy"])
-        r = ElementLength(attributes["r"])
+        cx = SVGLength(attributes["cx"])
+        cy = SVGLength(attributes["cy"])
+        fx = SVGLength(attributes["fx"])
+        fy = SVGLength(attributes["fy"])
+        r = SVGLength(attributes["r"])
 
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
@@ -268,11 +267,9 @@ struct SVGRadialGradientServer: SVGGradientServer {
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
         let stops = stops ?? []
         let userSpace = userSpace ?? false
-        let size = context.viewBox.size
-        let cx = (cx ?? .percent(50)).value(total: userSpace ? size.width : 1.0)
-        let cy = (cy ?? .percent(50)).value(total: userSpace ? size.height : 1.0)
-        let r = (r ?? .percent(50)).value(total: userSpace ? sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0) : 1.0)
-
+        let cx = (cx ?? .percent(50)).value(context: context, mode: .width, userSpace: userSpace)
+        let cy = (cy ?? .percent(50)).value(context: context, mode: .width, userSpace: userSpace)
+        let r = (r ?? .percent(50)).value(context: context, mode: .height, userSpace: userSpace)
         let colors = stops.compactMap {
             switch $0.color {
             case .current:

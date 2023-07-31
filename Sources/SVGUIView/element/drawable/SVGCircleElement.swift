@@ -6,9 +6,9 @@ struct SVGCircleElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let cx: ElementLength?
-    let cy: ElementLength?
-    let r: ElementLength?
+    let cx: SVGLength?
+    let cy: SVGLength?
+    let r: SVGLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
@@ -25,10 +25,9 @@ struct SVGCircleElement: SVGDrawableElement {
     }
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
-        let size = context.viewBox.size
-        let cx = cx?.value(total: size.width) ?? 0
-        let cy = cy?.value(total: size.height) ?? 0
-        let r = r?.value(total: sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0)) ?? 0
+        let cx = cx?.value(context: context, mode: .width) ?? 0
+        let cy = cy?.value(context: context, mode: .height) ?? 0
+        let r = r?.value(context: context, mode: .other) ?? 0
         guard r > 0 else { return nil }
         let path = UIBezierPath(arcCenter: CGPoint(x: cx, y: cy), radius: r, startAngle: 0, endAngle: CGFloat(Double.pi) * 2, clockwise: true)
         path.apply(scale(context: context))

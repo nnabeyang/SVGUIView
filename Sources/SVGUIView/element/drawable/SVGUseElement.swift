@@ -6,20 +6,20 @@ struct SVGUseElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let x: ElementLength?
-    let y: ElementLength?
-    let width: ElementLength?
-    let height: ElementLength?
+    let x: SVGLength?
+    let y: SVGLength?
+    let width: SVGLength?
+    let height: SVGLength?
     let parentId: String?
     let attributes: [String: String]
     let contentIds: [Int]
 
     init(attributes: [String: String], contentIds: [Int]) {
         base = SVGBaseElement(attributes: attributes)
-        x = .init(attributes["x"])
-        y = .init(attributes["y"])
-        width = .init(attributes["width"])
-        height = .init(attributes["height"])
+        x = SVGLength(attributes["x"])
+        y = SVGLength(attributes["y"])
+        width = SVGLength(attributes["width"])
+        height = SVGLength(attributes["height"])
         parentId = Self.parseLink(description: attributes["href"] ?? attributes["xlink:href"])
         self.attributes = attributes
         self.contentIds = contentIds
@@ -73,10 +73,8 @@ struct SVGUseElement: SVGDrawableElement {
         else {
             return nil
         }
-
-        let size = context.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
+        let x = x?.value(context: context, mode: .width) ?? 0
+        let y = y?.value(context: context, mode: .height) ?? 0
         let transform = CGAffineTransform(translationX: x, y: y)
         context.concatenate(transform)
         let parentElement = element.use(attributes: attributes)

@@ -13,7 +13,7 @@
   },
   {
     "src": "height:160px;",
-    "want": [{ "type": "height", "value": ["pixel", 160] }]
+    "want": [{ "type": "height", "value": ["px", 160] }]
   },
   {
     "src": "transform:scale(2);",

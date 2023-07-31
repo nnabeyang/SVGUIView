@@ -149,7 +149,7 @@ extension SVGCSSFill: Codable {
 enum CSSValue {
     case fill(SVGCSSFill)
     case number(Double)
-    case length(ElementLength)
+    case length(SVGLength)
     case transform(CGAffineTransform)
 }
 
@@ -200,7 +200,7 @@ extension CSSValue: Decodable {
             self = .transform(value)
             return
         }
-        if let value = try? container.decode(ElementLength.self) {
+        if let value = try? container.decode(SVGLength.self) {
             self = .length(value)
             return
         }
@@ -373,7 +373,7 @@ struct CSSParser {
             }
         case .height, .width:
             guard case let .dimension(value, unit) = tokenizer.next() else { return .failure(.invalid) }
-            return .success(CSSDeclaration(type: type, value: .length(ElementLength(value: value, unit: unit))))
+            return .success(CSSDeclaration(type: type, value: .length(SVGLength(value: value, unit: unit))))
         case .transform:
             switch parseTransform(tokenizer: &tokenizer) {
             case let .failure(error):

@@ -9,10 +9,10 @@ enum SVGPatternContentUnitsType: String {
 struct SVGPatternElement: SVGDrawableElement {
     var base: SVGBaseElement
     let colorInterpolation: SVGColorInterpolation?
-    let x: ElementLength?
-    let y: ElementLength?
-    let width: ElementLength?
-    let height: ElementLength?
+    let x: SVGLength?
+    let y: SVGLength?
+    let width: SVGLength?
+    let height: SVGLength?
     let patternContentUnits: SVGPatternContentUnitsType?
     let patternTransform: CGAffineTransform?
     let preserveAspectRatio: PreserveAspectRatio?
@@ -37,10 +37,10 @@ struct SVGPatternElement: SVGDrawableElement {
     init(attributes: [String: String], contentIds: [Int]) {
         base = SVGBaseElement(attributes: attributes)
         colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
-        x = ElementLength(attributes["x"])
-        y = ElementLength(attributes["y"])
-        width = ElementLength(style: base.style[.width], value: attributes["width"])
-        height = ElementLength(style: base.style[.height], value: attributes["height"])
+        x = SVGLength(attributes["x"])
+        y = SVGLength(attributes["y"])
+        width = SVGLength(style: base.style[.width], value: attributes["width"])
+        height = SVGLength(style: base.style[.height], value: attributes["height"])
 
         patternTransform = CGAffineTransform(description: attributes["patternTransform", default: ""])
         userSpace = attributes["patternUnits"].flatMap { $0 == "userSpaceOnUse" }
@@ -127,9 +127,8 @@ struct SVGPatternElement: SVGDrawableElement {
 
     func size(frame: CGRect, context: SVGContext) -> CGSize {
         let userSpace = userSpace ?? false
-        let size = userSpace ? context.viewBox.size : CGSize(width: 1.0, height: 1.0)
-        let width = width?.value(total: size.width) ?? 0
-        let height = height?.value(total: size.height) ?? 0
+        let width = width?.value(context: context, mode: .width, userSpace: userSpace) ?? 0
+        let height = height?.value(context: context, mode: .height, userSpace: userSpace) ?? 0
         return userSpace ? CGSize(width: width, height: height) : CGSize(width: width * frame.width, height: height * frame.height)
     }
 
@@ -158,16 +157,15 @@ struct SVGPatternElement: SVGDrawableElement {
             version: 0,
             drawPattern: drawPattern, releaseInfo: releaseInfo
         )
-        let size = context.viewBox.size
         let x: CGFloat
         let y: CGFloat
         let userSpace = userSpace ?? false
         if userSpace {
-            x = self.x?.value(total: size.width) ?? 0
-            y = self.y?.value(total: size.height) ?? 0
+            x = self.x?.value(context: context, mode: .width) ?? 0
+            y = self.y?.value(context: context, mode: .height) ?? 0
         } else {
-            x = (self.x?.value(total: 1.0) ?? 0) * frame.width + frame.minX
-            y = (self.y?.value(total: 1.0) ?? 0) * frame.height + frame.minY
+            x = (self.x?.value(context: context, mode: .width, userSpace: userSpace) ?? 0) * frame.width + frame.minX
+            y = (self.y?.value(context: context, mode: .height, userSpace: userSpace) ?? 0) * frame.height + frame.minY
         }
         let transform = (patternTransform ?? .identity).withoutScaling
         guard let pattern = CGPattern(

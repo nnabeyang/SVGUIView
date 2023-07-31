@@ -15,16 +15,16 @@ struct SVGTextElement: SVGDrawableElement {
     let text: String
     let font: SVGUIFont
     let textAnchor: TextAnchor?
-    let x: ElementLength?
-    let y: ElementLength?
+    let x: SVGLength?
+    let y: SVGLength?
 
     init(base: SVGBaseElement, text: String, attributes: [String: String]) {
         self.base = base
         self.text = text
         font = Self.parseFont(attributes: attributes)
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
-        x = .init(attributes["x"])
-        y = .init(attributes["y"])
+        x = SVGLength(attributes["x"])
+        y = SVGLength(attributes["y"])
     }
 
     init(other: Self, attributes: [String: String]) {
@@ -100,9 +100,8 @@ struct SVGTextElement: SVGDrawableElement {
 
     func frame(context: SVGContext, path _: UIBezierPath) -> CGRect {
         guard let line = getLine(context: context) else { return .zero }
-        let size = context.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
+        let x = x?.value(context: context, mode: .width) ?? 0
+        let y = y?.value(context: context, mode: .height) ?? 0
         var transform = CGAffineTransform(translationX: x, y: y)
             .scaledBy(x: 1.0, y: -1.0)
         let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
@@ -134,10 +133,8 @@ struct SVGTextElement: SVGDrawableElement {
         }
 
         let path = UIBezierPath(cgPath: letters)
-
-        let size = context.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
+        let x = x?.value(context: context, mode: .width) ?? 0
+        let y = y?.value(context: context, mode: .height) ?? 0
         var transform = CGAffineTransform(translationX: x, y: y)
             .scaledBy(x: 1.0, y: -1.0)
 

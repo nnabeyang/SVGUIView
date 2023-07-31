@@ -6,10 +6,10 @@ struct SVGLineElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let x1: ElementLength?
-    let y1: ElementLength?
-    let x2: ElementLength?
-    let y2: ElementLength?
+    let x1: SVGLength?
+    let y1: SVGLength?
+    let x2: SVGLength?
+    let y2: SVGLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
@@ -28,11 +28,10 @@ struct SVGLineElement: SVGDrawableElement {
     }
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
-        let size = context.viewBox.size
-        let x1 = x1?.value(total: size.width) ?? 0
-        let y1 = y1?.value(total: size.height) ?? 0
-        let x2 = x2?.value(total: size.width) ?? 0
-        let y2 = y2?.value(total: size.height) ?? 0
+        let x1 = x1?.value(context: context, mode: .width) ?? 0
+        let y1 = y1?.value(context: context, mode: .height) ?? 0
+        let x2 = x2?.value(context: context, mode: .width) ?? 0
+        let y2 = y2?.value(context: context, mode: .height) ?? 0
         let start = CGPoint(x: x1, y: y1)
         let end = CGPoint(x: x2, y: y2)
         guard start != end else { return nil }
@@ -47,13 +46,13 @@ struct SVGLineElement: SVGDrawableElement {
         if r.width > 0, r.height > 0 {
             return r
         }
-        let size = context.viewBox.size
-        let x1 = x1?.value(total: size.width) ?? 0
-        let y1 = y1?.value(total: size.height) ?? 0
-        let x2 = x2?.value(total: size.width) ?? 0
-        let y2 = y2?.value(total: size.height) ?? 0
+
+        let x1 = x1?.value(context: context, mode: .width) ?? 0
+        let y1 = y1?.value(context: context, mode: .height) ?? 0
+        let x2 = x2?.value(context: context, mode: .width) ?? 0
+        let y2 = y2?.value(context: context, mode: .height) ?? 0
         let length = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
-        let lineWidth = stroke.width?.value(total: sqrt(size.width * size.width + size.height * size.height) / sqrt(2.0)) ?? 1.0
+        let lineWidth = stroke.width?.value(context: context, mode: .other) ?? 1.0
         let xmin = min(x1, x2)
         let ymin = min(y1, y2)
         if r.width > 0 {

@@ -6,12 +6,12 @@ struct SVGRectElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let x: ElementLength?
-    let y: ElementLength?
-    let rx: ElementLength?
-    let ry: ElementLength?
-    let width: ElementLength?
-    let height: ElementLength?
+    let x: SVGLength?
+    let y: SVGLength?
+    let rx: SVGLength?
+    let ry: SVGLength?
+    let width: SVGLength?
+    let height: SVGLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
@@ -19,8 +19,8 @@ struct SVGRectElement: SVGDrawableElement {
         y = .init(attributes["y"])
         rx = .init(attributes["rx"])
         ry = .init(attributes["ry"])
-        width = ElementLength(style: base.style[.width], value: attributes["width"])
-        height = ElementLength(style: base.style[.height], value: attributes["height"])
+        width = SVGLength(style: base.style[.width], value: attributes["width"])
+        height = SVGLength(style: base.style[.height], value: attributes["height"])
     }
 
     init(other: Self, index: Int, css: SVGUIStyle) {
@@ -29,8 +29,8 @@ struct SVGRectElement: SVGDrawableElement {
         y = other.y
         rx = other.rx
         ry = other.ry
-        width = ElementLength(style: css[.width], value: nil) ?? other.width
-        height = ElementLength(style: css[.height], value: nil) ?? other.height
+        width = SVGLength(style: css[.width], value: nil) ?? other.width
+        height = SVGLength(style: css[.height], value: nil) ?? other.height
     }
 
     init(other: Self, attributes: [String: String]) {
@@ -47,15 +47,14 @@ struct SVGRectElement: SVGDrawableElement {
         color.map {
             context.push(color: $0)
         }
-        let size = context.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
-        let _rx = (rx?.value(total: size.width)).flatMap { $0 < 0 ? nil : $0 }
-        let _ry = (ry?.value(total: size.height)).flatMap { $0 < 0 ? nil : $0 }
+        let x = x?.value(context: context, mode: .width) ?? 0
+        let y = y?.value(context: context, mode: .height) ?? 0
+        let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }
+        let _ry = (ry?.value(context: context, mode: .height)).flatMap { $0 < 0 ? nil : $0 }
         let rx: CGFloat = _rx ?? _ry ?? 0
         let ry: CGFloat = _ry ?? _rx ?? 0
-        let width = width?.value(total: size.width) ?? 0
-        let height = height?.value(total: size.height) ?? 0
+        let width = width?.value(context: context, mode: .width) ?? 0
+        let height = height?.value(context: context, mode: .height) ?? 0
         guard width > 0, height > 0 else {
             return nil
         }

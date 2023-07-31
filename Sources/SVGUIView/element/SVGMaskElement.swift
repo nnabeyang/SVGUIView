@@ -9,10 +9,10 @@ enum SVGColorInterpolation: String {
 struct SVGMaskElement: SVGDrawableElement {
     var base: SVGBaseElement
     let colorInterpolation: SVGColorInterpolation?
-    let x: ElementLength?
-    let y: ElementLength?
-    let width: ElementLength?
-    let height: ElementLength?
+    let x: SVGLength?
+    let y: SVGLength?
+    let width: SVGLength?
+    let height: SVGLength?
 
     var type: SVGElementName {
         .mask
@@ -34,8 +34,8 @@ struct SVGMaskElement: SVGDrawableElement {
         colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
         x = .init(attributes["x"])
         y = .init(attributes["y"])
-        width = ElementLength(style: base.style[.width], value: attributes["width"])
-        height = ElementLength(style: base.style[.height], value: attributes["height"])
+        width = SVGLength(style: base.style[.width], value: attributes["width"])
+        height = SVGLength(style: base.style[.height], value: attributes["height"])
         userSpace = attributes["maskContentUnits"].flatMap { $0 == "userSpaceOnUse" }
         self.contentIds = contentIds
     }
@@ -67,11 +67,10 @@ struct SVGMaskElement: SVGDrawableElement {
 
     func clip(frame: CGRect, context: SVGContext, cgContext: CGContext) -> Bool {
         guard let maskImage = maskImage(frame: frame, context: context) else { return false }
-        let size = context.viewBox.size
-        let x = (x ?? .percent(-10)).value(total: size.width)
-        let y = (y ?? .percent(-10)).value(total: size.height)
-        let width = (width ?? .percent(120)).value(total: size.width)
-        let height = (height ?? .percent(120)).value(total: size.height)
+        let x = (x ?? .percent(-10)).value(context: context, mode: .width)
+        let y = (y ?? .percent(-10)).value(context: context, mode: .height)
+        let width = (width ?? .percent(120)).value(context: context, mode: .width)
+        let height = (height ?? .percent(120)).value(context: context, mode: .height)
         cgContext.clip(to: CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height)))
         cgContext.clip(to: frame, mask: maskImage)
         return true

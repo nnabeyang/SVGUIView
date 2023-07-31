@@ -22,21 +22,11 @@ struct SVGUIStroke {
     let miterLimit: CGFloat?
     let dashes: [CGFloat]?
     let offset: CGFloat?
-    init(fill: SVGFill?, opacity: CGFloat?, width: SVGLength?, cap: CGLineCap?, join: CGLineJoin?, miterLimit: CGFloat?, dashes: [CGFloat]?, offset: CGFloat?) {
-        self.fill = fill
-        self.opacity = opacity
-        self.width = width
-        self.cap = cap
-        self.join = join
-        self.miterLimit = miterLimit
-        self.dashes = dashes
-        self.offset = offset
-    }
 
     init(attributes: [String: String]) {
         fill = SVGFill(description: attributes["stroke", default: ""])
         opacity = Self.parseNumber(description: attributes["stroke-opacity", default: ""])
-        width = SVGLength(attributes["stroke-width", default: ""])
+        width = SVGLength(attributes["stroke-width"])
         cap = Self.getCap(attribute: attributes["stroke-linecap", default: ""])
         join = Self.getStrokeJoin(attribute: attributes["stroke-linejoin", default: ""])
         miterLimit = Self.parseNumber(description: attributes["stroke-miterlimit", default: ""])

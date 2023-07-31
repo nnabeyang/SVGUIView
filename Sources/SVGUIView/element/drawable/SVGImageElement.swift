@@ -7,19 +7,19 @@ struct SVGImageElement: SVGDrawableElement {
 
     let base: SVGBaseElement
     let data: Data?
-    let x: ElementLength?
-    let y: ElementLength?
-    let width: ElementLength?
-    let height: ElementLength?
+    let x: SVGLength?
+    let y: SVGLength?
+    let width: SVGLength?
+    let height: SVGLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
         let src = (attributes["href"] ?? attributes["xlink:href", default: ""]).split(separator: ",").map { String($0) }
         data = src.last.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
-        x = ElementLength(attributes["x"]) ?? .pixel(0)
-        y = ElementLength(attributes["y"]) ?? .pixel(0)
-        width = ElementLength(style: base.style[.width], value: attributes["width"])
-        height = ElementLength(style: base.style[.height], value: attributes["height"])
+        x = SVGLength(attributes["x"]) ?? .pixel(0)
+        y = SVGLength(attributes["y"]) ?? .pixel(0)
+        width = SVGLength(style: base.style[.width], value: attributes["width"])
+        height = SVGLength(style: base.style[.height], value: attributes["height"])
     }
 
     init(other: Self, index: Int, css: SVGUIStyle) {
@@ -31,16 +31,14 @@ struct SVGImageElement: SVGDrawableElement {
         height = other.height
     }
 
-    func draw(_ svgContext: SVGContext, index _: Int, depth: Int, isRoot _: Bool) {
-        guard !svgContext.detectCycles(type: type, depth: depth) else { return }
-        let context = svgContext.graphics
+    func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot _: Bool) {
+        guard !context.detectCycles(type: type, depth: depth) else { return }
+        let cgContext = context.graphics
         context.saveGState()
-
-        let size = svgContext.viewBox.size
-        let x = x?.value(total: size.width) ?? 0
-        let y = y?.value(total: size.height) ?? 0
-        let width = width?.value(total: size.width) ?? 0
-        let height = height?.value(total: size.width) ?? 0
+        let x = x?.value(context: context, mode: .width) ?? 0
+        let y = y?.value(context: context, mode: .width) ?? 0
+        let width = width?.value(context: context, mode: .width) ?? 0
+        let height = height?.value(context: context, mode: .height) ?? 0
         if let data = data,
            let image = UIImage(data: data),
            let cgImage = image.cgImage
@@ -48,8 +46,8 @@ struct SVGImageElement: SVGDrawableElement {
             let s = scale(width: width, height: height, imageSize: image.size)
             let width = image.size.width * s
             let height = image.size.height * s
-            context.scaleBy(x: 1, y: -1)
-            context.draw(cgImage, in: CGRect(x: x, y: -height - y, width: width, height: height))
+            cgContext.scaleBy(x: 1, y: -1)
+            cgContext.draw(cgImage, in: CGRect(x: x, y: -height - y, width: width, height: height))
         }
         context.restoreGState()
     }

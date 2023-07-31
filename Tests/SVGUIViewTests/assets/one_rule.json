@@ -12,7 +12,7 @@
     "want": [
       "qualified",
       [["tag", "rect"]],
-      ["height", { "type": "height", "value": ["pixel", 160] }]
+      ["height", { "type": "height", "value": ["px", 160] }]
     ]
   },
   {

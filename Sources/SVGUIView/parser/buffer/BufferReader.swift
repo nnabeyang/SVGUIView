@@ -117,6 +117,14 @@ struct BufferReader {
                 moveReaderIndex(forwardBy: 1)
                 allowedSign = true
             default:
+                if allowedSign {
+                    switch peek(offset: -1) {
+                    case UInt8(ascii: "e"), UInt8(ascii: "E"):
+                        moveReaderIndex(forwardBy: -1)
+                    default:
+                        break
+                    }
+                }
                 return
             }
         }

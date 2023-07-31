@@ -44,8 +44,9 @@ public class SVGUIView: UIView {
             graphics: graphics
         )
         context.saveGState()
-        let height = (svg.height ?? .percent(100)).value(total: viewBox.height)
-        let width = (svg.width ?? .percent(100)).value(total: viewBox.width)
+        context.push(viewBox: viewBox)
+        let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
+        let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
         switch contentMode {
         case .scaleToFill:
             let scaleX = viewBox.width / width
@@ -64,7 +65,6 @@ public class SVGUIView: UIView {
         default:
             break
         }
-        context.push(viewBox: viewBox)
         svg.draw(context, index: baseContext.contents.count - 1, depth: 1, isRoot: true)
         context.popViewBox()
         context.restoreGState()

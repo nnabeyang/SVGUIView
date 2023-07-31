@@ -536,6 +536,41 @@ extension SVGAttributeScanner {
     }
 }
 
+// for svg length
+extension SVGAttributeScanner {
+    mutating func scanLengthType() -> SVGLengthType {
+        if reader.isEOF {
+            return .number
+        }
+        guard let first = reader.read() else { return .unknown }
+        if reader.isEOF {
+            return first == UInt8(ascii: "%") ? .percentage : .unknown
+        }
+        guard let second = reader.read() else { return .unknown }
+        guard reader.isEOF else { return .unknown }
+        switch (first, second) {
+        case (UInt8(ascii: "e"), UInt8(ascii: "m")):
+            return .ems
+        case (UInt8(ascii: "e"), UInt8(ascii: "x")):
+            return .exs
+        case (UInt8(ascii: "p"), UInt8(ascii: "x")):
+            return .pixels
+        case (UInt8(ascii: "c"), UInt8(ascii: "m")):
+            return .centimeters
+        case (UInt8(ascii: "m"), UInt8(ascii: "m")):
+            return .millimeters
+        case (UInt8(ascii: "i"), UInt8(ascii: "n")):
+            return .inches
+        case (UInt8(ascii: "p"), UInt8(ascii: "t")):
+            return .points
+        case (UInt8(ascii: "p"), UInt8(ascii: "c")):
+            return .picas
+        default:
+            return .unknown
+        }
+    }
+}
+
 extension Double {
     init?(prevalidatedBuffer buffer: BufferView<UInt8>) {
         let value = buffer.withUnsafePointer { nptr, count -> Double? in

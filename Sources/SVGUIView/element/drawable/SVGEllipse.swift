@@ -6,17 +6,17 @@ struct SVGEllipseElement: SVGDrawableElement {
     }
 
     let base: SVGBaseElement
-    let cx: ElementLength?
-    let cy: ElementLength?
-    let rx: ElementLength?
-    let ry: ElementLength?
+    let cx: SVGLength?
+    let cy: SVGLength?
+    let rx: SVGLength?
+    let ry: SVGLength?
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
-        cx = ElementLength(attributes["cx"])
-        cy = ElementLength(attributes["cy"])
-        rx = ElementLength(attributes["rx"])
-        ry = ElementLength(attributes["ry"])
+        cx = SVGLength(attributes["cx"])
+        cy = SVGLength(attributes["cy"])
+        rx = SVGLength(attributes["rx"])
+        ry = SVGLength(attributes["ry"])
     }
 
     init(other: Self, index: Int, css: SVGUIStyle) {
@@ -28,13 +28,12 @@ struct SVGEllipseElement: SVGDrawableElement {
     }
 
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
-        let size = context.viewBox.size
-        let cx = cx?.value(total: size.width) ?? 0
-        let cy = cy?.value(total: size.height) ?? 0
-        let _rx = ((rx ?? ry)?.value(total: size.width)).flatMap { $0 < 0 ? nil : $0 }
-        let _ry = ((ry ?? rx)?.value(total: size.height)).flatMap { $0 < 0 ? nil : $0 }
-        let rx = _rx ?? _ry ?? 0
-        let ry = _ry ?? _rx ?? 0
+        let cx = cx?.value(context: context, mode: .width) ?? 0
+        let cy = cy?.value(context: context, mode: .height) ?? 0
+        let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }
+        let _ry = (ry?.value(context: context, mode: .height)).flatMap { $0 < 0 ? nil : $0 }
+        let rx: CGFloat = _rx ?? _ry ?? 0
+        let ry: CGFloat = _ry ?? _rx ?? 0
         guard rx > 0, ry > 0 else { return nil }
         let path = UIBezierPath(ovalIn: CGRect(origin: CGPoint(x: cx - rx, y: cy - ry), size: CGSize(width: 2 * rx, height: 2 * ry)))
         path.apply(scale(context: context))
