@@ -547,28 +547,37 @@ extension SVGAttributeScanner {
             return first == UInt8(ascii: "%") ? .percentage : .unknown
         }
         guard let second = reader.read() else { return .unknown }
+        if reader.isEOF {
+            switch (first, second) {
+            case (UInt8(ascii: "e"), UInt8(ascii: "m")):
+                return .ems
+            case (UInt8(ascii: "e"), UInt8(ascii: "x")):
+                return .exs
+            case (UInt8(ascii: "p"), UInt8(ascii: "x")):
+                return .pixels
+            case (UInt8(ascii: "c"), UInt8(ascii: "m")):
+                return .centimeters
+            case (UInt8(ascii: "m"), UInt8(ascii: "m")):
+                return .millimeters
+            case (UInt8(ascii: "i"), UInt8(ascii: "n")):
+                return .inches
+            case (UInt8(ascii: "p"), UInt8(ascii: "t")):
+                return .points
+            case (UInt8(ascii: "p"), UInt8(ascii: "c")):
+                return .picas
+            case (UInt8(ascii: "c"), UInt8(ascii: "h")):
+                return .chs
+            case (UInt8(ascii: "i"), UInt8(ascii: "c")):
+                return .ic
+            default:
+                return .unknown
+            }
+        }
+        guard let third = reader.read() else { return .unknown }
         guard reader.isEOF else { return .unknown }
-        switch (first, second) {
-        case (UInt8(ascii: "e"), UInt8(ascii: "m")):
-            return .ems
-        case (UInt8(ascii: "e"), UInt8(ascii: "x")):
-            return .exs
-        case (UInt8(ascii: "p"), UInt8(ascii: "x")):
-            return .pixels
-        case (UInt8(ascii: "c"), UInt8(ascii: "m")):
-            return .centimeters
-        case (UInt8(ascii: "m"), UInt8(ascii: "m")):
-            return .millimeters
-        case (UInt8(ascii: "i"), UInt8(ascii: "n")):
-            return .inches
-        case (UInt8(ascii: "p"), UInt8(ascii: "t")):
-            return .points
-        case (UInt8(ascii: "p"), UInt8(ascii: "c")):
-            return .picas
-        case (UInt8(ascii: "c"), UInt8(ascii: "h")):
-            return .chs
-        case (UInt8(ascii: "i"), UInt8(ascii: "c")):
-            return .ic
+        switch (first, second, third) {
+        case (UInt8(ascii: "r"), UInt8(ascii: "e"), UInt8(ascii: "m")):
+            return .rems
         default:
             return .unknown
         }

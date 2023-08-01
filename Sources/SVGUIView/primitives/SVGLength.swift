@@ -6,6 +6,7 @@ enum SVGLengthType: String {
     case number
     case percentage = "%"
     case ems = "em"
+    case rems = "rem"
     case exs = "ex"
     case pixels = "px"
     case centimeters = "cm"
@@ -27,6 +28,7 @@ enum SVGLength {
     case pixel(CGFloat)
     case percent(CGFloat)
     case ems(CGFloat)
+    case rems(CGFloat)
     case exs(CGFloat)
     case centimeters(CGFloat)
     case millimeters(CGFloat)
@@ -66,6 +68,8 @@ enum SVGLength {
                 return .percent(value)
             case .ems:
                 return .ems(value)
+            case .rems:
+                return .rems(value)
             case .exs:
                 return .exs(value)
             case .centimeters:
@@ -114,6 +118,8 @@ enum SVGLength {
                 return .percent(value)
             case .ems:
                 return .ems(value)
+            case .rems:
+                return .rems(value)
             case .exs:
                 return .exs(value)
             case .pixels, .number:
@@ -164,6 +170,10 @@ enum SVGLength {
             guard let font = context.font,
                   let fontSize = font.size else { return 0 }
             return value * fontSize
+        case let .rems(value):
+            guard let font = context.rootFont,
+                  let fontSize = font.size else { return 0 }
+            return value * fontSize
         case let .exs(value):
             guard let font = context.font else { return 0 }
             let xHeight = CTFontGetXHeight(font.toCTFont)
@@ -200,6 +210,7 @@ extension SVGLength: CustomStringConvertible {
         case let .pixel(value): return "\(value)px"
         case let .percent(value): return "\(value)%"
         case let .ems(value): return "\(value)em"
+        case let .rems(value): return "\(value)rem"
         case let .exs(value): return "\(value)ex"
         case let .centimeters(value): return "\(value)cm"
         case let .millimeters(value): return "\(value)mm"
@@ -224,6 +235,9 @@ extension SVGLength: Codable {
             try container.encode(v)
         case let .ems(v):
             try container.encode(SVGLengthType.ems.rawValue)
+            try container.encode(v)
+        case let .rems(v):
+            try container.encode(SVGLengthType.rems.rawValue)
             try container.encode(v)
         case let .exs(v):
             try container.encode(SVGLengthType.exs.rawValue)
@@ -266,6 +280,8 @@ extension SVGLength: Codable {
             self = .percent(value)
         case .ems:
             self = .ems(value)
+        case .rems:
+            self = .rems(value)
         case .exs:
             self = .ems(value)
         case .centimeters:
