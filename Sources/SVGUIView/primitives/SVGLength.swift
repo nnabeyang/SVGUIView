@@ -13,6 +13,7 @@ enum SVGLengthType: String {
     case inches = "in"
     case points = "pt"
     case picas = "pc"
+    case chs = "ch"
 }
 
 enum SVGLengthMode {
@@ -31,8 +32,10 @@ enum SVGLength {
     case inches(CGFloat)
     case points(CGFloat)
     case picas(CGFloat)
+    case chs(CGFloat)
 
     private static let pixelsPerInch: CGFloat = 96.0
+    private static var zeroCodePoint: UniChar = 0x30
 
     init(value: Double, unit: CSSUnitType) {
         switch unit {
@@ -73,6 +76,8 @@ enum SVGLength {
                 return .points(value)
             case .picas:
                 return .picas(value)
+            case .chs:
+                return .chs(value)
             case .pixels, .number:
                 return .pixel(value)
             }
@@ -119,6 +124,8 @@ enum SVGLength {
                 return .picas(value)
             case .picas:
                 return .picas(value)
+            case .chs:
+                return .chs(value)
             }
         }
 
@@ -165,6 +172,15 @@ enum SVGLength {
             return value * Self.pixelsPerInch / 72.0
         case let .picas(value):
             return value * Self.pixelsPerInch / 6.0
+        case let .chs(value):
+            guard let font = context.font else { return 0 }
+            let ctFont = font.toCTFont
+            var glyph = CGGlyph()
+            CTFontGetGlyphsForCharacters(ctFont, &Self.zeroCodePoint, &glyph, 1)
+            var advance: CGSize = .zero
+            CTFontGetAdvancesForGlyphs(ctFont, CTFontOrientation.default, &glyph, &advance, 1)
+            let width = advance == .zero ? CTFontGetSize(ctFont) / 2.0 : advance.width
+            return value * width
         }
     }
 }
@@ -181,6 +197,7 @@ extension SVGLength: CustomStringConvertible {
         case let .inches(value): return "\(value)in"
         case let .points(value): return "\(value)pt"
         case let .picas(value): return "\(value)pc"
+        case let .chs(value): return "\(value)ch"
         }
     }
 }
@@ -216,6 +233,9 @@ extension SVGLength: Codable {
         case let .picas(v):
             try container.encode(SVGLengthType.picas.rawValue)
             try container.encode(v)
+        case let .chs(v):
+            try container.encode(SVGLengthType.chs.rawValue)
+            try container.encode(v)
         }
     }
 
@@ -245,6 +265,8 @@ extension SVGLength: Codable {
             self = .points(value)
         case .picas:
             self = .picas(value)
+        case .chs:
+            self = .chs(value)
         case .unknown:
             self = .pixel(0)
         }

@@ -565,6 +565,8 @@ extension SVGAttributeScanner {
             return .points
         case (UInt8(ascii: "p"), UInt8(ascii: "c")):
             return .picas
+        case (UInt8(ascii: "c"), UInt8(ascii: "h")):
+            return .chs
         default:
             return .unknown
         }
