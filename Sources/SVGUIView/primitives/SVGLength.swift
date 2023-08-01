@@ -14,6 +14,7 @@ enum SVGLengthType: String {
     case points = "pt"
     case picas = "pc"
     case chs = "ch"
+    case ic
 }
 
 enum SVGLengthMode {
@@ -33,6 +34,7 @@ enum SVGLength {
     case points(CGFloat)
     case picas(CGFloat)
     case chs(CGFloat)
+    case ic(CGFloat)
 
     private static let pixelsPerInch: CGFloat = 96.0
     private static var zeroCodePoint: UniChar = 0x30
@@ -78,6 +80,8 @@ enum SVGLength {
                 return .picas(value)
             case .chs:
                 return .chs(value)
+            case .ic:
+                return .ic(value)
             case .pixels, .number:
                 return .pixel(value)
             }
@@ -126,6 +130,8 @@ enum SVGLength {
                 return .picas(value)
             case .chs:
                 return .chs(value)
+            case .ic:
+                return .ic(value)
             }
         }
 
@@ -181,6 +187,9 @@ enum SVGLength {
             CTFontGetAdvancesForGlyphs(ctFont, CTFontOrientation.default, &glyph, &advance, 1)
             let width = advance == .zero ? CTFontGetSize(ctFont) / 2.0 : advance.width
             return value * width
+        case let .ic(value):
+            guard let font = context.font else { return 0 }
+            return value * CTFontGetSize(font.toCTFont)
         }
     }
 }
@@ -198,6 +207,7 @@ extension SVGLength: CustomStringConvertible {
         case let .points(value): return "\(value)pt"
         case let .picas(value): return "\(value)pc"
         case let .chs(value): return "\(value)ch"
+        case let .ic(value): return "\(value)ic"
         }
     }
 }
@@ -236,6 +246,9 @@ extension SVGLength: Codable {
         case let .chs(v):
             try container.encode(SVGLengthType.chs.rawValue)
             try container.encode(v)
+        case let .ic(v):
+            try container.encode(SVGLengthType.ic.rawValue)
+            try container.encode(v)
         }
     }
 
@@ -267,6 +280,8 @@ extension SVGLength: Codable {
             self = .picas(value)
         case .chs:
             self = .chs(value)
+        case .ic:
+            self = .ic(value)
         case .unknown:
             self = .pixel(0)
         }
