@@ -16,6 +16,7 @@ enum SVGLengthType: String {
     case picas = "pc"
     case chs = "ch"
     case ic
+    case lhs = "lh"
 }
 
 enum SVGLengthMode {
@@ -37,6 +38,7 @@ enum SVGLength {
     case picas(CGFloat)
     case chs(CGFloat)
     case ic(CGFloat)
+    case lhs(CGFloat)
 
     private static let pixelsPerInch: CGFloat = 96.0
     private static var zeroCodePoint: UniChar = 0x30
@@ -86,6 +88,8 @@ enum SVGLength {
                 return .chs(value)
             case .ic:
                 return .ic(value)
+            case .lhs:
+                return .lhs(value)
             case .pixels, .number:
                 return .pixel(value)
             }
@@ -138,6 +142,8 @@ enum SVGLength {
                 return .chs(value)
             case .ic:
                 return .ic(value)
+            case .lhs:
+                return .lhs(value)
             }
         }
 
@@ -200,6 +206,14 @@ enum SVGLength {
         case let .ic(value):
             guard let font = context.font else { return 0 }
             return value * CTFontGetSize(font.toCTFont)
+        case let .lhs(value):
+            guard let font = context.font else { return 0 }
+            let ctFont = font.toCTFont
+            let ascent = CTFontGetAscent(ctFont)
+            let lineGap = CTFontGetLeading(ctFont)
+            let descent = CTFontGetDescent(ctFont)
+            let lineSpacing = (ceil(ascent) + ceil(lineGap) + ceil(descent))
+            return value * lineSpacing
         }
     }
 }
@@ -219,6 +233,7 @@ extension SVGLength: CustomStringConvertible {
         case let .picas(value): return "\(value)pc"
         case let .chs(value): return "\(value)ch"
         case let .ic(value): return "\(value)ic"
+        case let .lhs(value): return "\(value)lh"
         }
     }
 }
@@ -263,6 +278,9 @@ extension SVGLength: Codable {
         case let .ic(v):
             try container.encode(SVGLengthType.ic.rawValue)
             try container.encode(v)
+        case let .lhs(v):
+            try container.encode(SVGLengthType.lhs.rawValue)
+            try container.encode(v)
         }
     }
 
@@ -298,6 +316,8 @@ extension SVGLength: Codable {
             self = .chs(value)
         case .ic:
             self = .ic(value)
+        case .lhs:
+            self = .lhs(value)
         case .unknown:
             self = .pixel(0)
         }
