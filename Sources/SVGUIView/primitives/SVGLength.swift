@@ -17,6 +17,7 @@ enum SVGLengthType: String {
     case chs = "ch"
     case ic
     case lhs = "lh"
+    case rlhs = "rlh"
 }
 
 enum SVGLengthMode {
@@ -39,6 +40,7 @@ enum SVGLength {
     case chs(CGFloat)
     case ic(CGFloat)
     case lhs(CGFloat)
+    case rlhs(CGFloat)
 
     private static let pixelsPerInch: CGFloat = 96.0
     private static var zeroCodePoint: UniChar = 0x30
@@ -90,6 +92,8 @@ enum SVGLength {
                 return .ic(value)
             case .lhs:
                 return .lhs(value)
+            case .rlhs:
+                return .rlhs(value)
             case .pixels, .number:
                 return .pixel(value)
             }
@@ -144,6 +148,8 @@ enum SVGLength {
                 return .ic(value)
             case .lhs:
                 return .lhs(value)
+            case .rlhs:
+                return .rlhs(value)
             }
         }
 
@@ -214,6 +220,14 @@ enum SVGLength {
             let descent = CTFontGetDescent(ctFont)
             let lineSpacing = (ceil(ascent) + ceil(lineGap) + ceil(descent))
             return value * lineSpacing
+        case let .rlhs(value):
+            guard let font = context.rootFont else { return 0 }
+            let ctFont = font.toCTFont
+            let ascent = CTFontGetAscent(ctFont)
+            let lineGap = CTFontGetLeading(ctFont)
+            let descent = CTFontGetDescent(ctFont)
+            let lineSpacing = (ceil(ascent) + ceil(lineGap) + ceil(descent))
+            return value * lineSpacing
         }
     }
 }
@@ -234,6 +248,7 @@ extension SVGLength: CustomStringConvertible {
         case let .chs(value): return "\(value)ch"
         case let .ic(value): return "\(value)ic"
         case let .lhs(value): return "\(value)lh"
+        case let .rlhs(value): return "\(value)rlh"
         }
     }
 }
@@ -281,6 +296,9 @@ extension SVGLength: Codable {
         case let .lhs(v):
             try container.encode(SVGLengthType.lhs.rawValue)
             try container.encode(v)
+        case let .rlhs(v):
+            try container.encode(SVGLengthType.rlhs.rawValue)
+            try container.encode(v)
         }
     }
 
@@ -318,6 +336,8 @@ extension SVGLength: Codable {
             self = .ic(value)
         case .lhs:
             self = .lhs(value)
+        case .rlhs:
+            self = .rlhs(value)
         case .unknown:
             self = .pixel(0)
         }

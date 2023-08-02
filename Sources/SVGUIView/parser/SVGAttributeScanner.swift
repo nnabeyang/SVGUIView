@@ -580,6 +580,8 @@ extension SVGAttributeScanner {
         switch (first, second, third) {
         case (UInt8(ascii: "r"), UInt8(ascii: "e"), UInt8(ascii: "m")):
             return .rems
+        case (UInt8(ascii: "r"), UInt8(ascii: "l"), UInt8(ascii: "h")):
+            return .rlhs
         default:
             return .unknown
         }
