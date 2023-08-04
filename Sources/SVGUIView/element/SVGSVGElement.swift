@@ -14,6 +14,7 @@ private struct SVGLengthContextProxy: SVGLengthContext {
     var viewPort: CGRect { context.viewPort }
     var font: SVGUIFont? { context.font }
     var rootFont: SVGUIFont? { context.rootFont }
+    var writingMode: WritingMode? { context.writingMode }
 }
 
 struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
@@ -150,6 +151,9 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         font.map {
             context.push(font: $0)
         }
+        writingMode.map {
+            context.push(writingMode: $0)
+        }
         if isRoot {
             context.pushClipIdStack()
             context.pushMaskIdStack()
@@ -164,6 +168,9 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         }
         font.map { _ in
             _ = context.popFont()
+        }
+        writingMode.map { _ in
+            _ = context.popWritingMode()
         }
         context.popViewBox()
         gContext.endTransparencyLayer()

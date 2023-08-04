@@ -20,6 +20,12 @@ extension SVGElement {
     func pattern(context _: inout SVGBaseContext) {}
 }
 
+enum WritingMode: String {
+    case horizontalTB = "horizontal-tb"
+    case verticalRL = "vertical-rl"
+    case verticalLR = "vertical-lr"
+}
+
 struct SVGBaseElement {
     let id: String?
     let index: Int?
@@ -35,6 +41,7 @@ struct SVGBaseElement {
     let mask: SVGMask?
     let display: CSSDisplay?
     let visibility: CSSVisibility?
+    let writingMode: WritingMode?
     let style: SVGUIStyle
 
     init(attributes: [String: String]) {
@@ -49,6 +56,7 @@ struct SVGBaseElement {
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
         transform = CGAffineTransform(style: style[.transform], description: attributes["transform", default: ""])
+        writingMode = WritingMode(rawValue: attributes["writing-mode", default: ""])
         eoFill = attributes["fill-rule", default: ""].trimmingCharacters(in: .whitespaces) == "evenodd"
         clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
         display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
@@ -68,6 +76,7 @@ struct SVGBaseElement {
         opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
         transform = other.transform.concatenating(
             CGAffineTransform(description: attributes["transform", default: ""]))
+        writingMode = other.writingMode
         eoFill = other.eoFill
         clipRule = other.clipRule
         let display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
@@ -88,6 +97,7 @@ struct SVGBaseElement {
         stroke = other.stroke
         opacity = other.opacity
         transform = other.transform
+        writingMode = other.writingMode
         eoFill = other.eoFill
         clipRule = other.clipRule
         display = other.display
@@ -104,6 +114,7 @@ protocol SVGDrawableElement: SVGElement {
     var clipRule: Bool? { get }
     var className: String? { get }
     var transform: CGAffineTransform { get }
+    var writingMode: WritingMode? { get }
     var fill: SVGFill? { get }
     var stroke: SVGUIStroke { get }
     var color: SVGUIColor? { get }
@@ -132,6 +143,7 @@ extension SVGDrawableElement {
     var clipRule: Bool? { base.clipRule }
     var className: String? { base.className }
     var transform: CGAffineTransform { base.transform }
+    var writingMode: WritingMode? { base.writingMode }
     var fill: SVGFill? { base.fill }
     var stroke: SVGUIStroke { base.stroke }
     var clipPath: SVGClipPath? { base.clipPath }
@@ -209,6 +221,9 @@ extension SVGDrawableElement {
         }
         context.saveGState()
         context.concatenate(transform)
+        writingMode.map {
+            context.push(writingMode: $0)
+        }
         if isRoot {
             context.pushTagIdStack()
             context.pushClipIdStack()
@@ -245,6 +260,9 @@ extension SVGDrawableElement {
             context.popClipIdStack()
             context.popMaskIdStack()
             context.popPatternIdStack()
+        }
+        writingMode.map { _ in
+            _ = context.popWritingMode()
         }
         context.restoreGState()
     }

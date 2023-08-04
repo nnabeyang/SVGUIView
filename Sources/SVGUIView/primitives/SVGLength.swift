@@ -20,6 +20,8 @@ enum SVGLengthType: String {
     case rlhs = "rlh"
     case vw
     case vh
+    case vi
+    case vb
 }
 
 enum SVGLengthMode {
@@ -45,6 +47,8 @@ enum SVGLength {
     case rlhs(CGFloat)
     case vw(CGFloat)
     case vh(CGFloat)
+    case vi(CGFloat)
+    case vb(CGFloat)
 
     private static let pixelsPerInch: CGFloat = 96.0
     private static var zeroCodePoint: UniChar = 0x30
@@ -102,6 +106,10 @@ enum SVGLength {
                 return .vw(value)
             case .vh:
                 return .vh(value)
+            case .vi:
+                return .vi(value)
+            case .vb:
+                return .vb(value)
             case .pixels, .number:
                 return .pixel(value)
             }
@@ -162,6 +170,10 @@ enum SVGLength {
                 return .vw(value)
             case .vh:
                 return .vh(value)
+            case .vi:
+                return .vi(value)
+            case .vb:
+                return .vb(value)
             }
         }
 
@@ -244,6 +256,28 @@ enum SVGLength {
             return value * context.viewPort.width / 100.0
         case let .vh(value):
             return value * context.viewPort.height / 100.0
+        case let .vi(value):
+            let viewPort = context.viewPort
+            let writingMode = context.writingMode ?? .horizontalTB
+            let scale: CGFloat
+            switch writingMode {
+            case .horizontalTB:
+                scale = viewPort.width / 100.0
+            case .verticalLR, .verticalRL:
+                scale = viewPort.height / 100.0
+            }
+            return value * scale
+        case let .vb(value):
+            let viewPort = context.viewPort
+            let writingMode = context.writingMode ?? .horizontalTB
+            let scale: CGFloat
+            switch writingMode {
+            case .horizontalTB:
+                scale = viewPort.height / 100.0
+            case .verticalLR, .verticalRL:
+                scale = viewPort.width / 100.0
+            }
+            return value * scale
         }
     }
 }
@@ -267,6 +301,8 @@ extension SVGLength: CustomStringConvertible {
         case let .rlhs(value): return "\(value)rlh"
         case let .vw(value): return "\(value)vw"
         case let .vh(value): return "\(value)vh"
+        case let .vi(value): return "\(value)vi"
+        case let .vb(value): return "\(value)vb"
         }
     }
 }
@@ -323,6 +359,12 @@ extension SVGLength: Codable {
         case let .vh(v):
             try container.encode(SVGLengthType.vh.rawValue)
             try container.encode(v)
+        case let .vi(v):
+            try container.encode(SVGLengthType.vi.rawValue)
+            try container.encode(v)
+        case let .vb(v):
+            try container.encode(SVGLengthType.vb.rawValue)
+            try container.encode(v)
         }
     }
 
@@ -366,6 +408,10 @@ extension SVGLength: Codable {
             self = .vw(value)
         case .vh:
             self = .vh(value)
+        case .vi:
+            self = .vi(value)
+        case .vb:
+            self = .vb(value)
         case .unknown:
             self = .pixel(0)
         }

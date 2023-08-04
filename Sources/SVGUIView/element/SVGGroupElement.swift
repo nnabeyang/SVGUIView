@@ -77,6 +77,9 @@ struct SVGGroupElement: SVGDrawableElement {
         font.map {
             context.push(font: $0)
         }
+        writingMode.map {
+            context.push(writingMode: $0)
+        }
         fill.map {
             context.push(fill: $0)
         }
@@ -101,6 +104,9 @@ struct SVGGroupElement: SVGDrawableElement {
         }
         font.map { _ in
             _ = context.popFont()
+        }
+        writingMode.map { _ in
+            _ = context.popWritingMode()
         }
         fill.map { _ in
             _ = context.popFill()

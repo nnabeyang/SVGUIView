@@ -5,6 +5,7 @@ protocol SVGLengthContext {
     var font: SVGUIFont? { get }
     var rootFont: SVGUIFont? { get }
     var viewPort: CGRect { get }
+    var writingMode: WritingMode? { get }
 }
 
 struct SVGContext: SVGLengthContext {
@@ -16,6 +17,7 @@ struct SVGContext: SVGLengthContext {
     private let viewBoxStack: Stack<CGRect> = Stack()
     private let patternContentUnitStack = Stack<SVGPatternContentUnitsType>()
     private let fontStack: Stack<SVGUIFont> = Stack()
+    private let writingModeStack = Stack<WritingMode>()
     private let fillStack: Stack<SVGFill> = Stack()
     private let colorStack: Stack<SVGUIColor> = Stack()
     private let strokeStack: Stack<SVGUIStroke> = Stack()
@@ -100,6 +102,10 @@ struct SVGContext: SVGLengthContext {
 
     var font: SVGUIFont? {
         fontStack.last
+    }
+
+    var writingMode: WritingMode? {
+        writingModeStack.last
     }
 
     var fill: SVGFill? {
@@ -190,6 +196,10 @@ struct SVGContext: SVGLengthContext {
         patternContentUnitStack.push(patternContentUnit)
     }
 
+    func push(writingMode: WritingMode) {
+        writingModeStack.push(writingMode)
+    }
+
     func push(font: SVGUIFont) {
         let font = SVGUIFont(lhs: font, rhs: self.font)
         fontStack.push(font)
@@ -220,6 +230,11 @@ struct SVGContext: SVGLengthContext {
     @discardableResult
     func popPatternContentUnit() -> SVGPatternContentUnitsType? {
         patternContentUnitStack.pop()
+    }
+
+    @discardableResult
+    func popWritingMode() -> WritingMode? {
+        writingModeStack.pop()
     }
 
     @discardableResult
