@@ -4,11 +4,13 @@ protocol SVGLengthContext {
     var viewBoxSize: CGSize { get }
     var font: SVGUIFont? { get }
     var rootFont: SVGUIFont? { get }
+    var viewPort: CGRect { get }
 }
 
 struct SVGContext: SVGLengthContext {
     let base: SVGBaseContext
     let graphics: CGContext
+    let viewPort: CGRect
 
     private let startDetectingCyclesAfter: Int
     private let viewBoxStack: Stack<CGRect> = Stack()
@@ -25,18 +27,20 @@ struct SVGContext: SVGLengthContext {
     private let tagIdStack = ElementIdStack<Int>()
     private let initCtm: CGAffineTransform
 
-    init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000) {
+    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, startDetectingCyclesAfter: Int = 1000) {
         self.base = base
         self.graphics = graphics
         initCtm = graphics.ctm
+        self.viewPort = viewPort
         self.startDetectingCyclesAfter = startDetectingCyclesAfter
         patternIdStack = ElementIdStack<String>()
     }
 
-    init(base: SVGBaseContext, graphics: CGContext, startDetectingCyclesAfter: Int = 1000, other: Self) {
+    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, startDetectingCyclesAfter: Int = 1000, other: Self) {
         self.base = base
         self.graphics = graphics
         initCtm = graphics.ctm
+        self.viewPort = viewPort
         self.startDetectingCyclesAfter = startDetectingCyclesAfter
         patternIdStack = other.patternIdStack
     }

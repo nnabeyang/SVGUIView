@@ -11,6 +11,7 @@ private struct SVGLengthContextProxy: SVGLengthContext {
     let context: any SVGLengthContext
     let size: CGSize
     var viewBoxSize: CGSize { size }
+    var viewPort: CGRect { context.viewPort }
     var font: SVGUIFont? { context.font }
     var rootFont: SVGUIFont? { context.rootFont }
 }
@@ -73,6 +74,10 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
 
     init(other: SVGSVGElement, index _: Int, css _: SVGUIStyle) {
         self = other
+    }
+
+    var viewPort: CGRect {
+        fatalError("not implemented")
     }
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {

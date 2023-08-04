@@ -208,7 +208,7 @@ struct SVGPatternElement: SVGDrawableElement {
             return nil
         }
 
-        let maskContext = SVGContext(base: context.base, graphics: graphics, other: context)
+        let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, other: context)
         let patternContentUnits: SVGPatternContentUnitsType
         if viewBox != nil {
             patternContentUnits = .userSpaceOnUse

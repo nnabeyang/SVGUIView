@@ -104,7 +104,7 @@ struct SVGMaskElement: SVGDrawableElement {
             transform = CGAffineTransform(t.a, t.b, t.c, t.d, t.tx * scale, t.ty * scale)
                 .scaledBy(x: scale * size.width, y: scale * size.height)
         }
-        let maskContext = SVGContext(base: context.base, graphics: graphics)
+        let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
         maskContext.push(viewBox: context.viewBox)
         graphics.concatenate(transform)
         for index in contentIds {
