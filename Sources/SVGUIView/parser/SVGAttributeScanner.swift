@@ -584,12 +584,23 @@ extension SVGAttributeScanner {
             }
         }
         guard let third = reader.read() else { return .unknown }
+        if reader.isEOF {
+            switch (first, second, third) {
+            case (UInt8(ascii: "r"), UInt8(ascii: "e"), UInt8(ascii: "m")):
+                return .rems
+            case (UInt8(ascii: "r"), UInt8(ascii: "l"), UInt8(ascii: "h")):
+                return .rlhs
+            default:
+                return .unknown
+            }
+        }
+        guard let fourth = reader.read() else { return .unknown }
         guard reader.isEOF else { return .unknown }
-        switch (first, second, third) {
-        case (UInt8(ascii: "r"), UInt8(ascii: "e"), UInt8(ascii: "m")):
-            return .rems
-        case (UInt8(ascii: "r"), UInt8(ascii: "l"), UInt8(ascii: "h")):
-            return .rlhs
+        switch (first, second, third, fourth) {
+        case (UInt8(ascii: "v"), UInt8(ascii: "m"), UInt8(ascii: "a"), UInt8(ascii: "x")):
+            return .vmax
+        case (UInt8(ascii: "v"), UInt8(ascii: "m"), UInt8(ascii: "i"), UInt8(ascii: "n")):
+            return .vmin
         default:
             return .unknown
         }

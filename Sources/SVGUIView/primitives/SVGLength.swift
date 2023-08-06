@@ -22,6 +22,8 @@ enum SVGLengthType: String {
     case vh
     case vi
     case vb
+    case vmin
+    case vmax
 }
 
 enum SVGLengthMode {
@@ -49,6 +51,8 @@ enum SVGLength {
     case vh(CGFloat)
     case vi(CGFloat)
     case vb(CGFloat)
+    case vmin(CGFloat)
+    case vmax(CGFloat)
 
     private static let pixelsPerInch: CGFloat = 96.0
     private static var zeroCodePoint: UniChar = 0x30
@@ -110,6 +114,10 @@ enum SVGLength {
                 return .vi(value)
             case .vb:
                 return .vb(value)
+            case .vmin:
+                return .vmin(value)
+            case .vmax:
+                return .vmax(value)
             case .pixels, .number:
                 return .pixel(value)
             }
@@ -174,6 +182,10 @@ enum SVGLength {
                 return .vi(value)
             case .vb:
                 return .vb(value)
+            case .vmin:
+                return .vmin(value)
+            case .vmax:
+                return .vmax(value)
             }
         }
 
@@ -278,6 +290,10 @@ enum SVGLength {
                 scale = viewPort.width / 100.0
             }
             return value * scale
+        case let .vmin(value):
+            return value * min(context.viewPort.width, context.viewPort.height) / 100.0
+        case let .vmax(value):
+            return value * max(context.viewPort.width, context.viewPort.height) / 100.0
         }
     }
 }
@@ -303,6 +319,8 @@ extension SVGLength: CustomStringConvertible {
         case let .vh(value): return "\(value)vh"
         case let .vi(value): return "\(value)vi"
         case let .vb(value): return "\(value)vb"
+        case let .vmin(value): return "\(value)vmin"
+        case let .vmax(value): return "\(value)vmax"
         }
     }
 }
@@ -365,6 +383,12 @@ extension SVGLength: Codable {
         case let .vb(v):
             try container.encode(SVGLengthType.vb.rawValue)
             try container.encode(v)
+        case let .vmin(v):
+            try container.encode(SVGLengthType.vmin.rawValue)
+            try container.encode(v)
+        case let .vmax(v):
+            try container.encode(SVGLengthType.vmax.rawValue)
+            try container.encode(v)
         }
     }
 
@@ -412,6 +436,10 @@ extension SVGLength: Codable {
             self = .vi(value)
         case .vb:
             self = .vb(value)
+        case .vmin:
+            self = .vmin(value)
+        case .vmax:
+            self = .vmax(value)
         case .unknown:
             self = .pixel(0)
         }
