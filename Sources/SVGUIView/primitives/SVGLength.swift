@@ -24,6 +24,7 @@ enum SVGLengthType: String {
     case vb
     case vmin
     case vmax
+    case q = "Q"
 }
 
 enum SVGLengthMode {
@@ -53,6 +54,7 @@ enum SVGLength {
     case vb(CGFloat)
     case vmin(CGFloat)
     case vmax(CGFloat)
+    case q(CGFloat)
 
     private static let pixelsPerInch: CGFloat = 96.0
     private static var zeroCodePoint: UniChar = 0x30
@@ -118,6 +120,8 @@ enum SVGLength {
                 return .vmin(value)
             case .vmax:
                 return .vmax(value)
+            case .q:
+                return .q(value)
             case .pixels, .number:
                 return .pixel(value)
             }
@@ -186,6 +190,8 @@ enum SVGLength {
                 return .vmin(value)
             case .vmax:
                 return .vmax(value)
+            case .q:
+                return .q(value)
             }
         }
 
@@ -294,6 +300,8 @@ enum SVGLength {
             return value * min(context.viewPort.width, context.viewPort.height) / 100.0
         case let .vmax(value):
             return value * max(context.viewPort.width, context.viewPort.height) / 100.0
+        case let .q(value):
+            return value * Self.pixelsPerInch / (25.4 * 4.0)
         }
     }
 }
@@ -321,6 +329,7 @@ extension SVGLength: CustomStringConvertible {
         case let .vb(value): return "\(value)vb"
         case let .vmin(value): return "\(value)vmin"
         case let .vmax(value): return "\(value)vmax"
+        case let .q(value): return "\(value)Q"
         }
     }
 }
@@ -389,6 +398,9 @@ extension SVGLength: Codable {
         case let .vmax(v):
             try container.encode(SVGLengthType.vmax.rawValue)
             try container.encode(v)
+        case let .q(v):
+            try container.encode(SVGLengthType.q.rawValue)
+            try container.encode(v)
         }
     }
 
@@ -440,6 +452,8 @@ extension SVGLength: Codable {
             self = .vmin(value)
         case .vmax:
             self = .vmax(value)
+        case .q:
+            self = .q(value)
         case .unknown:
             self = .pixel(0)
         }

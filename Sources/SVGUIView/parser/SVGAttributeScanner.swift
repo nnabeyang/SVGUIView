@@ -544,7 +544,14 @@ extension SVGAttributeScanner {
         }
         guard let first = reader.read() else { return .unknown }
         if reader.isEOF {
-            return first == UInt8(ascii: "%") ? .percentage : .unknown
+            switch first {
+            case UInt8(ascii: "%"):
+                return .percentage
+            case UInt8(ascii: "Q"):
+                return .q
+            default:
+                return .unknown
+            }
         }
         guard let second = reader.read() else { return .unknown }
         if reader.isEOF {
