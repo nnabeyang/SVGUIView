@@ -37,6 +37,8 @@ enum CSSValueType: String, Hashable, Codable {
     case fill
     case height
     case width
+    case x
+    case y
     case transform
     case fillOpacity = "fill-opacity"
 }
@@ -371,7 +373,7 @@ struct CSSParser {
             default:
                 return .failure(.invalid)
             }
-        case .height, .width:
+        case .height, .width, .x, .y:
             guard case let .dimension(value, unit) = tokenizer.next() else { return .failure(.invalid) }
             return .success(CSSDeclaration(type: type, value: .length(SVGLength(value: value, unit: unit))))
         case .transform:

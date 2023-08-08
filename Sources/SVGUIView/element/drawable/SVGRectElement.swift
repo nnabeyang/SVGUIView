@@ -15,8 +15,8 @@ struct SVGRectElement: SVGDrawableElement {
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
-        x = .init(attributes["x"])
-        y = .init(attributes["y"])
+        x = SVGLength(style: base.style[.x], value: attributes["x"])
+        y = SVGLength(style: base.style[.y], value: attributes["y"])
         rx = .init(attributes["rx"])
         ry = .init(attributes["ry"])
         width = SVGLength(style: base.style[.width], value: attributes["width"])
@@ -25,8 +25,8 @@ struct SVGRectElement: SVGDrawableElement {
 
     init(other: Self, index: Int, css: SVGUIStyle) {
         base = SVGBaseElement(other: other.base, index: index, css: css)
-        x = other.x
-        y = other.y
+        x = SVGLength(style: css[.x], value: nil) ?? other.x
+        y = SVGLength(style: css[.y], value: nil) ?? other.y
         rx = other.rx
         ry = other.ry
         width = SVGLength(style: css[.width], value: nil) ?? other.width
