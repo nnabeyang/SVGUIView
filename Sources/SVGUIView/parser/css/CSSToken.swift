@@ -27,6 +27,11 @@ enum CSSUnitType: UInt8 {
     case counter = 23
     case rect = 24
     case rgbcolor = 25
+    case chs = 26
+    case ic = 27
+    case rems = 28
+    case lhs = 29
+    case rlhs = 30
 
     init(_ string: String) {
         switch string {
@@ -36,6 +41,22 @@ enum CSSUnitType: UInt8 {
             self = .cm
         case "px":
             self = .px
+        case "em":
+            self = .ems
+        case "ex":
+            self = .exs
+        case "mm":
+            self = .mm
+        case "ch":
+            self = .chs
+        case "ic":
+            self = .ic
+        case "rem":
+            self = .rems
+        case "lh":
+            self = .lhs
+        case "rlh":
+            self = .rlhs
         default:
             self = .px
         }

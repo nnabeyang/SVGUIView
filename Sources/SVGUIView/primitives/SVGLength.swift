@@ -65,6 +65,22 @@ enum SVGLength {
             self = .pixel(value)
         case .percentage:
             self = .percent(value)
+        case .ems:
+            self = .ems(value)
+        case .exs:
+            self = .exs(value)
+        case .mm:
+            self = .millimeters(value)
+        case .chs:
+            self = .chs(value)
+        case .ic:
+            self = .ic(value)
+        case .rems:
+            self = .rems(value)
+        case .lhs:
+            self = .lhs(value)
+        case .rlhs:
+            self = .rlhs(value)
         default:
             self = .pixel(value)
         }
