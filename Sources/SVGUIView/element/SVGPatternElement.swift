@@ -167,11 +167,16 @@ struct SVGPatternElement: SVGDrawableElement {
             x = (self.x?.value(context: context, mode: .width, userSpace: userSpace) ?? 0) * frame.width + frame.minX
             y = (self.y?.value(context: context, mode: .height, userSpace: userSpace) ?? 0) * frame.height + frame.minY
         }
+        let imageSize = size(frame: frame, context: context).applying((patternTransform ?? .identity).scale)
+        let scaleX = (imageSize.width * UIScreen.main.scale) / CGFloat(tileImage.width)
+        let scaleY = (imageSize.height * UIScreen.main.scale) / CGFloat(tileImage.height)
         let transform = (patternTransform ?? .identity).withoutScaling
         guard let pattern = CGPattern(
             info: Unmanaged.passRetained(tileImage).toOpaque(),
-            bounds: CGRect(x: 0, y: 0, width: tileImage.width, height: tileImage.height),
-            matrix: transform.concatenating(context.transform.translatedBy(x: x * UIScreen.main.scale, y: y * UIScreen.main.scale)),
+            bounds: CGRect(origin: .zero, size: frame.size),
+            matrix: transform
+                .concatenating(context.transform.translatedBy(x: x * UIScreen.main.scale, y: y * UIScreen.main.scale)
+                    .scaledBy(x: scaleX, y: scaleY)),
             xStep: CGFloat(tileImage.width),
             yStep: CGFloat(tileImage.height),
             tiling: .constantSpacing,
