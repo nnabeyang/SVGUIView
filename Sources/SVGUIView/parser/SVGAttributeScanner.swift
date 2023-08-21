@@ -450,6 +450,20 @@ extension SVGAttributeScanner {
     }
 }
 
+extension SVGAttributeScanner {
+    mutating func scanStdDeviation() -> StdDeviation? {
+        _ = reader.consumeWhitespace()
+        guard let x = scanNumber() else { return nil }
+        _ = reader.consumeWhitespace()
+        guard let y = scanNumber() else { return .iso(x) }
+        _ = reader.consumeWhitespace()
+        if reader.isEOF {
+            return .hetero(x: x, y: y)
+        }
+        return nil
+    }
+}
+
 // for preserveAspectRatio attribute
 extension SVGAttributeScanner {
     mutating func scanPreserveAspectRatio() -> PreserveAspectRatio? {
@@ -526,6 +540,27 @@ extension SVGAttributeScanner {
         switch type {
         case .none:
             return SVGMask.none
+        case .url:
+            guard consume(ascii: UInt8(ascii: "(")) else { return nil }
+            consumeWhitespaceIfNext(UInt8(ascii: "#"))
+            guard let id = scanIdentity() else { return nil }
+            guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+            return .url(url: id)
+        }
+    }
+}
+
+extension SVGAttributeScanner {
+    mutating func scanFilter() -> SVGFilter? {
+        guard let name = scanIdentity() else {
+            return nil
+        }
+        guard let type = SVGFilterType(rawValue: name.lowercased()) else {
+            return nil
+        }
+        switch type {
+        case .none:
+            return SVGFilter.none
         case .url:
             guard consume(ascii: UInt8(ascii: "(")) else { return nil }
             consumeWhitespaceIfNext(UInt8(ascii: "#"))

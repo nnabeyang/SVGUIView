@@ -112,7 +112,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
     var rootFont: SVGUIFont? { font }
 
-    func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot: Bool) {
+    func draw(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         context.saveGState()
         let x = (x ?? .pixel(0)).value(context: context, mode: .width)
@@ -154,15 +154,15 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         writingMode.map {
             context.push(writingMode: $0)
         }
-        if isRoot {
+        if case .root = mode {
             context.pushClipIdStack()
             context.pushMaskIdStack()
         }
         clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
-            context.contents[index].draw(context, index: index, depth: depth + 1, isRoot: isRoot)
+            context.contents[index].draw(context, index: index, depth: depth + 1, mode: mode)
         }
-        if isRoot {
+        if case .root = mode {
             context.popClipIdStack()
             context.popMaskIdStack()
         }
@@ -196,6 +196,12 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     func pattern(context: inout SVGBaseContext) {
         for index in contentIds {
             context.contents[index].pattern(context: &context)
+        }
+    }
+
+    func filter(context: inout SVGBaseContext) {
+        for index in contentIds {
+            context.contents[index].filter(context: &context)
         }
     }
 

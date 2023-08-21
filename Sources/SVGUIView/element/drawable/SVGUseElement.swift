@@ -90,19 +90,19 @@ struct SVGUseElement: SVGDrawableElement {
         return element.toBezierPath(context: context)
     }
 
-    func draw(_ context: SVGContext, index: Int, depth: Int, isRoot: Bool) {
+    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         let gContext = context.graphics
         gContext.saveGState()
         defer {
             gContext.restoreGState()
         }
-        if isRoot {
+        if case .root = mode {
             context.pushTagIdStack()
         }
         guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
-        newElement.draw(context, index: newIndex, depth: depth + 1, isRoot: false)
-        if isRoot {
+        newElement.draw(context, index: newIndex, depth: depth + 1, mode: .normal)
+        if case .root = mode {
             context.popTagIdStack()
         }
     }

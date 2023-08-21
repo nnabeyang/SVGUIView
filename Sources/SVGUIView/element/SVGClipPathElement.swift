@@ -168,7 +168,7 @@ struct SVGClipPathElement: SVGElement {
         return rootPath.map { UIBezierPath(cgPath: $0) } ?? UIBezierPath()
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {}
+    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))

@@ -22,6 +22,8 @@ enum SVGElementName: String, Equatable {
     case clipPath
     case mask
     case pattern
+    case filter
+    case feGaussianBlur
     case unknown
 }
 
@@ -53,6 +55,7 @@ final class Parser: NSObject {
             $0.clip(context: &context)
             $0.mask(context: &context)
             $0.pattern(context: &context)
+            $0.filter(context: &context)
         }
         return context
     }
@@ -100,6 +103,12 @@ extension Parser: XMLParserDelegate {
                 let element = SVGPatternElement(attributes: element.attributes,
                                                 contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
+            case .filter:
+                let element = SVGFilterElement(attributes: element.attributes,
+                                               contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return element
+            case .feGaussianBlur:
+                return SVGFeGaussianBlurElement(attributes: element.attributes)
             case .text:
                 return SVGTextElement(text: text, attributes: element.attributes)
             case .image:

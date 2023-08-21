@@ -2,12 +2,13 @@ import UIKit
 
 protocol SVGElement: Encodable {
     var type: SVGElementName { get }
-    func draw(_ context: SVGContext, index: Int, depth: Int, isRoot: Bool)
+    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode)
     func style(with style: CSSStyle, at index: Int) -> any SVGElement
     func contains(index: Int, context: SVGContext) -> Bool
     func clip(context: inout SVGBaseContext)
     func mask(context: inout SVGBaseContext)
     func pattern(context: inout SVGBaseContext)
+    func filter(context: inout SVGBaseContext)
 }
 
 extension SVGElement {
@@ -18,12 +19,19 @@ extension SVGElement {
     func clip(context _: inout SVGBaseContext) {}
     func mask(context _: inout SVGBaseContext) {}
     func pattern(context _: inout SVGBaseContext) {}
+    func filter(context _: inout SVGBaseContext) {}
 }
 
 enum WritingMode: String {
     case horizontalTB = "horizontal-tb"
     case verticalRL = "vertical-rl"
     case verticalLR = "vertical-lr"
+}
+
+enum DrawMode: Equatable {
+    case normal
+    case root
+    case filter
 }
 
 struct SVGBaseElement {
@@ -39,6 +47,7 @@ struct SVGBaseElement {
     let color: SVGUIColor?
     let clipPath: SVGClipPath?
     let mask: SVGMask?
+    let filter: SVGFilter?
     let display: CSSDisplay?
     let visibility: CSSVisibility?
     let writingMode: WritingMode?
@@ -52,6 +61,7 @@ struct SVGBaseElement {
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
         mask = SVGMask(description: attributes["mask", default: ""])
+        filter = SVGFilter(description: attributes["filter", default: ""])
         fill = SVGFill(style: style, attributes: attributes)
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
@@ -71,6 +81,7 @@ struct SVGBaseElement {
         color = other.color ?? SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         clipPath = other.clipPath
         mask = other.mask
+        filter = other.filter
         fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
         stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
         opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
@@ -93,6 +104,7 @@ struct SVGBaseElement {
         fill = SVGFill(style: css) ?? other.fill
         clipPath = other.clipPath
         mask = other.mask
+        filter = other.filter
         color = other.color
         stroke = other.stroke
         opacity = other.opacity
@@ -132,7 +144,7 @@ protocol SVGDrawableElement: SVGElement {
     @available(iOS 16.0, *)
     func toClippedBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
-    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, isRoot: Bool)
+    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode)
 }
 
 extension SVGDrawableElement {
@@ -148,6 +160,7 @@ extension SVGDrawableElement {
     var stroke: SVGUIStroke { base.stroke }
     var clipPath: SVGClipPath? { base.clipPath }
     var mask: SVGMask? { base.mask }
+    var filter: SVGFilter? { base.filter }
     var color: SVGUIColor? { base.color }
     var style: SVGUIStyle { base.style }
     var display: CSSDisplay? { base.display }
@@ -214,17 +227,29 @@ extension SVGDrawableElement {
         return result
     }
 
-    func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot: Bool) {
+    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         if let display = display, case .none = display {
             return
         }
+        let filter = filter ?? SVGFilter.none
+        if mode != .filter,
+           case let .url(id) = filter,
+           let server = context.filters[id]
+        {
+            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
+            return
+        }
         context.saveGState()
-        context.concatenate(transform)
+        if case .filter = mode {
+            context.concatenate(transform.scale)
+        } else {
+            context.concatenate(transform)
+        }
         writingMode.map {
             context.push(writingMode: $0)
         }
-        if isRoot {
+        if case .root = mode {
             context.pushTagIdStack()
             context.pushClipIdStack()
             context.pushMaskIdStack()
@@ -252,10 +277,10 @@ extension SVGDrawableElement {
             }
         }
         if let path = path {
-            applySVGFill(fill: fill, path: path, context: context, isRoot: isRoot)
+            applySVGFill(fill: fill, path: path, context: context, mode: mode)
             applySVGStroke(stroke: stroke, path: path, context: context)
         }
-        if isRoot {
+        if case .root = mode {
             context.popTagIdStack()
             context.popClipIdStack()
             context.popMaskIdStack()
@@ -309,7 +334,7 @@ extension SVGDrawableElement {
         cgContext.drawPath(using: .stroke)
     }
 
-    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, isRoot: Bool) {
+    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) {
         path.usesEvenOddFillRule = eoFill
         let cgContext = context.graphics
         guard let fill = fill ?? context.fill else {
@@ -321,7 +346,7 @@ extension SVGDrawableElement {
         switch fill {
         case .inherit:
             if let fill = context.fill {
-                applySVGFill(fill: fill, path: path, context: context, isRoot: isRoot)
+                applySVGFill(fill: fill, path: path, context: context, mode: mode)
             } else {
                 cgContext.setFillColor(UIColor.black.cgColor)
                 cgContext.addPath(path.cgPath)
@@ -351,7 +376,7 @@ extension SVGDrawableElement {
             if let pattern = context.patterns[id],
                context.check(patternId: id)
             {
-                _ = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, isRoot: isRoot)
+                _ = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, isRoot: mode == .root)
                 context.remove(patternId: id)
                 return
             }

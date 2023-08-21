@@ -62,7 +62,7 @@ struct SVGDefsElement: SVGDrawableElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {}
+    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
 
     func clip(context: inout SVGBaseContext) {
         clipRule.map {
@@ -85,6 +85,12 @@ struct SVGDefsElement: SVGDrawableElement {
     func pattern(context: inout SVGBaseContext) {
         for index in contentIds {
             context.contents[index].pattern(context: &context)
+        }
+    }
+
+    func filter(context: inout SVGBaseContext) {
+        for index in contentIds {
+            context.contents[index].filter(context: &context)
         }
     }
 

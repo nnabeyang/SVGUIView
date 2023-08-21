@@ -67,7 +67,7 @@ struct SVGGroupElement: SVGDrawableElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
-    func draw(_ context: SVGContext, index _: Int, depth: Int, isRoot: Bool) {
+    func draw(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
         context.saveGState()
         context.concatenate(transform)
@@ -90,15 +90,15 @@ struct SVGGroupElement: SVGDrawableElement {
         textAnchor.map {
             context.push(textAnchor: $0)
         }
-        if isRoot {
+        if case .root = mode {
             context.pushClipIdStack()
             context.pushMaskIdStack()
         }
         clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
-            context.contents[index].draw(context, index: index, depth: depth + 1, isRoot: isRoot)
+            context.contents[index].draw(context, index: index, depth: depth + 1, mode: mode)
         }
-        if isRoot {
+        if case .root = mode {
             context.popClipIdStack()
             context.popMaskIdStack()
         }
@@ -143,6 +143,12 @@ struct SVGGroupElement: SVGDrawableElement {
     func pattern(context: inout SVGBaseContext) {
         for index in contentIds {
             context.contents[index].pattern(context: &context)
+        }
+    }
+
+    func filter(context: inout SVGBaseContext) {
+        for index in contentIds {
+            context.contents[index].filter(context: &context)
         }
     }
 

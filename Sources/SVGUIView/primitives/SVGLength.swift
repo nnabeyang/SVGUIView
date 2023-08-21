@@ -218,6 +218,19 @@ enum SVGLength {
         return nil
     }
 
+    func calculatedLength(frame: CGRect, context: SVGLengthContext, mode: SVGLengthMode, userSpace: Bool = true) -> CGFloat {
+        let value = value(context: context, mode: mode, userSpace: userSpace)
+        switch mode {
+        case .height:
+            return userSpace ? min(value, 1.2 * frame.height) : frame.height * value
+        case .width:
+            return userSpace ? min(value, 1.2 * frame.width) : frame.width * value
+        case .other:
+            let c = sqrt(pow(frame.width, 2) + pow(frame.height, 2)) / sqrt(2)
+            return userSpace ? min(value, 1.2 * c) : c * value
+        }
+    }
+
     func value(context: SVGLengthContext, mode: SVGLengthMode, userSpace: Bool = true) -> CGFloat {
         switch self {
         case let .percent(percent):

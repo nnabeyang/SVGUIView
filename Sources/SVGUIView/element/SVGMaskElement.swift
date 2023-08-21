@@ -125,7 +125,7 @@ struct SVGMaskElement: SVGDrawableElement {
             graphics.concatenate(content.transform)
             content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
             content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-            content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext, isRoot: true)
+            content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext, mode: .root)
             graphics.restoreGState()
         }
         clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: graphics)
@@ -171,7 +171,7 @@ struct SVGMaskElement: SVGDrawableElement {
         return try? sourceBuffer.createCGImage(format: format)
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {}
+    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))

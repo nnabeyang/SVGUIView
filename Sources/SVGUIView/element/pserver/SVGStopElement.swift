@@ -31,7 +31,7 @@ struct SVGStopElement: SVGElement {
         .stop
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {
+    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
         fatalError()
     }
 

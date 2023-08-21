@@ -257,7 +257,7 @@ struct SVGPatternElement: SVGDrawableElement {
                 continue
             }
             maskContext.saveGState()
-            content.draw(maskContext, index: index, depth: 0, isRoot: false)
+            content.draw(maskContext, index: index, depth: 0, mode: .normal)
             maskContext.restoreGState()
         }
         clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: graphics)
@@ -271,7 +271,7 @@ struct SVGPatternElement: SVGDrawableElement {
         return image
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, isRoot _: Bool) {}
+    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))

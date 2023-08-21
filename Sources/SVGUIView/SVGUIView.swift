@@ -66,7 +66,7 @@ public class SVGUIView: UIView {
         default:
             break
         }
-        svg.draw(context, index: baseContext.contents.count - 1, depth: 1, isRoot: true)
+        svg.draw(context, index: baseContext.contents.count - 1, depth: 1, mode: .root)
         context.popViewBox()
         context.restoreGState()
     }

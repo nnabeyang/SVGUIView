@@ -52,7 +52,7 @@ struct SVGTextElement: SVGDrawableElement {
         y = other.y
     }
 
-    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, isRoot: Bool) {
+    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) {
         let cgContext = context.graphics
         guard let fill = fill else {
             cgContext.addPath(path.cgPath)
@@ -62,7 +62,7 @@ struct SVGTextElement: SVGDrawableElement {
         switch fill {
         case .inherit:
             if let fill = context.fill {
-                applySVGFill(fill: fill, path: path, context: context, isRoot: isRoot)
+                applySVGFill(fill: fill, path: path, context: context, mode: mode)
             }
         case .current:
             if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {

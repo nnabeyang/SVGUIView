@@ -67,6 +67,10 @@ struct SVGContext: SVGLengthContext {
         base.patterns
     }
 
+    var filters: [String: SVGFilterElement] {
+        base.filters
+    }
+
     var transform: CGAffineTransform {
         graphics.ctm.concatenating(initCtm.inverted())
             .scaledBy(x: 1 / UIScreen.main.scale, y: 1 / UIScreen.main.scale)
@@ -287,6 +291,7 @@ struct SVGBaseContext {
     var clipPaths = [String: SVGClipPathElement]()
     var masks = [String: SVGMaskElement]()
     var patterns = [String: SVGPatternElement]()
+    var filters = [String: SVGFilterElement]()
     private let clipRuleStack: Stack<Bool> = Stack()
 
     var root: SVGSVGElement? {
@@ -312,6 +317,12 @@ struct SVGBaseContext {
     mutating func setPattern(id: String, value: SVGPatternElement) {
         if patterns[id] == nil {
             patterns[id] = value
+        }
+    }
+
+    mutating func setFilter(id: String, value: SVGFilterElement) {
+        if filters[id] == nil {
+            filters[id] = value
         }
     }
 
