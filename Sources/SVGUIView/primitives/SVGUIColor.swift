@@ -20,6 +20,8 @@ enum SVGColorType: String {
 
 protocol SVGUIColor: CustomStringConvertible, Codable {
     func toUIColor(opacity: Double) -> UIColor?
+    // var rgba: (red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8) { get }
+    var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) { get }
 }
 
 struct SVGColorName: SVGUIColor {
@@ -37,6 +39,16 @@ struct SVGColorName: SVGUIColor {
             blue: CGFloat(b) / 255.0,
             alpha: (1.0 - CGFloat(t) / 255.0) * opacity
         )
+    }
+
+    var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        let value = Self.colors[name.lowercased()] ?? 0
+        let t = UInt8(value & 0xFF)
+        let blue = CGFloat((value >> 8) & 0xFF)
+        let green = CGFloat((value >> 16) & 0xFF)
+        let red = CGFloat((value >> 24) & 0xFF)
+        let alpha = CGFloat(0xFF - t)
+        return (red: red, green: green, blue: blue, alpha: alpha)
     }
 
     private static let colors: [String: UInt64] = [
@@ -240,6 +252,20 @@ struct SVGHexColor: SVGUIColor {
             alpha: CGFloat(a) / base * opacity
         )
     }
+
+    var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        let count = value.count
+        let isShort = count <= 4
+        let hasAlpha = count == 4 || count == 8
+        let shift = isShort ? 4 : 8
+        let mask: UInt64 = isShort ? 0xF : 0xFF
+        guard let v = UInt64(value, radix: 16) else { return (red: 0, green: 0, blue: 0, alpha: 0xFF) }
+        let alpha = CGFloat(hasAlpha ? ((v >> (shift * 0)) & mask) : mask)
+        let blue = CGFloat((v >> (shift * (hasAlpha ? 1 : 0))) & mask)
+        let green = CGFloat((v >> (shift * (hasAlpha ? 2 : 1))) & mask)
+        let red = CGFloat((v >> (shift * (hasAlpha ? 3 : 2))) & mask)
+        return (red: red, green: green, blue: blue, alpha: alpha)
+    }
 }
 
 extension SVGHexColor: Codable {
@@ -335,6 +361,10 @@ struct SVGRGBColor: SVGUIColor {
             alpha: opacity
         )
     }
+
+    var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        (red: r.value, green: g.value, blue: b.value, alpha: 255.0)
+    }
 }
 
 extension SVGRGBColor: Codable {
@@ -376,6 +406,10 @@ struct SVGRGBAColor: SVGUIColor {
             blue: b.value / 255.0,
             alpha: CGFloat(a) * opacity
         )
+    }
+
+    var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        (red: r.value, green: g.value, blue: b.value, alpha: a * 255.0)
     }
 }
 

@@ -24,6 +24,7 @@ enum SVGElementName: String, Equatable {
     case pattern
     case filter
     case feGaussianBlur
+    case feFlood
     case unknown
 }
 
@@ -109,6 +110,8 @@ extension Parser: XMLParserDelegate {
                 return element
             case .feGaussianBlur:
                 return SVGFeGaussianBlurElement(attributes: element.attributes)
+            case .feFlood:
+                return SVGFeFloodElement(attributes: element.attributes)
             case .text:
                 return SVGTextElement(text: text, attributes: element.attributes)
             case .image:

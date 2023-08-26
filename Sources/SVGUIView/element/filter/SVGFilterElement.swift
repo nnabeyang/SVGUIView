@@ -88,6 +88,7 @@ struct SVGFilterElement: SVGDrawableElement {
             let rect = applier.frame(filter: self, frame: frame, context: context)
             imageCgContext.clear(effectRect)
             imageCgContext.saveGState()
+            imageCgContext.setAlpha(content.opacity)
             imageCgContext.clip(to: rect)
             imageCgContext.draw(image, in: effectRect)
             guard let clippedImage = imageCgContext.makeImage() else { break }
@@ -96,7 +97,7 @@ struct SVGFilterElement: SVGDrawableElement {
         }
         cgContext.saveGState()
         let transform = CGAffineTransform(translationX: effectRect.minX, y: effectRect.minY)
-            .concatenating(content.transform.withoutScaling)
+            .concatenating(content.transform)
             .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
         cgContext.concatenate(transform)
         cgContext.draw(srcImage, in: effectRect)
