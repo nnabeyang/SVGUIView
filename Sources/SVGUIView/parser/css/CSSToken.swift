@@ -215,7 +215,7 @@ enum CSSToken: Equatable {
 
     var blockType: BlockType {
         switch self {
-        case .leftBrace, .leftBracket, .leftParenthesis, .url:
+        case .leftBrace, .leftBracket, .leftParenthesis, .url, .function:
             return .blockStart
         case .rightBrace, .rightBracket, .rightParenthesis:
             return .blockEnd

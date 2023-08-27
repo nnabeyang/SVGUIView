@@ -22,5 +22,36 @@
       [["tag", "rect"]],
       ["fill", { "type": "fill", "value": ["url", "id"] }]
     ]
+  },
+  {
+    "src": "#rect1 {transform: scale(2)}",
+    "want": [
+      "qualified",
+      [["id", "rect1"]],
+      ["transform", { "type": "transform", "value": [2, 0, 0, 2, 0, 0] }]
+    ]
+  },
+  {
+    "src": "rect {fill: rgba(12, 34, 56,.35)}",
+    "want": [
+      "qualified",
+      [["tag", "rect"]],
+      [
+        "fill",
+        {
+          "type": "fill",
+          "value": [
+            "color",
+            [
+              "rgba",
+              ["absolute", 12],
+              ["absolute", 34],
+              ["absolute", 56],
+              0.34999999999999998
+            ]
+          ]
+        }
+      ]
+    ]
   }
 ]
