@@ -258,6 +258,9 @@ struct CSSParser {
 
     mutating func parseRule() -> CSSRule {
         let selectors = parseSelectors()
+        if case .eof = tokenizer.peek() {
+            return .qualified(QualifiedCSSRule(selectors: selectors, declarations: [:]))
+        }
         var tokenizer = tokenizer.consumeBlock()
         let declarations = parseDeclarations(tokenizer: &tokenizer)
         return .qualified(QualifiedCSSRule(selectors: selectors, declarations: declarations))
@@ -267,11 +270,14 @@ struct CSSParser {
         var selectors = [CSSSelector]()
         while true {
             let token = tokenizer.peek()
-            if token == .leftBrace {
+            if token == .leftBrace || token == .eof {
                 return selectors
             }
-            if case let .success(selector) = parseSelector() {
+            switch parseSelector() {
+            case let .success(selector):
                 selectors.append(selector)
+            case .failure:
+                break
             }
         }
     }
