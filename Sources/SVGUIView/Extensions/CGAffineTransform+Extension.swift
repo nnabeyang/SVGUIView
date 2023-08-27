@@ -9,6 +9,14 @@ extension CGAffineTransform {
         self = .init(description: description)
     }
 
+    init?(style: CSSValue?) {
+        if case let .transform(value) = style {
+            self = value
+            return
+        }
+        return nil
+    }
+
     init(description: String) {
         var data = description
         let ops = data.withUTF8 {

@@ -96,7 +96,7 @@ struct SVGBaseElement {
         color = other.color
         stroke = other.stroke
         opacity = other.opacity
-        transform = other.transform
+        transform = CGAffineTransform(style: css[.transform]) ?? other.transform
         writingMode = other.writingMode
         eoFill = other.eoFill
         clipRule = other.clipRule
