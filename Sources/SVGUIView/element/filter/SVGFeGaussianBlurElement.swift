@@ -8,6 +8,7 @@ protocol SVGFilterApplier {
     var height: SVGLength? { get }
     func apply(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, context: SVGContext)
     func frame(filter: SVGFilterElement, frame: CGRect, context: SVGContext) -> CGRect
+    func transform(filter: SVGFilterElement, frame: CGRect) -> CGAffineTransform
 }
 
 extension SVGFilterApplier {
@@ -34,6 +35,10 @@ extension SVGFilterApplier {
             filter.height?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace) ??
             1.2 * frame.height
         return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
+    }
+
+    func transform(filter _: SVGFilterElement, frame _: CGRect) -> CGAffineTransform {
+        .identity
     }
 }
 

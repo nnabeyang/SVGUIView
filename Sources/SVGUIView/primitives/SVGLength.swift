@@ -34,6 +34,7 @@ enum SVGLengthMode {
 }
 
 enum SVGLength {
+    case number(CGFloat)
     case pixel(CGFloat)
     case percent(CGFloat)
     case ems(CGFloat)
@@ -138,8 +139,10 @@ enum SVGLength {
                 return .vmax(value)
             case .q:
                 return .q(value)
-            case .pixels, .number:
+            case .pixels:
                 return .pixel(value)
+            case .number:
+                return .number(value)
             }
         }
 
@@ -247,7 +250,7 @@ enum SVGLength {
                 total = sqrt(pow(w, 2) + pow(h, 2)) / sqrt(2)
             }
             return total * percent / 100.0
-        case let .pixel(pixel):
+        case let .pixel(pixel), let .number(pixel):
             return pixel
         case let .ems(value):
             guard let font = context.font,
@@ -338,6 +341,7 @@ enum SVGLength {
 extension SVGLength: CustomStringConvertible {
     var description: String {
         switch self {
+        case let .number(value): return "\(value)"
         case let .pixel(value): return "\(value)px"
         case let .percent(value): return "\(value)%"
         case let .ems(value): return "\(value)em"
@@ -367,6 +371,9 @@ extension SVGLength: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.unkeyedContainer()
         switch self {
+        case let .number(v):
+            try container.encode(SVGLengthType.number.rawValue)
+            try container.encode(v)
         case let .pixel(v):
             try container.encode(SVGLengthType.pixels.rawValue)
             try container.encode(v)
@@ -441,7 +448,9 @@ extension SVGLength: Codable {
         }
         let value = try container.decode(Double.self)
         switch type {
-        case .pixels, .number:
+        case .number:
+            self = .number(value)
+        case .pixels:
             self = .pixel(value)
         case .percentage:
             self = .percent(value)

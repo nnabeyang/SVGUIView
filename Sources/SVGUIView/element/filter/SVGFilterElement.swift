@@ -72,12 +72,13 @@ struct SVGFilterElement: SVGDrawableElement {
         else {
             return
         }
-
+        imageCgContext.saveGState()
         for index in contentIds {
             guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format),
                   var destBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
             else { break }
             guard let applier = context.contents[index] as? SVGFilterApplier else { continue }
+            imageCgContext.clear(effectRect)
             applier.apply(srcBuffer: &srcBuffer, destBuffer: &destBuffer, context: context)
             guard let image = vImageCreateCGImageFromBuffer(&destBuffer,
                                                             &format,
@@ -86,13 +87,16 @@ struct SVGFilterElement: SVGDrawableElement {
                                                             vImage_Flags(kvImageNoAllocate),
                                                             nil)?.takeRetainedValue() else { break }
             let rect = applier.frame(filter: self, frame: frame, context: context)
-            imageCgContext.clear(effectRect)
-            imageCgContext.saveGState()
+            if !(applier is SVGFeOffsetElement) {
+                imageCgContext.restoreGState()
+                imageCgContext.saveGState()
+            }
+            let transform = applier.transform(filter: self, frame: frame)
+            imageCgContext.concatenate(transform)
             imageCgContext.setAlpha(content.opacity)
             imageCgContext.clip(to: rect)
             imageCgContext.draw(image, in: effectRect)
             guard let clippedImage = imageCgContext.makeImage() else { break }
-            imageCgContext.restoreGState()
             srcImage = clippedImage
         }
         cgContext.saveGState()
