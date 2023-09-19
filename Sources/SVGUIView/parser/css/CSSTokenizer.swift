@@ -509,7 +509,6 @@ struct CSSScanner {
             let end = reader.readIndex
             return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
         }
-        fatalError()
     }
 }
 
