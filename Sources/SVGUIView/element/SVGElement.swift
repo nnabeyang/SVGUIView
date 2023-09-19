@@ -238,11 +238,14 @@ extension SVGDrawableElement {
         writingMode.map {
             context.push(writingMode: $0)
         }
-        if case .root = mode {
+        switch mode {
+        case .root, .filter:
             context.pushTagIdStack()
             context.pushClipIdStack()
             context.pushMaskIdStack()
             context.pushPatternIdStack()
+        default:
+            break
         }
         let path: UIBezierPath?
         if #available(iOS 16.0, *), type != .line {
@@ -269,11 +272,14 @@ extension SVGDrawableElement {
             applySVGFill(fill: fill, path: path, context: context, mode: mode)
             applySVGStroke(stroke: stroke, path: path, context: context)
         }
-        if case .root = mode {
+        switch mode {
+        case .root, .filter:
             context.popTagIdStack()
             context.popClipIdStack()
             context.popMaskIdStack()
             context.popPatternIdStack()
+        default:
+            break
         }
         writingMode.map { _ in
             _ = context.popWritingMode()

@@ -97,13 +97,19 @@ struct SVGUseElement: SVGDrawableElement {
         defer {
             gContext.restoreGState()
         }
-        if case .root = mode {
+        switch mode {
+        case .root, .filter:
             context.pushTagIdStack()
+        default:
+            break
         }
         guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
         newElement.draw(context, index: newIndex, depth: depth + 1, mode: .normal)
-        if case .root = mode {
+        switch mode {
+        case .root, .filter:
             context.popTagIdStack()
+        default:
+            break
         }
     }
 

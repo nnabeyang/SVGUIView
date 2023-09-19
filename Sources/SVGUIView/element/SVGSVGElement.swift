@@ -153,17 +153,23 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         writingMode.map {
             context.push(writingMode: $0)
         }
-        if case .root = mode {
+        switch mode {
+        case .root, .filter:
             context.pushClipIdStack()
             context.pushMaskIdStack()
+        default:
+            break
         }
         clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1, mode: mode)
         }
-        if case .root = mode {
+        switch mode {
+        case .root, .filter:
             context.popClipIdStack()
             context.popMaskIdStack()
+        default:
+            break
         }
         font.map { _ in
             _ = context.popFont()
