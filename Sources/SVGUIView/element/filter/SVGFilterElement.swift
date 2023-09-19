@@ -142,7 +142,7 @@ struct SVGFilterElement: SVGDrawableElement {
         let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
         nestContext.push(viewBox: context.viewBox)
         graphics.saveGState()
-        content.draw(nestContext, index: index, depth: 0, mode: .filter)
+        content.drawWithoutFilter(nestContext, index: index, depth: 0, mode: .filter)
         guard let image = graphics.makeImage() else { return nil }
         graphics.restoreGState()
         return image
