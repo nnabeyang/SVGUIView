@@ -2,8 +2,13 @@ import Darwin
 import XCTest
 @testable import SVGUIView
 
+enum Result<Success, Failure> {
+    case success(Success)
+    case failure(Failure)
+}
+
 extension Result: Encodable where Success: Encodable, Failure: Encodable {
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         switch self {
         case let .success(value):
             try value.encode(to: encoder)
@@ -14,7 +19,7 @@ extension Result: Encodable where Success: Encodable, Failure: Encodable {
 }
 
 extension Result: Decodable where Success: Decodable, Failure: Decodable {
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let value = try? container.decode(Success.self) {
             self = .success(value)
@@ -25,6 +30,19 @@ extension Result: Decodable where Success: Decodable, Failure: Decodable {
             return
         }
         throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
+    }
+}
+
+extension Result: Equatable where Success: Equatable, Failure: Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.success(lhs), .success(rhs)):
+            return lhs == rhs
+        case let (.failure(lhs), .failure(rhs)):
+            return lhs == rhs
+        default:
+            return false
+        }
     }
 }
 
@@ -73,7 +91,12 @@ final class CSSParserTests: XCTestCase {
                     tokenizer.consumeUntilSemicolon()
                     var declaration = tokenizer.makeSubTokenizer(startIndex: startIndex, endIndex: tokenizer.readIndex)
                     let result = parser.parseDeclaration(tokenizer: &declaration)
-                    results.append(result)
+                    switch result {
+                    case let .success(v):
+                        results.append(.success(v))
+                    case let .failure(e):
+                        results.append(.failure(e))
+                    }
                 default:
                     return results
                 }
