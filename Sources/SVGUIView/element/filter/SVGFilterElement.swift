@@ -110,10 +110,8 @@ struct SVGFilterElement: SVGDrawableElement {
 
     private func effectRect(frame: CGRect, context: SVGContext) -> CGRect {
         let userSpace = userSpace ?? false
-        let dx = x?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace) ?? -0.1 * frame.width
-        let dy = y?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace) ?? -0.1 * frame.height
-        let x = userSpace ? dx : frame.minX + dx
-        let y = userSpace ? dy : frame.minY + dy
+        let x = x?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace, isPosition: true) ?? (frame.minX - 0.1 * frame.width)
+        let y = y?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace, isPosition: true) ?? (frame.minY - 0.1 * frame.height)
         let width = width?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace) ?? 1.2 * frame.width
         let height = height?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace) ?? 1.2 * frame.height
         return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))

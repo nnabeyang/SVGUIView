@@ -221,15 +221,18 @@ enum SVGLength {
         return nil
     }
 
-    func calculatedLength(frame: CGRect, context: SVGLengthContext, mode: SVGLengthMode, userSpace: Bool = true) -> CGFloat {
+    func calculatedLength(frame: CGRect, context: SVGLengthContext, mode: SVGLengthMode, userSpace: Bool = true, isPosition: Bool = false) -> CGFloat {
         let value = value(context: context, mode: mode, userSpace: userSpace)
+        let viewBoxSize = context.viewBoxSize
         switch mode {
         case .height:
-            return userSpace ? min(value, 1.2 * frame.height) : frame.height * value
+            let dy = userSpace ? min(value, 1.2 * viewBoxSize.height) : frame.height * value
+            return (!userSpace && isPosition) ? frame.minY + dy : dy
         case .width:
-            return userSpace ? min(value, 1.2 * frame.width) : frame.width * value
+            let dx = userSpace ? min(value, 1.2 * viewBoxSize.width) : frame.width * value
+            return (!userSpace && isPosition) ? frame.minX + dx : dx
         case .other:
-            let c = sqrt(pow(frame.width, 2) + pow(frame.height, 2)) / sqrt(2)
+            let c = sqrt(pow(viewBoxSize.width, 2) + pow(viewBoxSize.height, 2)) / sqrt(2)
             return userSpace ? min(value, 1.2 * c) : c * value
         }
     }
