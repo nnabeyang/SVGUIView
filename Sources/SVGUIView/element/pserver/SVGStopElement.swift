@@ -35,6 +35,10 @@ struct SVGStopElement: SVGElement {
         fatalError()
     }
 
+    func drawWithoutFilter(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
+        fatalError()
+    }
+
     func style(with _: CSSStyle, at _: Int) -> any SVGElement {
         self
     }

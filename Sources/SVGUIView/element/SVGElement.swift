@@ -3,6 +3,7 @@ import UIKit
 protocol SVGElement: Encodable {
     var type: SVGElementName { get }
     func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode)
+    func drawWithoutFilter(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode)
     func style(with style: CSSStyle, at index: Int) -> any SVGElement
     func contains(index: Int, context: SVGContext) -> Bool
     func clip(context: inout SVGBaseContext)
@@ -227,19 +228,7 @@ extension SVGDrawableElement {
         return result
     }
 
-    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
-        guard !context.detectCycles(type: type, depth: depth) else { return }
-        if let display = display, case .none = display {
-            return
-        }
-        let filter = filter ?? SVGFilter.none
-        if mode != .filter,
-           case let .url(id) = filter,
-           let server = context.filters[id]
-        {
-            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
-            return
-        }
+    func drawWithoutFilter(_ context: SVGContext, index _: Int, depth _: Int, mode: DrawMode) {
         context.saveGState()
         if case .filter = mode {
             context.concatenate(transform.scale)
@@ -290,6 +279,22 @@ extension SVGDrawableElement {
             _ = context.popWritingMode()
         }
         context.restoreGState()
+    }
+
+    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
+        guard !context.detectCycles(type: type, depth: depth) else { return }
+        if let display = display, case .none = display {
+            return
+        }
+        let filter = filter ?? SVGFilter.none
+        if mode != .filter,
+           case let .url(id) = filter,
+           let server = context.filters[id]
+        {
+            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
+            return
+        }
+        drawWithoutFilter(context, index: index, depth: depth, mode: mode)
     }
 
     private func applyStrokeFill(fill: SVGFill, opacity: Double, path: UIBezierPath, context: SVGContext) {
