@@ -51,7 +51,7 @@ extension SVGCircleElement: Encodable {
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(cx, forKey: .cx)
         try container.encode(cy, forKey: .cy)
         try container.encode(r, forKey: .r)

@@ -33,7 +33,7 @@ extension SVGPolygonElement: Encodable {
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(points, forKey: .points)
         try container.encode(fill, forKey: .fill)
     }

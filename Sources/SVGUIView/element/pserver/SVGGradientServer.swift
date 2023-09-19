@@ -186,7 +186,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
 
 extension SVGLinearGradientServer {
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
         for content in stops ?? [] {
             try contentsContainer.encode(content)
@@ -316,7 +316,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
 
 extension SVGRadialGradientServer {
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
         for content in stops ?? [] {
             try contentsContainer.encode(content)

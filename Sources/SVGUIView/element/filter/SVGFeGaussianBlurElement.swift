@@ -25,7 +25,7 @@ extension StdDeviation: Encodable {
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         switch self {
         case let .iso(x):
             try container.encode(x, forKey: .x)
@@ -368,7 +368,7 @@ extension SVGFeGaussianBlurElement: Encodable {
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encodeIfPresent(stdDeviation, forKey: .stdDeviation)
     }
 }

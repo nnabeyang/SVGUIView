@@ -50,7 +50,7 @@ extension SVGPathElement: Encodable {
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var dContainer = container.nestedUnkeyedContainer(forKey: .d)
         for segment in segments {
             try dContainer.encode(segment)
@@ -328,7 +328,7 @@ extension MPathArgument: Encodable {
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CondingKeys)
+        var container = encoder.container(keyedBy: Self.CondingKeys.self)
         try container.encode(x, forKey: .x)
         try container.encode(y, forKey: .y)
     }

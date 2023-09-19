@@ -245,7 +245,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
 
 extension SVGSVGElement {
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys)
+        var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(width, forKey: .width)
         try container.encode(height, forKey: .height)
         try container.encodeIfPresent(viewBox, forKey: .viewBox)
