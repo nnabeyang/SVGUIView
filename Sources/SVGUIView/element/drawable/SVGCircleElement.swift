@@ -24,6 +24,13 @@ struct SVGCircleElement: SVGDrawableElement {
         r = other.r
     }
 
+    init(other: Self, attributes: [String: String]) {
+        base = SVGBaseElement(other: other.base, attributes: attributes)
+        cx = other.cx
+        cy = other.cy
+        r = other.r
+    }
+
     func toBezierPath(context: SVGContext) -> UIBezierPath? {
         let cx = cx?.value(context: context, mode: .width) ?? 0
         let cy = cy?.value(context: context, mode: .height) ?? 0
