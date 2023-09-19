@@ -27,6 +27,8 @@ enum SVGElementName: String, Equatable {
     case feFlood
     case feBlend
     case feOffset
+    case feMerge
+    case feMergeNode
     case unknown
 }
 
@@ -110,6 +112,9 @@ extension Parser: XMLParserDelegate {
                 let element = SVGFilterElement(attributes: element.attributes,
                                                contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
+            case .feMerge:
+                return SVGFeMergeElement(attributes: element.attributes,
+                                         contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .feGaussianBlur:
                 return SVGFeGaussianBlurElement(attributes: element.attributes)
             case .feFlood:
@@ -118,6 +123,8 @@ extension Parser: XMLParserDelegate {
                 return SVGFeBlendElement(attributes: element.attributes)
             case .feOffset:
                 return SVGFeOffsetElement(attributes: element.attributes)
+            case .feMergeNode:
+                return SVGFeMergeNodeElement(attributes: element.attributes)
             case .text:
                 return SVGTextElement(text: text, attributes: element.attributes)
             case .image:
