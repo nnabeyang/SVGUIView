@@ -287,8 +287,7 @@ extension SVGDrawableElement {
             return
         }
         let filter = filter ?? SVGFilter.none
-        if mode != .filter,
-           case let .url(id) = filter,
+        if case let .url(id) = filter,
            let server = context.filters[id]
         {
             server.filter(content: self, index: index, context: context, cgContext: context.graphics)
