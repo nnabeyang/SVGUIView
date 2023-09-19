@@ -104,7 +104,7 @@ struct SVGUseElement: SVGDrawableElement {
             break
         }
         guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
-        newElement.draw(context, index: newIndex, depth: depth + 1, mode: .normal)
+        newElement.draw(context, index: newIndex, depth: depth + 1, mode: .root)
         switch mode {
         case .root, .filter:
             context.popTagIdStack()
