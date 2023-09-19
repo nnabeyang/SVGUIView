@@ -67,8 +67,15 @@ struct SVGGroupElement: SVGDrawableElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
-    func draw(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
+    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
+        let filter = filter ?? SVGFilter.none
+        if case let .url(id) = filter,
+           let server = context.filters[id]
+        {
+            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
+            return
+        }
         context.saveGState()
         context.concatenate(transform)
         context.setAlpha(opacity)

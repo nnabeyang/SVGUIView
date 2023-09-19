@@ -112,8 +112,15 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
     var rootFont: SVGUIFont? { font }
 
-    func draw(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
+    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
         guard !context.detectCycles(type: type, depth: depth) else { return }
+        let filter = filter ?? SVGFilter.none
+        if case let .url(id) = filter,
+           let server = context.filters[id]
+        {
+            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
+            return
+        }
         context.saveGState()
         let x = (x ?? .pixel(0)).value(context: context, mode: .width)
         let y = (y ?? .pixel(0)).value(context: context, mode: .height)
