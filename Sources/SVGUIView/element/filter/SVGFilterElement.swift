@@ -15,6 +15,9 @@ struct SVGFilterElement: SVGDrawableElement {
     let userSpace: Bool?
     let primitiveUnits: SVGPrimitiveUnitsType?
 
+    let colorInterpolation: SVGColorInterpolation?
+    let colorInterpolationFilters: SVGColorInterpolation?
+
     var type: SVGElementName {
         .filter
     }
@@ -31,6 +34,8 @@ struct SVGFilterElement: SVGDrawableElement {
 
     init(attributes: [String: String], contentIds: [Int]) {
         base = SVGBaseElement(attributes: attributes)
+        colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
+        colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
         x = .init(attributes["x"])
         y = .init(attributes["y"])
         width = SVGLength(style: base.style[.width], value: attributes["width"])
@@ -42,6 +47,8 @@ struct SVGFilterElement: SVGDrawableElement {
 
     init(other: Self, index _: Int, css _: SVGUIStyle) {
         base = other.base
+        colorInterpolation = other.colorInterpolation
+        colorInterpolationFilters = other.colorInterpolationFilters
         x = other.x
         y = other.y
         width = other.width
@@ -51,8 +58,13 @@ struct SVGFilterElement: SVGDrawableElement {
         contentIds = other.contentIds
     }
 
-    var colorSpace: CGColorSpace {
-        CGColorSpaceCreateDeviceRGB()
+    private func colorSpace(colorInterpolation: SVGColorInterpolation) -> CGColorSpace {
+        switch colorInterpolation {
+        case .sRGB:
+            return CGColorSpace(name: CGColorSpace.sRGB)!
+        case .linearRGB:
+            return CGColorSpace(name: CGColorSpace.linearSRGB)!
+        }
     }
 
     func toBezierPath(context _: SVGContext) -> UIBezierPath? {
@@ -60,51 +72,33 @@ struct SVGFilterElement: SVGDrawableElement {
     }
 
     func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) {
-        guard let bezierPath = content.toBezierPath(context: context) else { return }
+        guard !contentIds.isEmpty else { return }
+        let bezierPath = content.toBezierPath(context: context)
         let frame = content.frame(context: context, path: bezierPath)
         let effectRect = effectRect(frame: frame, context: context)
-        guard let imageCgContext = createImageCGContext(rect: effectRect) else { return }
-        guard var srcImage = srcImage(content: content, graphics: imageCgContext, context: context) else { return }
-        guard var format = vImage_CGImageFormat(bitsPerComponent: srcImage.bitsPerComponent,
-                                                bitsPerPixel: srcImage.bitsPerPixel,
-                                                colorSpace: srcImage.colorSpace!,
-                                                bitmapInfo: srcImage.bitmapInfo)
-        else {
-            return
-        }
-        imageCgContext.saveGState()
-        for index in contentIds {
-            guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format),
-                  var destBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
-            else { break }
+        guard let imageCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
+              let srcImage = srcImage(content: content, graphics: imageCgContext, context: context),
+              let filterCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB) else { return }
+        filterCgContext.saveGState()
+        var results = [String: CGImage]()
+        var inputImage = srcImage
+        var clipRect = effectRect
+        for (i, index) in contentIds.enumerated() {
             guard let applier = context.contents[index] as? SVGFilterApplier else { continue }
-            imageCgContext.clear(effectRect)
-            applier.apply(srcBuffer: &srcBuffer, destBuffer: &destBuffer, context: context)
-            guard let image = vImageCreateCGImageFromBuffer(&destBuffer,
-                                                            &format,
-                                                            { _, _ in },
-                                                            nil,
-                                                            vImage_Flags(kvImageNoAllocate),
-                                                            nil)?.takeRetainedValue() else { break }
-            let rect = applier.frame(filter: self, frame: frame, context: context)
-            if !(applier is SVGFeOffsetElement) {
-                imageCgContext.restoreGState()
-                imageCgContext.saveGState()
+            filterCgContext.clear(effectRect)
+            filterCgContext.restoreGState()
+            filterCgContext.saveGState()
+            guard let clippedImage = applier.apply(srcImage: srcImage, inImage: inputImage, clipRect: &clipRect,
+                                                   filter: self, frame: frame, effectRect: effectRect, opacity: content.opacity,
+                                                   cgContext: filterCgContext, context: context, results: results, isFirst: i == 0) else { break }
+            if let result = applier.result {
+                results[result] = clippedImage
             }
-            let transform = applier.transform(filter: self, frame: frame)
-            imageCgContext.concatenate(transform)
-            imageCgContext.setAlpha(content.opacity)
-            imageCgContext.clip(to: rect)
-            imageCgContext.draw(image, in: effectRect)
-            guard let clippedImage = imageCgContext.makeImage() else { break }
-            srcImage = clippedImage
+            inputImage = clippedImage
         }
         cgContext.saveGState()
-        let transform = CGAffineTransform(translationX: effectRect.minX, y: effectRect.minY)
-            .concatenating(content.transform)
-            .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
-        cgContext.concatenate(transform)
-        cgContext.draw(srcImage, in: effectRect)
+        cgContext.concatenate(content.transform)
+        cgContext.draw(inputImage, in: effectRect)
         cgContext.restoreGState()
     }
 
@@ -117,7 +111,7 @@ struct SVGFilterElement: SVGDrawableElement {
         return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
     }
 
-    private func createImageCGContext(rect: CGRect) -> CGContext? {
+    private func createImageCGContext(rect: CGRect, colorInterpolation: SVGColorInterpolation) -> CGContext? {
         let scale = UIScreen.main.scale
         let frameWidth = Int((rect.width * scale).rounded(.up))
         let frameHeight = Int((rect.height * scale).rounded(.up))
@@ -127,9 +121,8 @@ struct SVGFilterElement: SVGDrawableElement {
                                   height: frameHeight,
                                   bitsPerComponent: 8,
                                   bytesPerRow: bytesPerRow,
-                                  space: colorSpace,
+                                  space: colorSpace(colorInterpolation: colorInterpolation),
                                   bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-
         cgContext.map {
             let transform = CGAffineTransform(scaleX: scale, y: scale)
                 .translatedBy(x: -rect.minX, y: -rect.minY)

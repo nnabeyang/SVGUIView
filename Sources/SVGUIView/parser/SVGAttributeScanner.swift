@@ -455,10 +455,11 @@ extension SVGAttributeScanner {
         _ = reader.consumeWhitespace()
         guard let x = scanNumber() else { return nil }
         _ = reader.consumeWhitespace()
-        guard let y = scanNumber() else { return .iso(x) }
+        guard let y = scanNumber() else { return .iso(SVGLength(value: x, unit: .number)) }
         _ = reader.consumeWhitespace()
         if reader.isEOF {
-            return .hetero(x: x, y: y)
+            return .hetero(x: SVGLength(value: x, unit: .number),
+                           y: SVGLength(value: y, unit: .number))
         }
         return nil
     }

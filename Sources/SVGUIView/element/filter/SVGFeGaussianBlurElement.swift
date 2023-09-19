@@ -2,8 +2,8 @@ import Accelerate
 import UIKit
 
 enum StdDeviation: Equatable {
-    case iso(Double)
-    case hetero(x: Double, y: Double)
+    case iso(SVGLength)
+    case hetero(x: SVGLength, y: SVGLength)
     init?(description: String) {
         var data = description
         let stdDeviation = data.withUTF8 {
@@ -37,7 +37,25 @@ extension StdDeviation: Encodable {
 }
 
 extension StdDeviation {
-    static let zero: StdDeviation = .hetero(x: 0, y: 0)
+    static let zero: StdDeviation = .hetero(x: SVGLength(value: 0, unit: .number), y: SVGLength(value: 0, unit: .number))
+}
+
+enum SVGFilterInput {
+    case sourceGraphic
+    case sourceAlpha
+    case other(String)
+
+    init?(rawValue: String) {
+        guard !rawValue.isEmpty else { return nil }
+        switch rawValue {
+        case "SourceGraphic":
+            self = .sourceGraphic
+        case "SourceAlpha":
+            self = .sourceAlpha
+        default:
+            self = .other(rawValue)
+        }
+    }
 }
 
 struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
@@ -50,6 +68,12 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     let y: SVGLength?
     let width: SVGLength?
     let height: SVGLength?
+
+    let result: String?
+
+    let input: SVGFilterInput?
+
+    let colorInterpolationFilters: SVGColorInterpolation?
 
     func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
         fatalError()
@@ -65,32 +89,127 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
         y = SVGLength(attributes["y"])
         width = SVGLength(attributes["width"])
         height = SVGLength(attributes["height"])
+
+        result = attributes["result"]
+
         stdDeviation = StdDeviation(description: attributes["stdDeviation", default: ""])
+        input = SVGFilterInput(rawValue: attributes["in", default: ""])
+
+        colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
     }
 
     static func clampedToKernelSize(value: CGFloat) -> UInt32 {
         min(Self.maxKernelSize, UInt32(max(floor(value * 3.0 * sqrt(2 * .pi) as CGFloat / 4 + 0.5) as CGFloat, 2 * UIScreen.main.scale)))
     }
 
-    func apply(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, context: SVGContext) {
+    private func dropRGBColor(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer) {
+        let matrix: [Int16] = [
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 1,
+        ]
+
+        vImageMatrixMultiply_ARGB8888(
+            &srcBuffer,
+            &destBuffer,
+            matrix,
+            1,
+            nil,
+            nil,
+            vImage_Flags(kvImageNoFlags)
+        )
+        swap(&srcBuffer, &destBuffer)
+    }
+
+    private func colorSpace(colorInterpolation: SVGColorInterpolation) -> CGColorSpace {
+        switch colorInterpolation {
+        case .sRGB:
+            return CGColorSpace(name: CGColorSpace.sRGB)!
+        case .linearRGB:
+            return CGColorSpace(name: CGColorSpace.linearSRGB)!
+        }
+    }
+
+    func apply(srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
+               filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst: Bool) -> CGImage?
+    {
+        let colorSpace: CGColorSpace
+        switch input {
+        case .none:
+            if isFirst {
+                colorSpace = self.colorSpace(colorInterpolation: colorInterpolationFilters ?? filter.colorInterpolationFilters ?? .sRGB)
+            } else {
+                colorSpace = (colorInterpolationFilters ?? filter.colorInterpolationFilters).map { self.colorSpace(colorInterpolation: $0) } ?? inImage.colorSpace!
+            }
+        case .sourceAlpha, .sourceGraphic:
+            colorSpace = colorInterpolationFilters.map { self.colorSpace(colorInterpolation: $0) } ?? srcImage.colorSpace!
+        case let .other(srcName):
+            if let image = results[srcName] {
+                colorSpace = image.colorSpace!
+            } else {
+                colorSpace = colorInterpolationFilters.map { self.colorSpace(colorInterpolation: $0) } ?? (isFirst ? srcImage.colorSpace! : inImage.colorSpace!)
+            }
+        }
+        guard var format = vImage_CGImageFormat(bitsPerComponent: srcImage.bitsPerComponent,
+                                                bitsPerPixel: srcImage.bitsPerPixel,
+                                                colorSpace: colorSpace,
+                                                bitmapInfo: srcImage.bitmapInfo) else { return nil }
+        guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage.copy(colorSpace: colorSpace)!, format: format) else { return nil }
+        guard var inputBuffer = try? vImage_Buffer(cgImage: inImage.copy(colorSpace: colorSpace)!, format: format) else { return nil }
+
+        let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height))
+        var destBuffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
+        defer {
+            free(data)
+        }
         let stdDeviation = stdDeviation ?? .zero
+        let userSpace = (filter.primitiveUnits ?? .userSpaceOnUse) == .userSpaceOnUse
+        var buffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
+        inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &buffer)
         switch stdDeviation {
         case let .hetero(x, y):
-            guard x >= 0, y >= 0 else { return }
+            let x = x.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace)
+            let y = y.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace)
+            guard x >= 0, y >= 0 else {
+                swap(&inputBuffer, &destBuffer)
+                break
+            }
             if x != y {
                 let kernelSizeX = Self.clampedToKernelSize(value: x * UIScreen.main.scale)
                 let kernelSizeY = Self.clampedToKernelSize(value: y * UIScreen.main.scale)
-                applyUnaccelerated(srcBuffer: &srcBuffer, destBuffer: &destBuffer,
+                applyUnaccelerated(srcBuffer: &buffer, destBuffer: &destBuffer,
                                    kernelSizeX: kernelSizeX, kernelSizeY: kernelSizeY, context: context)
             } else {
                 let kernelSize = Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
-                applyAccelerated(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelSize: kernelSize)
+                applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
             }
         case let .iso(x):
-            guard x >= 0 else { return }
+            let x = x.calculatedLength(frame: frame, context: context, mode: .other, userSpace: userSpace)
+            guard x >= 0 else {
+                swap(&buffer, &destBuffer)
+                break
+            }
             let kernelSize = Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
-            applyAccelerated(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelSize: kernelSize)
+            applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
         }
+        guard let image = vImageCreateCGImageFromBuffer(&destBuffer,
+                                                        &format,
+                                                        { _, _ in },
+                                                        nil,
+                                                        vImage_Flags(kvImageNoAllocate),
+                                                        nil)?.takeRetainedValue()
+        else {
+            return nil
+        }
+        let rect = self.frame(filter: filter, frame: frame, context: context)
+        clipRect = rect
+        cgContext.clip(to: rect)
+        let transform = transform(filter: filter, frame: frame)
+        cgContext.concatenate(transform)
+        cgContext.setAlpha(opacity)
+        cgContext.draw(image, in: effectRect)
+        return cgContext.makeImage()
     }
 
     func applyAccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSize: UInt32) {

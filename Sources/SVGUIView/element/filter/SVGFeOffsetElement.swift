@@ -11,6 +11,8 @@ struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
     let width: SVGLength?
     let height: SVGLength?
 
+    let result: String?
+
     let dx: Double?
     let dy: Double?
 
@@ -28,6 +30,8 @@ struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
         width = SVGLength(attributes["width"])
         height = SVGLength(attributes["height"])
 
+        result = attributes["result"]
+
         dx = Double(attributes["dx", default: ""])
         dy = Double(attributes["dy", default: ""])
     }
@@ -41,7 +45,30 @@ struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
         }
     }
 
-    func apply(srcBuffer _: inout vImage_Buffer, destBuffer _: inout vImage_Buffer, context _: SVGContext) {}
+    func apply(srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
+               filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results _: [String: CGImage], isFirst _: Bool) -> CGImage?
+    {
+        guard var format = vImage_CGImageFormat(bitsPerComponent: srcImage.bitsPerComponent,
+                                                bitsPerPixel: srcImage.bitsPerPixel,
+                                                colorSpace: srcImage.colorSpace!,
+                                                bitmapInfo: srcImage.bitmapInfo),
+            var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format),
+            let image = vImageCreateCGImageFromBuffer(&inputBuffer,
+                                                      &format,
+                                                      { _, _ in },
+                                                      nil,
+                                                      vImage_Flags(kvImageNoAllocate),
+                                                      nil)?.takeRetainedValue() else { return nil }
+        let rect = self.frame(filter: filter, frame: frame, context: context)
+        clipRect = CGRectIntersection(clipRect, rect)
+        cgContext.clip(to: clipRect)
+        let transform = transform(filter: filter, frame: frame)
+        cgContext.concatenate(transform)
+        cgContext.setAlpha(opacity)
+        cgContext.draw(image, in: effectRect)
+        return cgContext.makeImage()
+    }
+
     func transform(filter: SVGFilterElement, frame: CGRect) -> CGAffineTransform {
         let primitiveUnits = (filter.primitiveUnits ?? .userSpaceOnUse) == .userSpaceOnUse
         let dx = dx ?? 0
