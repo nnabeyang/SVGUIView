@@ -98,7 +98,7 @@ struct SVGTextElement: SVGDrawableElement {
         return CTLineCreateWithAttributedString(attributedText)
     }
 
-    func frame(context: SVGContext, path _: UIBezierPath) -> CGRect {
+    func frame(context: SVGContext, path _: UIBezierPath?) -> CGRect {
         guard let line = getLine(context: context) else { return .zero }
         let x = x?.value(context: context, mode: .width) ?? 0
         let y = y?.value(context: context, mode: .height) ?? 0

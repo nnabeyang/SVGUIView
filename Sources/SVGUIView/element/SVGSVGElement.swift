@@ -112,6 +112,15 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
     var rootFont: SVGUIFont? { font }
 
+    func frame(context: SVGContext, path _: UIBezierPath?) -> CGRect {
+        var rect: CGRect = .zero
+        for index in contentIds {
+            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+            rect = CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)))
+        }
+        return rect
+    }
+
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
         context.saveGState()
         let x = (x ?? .pixel(0)).value(context: context, mode: .width)

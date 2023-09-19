@@ -67,6 +67,15 @@ struct SVGGroupElement: SVGDrawableElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
+    func frame(context: SVGContext, path _: UIBezierPath?) -> CGRect {
+        var rect: CGRect = .zero
+        for index in contentIds {
+            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+            rect = CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform))
+        }
+        return rect
+    }
+
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
         context.saveGState()
         context.concatenate(transform)

@@ -41,7 +41,8 @@ struct SVGLineElement: SVGDrawableElement {
         return path
     }
 
-    func frame(context: SVGContext, path: UIBezierPath) -> CGRect {
+    func frame(context: SVGContext, path: UIBezierPath?) -> CGRect {
+        guard let path = path else { return .zero }
         let r = path.cgPath.boundingBoxOfPath
         if r.width > 0, r.height > 0 {
             return r

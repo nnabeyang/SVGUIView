@@ -134,7 +134,7 @@ protocol SVGDrawableElement: SVGElement {
     var style: SVGUIStyle { get }
     var display: CSSDisplay? { get }
     var visibility: CSSVisibility? { get }
-    func frame(context: SVGContext, path: UIBezierPath) -> CGRect
+    func frame(context: SVGContext, path: UIBezierPath?) -> CGRect
     func scale(context: SVGContext) -> CGAffineTransform
     init(text: String, attributes: [String: String])
     init(base: SVGBaseElement, text: String, attributes: [String: String])
@@ -189,8 +189,8 @@ extension SVGDrawableElement {
         return Self(other: self, index: index, css: SVGUIStyle(decratations: properties))
     }
 
-    func frame(context _: SVGContext, path: UIBezierPath) -> CGRect {
-        path.cgPath.boundingBoxOfPath
+    func frame(context _: SVGContext, path: UIBezierPath?) -> CGRect {
+        path?.cgPath.boundingBoxOfPath ?? .zero
     }
 
     func scale(context: SVGContext) -> CGAffineTransform {
