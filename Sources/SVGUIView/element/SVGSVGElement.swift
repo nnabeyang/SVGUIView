@@ -197,7 +197,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         if case let .url(id) = filter,
            let server = context.filters[id]
         {
-            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
+            server.filter(content: self, context: context, cgContext: context.graphics)
             return
         }
         drawWithoutFilter(context, index: index, depth: depth, mode: mode)

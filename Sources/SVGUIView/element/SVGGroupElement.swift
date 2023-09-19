@@ -78,7 +78,9 @@ struct SVGGroupElement: SVGDrawableElement {
 
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
         context.saveGState()
-        context.concatenate(transform)
+        if mode != .filter(isRoot: true) {
+            context.concatenate(transform)
+        }
         context.setAlpha(opacity)
         let gContext = context.graphics
         gContext.beginTransparencyLayer(auxiliaryInfo: nil)
@@ -107,7 +109,7 @@ struct SVGGroupElement: SVGDrawableElement {
         }
         clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
-            context.contents[index].draw(context, index: index, depth: depth + 1, mode: mode)
+            context.contents[index].draw(context, index: index, depth: depth + 1, mode: mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode)
         }
         switch mode {
         case .root, .filter:
@@ -142,7 +144,7 @@ struct SVGGroupElement: SVGDrawableElement {
         if case let .url(id) = filter,
            let server = context.filters[id]
         {
-            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
+            server.filter(content: self, context: context, cgContext: context.graphics)
             return
         }
         drawWithoutFilter(context, index: index, depth: depth, mode: mode)

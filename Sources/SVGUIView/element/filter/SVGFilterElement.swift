@@ -59,12 +59,12 @@ struct SVGFilterElement: SVGDrawableElement {
         nil
     }
 
-    func filter(content: any SVGDrawableElement, index: Int, context: SVGContext, cgContext: CGContext) {
+    func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) {
         guard let bezierPath = content.toBezierPath(context: context) else { return }
         let frame = content.frame(context: context, path: bezierPath)
         let effectRect = effectRect(frame: frame, context: context)
         guard let imageCgContext = createImageCGContext(rect: effectRect) else { return }
-        guard var srcImage = srcImage(content: content, index: index, graphics: imageCgContext, context: context) else { return }
+        guard var srcImage = srcImage(content: content, graphics: imageCgContext, context: context) else { return }
         guard var format = vImage_CGImageFormat(bitsPerComponent: srcImage.bitsPerComponent,
                                                 bitsPerPixel: srcImage.bitsPerPixel,
                                                 colorSpace: srcImage.colorSpace!,
@@ -138,11 +138,11 @@ struct SVGFilterElement: SVGDrawableElement {
         return cgContext
     }
 
-    private func srcImage(content: any SVGDrawableElement, index: Int, graphics: CGContext, context: SVGContext) -> CGImage? {
+    private func srcImage(content: any SVGDrawableElement, graphics: CGContext, context: SVGContext) -> CGImage? {
         let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
         nestContext.push(viewBox: context.viewBox)
         graphics.saveGState()
-        content.drawWithoutFilter(nestContext, index: index, depth: 0, mode: .filter)
+        content.drawWithoutFilter(nestContext, index: 0, depth: 0, mode: .filter(isRoot: true))
         guard let image = graphics.makeImage() else { return nil }
         graphics.restoreGState()
         return image

@@ -32,7 +32,7 @@ enum WritingMode: String {
 enum DrawMode: Equatable {
     case normal
     case root
-    case filter
+    case filter(isRoot: Bool)
 }
 
 struct SVGBaseElement {
@@ -230,9 +230,7 @@ extension SVGDrawableElement {
 
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth _: Int, mode: DrawMode) {
         context.saveGState()
-        if case .filter = mode {
-            context.concatenate(transform.scale)
-        } else {
+        if mode != .filter(isRoot: true) {
             context.concatenate(transform)
         }
         writingMode.map {
@@ -296,7 +294,7 @@ extension SVGDrawableElement {
         if case let .url(id) = filter,
            let server = context.filters[id]
         {
-            server.filter(content: self, index: index, context: context, cgContext: context.graphics)
+            server.filter(content: self, context: context, cgContext: context.graphics)
             return
         }
         drawWithoutFilter(context, index: index, depth: depth, mode: mode)
