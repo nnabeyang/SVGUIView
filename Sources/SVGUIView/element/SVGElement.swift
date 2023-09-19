@@ -82,7 +82,7 @@ struct SVGBaseElement {
         color = other.color ?? SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         clipPath = other.clipPath
         mask = other.mask
-        filter = other.filter
+        filter = other.filter ?? SVGFilter(description: attributes["filter", default: ""])
         fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
         stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
         opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
