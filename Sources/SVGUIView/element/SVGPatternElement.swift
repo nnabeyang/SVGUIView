@@ -132,17 +132,17 @@ struct SVGPatternElement: SVGDrawableElement {
         return userSpace ? CGSize(width: width, height: height) : CGSize(width: width * frame.width, height: height * frame.height)
     }
 
-    func pattern(path: UIBezierPath, frame: CGRect, context: SVGContext, cgContext: CGContext, isRoot: Bool) -> Bool {
+    func pattern(path: UIBezierPath, frame: CGRect, context: SVGContext, cgContext: CGContext, mode: DrawMode) -> Bool {
         if let parentId = parentId,
            let parent = context.patterns[parentId],
            context.check(patternId: parentId)
         {
             let pattern = SVGPatternElement(lhs: self, rhs: parent)
-            let result = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, isRoot: false)
+            let result = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
             context.remove(patternId: parentId)
             return result
         }
-        guard let tileImage = tileImage(frame: frame, context: context, isRoot: isRoot) else { return false }
+        guard let tileImage = tileImage(frame: frame, context: context, isRoot: mode == .root || mode == .filter) else { return false }
         let drawPattern: CGPatternDrawPatternCallback = { info, context in
             guard let info = info else { return }
             let image = Unmanaged<CGImage>.fromOpaque(info).takeUnretainedValue()
@@ -167,14 +167,19 @@ struct SVGPatternElement: SVGDrawableElement {
             x = (self.x?.value(context: context, mode: .width, userSpace: userSpace) ?? 0) * frame.width + frame.minX
             y = (self.y?.value(context: context, mode: .height, userSpace: userSpace) ?? 0) * frame.height + frame.minY
         }
-        let imageSize = size(frame: frame, context: context).applying((patternTransform ?? .identity).scale)
+        let transform: CGAffineTransform
+        if case .filter = mode {
+            transform = (patternTransform ?? .identity).scaledBy(x: UIScreen.main.scale, y: UIScreen.main.scale)
+        } else {
+            transform = patternTransform ?? .identity
+        }
+        let imageSize = size(frame: frame, context: context).applying(transform.scale)
         let scaleX = (imageSize.width * UIScreen.main.scale) / CGFloat(tileImage.width)
         let scaleY = (imageSize.height * UIScreen.main.scale) / CGFloat(tileImage.height)
-        let transform = (patternTransform ?? .identity).withoutScaling
         guard let pattern = CGPattern(
             info: Unmanaged.passRetained(tileImage).toOpaque(),
             bounds: CGRect(origin: .zero, size: frame.size),
-            matrix: transform
+            matrix: transform.withoutScaling
                 .concatenating(context.transform.translatedBy(x: x * UIScreen.main.scale, y: y * UIScreen.main.scale)
                     .scaledBy(x: scaleX, y: scaleY)),
             xStep: CGFloat(tileImage.width),

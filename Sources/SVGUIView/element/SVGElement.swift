@@ -376,7 +376,7 @@ extension SVGDrawableElement {
             if let pattern = context.patterns[id],
                context.check(patternId: id)
             {
-                _ = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, isRoot: mode == .root)
+                _ = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
                 context.remove(patternId: id)
                 return
             }
