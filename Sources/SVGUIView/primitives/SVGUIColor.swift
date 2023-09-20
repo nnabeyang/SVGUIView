@@ -20,7 +20,6 @@ enum SVGColorType: String {
 
 protocol SVGUIColor: CustomStringConvertible, Codable {
     func toUIColor(opacity: Double) -> UIColor?
-    // var rgba: (red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8) { get }
     var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) { get }
 }
 
@@ -231,20 +230,22 @@ extension SVGColorName: CustomStringConvertible {
 }
 
 struct SVGHexColor: SVGUIColor {
-    let value: String
+    let hex: String
+    let value: UInt64
+    let isShort: Bool
+    let hasAlpha: Bool
+    init?(hex: String) {
+        guard let value = UInt64(hex, radix: 16) else { return nil }
+        self.hex = hex
+        self.value = value
+        let count = hex.count
+        isShort = count <= 4
+        hasAlpha = count == 4 || count == 8
+    }
 
     func toUIColor(opacity: Double) -> UIColor? {
-        let count = value.count
-        let isShort = count <= 4
-        let hasAlpha = count == 4 || count == 8
-        let shift = isShort ? 4 : 8
-        let mask: UInt64 = isShort ? 0xF : 0xFF
-        let base = CGFloat(mask)
-        guard let v = UInt64(value, radix: 16) else { return nil }
-        let a = hasAlpha ? ((v >> (shift * 0)) & mask) : mask
-        let b = (v >> (shift * (hasAlpha ? 1 : 0))) & mask
-        let g = (v >> (shift * (hasAlpha ? 2 : 1))) & mask
-        let r = (v >> (shift * (hasAlpha ? 3 : 2))) & mask
+        let base = CGFloat(isShort ? 0xF : 0xFF)
+        let (r, g, b, a) = rgba
         return UIColor(
             red: CGFloat(r) / base,
             green: CGFloat(g) / base,
@@ -254,16 +255,12 @@ struct SVGHexColor: SVGUIColor {
     }
 
     var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
-        let count = value.count
-        let isShort = count <= 4
-        let hasAlpha = count == 4 || count == 8
         let shift = isShort ? 4 : 8
         let mask: UInt64 = isShort ? 0xF : 0xFF
-        guard let v = UInt64(value, radix: 16) else { return (red: 0, green: 0, blue: 0, alpha: 0xFF) }
-        let alpha = CGFloat(hasAlpha ? ((v >> (shift * 0)) & mask) : mask)
-        let blue = CGFloat((v >> (shift * (hasAlpha ? 1 : 0))) & mask)
-        let green = CGFloat((v >> (shift * (hasAlpha ? 2 : 1))) & mask)
-        let red = CGFloat((v >> (shift * (hasAlpha ? 3 : 2))) & mask)
+        let alpha = CGFloat(hasAlpha ? ((value >> (shift * 0)) & mask) : mask)
+        let blue = CGFloat((value >> (shift * (hasAlpha ? 1 : 0))) & mask)
+        let green = CGFloat((value >> (shift * (hasAlpha ? 2 : 1))) & mask)
+        let red = CGFloat((value >> (shift * (hasAlpha ? 3 : 2))) & mask)
         return (red: red, green: green, blue: blue, alpha: alpha)
     }
 }
@@ -272,7 +269,7 @@ extension SVGHexColor: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode(SVGColorType.hex.rawValue)
-        try container.encode(value)
+        try container.encode(hex)
     }
 
     init(from decoder: Decoder) throws {
@@ -281,7 +278,11 @@ extension SVGHexColor: Codable {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
         }
         precondition(type == .hex)
-        value = try container.decode(String.self)
+        let hex = try container.decode(String.self)
+        guard let color = SVGHexColor(hex: hex) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
+        }
+        self = color
     }
 }
 

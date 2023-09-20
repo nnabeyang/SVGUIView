@@ -78,7 +78,8 @@ struct SVGTextElement: SVGDrawableElement {
                 cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case .url:
-            fatalError()
+            // FIXME: implement url color case
+            break
         }
     }
 

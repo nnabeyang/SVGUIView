@@ -366,7 +366,7 @@ private class ElementIdStack<T: Equatable> {
     var values = [[T]]()
 
     func check(elementId: T) -> Bool {
-        if values.last?.contains(elementId) ?? false {
+        if values.last?.contains(elementId) ?? true {
             return false
         }
         values[values.count - 1].append(elementId)

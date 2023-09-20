@@ -272,6 +272,7 @@ extension SVGAttributeScanner {
         let start = reader.readIndex
         reader.skipHex()
         let end = reader.readIndex
+        guard start != end else { return nil }
         return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
     }
 }
@@ -365,7 +366,7 @@ extension SVGAttributeScanner {
         guard let ascii = reader.consumeWhitespace() else { return nil }
         if ascii == UInt8(ascii: "#") {
             guard let hex = scanHex() else { return nil }
-            return .color(color: SVGHexColor(value: hex), opacity: opacity)
+            return .color(color: SVGHexColor(hex: hex), opacity: opacity)
         }
 
         guard let name = scanIdentity() else {
@@ -398,7 +399,7 @@ extension SVGAttributeScanner {
         guard let ascii = reader.consumeWhitespace() else { return nil }
         if ascii == UInt8(ascii: "#") {
             guard let hex = scanHex() else { return nil }
-            return SVGHexColor(value: hex)
+            return SVGHexColor(hex: hex)
         }
 
         guard let name = scanIdentity() else {

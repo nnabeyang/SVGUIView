@@ -132,13 +132,13 @@ struct BufferReader {
 
     mutating func skipHex() {
         guard let ascii = read() else {
-            preconditionFailure()
+            return
         }
         switch ascii {
         case asciiNumbers, hexCharsLower, hexCharsUpper:
             break
         default:
-            preconditionFailure()
+            return
         }
 
         while true {

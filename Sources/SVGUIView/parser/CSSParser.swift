@@ -121,7 +121,10 @@ extension SVGCSSFill: Codable {
                 switch colorType {
                 case .hex:
                     let value = try nestedContainer.decode(String.self)
-                    self = .color(SVGHexColor(value: value))
+                    guard let color = SVGHexColor(hex: value) else {
+                        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
+                    }
+                    self = .color(color)
                 case .rgb:
                     let r = try nestedContainer.decode(ColorDimension.self)
                     let g = try nestedContainer.decode(ColorDimension.self)
@@ -341,7 +344,8 @@ struct CSSParser {
             case let .ident(name):
                 return .success(CSSDeclaration(type: type, value: .fill(.color(SVGColorName(name: name)))))
             case let .hash(value: hash, _):
-                return .success(CSSDeclaration(type: type, value: .fill(.color(SVGHexColor(value: hash)))))
+                guard let color = SVGHexColor(hex: hash) else { return .failure(.invalid) }
+                return .success(CSSDeclaration(type: type, value: .fill(.color(color))))
             case let .url(hashId):
                 precondition(hashId.hasPrefix("#"))
                 let token = tokenizer.next()

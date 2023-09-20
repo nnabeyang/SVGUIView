@@ -319,7 +319,8 @@ extension SVGDrawableElement {
                 cgContext.setStrokeColor(UIColor.clear.cgColor)
             }
         case .url:
-            fatalError()
+            // TODO: implement url color case
+            break
         }
     }
 
@@ -354,7 +355,17 @@ extension SVGDrawableElement {
         switch fill {
         case .inherit:
             if let fill = context.fill {
-                applySVGFill(fill: fill, path: path, context: context, mode: mode)
+                if case .inherit = fill {
+                    let fill = context.popFill()
+                    if let fill = context.fill {
+                        applySVGFill(fill: fill, path: path, context: context, mode: mode)
+                    }
+                    fill.map {
+                        context.push(fill: $0)
+                    }
+                } else {
+                    applySVGFill(fill: fill, path: path, context: context, mode: mode)
+                }
             } else {
                 cgContext.setFillColor(UIColor.black.cgColor)
                 cgContext.addPath(path.cgPath)

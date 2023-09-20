@@ -100,14 +100,20 @@ struct SVGUseElement: SVGDrawableElement {
         switch mode {
         case .root, .filter:
             context.pushTagIdStack()
+            context.pushClipIdStack()
+            context.pushMaskIdStack()
+            context.pushPatternIdStack()
         default:
             break
         }
         guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
-        newElement.draw(context, index: newIndex, depth: depth + 1, mode: .root)
+        newElement.draw(context, index: newIndex, depth: depth + 1, mode: .normal)
         switch mode {
         case .root, .filter:
             context.popTagIdStack()
+            context.popClipIdStack()
+            context.popMaskIdStack()
+            context.popPatternIdStack()
         default:
             break
         }

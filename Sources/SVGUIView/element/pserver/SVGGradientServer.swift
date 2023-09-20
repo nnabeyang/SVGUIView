@@ -9,10 +9,11 @@ enum SpreadMethod: String {
 
 protocol SVGGradientServer {
     var parentId: String? { get }
+    var parentIds: [String] { get }
     func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
-    init(lhs: Self, rhs: SVGLinearGradientServer)
-    init(lhs: Self, rhs: SVGRadialGradientServer)
+    init?(lhs: Self, rhs: SVGLinearGradientServer)
+    init?(lhs: Self, rhs: SVGRadialGradientServer)
 }
 
 extension SVGGradientServer {
@@ -31,6 +32,7 @@ extension SVGGradientServer {
 struct SVGLinearGradientServer: SVGGradientServer {
     let color: SVGUIColor?
     let stops: [SVGStopElement]?
+    let id: String?
     let parentId: String?
     let userSpace: Bool?
     let spreadMethod: SpreadMethod?
@@ -39,11 +41,14 @@ struct SVGLinearGradientServer: SVGGradientServer {
     let x2: SVGLength?
     let y2: SVGLength?
 
+    let parentIds: [String]
+
     private enum CodingKeys: String, CodingKey {
         case stops
     }
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
+        id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
         x1 = SVGLength(attributes["x1"])
         y1 = SVGLength(attributes["y1"])
         x2 = SVGLength(attributes["x2"])
@@ -54,9 +59,22 @@ struct SVGLinearGradientServer: SVGGradientServer {
         parentId = Self.parseLink(description: attributes["xlink:href"])
         userSpace = attributes["gradientUnits"].flatMap { $0 == "userSpaceOnUse" }
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
+
+        if let parentId = parentId {
+            parentIds = [parentId]
+        } else {
+            parentIds = []
+        }
     }
 
-    init(lhs: Self, rhs: SVGLinearGradientServer) {
+    init?(lhs: Self, rhs: SVGLinearGradientServer) {
+        if let id = lhs.id {
+            guard !rhs.parentIds.contains(id) else { return nil }
+            parentIds = lhs.parentIds + rhs.parentIds
+        } else {
+            parentIds = lhs.parentIds
+        }
+        id = lhs.id
         x1 = lhs.x1 ?? rhs.x1
         y1 = lhs.y1 ?? rhs.y1
         x2 = lhs.x2 ?? rhs.x2
@@ -68,7 +86,14 @@ struct SVGLinearGradientServer: SVGGradientServer {
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     }
 
-    init(lhs: Self, rhs: SVGRadialGradientServer) {
+    init?(lhs: Self, rhs: SVGRadialGradientServer) {
+        if let id = lhs.id {
+            guard !lhs.parentIds.contains(id) else { return nil }
+            parentIds = lhs.parentIds + rhs.parentIds
+        } else {
+            parentIds = lhs.parentIds
+        }
+        id = lhs.id
         x1 = lhs.x1
         y1 = lhs.y1
         x2 = lhs.x2
@@ -109,14 +134,17 @@ struct SVGLinearGradientServer: SVGGradientServer {
             case let .color(color, colorOpacity):
                 let colorOpacity = colorOpacity ?? 1.0
                 return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
-            default:
-                fatalError("not implemented")
+            case .inherit, .url, .none:
+                // TODO: implement inherit, url(...), auto case
+                return nil
             }
         }
         guard !colors.isEmpty else { return }
         let space = CGColorSpaceCreateDeviceRGB()
         let locations: [CGFloat] = stops.map(\.offset.value)
-        let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations)!
+        guard let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else {
+            return
+        }
         let gContext = context.graphics
         gContext.saveGState()
         gContext.addPath(path.cgPath)
@@ -199,7 +227,11 @@ struct SVGRadialGradientServer: SVGGradientServer {
     let stops: [SVGStopElement]?
     let spreadMethod: SpreadMethod?
     let userSpace: Bool?
+
+    let id: String?
     let parentId: String?
+    let parentIds: [String]
+
     let cx: SVGLength?
     let cy: SVGLength?
     let fx: SVGLength?
@@ -211,6 +243,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     }
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
+        id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         cx = SVGLength(attributes["cx"])
         cy = SVGLength(attributes["cy"])
@@ -223,9 +256,18 @@ struct SVGRadialGradientServer: SVGGradientServer {
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
         parentId = Self.parseLink(description: attributes["xlink:href"])
         userSpace = attributes["gradientUnits"].flatMap { $0 == "userSpaceOnUse" }
+
+        parentIds = []
     }
 
-    init(lhs: Self, rhs: SVGRadialGradientServer) {
+    init?(lhs: Self, rhs: SVGRadialGradientServer) {
+        if let id = rhs.id {
+            guard !lhs.parentIds.contains(id) else { return nil }
+            parentIds = lhs.parentIds + [id]
+        } else {
+            parentIds = lhs.parentIds
+        }
+        id = lhs.id
         color = lhs.color ?? rhs.color
         cx = lhs.cx ?? rhs.cx
         cy = lhs.cy ?? rhs.cy
@@ -238,7 +280,14 @@ struct SVGRadialGradientServer: SVGGradientServer {
         userSpace = lhs.userSpace ?? rhs.userSpace
     }
 
-    init(lhs: Self, rhs: SVGLinearGradientServer) {
+    init?(lhs: Self, rhs: SVGLinearGradientServer) {
+        if let id = rhs.id {
+            guard !lhs.parentIds.contains(id) else { return nil }
+            parentIds = lhs.parentIds + [id]
+        } else {
+            parentIds = lhs.parentIds
+        }
+        id = lhs.id
         color = lhs.color ?? rhs.color
         cx = lhs.cx
         cy = lhs.cy
@@ -277,8 +326,9 @@ struct SVGRadialGradientServer: SVGGradientServer {
             case let .color(color, colorOpacity):
                 let colorOpacity = colorOpacity ?? 1.0
                 return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
-            default:
-                fatalError("not implemented")
+            case .inherit, .url, .none:
+                // TODO: implement inherit, url(...), auto case
+                return nil
             }
         }
         guard !colors.isEmpty else { return }
