@@ -95,15 +95,16 @@ struct SVGMaskElement: SVGDrawableElement {
 
         let transform: CGAffineTransform
         let userSpace = userSpace ?? true
-        let t = self.transform
+        let t = self.transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
+
         if userSpace {
-            transform = CGAffineTransform(t.a, t.b, t.c, t.d, t.tx * scale, t.ty * scale)
-                .scaledBy(x: scale, y: scale)
-                .translatedBy(x: -frame.origin.x, y: -frame.origin.y)
+            transform = t
+                .translatedBy(x: -frame.minX, y: -frame.minY)
         } else {
-            transform = CGAffineTransform(t.a, t.b, t.c, t.d, t.tx * scale, t.ty * scale)
-                .scaledBy(x: scale * size.width, y: scale * size.height)
+            transform = t
+                .scaledBy(x: size.width, y: size.height)
         }
+
         let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
         maskContext.push(viewBox: context.viewBox)
         graphics.concatenate(transform)

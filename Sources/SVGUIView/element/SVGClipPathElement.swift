@@ -75,14 +75,14 @@ struct SVGClipPathElement: SVGElement {
 
         let transform: CGAffineTransform
         let userSpace = userSpace ?? true
-        let t = self.transform ?? .identity
+        let t = (self.transform ?? .identity).concatenating(CGAffineTransform(scaleX: scale, y: scale))
+
         if userSpace {
-            transform = CGAffineTransform(t.a, t.b, t.c, t.d, t.tx * scale, t.ty * scale)
-                .scaledBy(x: scale, y: scale)
-                .translatedBy(x: -frame.origin.x, y: -frame.origin.y)
+            transform = t
+                .translatedBy(x: -frame.minX, y: -frame.minY)
         } else {
-            transform = CGAffineTransform(t.a, t.b, t.c, t.d, t.tx * scale, t.ty * scale)
-                .scaledBy(x: scale * size.width, y: scale * size.height)
+            transform = t
+                .scaledBy(x: size.width, y: size.height)
         }
 
         graphics.concatenate(transform)
