@@ -1,7 +1,7 @@
 import Accelerate
 import UIKit
 
-enum SVGPatternContentUnitsType: String {
+enum SVGUnitType: String {
     case userSpaceOnUse
     case objectBoundingBox
 }
@@ -13,7 +13,7 @@ struct SVGPatternElement: SVGDrawableElement {
     let y: SVGLength?
     let width: SVGLength?
     let height: SVGLength?
-    let patternContentUnits: SVGPatternContentUnitsType?
+    let patternContentUnits: SVGUnitType?
     let patternTransform: CGAffineTransform?
     let preserveAspectRatio: PreserveAspectRatio?
     let viewBox: SVGElementRect?
@@ -28,7 +28,7 @@ struct SVGPatternElement: SVGDrawableElement {
     }
 
     let contentIds: [Int]
-    let userSpace: Bool?
+    let patternUnits: SVGUnitType?
 
     init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
         fatalError()
@@ -43,8 +43,8 @@ struct SVGPatternElement: SVGDrawableElement {
         height = SVGLength(style: base.style[.height], value: attributes["height"])
 
         patternTransform = CGAffineTransform(description: attributes["patternTransform", default: ""])
-        userSpace = attributes["patternUnits"].flatMap { $0 == "userSpaceOnUse" }
-        patternContentUnits = SVGPatternContentUnitsType(rawValue: attributes["patternContentUnits", default: ""])
+        patternUnits = SVGUnitType(rawValue: attributes["patternUnits", default: ""])
+        patternContentUnits = SVGUnitType(rawValue: attributes["patternContentUnits", default: ""])
         preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
         viewBox = Self.parseViewBox(attributes["viewBox"])
         parentId = Self.parseLink(description: attributes["href"] ?? attributes["xlink:href"])
@@ -60,7 +60,7 @@ struct SVGPatternElement: SVGDrawableElement {
         width = other.width
         height = other.height
         patternTransform = other.patternTransform
-        userSpace = other.userSpace
+        patternUnits = other.patternUnits
         patternContentUnits = other.patternContentUnits
         preserveAspectRatio = other.preserveAspectRatio
         viewBox = other.viewBox
@@ -76,7 +76,7 @@ struct SVGPatternElement: SVGDrawableElement {
         width = lhs.width ?? rhs.width
         height = lhs.height ?? rhs.height
         patternTransform = lhs.patternTransform ?? rhs.patternTransform
-        userSpace = lhs.userSpace ?? rhs.userSpace
+        patternUnits = lhs.patternUnits ?? rhs.patternUnits
         patternContentUnits = lhs.patternContentUnits ?? rhs.patternContentUnits
         preserveAspectRatio = lhs.preserveAspectRatio ?? rhs.preserveAspectRatio
         viewBox = lhs.viewBox ?? rhs.viewBox
@@ -126,10 +126,15 @@ struct SVGPatternElement: SVGDrawableElement {
     }
 
     func size(frame: CGRect, context: SVGContext) -> CGSize {
-        let userSpace = userSpace ?? false
-        let width = width?.value(context: context, mode: .width, userSpace: userSpace) ?? 0
-        let height = height?.value(context: context, mode: .height, userSpace: userSpace) ?? 0
-        return userSpace ? CGSize(width: width, height: height) : CGSize(width: width * frame.width, height: height * frame.height)
+        let patternUnits = patternUnits ?? .objectBoundingBox
+        let width = width?.value(context: context, mode: .width, unitType: patternUnits) ?? 0
+        let height = height?.value(context: context, mode: .height, unitType: patternUnits) ?? 0
+        switch patternUnits {
+        case .userSpaceOnUse:
+            return CGSize(width: width, height: height)
+        case .objectBoundingBox:
+            return CGSize(width: width * frame.width, height: height * frame.height)
+        }
     }
 
     func pattern(path: UIBezierPath, frame: CGRect, context: SVGContext, cgContext: CGContext, mode: DrawMode) -> Bool {
@@ -159,14 +164,16 @@ struct SVGPatternElement: SVGDrawableElement {
         )
         let x: CGFloat
         let y: CGFloat
-        let userSpace = userSpace ?? false
-        if userSpace {
-            x = self.x?.value(context: context, mode: .width) ?? 0
-            y = self.y?.value(context: context, mode: .height) ?? 0
-        } else {
-            x = (self.x?.value(context: context, mode: .width, userSpace: userSpace) ?? 0) * frame.width + frame.minX
-            y = (self.y?.value(context: context, mode: .height, userSpace: userSpace) ?? 0) * frame.height + frame.minY
+        let patternUnits = patternUnits ?? .objectBoundingBox
+        switch patternUnits {
+        case .userSpaceOnUse:
+            x = self.x?.value(context: context, mode: .width, unitType: patternUnits) ?? 0
+            y = self.y?.value(context: context, mode: .height, unitType: patternUnits) ?? 0
+        case .objectBoundingBox:
+            x = (self.x?.value(context: context, mode: .width, unitType: patternUnits) ?? 0) * frame.width + frame.minX
+            y = (self.y?.value(context: context, mode: .height, unitType: patternUnits) ?? 0) * frame.height + frame.minY
         }
+
         let transform: CGAffineTransform
         if case .filter = mode {
             transform = (patternTransform ?? .identity).scaledBy(x: UIScreen.main.scale, y: UIScreen.main.scale)
@@ -219,7 +226,7 @@ struct SVGPatternElement: SVGDrawableElement {
         }
 
         let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, other: context)
-        let patternContentUnits: SVGPatternContentUnitsType
+        let patternContentUnits: SVGUnitType
         if viewBox != nil {
             patternContentUnits = .userSpaceOnUse
         } else {

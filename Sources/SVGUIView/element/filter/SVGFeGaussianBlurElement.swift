@@ -164,13 +164,13 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
             free(data)
         }
         let stdDeviation = stdDeviation ?? .zero
-        let userSpace = (filter.primitiveUnits ?? .userSpaceOnUse) == .userSpaceOnUse
+        let unitType = filter.primitiveUnits ?? .userSpaceOnUse
         var buffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
         inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &buffer)
         switch stdDeviation {
         case let .hetero(x, y):
-            let x = x.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace)
-            let y = y.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace)
+            let x = x.calculatedLength(frame: frame, context: context, mode: .width, unitType: unitType)
+            let y = y.calculatedLength(frame: frame, context: context, mode: .height, unitType: unitType)
             guard x >= 0, y >= 0 else {
                 swap(&inputBuffer, &destBuffer)
                 break
@@ -185,7 +185,7 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
                 applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
             }
         case let .iso(x):
-            let x = x.calculatedLength(frame: frame, context: context, mode: .other, userSpace: userSpace)
+            let x = x.calculatedLength(frame: frame, context: context, mode: .other, unitType: unitType)
             guard x >= 0 else {
                 swap(&buffer, &destBuffer)
                 break

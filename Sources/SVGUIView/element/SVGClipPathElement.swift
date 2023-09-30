@@ -7,7 +7,7 @@ struct SVGClipPathElement: SVGElement {
 
     let contentIds: [Int]
     let transform: CGAffineTransform?
-    let userSpace: Bool?
+    let clipPathUnits: SVGUnitType?
     let clipRule: Bool?
     let clipPath: SVGClipPath?
     let id: String?
@@ -16,7 +16,7 @@ struct SVGClipPathElement: SVGElement {
     init(attributes: [String: String], contentIds: [Int]) {
         id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
         index = nil
-        userSpace = attributes["clipPathUnits"].flatMap { $0 == "userSpaceOnUse" }
+        clipPathUnits = SVGUnitType(rawValue: attributes["clipPathUnits", default: ""])
         clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
         clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
         transform = CGAffineTransform(description: attributes["transform", default: ""])
@@ -26,7 +26,7 @@ struct SVGClipPathElement: SVGElement {
     init(other: Self, index: Int, css _: SVGUIStyle) {
         id = other.id
         self.index = index
-        userSpace = other.userSpace
+        clipPathUnits = other.clipPathUnits
         clipRule = other.clipRule
         clipPath = other.clipPath
         transform = other.transform
@@ -36,7 +36,7 @@ struct SVGClipPathElement: SVGElement {
     init(other: Self, clipRule: Bool?) {
         id = other.id
         index = other.index
-        userSpace = other.userSpace
+        clipPathUnits = other.clipPathUnits
         self.clipRule = other.clipRule ?? clipRule
         clipPath = other.clipPath
         contentIds = other.contentIds
@@ -74,13 +74,14 @@ struct SVGClipPathElement: SVGElement {
         }
 
         let transform: CGAffineTransform
-        let userSpace = userSpace ?? true
+        let clipPathUnits = clipPathUnits ?? .userSpaceOnUse
         let t = (self.transform ?? .identity).concatenating(CGAffineTransform(scaleX: scale, y: scale))
 
-        if userSpace {
+        switch clipPathUnits {
+        case .userSpaceOnUse:
             transform = t
                 .translatedBy(x: -frame.minX, y: -frame.minY)
-        } else {
+        case .objectBoundingBox:
             transform = t
                 .scaledBy(x: size.width, y: size.height)
         }
@@ -120,10 +121,11 @@ struct SVGClipPathElement: SVGElement {
     @available(iOS 16.0, *)
     func toBezierPath(context: SVGContext, frame: CGRect) -> UIBezierPath {
         let transform: CGAffineTransform
-        let userSpace = userSpace ?? true
-        if userSpace {
+        let clipPathUnits = clipPathUnits ?? .userSpaceOnUse
+        switch clipPathUnits {
+        case .userSpaceOnUse:
             transform = self.transform ?? .identity
-        } else {
+        case .objectBoundingBox:
             transform = (self.transform ?? .identity)
                 .translatedBy(x: frame.origin.x, y: frame.origin.y)
                 .scaledBy(x: frame.width, y: frame.height)

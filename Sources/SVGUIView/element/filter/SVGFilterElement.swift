@@ -1,19 +1,14 @@
 import Accelerate
 import UIKit
 
-enum SVGPrimitiveUnitsType: String {
-    case userSpaceOnUse
-    case objectBoundingBox
-}
-
 struct SVGFilterElement: SVGDrawableElement {
     var base: SVGBaseElement
     let x: SVGLength?
     let y: SVGLength?
     let width: SVGLength?
     let height: SVGLength?
-    let userSpace: Bool?
-    let primitiveUnits: SVGPrimitiveUnitsType?
+    let filterUnits: SVGUnitType?
+    let primitiveUnits: SVGUnitType?
 
     let colorInterpolation: SVGColorInterpolation?
     let colorInterpolationFilters: SVGColorInterpolation?
@@ -40,8 +35,8 @@ struct SVGFilterElement: SVGDrawableElement {
         y = .init(attributes["y"])
         width = SVGLength(style: base.style[.width], value: attributes["width"])
         height = SVGLength(style: base.style[.height], value: attributes["height"])
-        userSpace = attributes["filterUnits"].flatMap { $0 == "userSpaceOnUse" }
-        primitiveUnits = SVGPrimitiveUnitsType(rawValue: attributes["primitiveUnits", default: ""])
+        filterUnits = SVGUnitType(rawValue: attributes["filterUnits", default: ""])
+        primitiveUnits = SVGUnitType(rawValue: attributes["primitiveUnits", default: ""])
         self.contentIds = contentIds
     }
 
@@ -53,7 +48,7 @@ struct SVGFilterElement: SVGDrawableElement {
         y = other.y
         width = other.width
         height = other.height
-        userSpace = other.userSpace
+        filterUnits = other.filterUnits
         primitiveUnits = other.primitiveUnits
         contentIds = other.contentIds
     }
@@ -103,11 +98,11 @@ struct SVGFilterElement: SVGDrawableElement {
     }
 
     private func effectRect(frame: CGRect, context: SVGContext) -> CGRect {
-        let userSpace = userSpace ?? false
-        let x = x?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace, isPosition: true) ?? (frame.minX - 0.1 * frame.width)
-        let y = y?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace, isPosition: true) ?? (frame.minY - 0.1 * frame.height)
-        let width = width?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace) ?? 1.2 * frame.width
-        let height = height?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace) ?? 1.2 * frame.height
+        let filterUnits = filterUnits ?? .objectBoundingBox
+        let x = x?.calculatedLength(frame: frame, context: context, mode: .width, unitType: filterUnits, isPosition: true) ?? (frame.minX - 0.1 * frame.width)
+        let y = y?.calculatedLength(frame: frame, context: context, mode: .height, unitType: filterUnits, isPosition: true) ?? (frame.minY - 0.1 * frame.height)
+        let width = width?.calculatedLength(frame: frame, context: context, mode: .width, unitType: filterUnits) ?? 1.2 * frame.width
+        let height = height?.calculatedLength(frame: frame, context: context, mode: .height, unitType: filterUnits) ?? 1.2 * frame.height
         return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
     }
 

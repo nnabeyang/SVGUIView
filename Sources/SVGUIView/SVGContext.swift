@@ -15,7 +15,7 @@ struct SVGContext: SVGLengthContext {
 
     private let startDetectingCyclesAfter: Int
     private let viewBoxStack: Stack<CGRect> = Stack()
-    private let patternContentUnitStack = Stack<SVGPatternContentUnitsType>()
+    private let patternContentUnitStack = Stack<SVGUnitType>()
     private let fontStack: Stack<SVGUIFont> = Stack()
     private let writingModeStack = Stack<WritingMode>()
     private let fillStack: Stack<SVGFill> = Stack()
@@ -96,7 +96,7 @@ struct SVGContext: SVGLengthContext {
         viewBox.size
     }
 
-    var patternContentUnit: SVGPatternContentUnitsType? {
+    var patternContentUnit: SVGUnitType? {
         patternContentUnitStack.last
     }
 
@@ -196,7 +196,7 @@ struct SVGContext: SVGLengthContext {
         viewBoxStack.push(viewBox)
     }
 
-    func push(patternContentUnit: SVGPatternContentUnitsType) {
+    func push(patternContentUnit: SVGUnitType) {
         patternContentUnitStack.push(patternContentUnit)
     }
 
@@ -232,7 +232,7 @@ struct SVGContext: SVGLengthContext {
     }
 
     @discardableResult
-    func popPatternContentUnit() -> SVGPatternContentUnitsType? {
+    func popPatternContentUnit() -> SVGUnitType? {
         patternContentUnitStack.pop()
     }
 

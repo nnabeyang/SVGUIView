@@ -70,10 +70,19 @@ struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
     }
 
     func transform(filter: SVGFilterElement, frame: CGRect) -> CGAffineTransform {
-        let primitiveUnits = (filter.primitiveUnits ?? .userSpaceOnUse) == .userSpaceOnUse
+        let primitiveUnits = filter.primitiveUnits ?? .userSpaceOnUse
         let dx = dx ?? 0
         let dy = dy ?? 0
-        return CGAffineTransform(translationX: primitiveUnits ? dx : dx * frame.width, y: primitiveUnits ? dy : dy * frame.height)
+        let x, y: CGFloat
+        switch primitiveUnits {
+        case .userSpaceOnUse:
+            x = dx
+            y = dy
+        case .objectBoundingBox:
+            x = dx * frame.width
+            y = dy * frame.height
+        }
+        return CGAffineTransform(translationX: x, y: y)
     }
 }
 

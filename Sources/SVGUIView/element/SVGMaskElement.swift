@@ -23,7 +23,7 @@ struct SVGMaskElement: SVGDrawableElement {
     }
 
     let contentIds: [Int]
-    let userSpace: Bool?
+    let maskContentUnits: SVGUnitType?
 
     init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
         fatalError()
@@ -36,7 +36,7 @@ struct SVGMaskElement: SVGDrawableElement {
         y = .init(attributes["y"])
         width = SVGLength(style: base.style[.width], value: attributes["width"])
         height = SVGLength(style: base.style[.height], value: attributes["height"])
-        userSpace = attributes["maskContentUnits"].flatMap { $0 == "userSpaceOnUse" }
+        maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
         self.contentIds = contentIds
     }
 
@@ -47,7 +47,7 @@ struct SVGMaskElement: SVGDrawableElement {
         y = other.y
         width = other.width
         height = other.height
-        userSpace = other.userSpace
+        maskContentUnits = other.maskContentUnits
         contentIds = other.contentIds
     }
 
@@ -94,13 +94,14 @@ struct SVGMaskElement: SVGDrawableElement {
         }
 
         let transform: CGAffineTransform
-        let userSpace = userSpace ?? true
+        let maskContentUnits = maskContentUnits ?? .userSpaceOnUse
         let t = self.transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
 
-        if userSpace {
+        switch maskContentUnits {
+        case .userSpaceOnUse:
             transform = t
                 .translatedBy(x: -frame.minX, y: -frame.minY)
-        } else {
+        case .objectBoundingBox:
             transform = t
                 .scaledBy(x: size.width, y: size.height)
         }

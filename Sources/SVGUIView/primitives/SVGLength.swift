@@ -221,27 +221,50 @@ enum SVGLength: Equatable {
         return nil
     }
 
-    func calculatedLength(frame: CGRect, context: SVGLengthContext, mode: SVGLengthMode, userSpace: Bool = true, isPosition: Bool = false) -> CGFloat {
-        let value = value(context: context, mode: mode, userSpace: userSpace)
+    func calculatedLength(frame: CGRect, context: SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse, isPosition: Bool = false) -> CGFloat {
+        let value = value(context: context, mode: mode, unitType: unitType)
         let viewBoxSize = context.viewBoxSize
         switch mode {
         case .height:
-            let dy = userSpace ? min(value, 1.2 * viewBoxSize.height) : frame.height * value
-            return (!userSpace && isPosition) ? frame.minY + dy : dy
+            let dy: CGFloat
+            switch unitType {
+            case .userSpaceOnUse:
+                return min(value, 1.2 * viewBoxSize.height)
+            case .objectBoundingBox:
+                dy = frame.height * value
+                return isPosition ? frame.minY + dy : dy
+            }
         case .width:
-            let dx = userSpace ? min(value, 1.2 * viewBoxSize.width) : frame.width * value
-            return (!userSpace && isPosition) ? frame.minX + dx : dx
+            let dx: CGFloat
+            switch unitType {
+            case .userSpaceOnUse:
+                return min(value, 1.2 * viewBoxSize.width)
+            case .objectBoundingBox:
+                dx = frame.width * value
+                return isPosition ? frame.minX + dx : dx
+            }
         case .other:
             let c = sqrt(pow(viewBoxSize.width, 2) + pow(viewBoxSize.height, 2)) / sqrt(2)
-            return userSpace ? min(value, 1.2 * c) : c * value
+            switch unitType {
+            case .userSpaceOnUse:
+                return min(value, 1.2 * c)
+            case .objectBoundingBox:
+                return c * value
+            }
         }
     }
 
-    func value(context: SVGLengthContext, mode: SVGLengthMode, userSpace: Bool = true) -> CGFloat {
+    func value(context: SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse) -> CGFloat {
         switch self {
         case let .percent(percent):
             let total: CGFloat
-            let size = userSpace ? context.viewBoxSize : CGSize(width: 1, height: 1)
+            let size: CGSize
+            switch unitType {
+            case .userSpaceOnUse:
+                size = context.viewBoxSize
+            case .objectBoundingBox:
+                size = CGSize(width: 1, height: 1)
+            }
             switch mode {
             case .height:
                 total = size.height

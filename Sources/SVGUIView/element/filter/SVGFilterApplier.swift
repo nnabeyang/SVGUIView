@@ -23,19 +23,19 @@ extension SVGFilterApplier {
     }
 
     func frame(filter: SVGFilterElement, frame: CGRect, context: SVGContext) -> CGRect {
-        let primitiveUnits = (filter.primitiveUnits ?? .userSpaceOnUse) == .userSpaceOnUse
-        let userSpace = filter.userSpace ?? false
-        let x = x?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: primitiveUnits, isPosition: true) ??
-            filter.x?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: userSpace, isPosition: true) ??
+        let primitiveUnits = filter.primitiveUnits ?? .userSpaceOnUse
+        let filterUnits = filter.filterUnits ?? .objectBoundingBox
+        let x = x?.calculatedLength(frame: frame, context: context, mode: .width, unitType: primitiveUnits, isPosition: true) ??
+            filter.x?.calculatedLength(frame: frame, context: context, mode: .width, unitType: filterUnits, isPosition: true) ??
             (frame.minX - 0.1 * frame.width)
-        let y = y?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: primitiveUnits, isPosition: true) ??
-            filter.y?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace, isPosition: true) ??
+        let y = y?.calculatedLength(frame: frame, context: context, mode: .height, unitType: primitiveUnits, isPosition: true) ??
+            filter.y?.calculatedLength(frame: frame, context: context, mode: .height, unitType: filterUnits, isPosition: true) ??
             (frame.minY - 0.1 * frame.height)
-        let width = width?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: primitiveUnits) ??
-            filter.width?.calculatedLength(frame: frame, context: context, mode: .width, userSpace: filter.userSpace ?? false) ??
+        let width = width?.calculatedLength(frame: frame, context: context, mode: .width, unitType: primitiveUnits) ??
+            filter.width?.calculatedLength(frame: frame, context: context, mode: .width, unitType: filterUnits) ??
             1.2 * frame.width
-        let height = height?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: primitiveUnits) ??
-            filter.height?.calculatedLength(frame: frame, context: context, mode: .height, userSpace: userSpace) ??
+        let height = height?.calculatedLength(frame: frame, context: context, mode: .height, unitType: primitiveUnits) ??
+            filter.height?.calculatedLength(frame: frame, context: context, mode: .height, unitType: filterUnits) ??
             1.2 * frame.height
         return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
     }
