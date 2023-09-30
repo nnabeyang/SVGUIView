@@ -71,7 +71,7 @@ struct SVGGroupElement: SVGDrawableElement {
         var rect: CGRect = .zero
         for index in contentIds {
             guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            rect = CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform))
+            rect = CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
         }
         return rect
     }
@@ -79,7 +79,7 @@ struct SVGGroupElement: SVGDrawableElement {
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
         context.saveGState()
         if mode != .filter(isRoot: true) {
-            context.concatenate(transform)
+            context.concatenate(transform ?? .identity)
         }
         context.setAlpha(opacity)
         let gContext = context.graphics

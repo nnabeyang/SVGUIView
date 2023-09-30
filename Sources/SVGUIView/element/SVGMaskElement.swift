@@ -123,7 +123,7 @@ struct SVGMaskElement: SVGDrawableElement {
             }
             guard let bezierPath = content.toBezierPath(context: context) else { continue }
             graphics.saveGState()
-            graphics.concatenate(content.transform)
+            graphics.concatenate(content.transform ?? .identity)
             content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
             content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
             content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext, mode: .root)

@@ -101,7 +101,9 @@ struct SVGClipPathElement: SVGElement {
             }
             guard let bezierPath = content.toBezierPath(context: context) else { continue }
             graphics.saveGState()
-            graphics.concatenate(content.transform)
+            content.transform.map {
+                graphics.concatenate($0)
+            }
 
             content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
             let clipRule = content.clipRule ?? clipRule ?? false
@@ -141,7 +143,7 @@ struct SVGClipPathElement: SVGElement {
                 continue
             }
             guard let bezierPath = content.toClippedBezierPath(context: context) else { continue }
-            bezierPath.apply(content.transform.concatenating(transform))
+            bezierPath.apply((content.transform ?? .identity).concatenating(transform))
             var tpath = bezierPath.cgPath
             let clipRule = content.clipRule ?? clipRule ?? false
             if case let .url(id) = content.clipPath,

@@ -42,7 +42,7 @@ struct SVGBaseElement {
     let eoFill: Bool
     let clipRule: Bool?
     let className: String?
-    let transform: CGAffineTransform
+    let transform: CGAffineTransform?
     let fill: SVGFill?
     let stroke: SVGUIStroke
     let color: SVGUIColor?
@@ -86,8 +86,11 @@ struct SVGBaseElement {
         fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
         stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
         opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
-        transform = other.transform.concatenating(
-            CGAffineTransform(description: attributes["transform", default: ""]))
+
+        let transform = CGAffineTransform(description: attributes["transform", default: ""])
+            .flatMap { other.transform?.concatenating($0) ?? $0 } ??
+            other.transform
+        self.transform = transform
         writingMode = other.writingMode
         eoFill = other.eoFill
         clipRule = other.clipRule
@@ -126,7 +129,7 @@ protocol SVGDrawableElement: SVGElement {
     var eoFill: Bool { get }
     var clipRule: Bool? { get }
     var className: String? { get }
-    var transform: CGAffineTransform { get }
+    var transform: CGAffineTransform? { get }
     var writingMode: WritingMode? { get }
     var fill: SVGFill? { get }
     var stroke: SVGUIStroke { get }
@@ -155,7 +158,7 @@ extension SVGDrawableElement {
     var eoFill: Bool { base.eoFill }
     var clipRule: Bool? { base.clipRule }
     var className: String? { base.className }
-    var transform: CGAffineTransform { base.transform }
+    var transform: CGAffineTransform? { base.transform }
     var writingMode: WritingMode? { base.writingMode }
     var fill: SVGFill? { base.fill }
     var stroke: SVGUIStroke { base.stroke }
@@ -231,7 +234,7 @@ extension SVGDrawableElement {
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth _: Int, mode: DrawMode) {
         context.saveGState()
         if mode != .filter(isRoot: true) {
-            context.concatenate(transform)
+            context.concatenate(transform ?? .identity)
         }
         writingMode.map {
             context.push(writingMode: $0)

@@ -97,7 +97,7 @@ struct SVGFilterElement: SVGDrawableElement {
             inputImage = clippedImage
         }
         cgContext.saveGState()
-        cgContext.concatenate(content.transform)
+        cgContext.concatenate(content.transform ?? .identity)
         cgContext.draw(inputImage, in: effectRect)
         cgContext.restoreGState()
     }

@@ -1,12 +1,13 @@
 import CoreGraphics
 
 extension CGAffineTransform {
-    init(style: CSSValue?, description: String) {
+    init?(style: CSSValue?, description: String) {
         if case let .transform(value) = style {
             self = value
             return
         }
-        self = .init(description: description)
+        guard let transform = CGAffineTransform(description: description) else { return nil }
+        self = transform
     }
 
     init?(style: CSSValue?) {
@@ -17,13 +18,14 @@ extension CGAffineTransform {
         return nil
     }
 
-    init(description: String) {
+    init?(description: String) {
         var data = description
         let ops = data.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
             var parser = SVGAttributeScanner(bytes: bytes)
             return parser.scanTransform()
         }
+        guard !ops.isEmpty else { return nil }
         var transform: CGAffineTransform = .identity
         for op in ops {
             op.apply(transform: &transform)
