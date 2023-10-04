@@ -147,7 +147,9 @@ struct SVGPatternElement: SVGDrawableElement {
             context.remove(patternId: parentId)
             return result
         }
-        guard let tileImage = tileImage(frame: frame, context: context, isRoot: mode == .root || mode == .filter(isRoot: true)) else { return false }
+        let transform = patternTransform ?? .identity
+        let imageSize = size(frame: frame, context: context).applying(transform.scale)
+        guard let tileImage = tileImage(frame: frame, context: context, size: imageSize, transform: transform, isRoot: mode == .root || mode == .filter(isRoot: true)) else { return false }
         let drawPattern: CGPatternDrawPatternCallback = { info, context in
             guard let info = info else { return }
             let image = Unmanaged<CGImage>.fromOpaque(info).takeUnretainedValue()
@@ -174,8 +176,6 @@ struct SVGPatternElement: SVGDrawableElement {
             y = (self.y?.value(context: context, mode: .height, unitType: patternUnits) ?? 0) * frame.height + frame.minY
         }
 
-        let transform = patternTransform ?? .identity
-        let imageSize = size(frame: frame, context: context).applying(transform.scale)
         let scaleX = imageSize.width / CGFloat(tileImage.width)
         let scaleY = imageSize.height / CGFloat(tileImage.height)
         guard let pattern = CGPattern(
@@ -201,11 +201,8 @@ struct SVGPatternElement: SVGDrawableElement {
         return true
     }
 
-    private func tileImage(frame: CGRect, context: SVGContext, isRoot: Bool) -> CGImage? {
-        let transform = (patternTransform ?? .identity).scale
+    private func tileImage(frame: CGRect, context: SVGContext, size: CGSize, transform: CGAffineTransform, isRoot: Bool) -> CGImage? {
         let scale = UIScreen.main.scale
-        let size = size(frame: frame, context: context).applying(transform)
-
         let frameWidth = Int((size.width * scale).rounded(.up))
         let frameHeight = Int((size.height * scale).rounded(.up))
         if frameWidth == 0 || frameHeight == 0 { return nil }
@@ -232,7 +229,7 @@ struct SVGPatternElement: SVGDrawableElement {
         defer {
             maskContext.popPatternContentUnit()
         }
-        graphics.concatenate(transform.scaledBy(x: scale, y: scale))
+        graphics.concatenate(transform.scaledBy(x: scale, y: scale).scale)
         switch patternContentUnits {
         case .userSpaceOnUse:
             if let viewBox = viewBox?.toCGRect() {
