@@ -73,7 +73,6 @@ struct SVGContext: SVGLengthContext {
 
     var transform: CGAffineTransform {
         graphics.ctm.concatenating(initCtm.inverted())
-            .scaledBy(x: 1 / UIScreen.main.scale, y: 1 / UIScreen.main.scale)
     }
 
     subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {

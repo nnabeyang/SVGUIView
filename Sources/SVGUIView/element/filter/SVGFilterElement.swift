@@ -72,8 +72,12 @@ struct SVGFilterElement: SVGDrawableElement {
         let frame = content.frame(context: context, path: bezierPath)
         let effectRect = effectRect(frame: frame, context: context)
         guard let imageCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
-              let srcImage = srcImage(content: content, graphics: imageCgContext, context: context),
+              let srcImage = srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),
               let filterCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB) else { return }
+        let scale = UIScreen.main.scale
+        let transform = CGAffineTransform(scaleX: scale, y: scale)
+            .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
+        filterCgContext.concatenate(transform)
         filterCgContext.saveGState()
         var results = [String: CGImage]()
         var inputImage = srcImage
@@ -118,16 +122,16 @@ struct SVGFilterElement: SVGDrawableElement {
                                   bytesPerRow: bytesPerRow,
                                   space: colorSpace(colorInterpolation: colorInterpolation),
                                   bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-        cgContext.map {
-            let transform = CGAffineTransform(scaleX: scale, y: scale)
-                .translatedBy(x: -rect.minX, y: -rect.minY)
-            $0.concatenate(transform)
-        }
         return cgContext
     }
 
-    private func srcImage(content: any SVGDrawableElement, graphics: CGContext, context: SVGContext) -> CGImage? {
+    private func srcImage(content: any SVGDrawableElement, graphics: CGContext, rect: CGRect, context: SVGContext) -> CGImage? {
         let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
+        let scale = UIScreen.main.scale
+        let transform = CGAffineTransform(scaleX: scale, y: scale)
+            .translatedBy(x: -rect.minX, y: -rect.minY)
+        graphics.concatenate(transform)
+
         nestContext.push(viewBox: context.viewBox)
         graphics.saveGState()
         content.drawWithoutFilter(nestContext, index: 0, depth: 0, mode: .filter(isRoot: true))
