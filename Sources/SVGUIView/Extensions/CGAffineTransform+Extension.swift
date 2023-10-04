@@ -34,8 +34,9 @@ extension CGAffineTransform {
     }
 
     var scale: CGAffineTransform {
-        let scale = sqrt(pow(a, 2) + pow(b, 2))
-        return CGAffineTransform(scaleX: scale, y: scale)
+        let scaleX = sqrt(pow(a, 2) + pow(c, 2))
+        let scaleY = sqrt(pow(b, 2) + pow(d, 2))
+        return CGAffineTransform(scaleX: scaleX, y: scaleY)
     }
 
     var withoutScaling: CGAffineTransform {
