@@ -47,7 +47,7 @@ struct SVGPatternElement: SVGDrawableElement {
         patternContentUnits = SVGUnitType(rawValue: attributes["patternContentUnits", default: ""])
         preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
         viewBox = Self.parseViewBox(attributes["viewBox"])
-        parentId = Self.parseLink(description: attributes["href"] ?? attributes["xlink:href"])
+        parentId = Self.parseLink(description: attributes["href"])
 
         self.contentIds = contentIds
     }

@@ -81,6 +81,23 @@ final class Parser: NSObject {
 }
 
 extension Parser: XMLParserDelegate {
+    private func filter(attributes oldValue: [String: String]) -> [String: String] {
+        var attributes = [String: String]()
+        for element in oldValue {
+            let a = element.key.components(separatedBy: ":")
+            guard a.count == 2 else {
+                attributes[element.key] = element.value
+                continue
+            }
+            let prefix = a[0]
+            let attributeName = a[1]
+            if case .xlink = nameSpaces[prefix]?.ns, attributeName == "href" {
+                attributes[attributeName] = element.value
+            }
+        }
+        return attributes
+    }
+
     func parser(_: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
         let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
         if !countList.isEmpty {
@@ -113,78 +130,79 @@ extension Parser: XMLParserDelegate {
               let element = stack.popLast(),
               let count = countList.popLast() else { return }
         precondition(name == element.name)
+        let attributes = filter(attributes: element.attributes)
         let content: SVGElement? = {
             switch element.name {
             case .svg:
-                let element = SVGSVGElement(attributes: element.attributes,
+                let element = SVGSVGElement(attributes: attributes,
                                             contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .g:
-                let element = SVGGroupElement(attributes: element.attributes,
+                let element = SVGGroupElement(attributes: attributes,
                                               contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .clipPath:
-                let element = SVGClipPathElement(attributes: element.attributes,
+                let element = SVGClipPathElement(attributes: attributes,
                                                  contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .mask:
-                let element = SVGMaskElement(attributes: element.attributes,
+                let element = SVGMaskElement(attributes: attributes,
                                              contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .pattern:
-                let element = SVGPatternElement(attributes: element.attributes,
+                let element = SVGPatternElement(attributes: attributes,
                                                 contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .filter:
-                let element = SVGFilterElement(attributes: element.attributes,
+                let element = SVGFilterElement(attributes: attributes,
                                                contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .feMerge:
-                return SVGFeMergeElement(attributes: element.attributes,
+                return SVGFeMergeElement(attributes: attributes,
                                          contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .feGaussianBlur:
-                return SVGFeGaussianBlurElement(attributes: element.attributes)
+                return SVGFeGaussianBlurElement(attributes: attributes)
             case .feFlood:
-                return SVGFeFloodElement(attributes: element.attributes)
+                return SVGFeFloodElement(attributes: attributes)
             case .feBlend:
-                return SVGFeBlendElement(attributes: element.attributes)
+                return SVGFeBlendElement(attributes: attributes)
             case .feOffset:
-                return SVGFeOffsetElement(attributes: element.attributes)
+                return SVGFeOffsetElement(attributes: attributes)
             case .feMergeNode:
-                return SVGFeMergeNodeElement(attributes: element.attributes)
+                return SVGFeMergeNodeElement(attributes: attributes)
             case .text:
-                return SVGTextElement(text: text, attributes: element.attributes)
+                return SVGTextElement(text: text, attributes: attributes)
             case .image:
-                return SVGImageElement(text: text, attributes: element.attributes)
+                return SVGImageElement(text: text, attributes: attributes)
             case .line:
-                return SVGLineElement(text: text, attributes: element.attributes)
+                return SVGLineElement(text: text, attributes: attributes)
             case .circle:
-                return SVGCircleElement(text: text, attributes: element.attributes)
+                return SVGCircleElement(text: text, attributes: attributes)
             case .ellipse:
-                return SVGEllipseElement(text: text, attributes: element.attributes)
+                return SVGEllipseElement(text: text, attributes: attributes)
             case .rect:
-                return SVGRectElement(text: text, attributes: element.attributes)
+                return SVGRectElement(text: text, attributes: attributes)
             case .path:
-                return SVGPathElement(text: text, attributes: element.attributes)
+                return SVGPathElement(text: text, attributes: attributes)
             case .polyline:
-                return SVGPolylineElement(text: text, attributes: element.attributes)
+                return SVGPolylineElement(text: text, attributes: attributes)
             case .polygon:
-                return SVGPolygonElement(text: text, attributes: element.attributes)
+                return SVGPolygonElement(text: text, attributes: attributes)
             case .stop:
-                return SVGStopElement(attributes: element.attributes)
+                return SVGStopElement(attributes: attributes)
             case .use:
-                return SVGUseElement(attributes: element.attributes, contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGUseElement(attributes: attributes, contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .unknown:
                 if !countList.isEmpty {
                     countList[countList.count - 1] -= 1
                 }
                 return nil
             case .defs:
-                let element = SVGDefsElement(attributes: element.attributes,
+                let element = SVGDefsElement(attributes: attributes,
                                              contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 return element
             case .linearGradient:
-                let pserver = SVGLinearGradientServer(attributes: element.attributes,
+                let pserver = SVGLinearGradientServer(attributes: attributes,
                                                       contents: Array(contents.dropFirst(contents.count - count + 1)))
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
@@ -194,7 +212,7 @@ extension Parser: XMLParserDelegate {
                 }
                 return nil
             case .radialGradient:
-                let pserver = SVGRadialGradientServer(attributes: element.attributes,
+                let pserver = SVGRadialGradientServer(attributes: attributes,
                                                       contents: Array(contents.dropFirst(contents.count - count + 1)))
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver

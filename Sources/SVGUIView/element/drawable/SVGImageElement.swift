@@ -14,7 +14,7 @@ struct SVGImageElement: SVGDrawableElement {
 
     init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
         self.base = base
-        let src = (attributes["href"] ?? attributes["xlink:href", default: ""]).split(separator: ",").map { String($0) }
+        let src = attributes["href", default: ""].split(separator: ",").map { String($0) }
         data = src.last.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
         x = SVGLength(attributes["x"]) ?? .pixel(0)
         y = SVGLength(attributes["y"]) ?? .pixel(0)

@@ -56,7 +56,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
-        parentId = Self.parseLink(description: attributes["xlink:href"])
+        parentId = Self.parseLink(description: attributes["href"])
         gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
 
@@ -266,7 +266,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         let stops = contents.compactMap { $0 as? SVGStopElement }
         self.stops = stops.isEmpty ? nil : stops
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
-        parentId = Self.parseLink(description: attributes["xlink:href"])
+        parentId = Self.parseLink(description: attributes["href"])
         gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
 
         parentIds = []

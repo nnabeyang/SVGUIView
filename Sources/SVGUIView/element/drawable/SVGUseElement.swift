@@ -20,7 +20,7 @@ struct SVGUseElement: SVGDrawableElement {
         y = SVGLength(attributes["y"])
         width = SVGLength(attributes["width"])
         height = SVGLength(attributes["height"])
-        parentId = Self.parseLink(description: attributes["href"] ?? attributes["xlink:href"])
+        parentId = Self.parseLink(description: attributes["href"])
         self.attributes = attributes
         self.contentIds = contentIds
     }
