@@ -32,6 +32,11 @@ enum SVGElementName: String, Equatable {
     case unknown
 }
 
+enum SVGXmlNameSpace: String {
+    case svg = "http://www.w3.org/2000/svg"
+    case xlink = "http://www.w3.org/1999/xlink"
+}
+
 final class Parser: NSObject {
     private var pservers: [String: any SVGGradientServer] = [:]
     private var contentIdMap: [String: Int] = [:]
@@ -41,6 +46,8 @@ final class Parser: NSObject {
     private var countList = [Int]()
     private var stack = [(name: SVGElementName, attributes: [String: String])]()
     private var text: String = ""
+    private var nameSpaces = [String: (ns: SVGXmlNameSpace, count: Int)]()
+
     private static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "parser")
 
     static func parse(data: Data) -> SVGBaseContext {
@@ -66,13 +73,16 @@ final class Parser: NSObject {
     }
 
     private func parse(data: Data) -> SVGBaseContext {
-        parse(parser: XMLParser(data: data))
+        let parser = XMLParser(data: data)
+        parser.shouldProcessNamespaces = true
+        parser.shouldReportNamespacePrefixes = true
+        return parse(parser: parser)
     }
 }
 
 extension Parser: XMLParserDelegate {
-    func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
-        let name = SVGElementName(rawValue: elementName) ?? .unknown
+    func parser(_: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
+        let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
         if !countList.isEmpty {
             countList[countList.count - 1] += 1
         }
@@ -80,8 +90,25 @@ extension Parser: XMLParserDelegate {
         countList.append(1)
     }
 
-    func parser(_: XMLParser, didEndElement elementName: String, namespaceURI _: String?, qualifiedName _: String?) {
-        let name = SVGElementName(rawValue: elementName) ?? .unknown
+    func parser(_: XMLParser, didStartMappingPrefix prefix: String, toURI namespaceURI: String) {
+        guard let nameSpace = SVGXmlNameSpace(rawValue: namespaceURI) else { return }
+        if let value = nameSpaces[prefix] {
+            nameSpaces[prefix] = (ns: nameSpace, value.count + 1)
+        } else {
+            nameSpaces[prefix] = (ns: nameSpace, 1)
+        }
+    }
+
+    func parser(_: XMLParser, didEndMappingPrefix prefix: String) {
+        if let value = nameSpaces[prefix], value.count > 1 {
+            nameSpaces[prefix] = (ns: value.ns, count: value.count - 1)
+        } else {
+            nameSpaces.removeValue(forKey: prefix)
+        }
+    }
+
+    func parser(_: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName _: String?) {
+        let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
         guard !stack.isEmpty,
               let element = stack.popLast(),
               let count = countList.popLast() else { return }
