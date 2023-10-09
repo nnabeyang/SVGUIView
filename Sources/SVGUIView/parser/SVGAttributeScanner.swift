@@ -362,7 +362,7 @@ extension SVGAttributeScanner {
         }
     }
 
-    mutating func scanFill(opacity: Double = 1.0) -> SVGFill? {
+    mutating func scanFill(opacity: SVGOpacity? = nil) -> SVGFill? {
         guard let ascii = reader.consumeWhitespace() else { return nil }
         if ascii == UInt8(ascii: "#") {
             guard let hex = scanHex() else { return nil }

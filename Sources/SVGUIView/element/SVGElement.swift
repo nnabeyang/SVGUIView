@@ -319,7 +319,7 @@ extension SVGDrawableElement {
                 cgContext.setStrokeColor(uiColor.cgColor)
             }
         case let .color(color, colorOpacity):
-            let colorOpacity = colorOpacity ?? 1.0
+            let colorOpacity = colorOpacity?.value ?? 1.0
             if let uiColor = color?.toUIColor(opacity: opacity * colorOpacity) {
                 cgContext.setStrokeColor(uiColor.cgColor)
             } else {
@@ -387,7 +387,7 @@ extension SVGDrawableElement {
             cgContext.addPath(path.cgPath)
             cgContext.drawPath(using: eoFill ? .eoFill : .fill)
         case let .color(color, opacity):
-            let opacity = opacity ?? 1.0
+            let opacity = opacity?.value ?? 1.0
             if let uiColor = color?.toUIColor(opacity: opacity) {
                 cgContext.setFillColor(uiColor.cgColor)
                 cgContext.addPath(path.cgPath)
@@ -395,7 +395,7 @@ extension SVGDrawableElement {
             }
         case let .url(id, opacity):
             if let server = context.pservers[id] {
-                applyPServerFill(server: server, path: path, context: context, opacity: opacity ?? 1.0)
+                applyPServerFill(server: server, path: path, context: context, opacity: opacity?.value ?? 1.0)
                 return
             }
             let frame = frame(context: context, path: path)
@@ -403,7 +403,7 @@ extension SVGDrawableElement {
                context.check(patternId: id)
             {
                 let cgContext = context.graphics
-                let opacity = opacity ?? 1.0
+                let opacity = opacity?.value ?? 1.0
                 cgContext.saveGState()
                 cgContext.setAlpha(opacity)
                 cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
@@ -419,7 +419,7 @@ extension SVGDrawableElement {
         }
     }
 
-    func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext, opacity: Double) {
+    func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext, opacity: CGFloat) {
         if let id = server.parentId,
            let parent = context.pservers[id],
            let merged = server.merged(other: parent)

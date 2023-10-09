@@ -71,7 +71,7 @@ struct SVGTextElement: SVGDrawableElement {
                 cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case let .color(color, opacity):
-            let opacity = opacity ?? 1.0
+            let opacity = opacity?.value ?? 1.0
             if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
                 cgContext.setFillColor(uiColor.cgColor)
                 cgContext.addPath(path.cgPath)

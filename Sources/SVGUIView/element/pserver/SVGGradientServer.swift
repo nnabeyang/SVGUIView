@@ -132,7 +132,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
             case .current:
                 return color?.toUIColor(opacity: $0.opacity * opacity)?.cgColor
             case let .color(color, colorOpacity):
-                let colorOpacity = colorOpacity ?? 1.0
+                let colorOpacity = colorOpacity?.value ?? 1.0
                 return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
             case .inherit, .url, .none:
                 // TODO: implement inherit, url(...), auto case
@@ -336,7 +336,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
             case .current:
                 return color?.toUIColor(opacity: opacity)?.cgColor
             case let .color(color, colorOpacity):
-                let colorOpacity = colorOpacity ?? 1.0
+                let colorOpacity = colorOpacity?.value ?? 1.0
                 return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
             case .inherit, .url, .none:
                 // TODO: implement inherit, url(...), auto case
