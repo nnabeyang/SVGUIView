@@ -114,7 +114,7 @@ struct SVGGroupElement: SVGDrawableElement {
         default:
             break
         }
-        clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
+        clipPath?.clipIfNeeded(type: type, frame: frame(context: context, path: nil), context: context, cgContext: context.graphics)
         for index in contentIds {
             context.contents[index].draw(context, index: index, depth: depth + 1, mode: mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode)
         }
