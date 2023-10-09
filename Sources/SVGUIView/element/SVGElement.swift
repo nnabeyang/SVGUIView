@@ -402,7 +402,14 @@ extension SVGDrawableElement {
             if let pattern = context.patterns[id],
                context.check(patternId: id)
             {
+                let cgContext = context.graphics
+                let opacity = opacity ?? 1.0
+                cgContext.saveGState()
+                cgContext.setAlpha(opacity)
+                cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
                 _ = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
+                cgContext.endTransparencyLayer()
+                cgContext.restoreGState()
                 context.remove(patternId: id)
                 return
             }
