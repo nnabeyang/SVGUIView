@@ -68,12 +68,19 @@ struct SVGGroupElement: SVGDrawableElement {
     }
 
     func frame(context: SVGContext, path _: UIBezierPath?) -> CGRect {
-        var rect: CGRect = .zero
+        var rect: CGRect? = nil
         for index in contentIds {
             guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            rect = CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
+            if case .none = content.display ?? .inline {
+                continue
+            }
+            if rect != nil {
+                rect = CGRectUnion(rect!, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
+            } else {
+                rect = content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity)
+            }
         }
-        return rect
+        return rect ?? .zero
     }
 
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth: Int, mode: DrawMode) {
