@@ -269,6 +269,9 @@ extension SVGDrawableElement {
                 }
             }
         }
+        let gContext = context.graphics
+        gContext.setAlpha(opacity)
+        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
         if let path = path {
             applySVGFill(fill: fill, path: path, context: context, mode: mode)
             applySVGStroke(stroke: stroke, path: path, context: context)
@@ -285,6 +288,7 @@ extension SVGDrawableElement {
         writingMode.map { _ in
             _ = context.popWritingMode()
         }
+        gContext.endTransparencyLayer()
         context.restoreGState()
     }
 
@@ -332,7 +336,7 @@ extension SVGDrawableElement {
         guard let fill = stroke.fill else { return }
         let dashes = stroke.dashes ?? []
         let offset = stroke.offset ?? 0
-        applyStrokeFill(fill: fill, opacity: opacity * (stroke.opacity ?? 1.0), path: path, context: context)
+        applyStrokeFill(fill: fill, opacity: stroke.opacity ?? 1.0, path: path, context: context)
         let cgContext = context.graphics
         if !dashes.filter({ $0 > 0 }).isEmpty {
             cgContext.setLineDash(phase: offset, lengths: dashes)
@@ -384,14 +388,14 @@ extension SVGDrawableElement {
             cgContext.drawPath(using: eoFill ? .eoFill : .fill)
         case let .color(color, opacity):
             let opacity = opacity ?? 1.0
-            if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
+            if let uiColor = color?.toUIColor(opacity: opacity) {
                 cgContext.setFillColor(uiColor.cgColor)
                 cgContext.addPath(path.cgPath)
                 cgContext.drawPath(using: eoFill ? .eoFill : .fill)
             }
         case let .url(id, opacity):
             if let server = context.pservers[id] {
-                applyPServerFill(server: server, path: path, context: context, opacity: self.opacity * (opacity ?? 1.0))
+                applyPServerFill(server: server, path: path, context: context, opacity: opacity ?? 1.0)
                 return
             }
             let frame = frame(context: context, path: path)
