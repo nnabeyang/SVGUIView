@@ -395,13 +395,17 @@ extension SVGDrawableElement {
             }
         case let .url(id, opacity):
             if let server = context.pservers[id] {
-                applyPServerFill(server: server, path: path, context: context, opacity: opacity?.value ?? 1.0)
-                return
-            }
-            let frame = frame(context: context, path: path)
-            if let pattern = context.patterns[id],
-               context.check(patternId: id)
+                switch server.display ?? .inline {
+                case .none:
+                    break
+                default:
+                    applyPServerFill(server: server, path: path, context: context, opacity: opacity?.value ?? 1.0)
+                    return
+                }
+            } else if let pattern = context.patterns[id],
+                      context.check(patternId: id)
             {
+                let frame = frame(context: context, path: path)
                 let cgContext = context.graphics
                 let opacity = opacity?.value ?? 1.0
                 cgContext.saveGState()

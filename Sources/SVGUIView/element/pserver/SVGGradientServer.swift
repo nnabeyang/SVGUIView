@@ -10,6 +10,7 @@ enum SpreadMethod: String {
 protocol SVGGradientServer {
     var parentId: String? { get }
     var parentIds: [String] { get }
+    var display: CSSDisplay? { get }
     func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
     init?(lhs: Self, rhs: SVGLinearGradientServer)
@@ -30,6 +31,7 @@ extension SVGGradientServer {
 }
 
 struct SVGLinearGradientServer: SVGGradientServer {
+    let display: CSSDisplay?
     let color: SVGUIColor?
     let stops: [SVGStopElement]?
     let id: String?
@@ -49,6 +51,8 @@ struct SVGLinearGradientServer: SVGGradientServer {
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
         id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
+        display = CSSDisplay(rawValue: attributes["display", default: ""])
+
         x1 = SVGLength(attributes["x1"])
         y1 = SVGLength(attributes["y1"])
         x2 = SVGLength(attributes["x2"])
@@ -75,6 +79,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
             parentIds = lhs.parentIds
         }
         id = lhs.id
+        display = lhs.display ?? rhs.display
         x1 = lhs.x1 ?? rhs.x1
         y1 = lhs.y1 ?? rhs.y1
         x2 = lhs.x2 ?? rhs.x2
@@ -94,6 +99,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
             parentIds = lhs.parentIds
         }
         id = lhs.id
+        display = lhs.display ?? rhs.display
         x1 = lhs.x1
         y1 = lhs.y1
         x2 = lhs.x2
@@ -235,6 +241,7 @@ extension SVGLinearGradientServer {
 }
 
 struct SVGRadialGradientServer: SVGGradientServer {
+    let display: CSSDisplay?
     let color: SVGUIColor?
     let stops: [SVGStopElement]?
     let spreadMethod: SpreadMethod?
@@ -256,6 +263,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
 
     init(attributes: [String: String], contents: [SVGElement & Encodable]) {
         id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
+        display = CSSDisplay(rawValue: attributes["display", default: ""])
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
         cx = SVGLength(attributes["cx"])
         cy = SVGLength(attributes["cy"])
@@ -280,6 +288,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
             parentIds = lhs.parentIds
         }
         id = lhs.id
+        display = lhs.display ?? rhs.display
         color = lhs.color ?? rhs.color
         cx = lhs.cx ?? rhs.cx
         cy = lhs.cy ?? rhs.cy
@@ -300,6 +309,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
             parentIds = lhs.parentIds
         }
         id = lhs.id
+        display = lhs.display ?? rhs.display
         color = lhs.color ?? rhs.color
         cx = lhs.cx
         cy = lhs.cy
