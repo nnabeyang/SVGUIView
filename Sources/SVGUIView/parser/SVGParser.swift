@@ -200,6 +200,23 @@ extension Parser: XMLParserDelegate {
             case .defs:
                 let element = SVGDefsElement(attributes: attributes,
                                              contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                if case .none = (element.display ?? .inline) {
+                    for index in element.contentIds {
+                        let content = contents[index]
+                        switch content {
+                        case let content as (any SVGDrawableElement):
+                            if let id = content.id {
+                                contentIdMap.removeValue(forKey: id)
+                            }
+                        case let content as (any SVGGradientServer):
+                            if let id = content.id {
+                                pservers.removeValue(forKey: id)
+                            }
+                        default:
+                            break
+                        }
+                    }
+                }
                 return element
             case .linearGradient:
                 let pserver = SVGLinearGradientServer(attributes: attributes,
@@ -207,20 +224,14 @@ extension Parser: XMLParserDelegate {
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
-                if !countList.isEmpty {
-                    countList[countList.count - 1] -= 1
-                }
-                return nil
+                return pserver
             case .radialGradient:
                 let pserver = SVGRadialGradientServer(attributes: attributes,
                                                       contents: Array(contents.dropFirst(contents.count - count + 1)))
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
-                if !countList.isEmpty {
-                    countList[countList.count - 1] -= 1
-                }
-                return nil
+                return pserver
             case .style:
                 text.withUTF8 {
                     let bytes = BufferView(unsafeBufferPointer: $0)!

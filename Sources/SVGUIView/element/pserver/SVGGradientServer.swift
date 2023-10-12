@@ -7,9 +7,10 @@ enum SpreadMethod: String {
     case reflect
 }
 
-protocol SVGGradientServer {
+protocol SVGGradientServer: SVGElement {
     var parentId: String? { get }
     var parentIds: [String] { get }
+    var id: String? { get }
     var display: CSSDisplay? { get }
     func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
@@ -28,9 +29,25 @@ extension SVGGradientServer {
             fatalError("not implemented")
         }
     }
+
+    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
+        fatalError()
+    }
+
+    func drawWithoutFilter(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
+        fatalError()
+    }
+
+    func style(with _: CSSStyle, at _: Int) -> SVGElement {
+        self
+    }
 }
 
 struct SVGLinearGradientServer: SVGGradientServer {
+    var type: SVGElementName {
+        .linearGradient
+    }
+
     let display: CSSDisplay?
     let color: SVGUIColor?
     let stops: [SVGStopElement]?
@@ -241,6 +258,10 @@ extension SVGLinearGradientServer {
 }
 
 struct SVGRadialGradientServer: SVGGradientServer {
+    var type: SVGElementName {
+        .radialGradient
+    }
+
     let display: CSSDisplay?
     let color: SVGUIColor?
     let stops: [SVGStopElement]?

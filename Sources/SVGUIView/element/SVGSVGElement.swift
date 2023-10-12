@@ -171,7 +171,8 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         }
         clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
-            context.contents[index].draw(context, index: index, depth: depth + 1, mode: mode)
+            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+            content.draw(context, index: index, depth: depth + 1, mode: mode)
         }
         switch mode {
         case .root, .filter:
