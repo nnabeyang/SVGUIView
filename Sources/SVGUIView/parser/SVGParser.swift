@@ -180,11 +180,6 @@ extension Parser: XMLParserDelegate {
                 return SVGStopElement(attributes: attributes)
             case .use:
                 return SVGUseElement(attributes: attributes, contentIds: contentIds)
-            case .unknown:
-                if !countList.isEmpty {
-                    countList[countList.count - 1] -= 1
-                }
-                return nil
             case .defs:
                 let element = SVGDefsElement(attributes: attributes, contentIds: contentIds)
                 if case .none = (element.display ?? .inline) {
@@ -215,6 +210,8 @@ extension Parser: XMLParserDelegate {
                     var parser = CSSParser(bytes: bytes)
                     rules.append(contentsOf: parser.parseRules())
                 }
+                fallthrough
+            case .unknown:
                 if !countList.isEmpty {
                     countList[countList.count - 1] -= 1
                 }
