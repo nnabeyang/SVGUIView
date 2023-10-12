@@ -132,28 +132,22 @@ extension Parser: XMLParserDelegate {
         precondition(name == element.name)
         let attributes = filter(attributes: element.attributes)
         let content: SVGElement? = {
+            let contentIds = self.contentIds.shift(count: count)
             switch element.name {
             case .svg:
-                return SVGSVGElement(attributes: attributes,
-                                     contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGSVGElement(attributes: attributes, contentIds: contentIds)
             case .g:
-                return SVGGroupElement(attributes: attributes,
-                                       contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGGroupElement(attributes: attributes, contentIds: contentIds)
             case .clipPath:
-                return SVGClipPathElement(attributes: attributes,
-                                          contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGClipPathElement(attributes: attributes, contentIds: contentIds)
             case .mask:
-                return SVGMaskElement(attributes: attributes,
-                                      contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGMaskElement(attributes: attributes, contentIds: contentIds)
             case .pattern:
-                return SVGPatternElement(attributes: attributes,
-                                         contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGPatternElement(attributes: attributes, contentIds: contentIds)
             case .filter:
-                return SVGFilterElement(attributes: attributes,
-                                        contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGFilterElement(attributes: attributes, contentIds: contentIds)
             case .feMerge:
-                return SVGFeMergeElement(attributes: attributes,
-                                         contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGFeMergeElement(attributes: attributes, contentIds: contentIds)
             case .feGaussianBlur:
                 return SVGFeGaussianBlurElement(attributes: attributes)
             case .feFlood:
@@ -185,15 +179,14 @@ extension Parser: XMLParserDelegate {
             case .stop:
                 return SVGStopElement(attributes: attributes)
             case .use:
-                return SVGUseElement(attributes: attributes, contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                return SVGUseElement(attributes: attributes, contentIds: contentIds)
             case .unknown:
                 if !countList.isEmpty {
                     countList[countList.count - 1] -= 1
                 }
                 return nil
             case .defs:
-                let element = SVGDefsElement(attributes: attributes,
-                                             contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                let element = SVGDefsElement(attributes: attributes, contentIds: contentIds)
                 if case .none = (element.display ?? .inline) {
                     for index in element.contentIds {
                         let content = contents[index]
@@ -213,15 +206,13 @@ extension Parser: XMLParserDelegate {
                 }
                 return element
             case .linearGradient:
-                let pserver = SVGLinearGradientServer(attributes: attributes,
-                                                      contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                let pserver = SVGLinearGradientServer(attributes: attributes, contentIds: contentIds)
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
                 return pserver
             case .radialGradient:
-                let pserver = SVGRadialGradientServer(attributes: attributes,
-                                                      contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
+                let pserver = SVGRadialGradientServer(attributes: attributes, contentIds: contentIds)
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
@@ -263,5 +254,11 @@ extension Parser: XMLParserDelegate {
 
     func parser(_: XMLParser, parseErrorOccurred parseError: Error) {
         Self.logger.error("\(parseError.localizedDescription)")
+    }
+}
+
+private extension Array {
+    func shift(count: Int) -> [Element] {
+        Array(dropFirst(self.count - count + 1))
     }
 }
