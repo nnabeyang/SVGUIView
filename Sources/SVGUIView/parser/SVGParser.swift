@@ -134,29 +134,23 @@ extension Parser: XMLParserDelegate {
         let content: SVGElement? = {
             switch element.name {
             case .svg:
-                let element = SVGSVGElement(attributes: attributes,
-                                            contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
-                return element
+                return SVGSVGElement(attributes: attributes,
+                                     contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .g:
-                let element = SVGGroupElement(attributes: attributes,
-                                              contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
-                return element
+                return SVGGroupElement(attributes: attributes,
+                                       contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .clipPath:
-                let element = SVGClipPathElement(attributes: attributes,
-                                                 contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
-                return element
+                return SVGClipPathElement(attributes: attributes,
+                                          contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .mask:
-                let element = SVGMaskElement(attributes: attributes,
-                                             contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
-                return element
+                return SVGMaskElement(attributes: attributes,
+                                      contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .pattern:
-                let element = SVGPatternElement(attributes: attributes,
-                                                contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
-                return element
+                return SVGPatternElement(attributes: attributes,
+                                         contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .filter:
-                let element = SVGFilterElement(attributes: attributes,
-                                               contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
-                return element
+                return SVGFilterElement(attributes: attributes,
+                                        contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
             case .feMerge:
                 return SVGFeMergeElement(attributes: attributes,
                                          contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
