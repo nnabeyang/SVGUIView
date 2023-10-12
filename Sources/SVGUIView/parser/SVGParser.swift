@@ -206,17 +206,9 @@ extension Parser: XMLParserDelegate {
                 }
                 return element
             case .linearGradient:
-                let pserver = SVGLinearGradientServer(attributes: attributes, contentIds: contentIds)
-                if let id = element.attributes["id"], pservers[id] == nil {
-                    pservers[id] = pserver
-                }
-                return pserver
+                return SVGLinearGradientServer(attributes: attributes, contentIds: contentIds)
             case .radialGradient:
-                let pserver = SVGRadialGradientServer(attributes: attributes, contentIds: contentIds)
-                if let id = element.attributes["id"], pservers[id] == nil {
-                    pservers[id] = pserver
-                }
-                return pserver
+                return SVGRadialGradientServer(attributes: attributes, contentIds: contentIds)
             case .style:
                 text.withUTF8 {
                     let bytes = BufferView(unsafeBufferPointer: $0)!
@@ -235,10 +227,19 @@ extension Parser: XMLParserDelegate {
             let idx = contents.count
             contentIds.append(idx)
             contents.append($0)
-            if let id = ($0 as? (any SVGDrawableElement))?.id,
-               contentIdMap[id] == nil
-            {
-                contentIdMap[id] = idx
+            switch $0 {
+            case let content as any SVGDrawableElement:
+                if let id = content.id,
+                   contentIdMap[id] == nil
+                {
+                    contentIdMap[id] = idx
+                }
+            case let pserver as any SVGGradientServer:
+                if let id = pserver.id, pservers[id] == nil {
+                    pservers[id] = pserver
+                }
+            default:
+                break
             }
         }
     }
