@@ -12,8 +12,11 @@ protocol SVGGradientServer: SVGElement {
     var parentIds: [String] { get }
     var id: String? { get }
     var display: CSSDisplay? { get }
+    var contentIds: [Int] { get }
     func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
+    func stops(context: SVGContext) -> [SVGStopElement]
+    init(attributes: [String: String], contentIds: [Int])
     init?(lhs: Self, rhs: SVGLinearGradientServer)
     init?(lhs: Self, rhs: SVGRadialGradientServer)
 }
@@ -28,6 +31,10 @@ extension SVGGradientServer {
         default:
             fatalError("not implemented")
         }
+    }
+
+    func stops(context: SVGContext) -> [SVGStopElement] {
+        contentIds.compactMap { context.contents[$0] as? SVGStopElement }
     }
 
     func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
@@ -50,7 +57,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
 
     let display: CSSDisplay?
     let color: SVGUIColor?
-    let stops: [SVGStopElement]?
+    let contentIds: [Int]
     let id: String?
     let parentId: String?
     let gradientUnits: SVGUnitType?
@@ -66,7 +73,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         case stops
     }
 
-    init(attributes: [String: String], contents: [SVGElement & Encodable]) {
+    init(attributes: [String: String], contentIds: [Int]) {
         id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
         display = CSSDisplay(rawValue: attributes["display", default: ""])
 
@@ -75,8 +82,8 @@ struct SVGLinearGradientServer: SVGGradientServer {
         x2 = SVGLength(attributes["x2"])
         y2 = SVGLength(attributes["y2"])
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
-        let stops = contents.compactMap { $0 as? SVGStopElement }
-        self.stops = stops.isEmpty ? nil : stops
+        self.contentIds = contentIds
+
         parentId = Self.parseLink(description: attributes["href"])
         gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
@@ -102,7 +109,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         x2 = lhs.x2 ?? rhs.x2
         y2 = lhs.y2 ?? rhs.y2
         color = lhs.color ?? rhs.color
-        stops = lhs.stops ?? rhs.stops
+        contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
         parentId = rhs.parentId
         gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
@@ -122,7 +129,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
         x2 = lhs.x2
         y2 = lhs.y2
         color = lhs.color ?? rhs.color
-        stops = lhs.stops ?? rhs.stops
+        contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
         parentId = rhs.parentId
         gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
@@ -142,7 +149,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
     }
 
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
-        let stops = stops ?? []
+        let stops = stops(context: context)
         let gradientUnits = gradientUnits ?? .objectBoundingBox
         let x1 = (x1 ?? .percent(0)).value(context: context, mode: .width, unitType: gradientUnits)
         let y1 = (y1 ?? .percent(0)).value(context: context, mode: .height, unitType: gradientUnits)
@@ -251,9 +258,7 @@ extension SVGLinearGradientServer {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
-        for content in stops ?? [] {
-            try contentsContainer.encode(content)
-        }
+        try contentsContainer.encode(contentIds)
     }
 }
 
@@ -264,7 +269,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
 
     let display: CSSDisplay?
     let color: SVGUIColor?
-    let stops: [SVGStopElement]?
+    let contentIds: [Int]
     let spreadMethod: SpreadMethod?
     let gradientUnits: SVGUnitType?
 
@@ -282,7 +287,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         case stops
     }
 
-    init(attributes: [String: String], contents: [SVGElement & Encodable]) {
+    init(attributes: [String: String], contentIds: [Int]) {
         id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
         display = CSSDisplay(rawValue: attributes["display", default: ""])
         color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
@@ -291,9 +296,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         fx = SVGLength(attributes["fx"])
         fy = SVGLength(attributes["fy"])
         r = SVGLength(attributes["r"])
-
-        let stops = contents.compactMap { $0 as? SVGStopElement }
-        self.stops = stops.isEmpty ? nil : stops
+        self.contentIds = contentIds
         spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
         parentId = Self.parseLink(description: attributes["href"])
         gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
@@ -316,7 +319,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         fx = lhs.fx ?? rhs.fx
         fy = lhs.fy ?? rhs.fy
         r = lhs.r ?? rhs.r
-        stops = lhs.stops ?? rhs.stops
+        contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
         parentId = rhs.parentId
         gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
@@ -337,7 +340,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
         fx = lhs.fx
         fy = lhs.fy
         r = lhs.r
-        stops = lhs.stops ?? rhs.stops
+        contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
         spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
         parentId = rhs.parentId
         gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
@@ -357,7 +360,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     }
 
     func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
-        let stops = stops ?? []
+        let stops = stops(context: context)
         let gradientUnits = gradientUnits ?? .objectBoundingBox
         let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
         let cy = (cy ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
@@ -421,8 +424,6 @@ extension SVGRadialGradientServer {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
-        for content in stops ?? [] {
-            try contentsContainer.encode(content)
-        }
+        try contentsContainer.encode(contentIds)
     }
 }

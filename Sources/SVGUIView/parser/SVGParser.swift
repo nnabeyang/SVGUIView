@@ -214,14 +214,14 @@ extension Parser: XMLParserDelegate {
                 return element
             case .linearGradient:
                 let pserver = SVGLinearGradientServer(attributes: attributes,
-                                                      contents: Array(contents.dropFirst(contents.count - count + 1)))
+                                                      contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
                 return pserver
             case .radialGradient:
                 let pserver = SVGRadialGradientServer(attributes: attributes,
-                                                      contents: Array(contents.dropFirst(contents.count - count + 1)))
+                                                      contentIds: Array(contentIds.dropFirst(contentIds.count - count + 1)))
                 if let id = element.attributes["id"], pservers[id] == nil {
                     pservers[id] = pserver
                 }
