@@ -14,7 +14,9 @@ let package = Package(
             targets: ["SVGUIView"]
         ),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.51.2"),
+    ],
     targets: [
         .target(
             name: "SVGUIView",
