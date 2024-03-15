@@ -41,6 +41,24 @@ struct SVGAttributeScanner {
         }
     }
 
+    mutating func consumeString() -> String {
+        let endingCodePoint = reader.peek()
+        precondition(endingCodePoint == UInt8(ascii: "'") || endingCodePoint == UInt8(ascii: "\""))
+        _ = reader.read()
+        let start = reader.readIndex
+        var size = 0
+        while !reader.isEOF {
+            let c = reader.peek(offset: size)
+            guard c != endingCodePoint else {
+                break
+            }
+            size += 1
+        }
+        reader.moveReaderIndex(forwardBy: size + 1)
+        let end = reader.readIndex.advanced(by: -1)
+        return String(decoding: reader.bytes[start ..< end], as: UTF8.self)
+    }
+
     mutating func scanNumber() -> Double? {
         let ch = reader.peek()
         guard ch > 0 else { return nil }
@@ -251,6 +269,36 @@ extension SVGAttributeScanner {
             if args.isEmpty { return nil }
             return APathSegment(type: type, args: args)
         }
+    }
+}
+
+// for font attributes
+extension SVGAttributeScanner {
+    private static let familyNames = [
+        "cursive",
+        "fantasy",
+        "monospace",
+        "sans-serif",
+        "serif",
+        "standard",
+    ]
+
+    mutating func scanFontFamilies() -> [String] {
+        var families = [String]()
+        guard reader.consumeWhitespace() != nil else { return families }
+        while !reader.isEOF {
+            let family: String
+            let ch = reader.peek()
+            if ch == UInt8(ascii: "\"") || ch == UInt8(ascii: "'") {
+                family = consumeString()
+            } else {
+                family = consumeName()
+            }
+            let prefix = Self.familyNames.contains(family) ? "-webkit-" : ""
+            families.append("\(prefix)\(family)")
+            consumeWhitespaceIfNext(UInt8(ascii: ","))
+        }
+        return families
     }
 }
 

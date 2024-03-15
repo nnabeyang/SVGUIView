@@ -87,7 +87,7 @@ struct SVGTextElement: SVGDrawableElement {
         var attributes: [CFString: Any] = [:]
         let ctFont: CTFont = {
             if let contextFont = context.font {
-                return SVGUIFont(lhs: font, rhs: contextFont).toCTFont
+                return SVGUIFont(child: font, parent: contextFont).toCTFont
             }
             return font.toCTFont
         }()

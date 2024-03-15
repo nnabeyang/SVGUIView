@@ -33,6 +33,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     let contentIds: [Int]
 
     let font: SVGUIFont?
+    let textAnchor: TextAnchor?
 
     private enum CodingKeys: String, CodingKey {
         case width
@@ -50,6 +51,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         height = SVGLength(attributes["height"])
         viewBox = Self.parseViewBox(attributes["viewBox"])
         font = Self.parseFont(attributes: attributes)
+        textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
         preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
         overflow = SVGOverflow(rawValue: attributes["overflow", default: ""].trimmingCharacters(in: .whitespaces))
         self.contentIds = contentIds
@@ -68,6 +70,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         height = .init(attributes["height"]) ?? other.height
         viewBox = other.viewBox
         font = other.font
+        textAnchor = other.textAnchor
         contentIds = other.contentIds
         preserveAspectRatio = other.preserveAspectRatio
         overflow = other.overflow
@@ -159,6 +162,9 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         font.map {
             context.push(font: $0)
         }
+        textAnchor.map {
+            context.push(textAnchor: $0)
+        }
         writingMode.map {
             context.push(writingMode: $0)
         }
@@ -183,6 +189,9 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         }
         font.map { _ in
             _ = context.popFont()
+        }
+        textAnchor.map { _ in
+            _ = context.popTextAnchor()
         }
         writingMode.map { _ in
             _ = context.popWritingMode()

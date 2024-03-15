@@ -18,9 +18,11 @@ let package = Package(
         .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.51.2"),
     ],
     targets: [
+        .target(name: "_SPI"),
+        .target(name: "_ICU"),
         .target(
             name: "SVGUIView",
-            dependencies: []
+            dependencies: ["_SPI", "_ICU"]
         ),
         .testTarget(
             name: "SVGUIViewTests",
