@@ -87,9 +87,9 @@ struct SVGTextElement: SVGDrawableElement {
         var attributes: [CFString: Any] = [:]
         let ctFont: CTFont = {
             if let contextFont = context.font {
-                return SVGUIFont(child: font, parent: contextFont).toCTFont
+                return SVGUIFont(child: font, parent: contextFont).ctFont(textScale: context.textScale)
             }
-            return font.toCTFont
+            return font.ctFont(textScale: context.textScale)
         }()
         attributes[kCTFontAttributeName] = ctFont
 
@@ -103,9 +103,16 @@ struct SVGTextElement: SVGDrawableElement {
         guard let line = getLine(context: context) else { return .zero }
         let x = x?.value(context: context, mode: .width) ?? 0
         let y = y?.value(context: context, mode: .height) ?? 0
+        let textScale = context.textScale
         var transform = CGAffineTransform(translationX: x, y: y)
-            .scaledBy(x: 1.0, y: -1.0)
+            .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
         let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
+        let fontCascade: FontCascade = {
+            if let contextFont = context.font {
+                return SVGUIFont(child: font, parent: contextFont).fontCascade(textScale: context.textScale)
+            }
+            return font.fontCascade(textScale: context.textScale)
+        }()
         if case .middle = textAnchor ?? context.textAnchor ?? .start {
             transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
         }
@@ -138,8 +145,9 @@ struct SVGTextElement: SVGDrawableElement {
         let path = UIBezierPath(cgPath: letters)
         let x = x?.value(context: context, mode: .width) ?? 0
         let y = y?.value(context: context, mode: .height) ?? 0
+        let textScale = context.textScale
         var transform = CGAffineTransform(translationX: x, y: y)
-            .scaledBy(x: 1.0, y: -1.0)
+            .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
 
         let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
         if case .middle = textAnchor ?? context.textAnchor ?? .start {
@@ -147,6 +155,11 @@ struct SVGTextElement: SVGDrawableElement {
         }
         path.apply(transform)
         return path
+    }
+
+    static func withUnsafeMutablePointer<T>(array: inout [T], from: Int) -> UnsafeMutablePointer<T> {
+        let baseAddress = array.withUnsafeMutableBufferPointer { $0.baseAddress! }
+        return baseAddress.advanced(by: from)
     }
 }
 

@@ -124,14 +124,18 @@ struct SVGUIFont {
         }
     }
 
-    var toCTFont: CTFont {
+    func fontCascade(textScale: Double) -> FontCascade {
+        Self.createFontCascade(name: name, size: size, weight: weight, textScale: textScale)
+    }
+
+    static func createFontCascade(name: String?, size: CGFloat?, weight: Weight?, textScale: Double) -> FontCascade {
         var name = name ?? SVGUIView.familyNamesData[.standard]
         let families = name.withUTF8 {
             let bytes = BufferView(unsafeBufferPointer: $0)!
             var scanner = SVGAttributeScanner(bytes: bytes)
             return scanner.scanFontFamilies()
         }
-        let size = size ?? 12.0
+        let size = (size ?? 12.0) * textScale
         let weight = weight ?? .normal
         let fontSelector = CSSFontSelector()
         let description = FontCascadeDescription()
@@ -141,7 +145,14 @@ struct SVGUIFont {
             weight: weight.value,
             width: .normalStretchValue
         )
-        let fontCascade = FontCascade(fontDescription: description, fonts: FontCascadeFonts(fontSelector: fontSelector))
-        return fontCascade.primaryFont().ctFont
+        return FontCascade(fontDescription: description, fonts: FontCascadeFonts(fontSelector: fontSelector))
+    }
+
+    func ctFont(textScale: Double) -> CTFont {
+        fontCascade(textScale: textScale).primaryFont().ctFont
+    }
+
+    var toCTFont: CTFont {
+        ctFont(textScale: 1.0)
     }
 }

@@ -47,6 +47,13 @@ struct SVGContext: SVGLengthContext {
         patternIdStack = other.patternIdStack
     }
 
+    var textScale: Double {
+        let scale = UIScreen.main.scale
+        let x = viewPort.width * scale / viewBox.width
+        let y = viewPort.height * scale / viewBox.height
+        return hypot(x, y) / sqrt(2)
+    }
+
     var pservers: [String: any SVGGradientServer] {
         base.pservers
     }
