@@ -121,13 +121,15 @@ struct SVGTextElement: SVGDrawableElement {
             let fontPointer = CFDictionaryGetValue(CTRunGetAttributes(run), Unmanaged.passUnretained(kCTFontAttributeName).toOpaque())
             let runFont = unsafeBitCast(fontPointer, to: CTFont.self)
 
-            for index in 0 ..< CTRunGetGlyphCount(run) {
-                let range = CFRange(location: index, length: 1)
-                var glyph = CGGlyph()
-                var position = CGPoint()
-                CTRunGetGlyphs(run, range, &glyph)
-                CTRunGetPositions(run, range, &position)
-
+            let length = CTRunGetGlyphCount(run) as Int
+            var glyphs = [CGGlyph](repeating: .init(), count: length)
+            var positions = [CGPoint](repeating: CGPoint(), count: length)
+            let range = CFRange(location: 0, length: length)
+            CTRunGetGlyphs(run, range, &glyphs)
+            CTRunGetPositions(run, range, &positions)
+            for index in 0 ..< glyphs.count {
+                let position = positions[index]
+                let glyph = glyphs[index]
                 guard let letter = CTFontCreatePathForGlyph(runFont, glyph, nil) else { continue }
                 letters.addPath(letter, transform: CGAffineTransform(translationX: position.x, y: position.y))
             }
