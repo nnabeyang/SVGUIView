@@ -45,19 +45,6 @@ struct SVGDefsElement: SVGDrawableElement {
         }
     }
 
-    private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
-        let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
-        let size = Double(attributes["font-size", default: ""]).flatMap { CGFloat($0) }
-        let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
-        if name == nil,
-           size == nil,
-           weight == nil
-        {
-            return nil
-        }
-        return SVGUIFont(name: name, size: size, weight: weight)
-    }
-
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }

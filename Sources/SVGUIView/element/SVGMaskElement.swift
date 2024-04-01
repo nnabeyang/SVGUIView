@@ -122,7 +122,13 @@ struct SVGMaskElement: SVGDrawableElement {
             if let display = content.display, case .none = display {
                 continue
             }
+            content.font.map {
+                context.push(font: $0)
+            }
             guard let bezierPath = content.toBezierPath(context: context) else { continue }
+            content.font.map { _ in
+                _ = context.popFont()
+            }
             graphics.saveGState()
             graphics.concatenate(content.transform ?? .identity)
             content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)

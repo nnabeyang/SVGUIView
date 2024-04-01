@@ -15,6 +15,7 @@ private struct SVGLengthContextProxy: SVGLengthContext {
     var font: SVGUIFont? { context.font }
     var rootFont: SVGUIFont? { context.rootFont }
     var writingMode: WritingMode? { context.writingMode }
+    var textScale: Double { 1.0 }
 }
 
 struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
@@ -32,8 +33,9 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     let viewBox: SVGElementRect?
     let contentIds: [Int]
 
-    let font: SVGUIFont?
     let textAnchor: TextAnchor?
+
+    var textScale: Double { 1.0 }
 
     private enum CodingKeys: String, CodingKey {
         case width
@@ -50,7 +52,6 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         width = SVGLength(attributes["width"])
         height = SVGLength(attributes["height"])
         viewBox = Self.parseViewBox(attributes["viewBox"])
-        font = Self.parseFont(attributes: attributes)
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
         preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
         overflow = SVGOverflow(rawValue: attributes["overflow", default: ""].trimmingCharacters(in: .whitespaces))
@@ -69,7 +70,6 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         width = .init(attributes["width"]) ?? other.width
         height = .init(attributes["height"]) ?? other.height
         viewBox = other.viewBox
-        font = other.font
         textAnchor = other.textAnchor
         contentIds = other.contentIds
         preserveAspectRatio = other.preserveAspectRatio
@@ -86,16 +86,6 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
-    }
-
-    private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
-        let name = attributes["font-family"]
-        let size = Double(attributes["font-size", default: ""]).flatMap { CGFloat($0) }
-        let weight = attributes["font-weight"]
-        if name == nil, size == nil, weight == nil {
-            return nil
-        }
-        return SVGUIFont(name: name, size: size, weight: weight)
     }
 
     static func parseViewBox(_ value: String?) -> SVGElementRect? {
@@ -159,6 +149,12 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         }
 
         gContext.beginTransparencyLayer(auxiliaryInfo: nil)
+        let font: SVGUIFont?
+        if mode == .root {
+            font = self.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
+        } else {
+            font = self.font
+        }
         font.map {
             context.push(font: $0)
         }

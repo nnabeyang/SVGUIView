@@ -3,6 +3,7 @@ import UIKit
 protocol SVGLengthContext {
     var viewBoxSize: CGSize { get }
     var font: SVGUIFont? { get }
+    var textScale: Double { get }
     var rootFont: SVGUIFont? { get }
     var viewPort: CGRect { get }
     var writingMode: WritingMode? { get }
@@ -211,7 +212,7 @@ struct SVGContext: SVGLengthContext {
     }
 
     func push(font: SVGUIFont) {
-        let font = SVGUIFont(lhs: font, rhs: self.font)
+        let font = SVGUIFont(child: font, context: self)
         fontStack.push(font)
     }
 

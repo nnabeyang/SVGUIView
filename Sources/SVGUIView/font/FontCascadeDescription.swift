@@ -4,6 +4,10 @@ class FontCascadeDescription: FontDescription {
         self.familyNames = familyNames
     }
 
+    var useFixedDefaultSize: Bool {
+        familyNames.count == 1 && familyNames[0] == SVGUIView.familyNamesData[.monospace]
+    }
+
     var effectiveFamilyCount: Int {
         var result = 0
         for familyName in familyNames {

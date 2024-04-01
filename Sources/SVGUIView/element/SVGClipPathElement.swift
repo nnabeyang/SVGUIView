@@ -100,7 +100,13 @@ struct SVGClipPathElement: SVGElement {
             if let display = content.display, case .none = display {
                 continue
             }
+            content.font.map {
+                context.push(font: $0)
+            }
             guard let bezierPath = content.toBezierPath(context: context) else { continue }
+            content.font.map { _ in
+                _ = context.popFont()
+            }
             graphics.saveGState()
             content.transform.map {
                 graphics.concatenate($0)
@@ -144,7 +150,13 @@ struct SVGClipPathElement: SVGElement {
             if let display = content.display, case .none = display {
                 continue
             }
+            content.font.map {
+                context.push(font: $0)
+            }
             guard let bezierPath = content.toClippedBezierPath(context: context) else { continue }
+            content.font.map { _ in
+                _ = context.popFont()
+            }
             bezierPath.apply((content.transform ?? .identity).concatenating(transform))
             var tpath = bezierPath.cgPath
             let clipRule = content.clipRule ?? clipRule ?? false

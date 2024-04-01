@@ -8,7 +8,6 @@ struct SVGGroupElement: SVGDrawableElement {
     let base: SVGBaseElement
 
     let contentIds: [Int]
-    let font: SVGUIFont?
     let textAnchor: TextAnchor?
 
     private enum CodingKeys: String, CodingKey {
@@ -16,7 +15,6 @@ struct SVGGroupElement: SVGDrawableElement {
     }
 
     init(attributes: [String: String], contentIds: [Int]) {
-        font = Self.parseFont(attributes: attributes)
         base = SVGBaseElement(attributes: attributes)
         self.contentIds = contentIds
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
@@ -29,7 +27,6 @@ struct SVGGroupElement: SVGDrawableElement {
     init(other: Self, attributes: [String: String]) {
         base = SVGBaseElement(other: other.base, attributes: attributes)
         contentIds = other.contentIds
-        font = other.font
         textAnchor = other.textAnchor
     }
 
@@ -52,7 +49,7 @@ struct SVGGroupElement: SVGDrawableElement {
 
     private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
         let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
-        let size = Double(attributes["font-size", default: ""]).flatMap { CGFloat($0) }
+        let size = attributes["font-size"]
         let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
         if name == nil,
            size == nil,

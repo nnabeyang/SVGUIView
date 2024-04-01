@@ -13,7 +13,6 @@ struct SVGTextElement: SVGDrawableElement {
 
     let base: SVGBaseElement
     let text: String
-    let font: SVGUIFont
     let textAnchor: TextAnchor?
     let x: SVGLength?
     let y: SVGLength?
@@ -21,7 +20,6 @@ struct SVGTextElement: SVGDrawableElement {
     init(base: SVGBaseElement, text: String, attributes: [String: String]) {
         self.base = base
         self.text = text
-        font = Self.parseFont(attributes: attributes)
         textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
         x = SVGLength(attributes["x"])
         y = SVGLength(attributes["y"])
@@ -30,23 +28,14 @@ struct SVGTextElement: SVGDrawableElement {
     init(other: Self, attributes: [String: String]) {
         base = SVGBaseElement(other: other.base, attributes: attributes)
         text = other.text
-        font = SVGUIFont(lhs: other.font, rhs: Self.parseFont(attributes: attributes))
         textAnchor = other.textAnchor ?? TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
         x = other.x
         y = other.y
     }
 
-    private static func parseFont(attributes: [String: String]) -> SVGUIFont {
-        let name = attributes["font-family"]
-        let size = Double(attributes["font-size", default: ""]).flatMap { CGFloat($0) }
-        let weight = attributes["font-weight"]
-        return SVGUIFont(name: name, size: size, weight: weight)
-    }
-
     init(other: Self, index: Int, css: SVGUIStyle) {
         base = SVGBaseElement(other: other.base, index: index, css: css)
         text = other.text
-        font = other.font
         textAnchor = other.textAnchor
         x = other.x
         y = other.y
@@ -85,13 +74,23 @@ struct SVGTextElement: SVGDrawableElement {
 
     private func getLine(context: SVGContext) -> CTLine? {
         var attributes: [CFString: Any] = [:]
-        let ctFont: CTFont = {
-            if let contextFont = context.font {
-                return SVGUIFont(child: font, parent: contextFont).ctFont(textScale: context.textScale)
+        let font = context.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
+        let modifiedFont: SVGUIFont? = {
+            switch font.size {
+            case let .length(.number(value)), let .length(.pixel(value)):
+                if value == 0 {
+                    return nil
+                }
+                if value < 0 {
+                    return SVGUIFont(name: font.name, weight: font.weight)
+                }
+            default:
+                break
             }
-            return font.ctFont(textScale: context.textScale)
+            return font
         }()
-        attributes[kCTFontAttributeName] = ctFont
+        guard let modifiedFont = modifiedFont else { return nil }
+        attributes[kCTFontAttributeName] = modifiedFont.ctFont(context: context, textScale: context.textScale)
 
         guard let attributedText = CFAttributedStringCreate(kCFAllocatorDefault,
                                                             text as NSString,
@@ -107,12 +106,6 @@ struct SVGTextElement: SVGDrawableElement {
         var transform = CGAffineTransform(translationX: x, y: y)
             .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
         let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-        let fontCascade: FontCascade = {
-            if let contextFont = context.font {
-                return SVGUIFont(child: font, parent: contextFont).fontCascade(textScale: context.textScale)
-            }
-            return font.fontCascade(textScale: context.textScale)
-        }()
         if case .middle = textAnchor ?? context.textAnchor ?? .start {
             transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
         }

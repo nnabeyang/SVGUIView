@@ -43,6 +43,7 @@ struct SVGBaseElement {
     let clipRule: Bool?
     let className: String?
     let transform: CGAffineTransform?
+    let font: SVGUIFont?
     let fill: SVGFill?
     let stroke: SVGUIStroke
     let color: SVGUIColor?
@@ -63,6 +64,7 @@ struct SVGBaseElement {
         clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
         mask = SVGMask(description: attributes["mask", default: ""])
         filter = SVGFilter(description: attributes["filter", default: ""])
+        font = Self.parseFont(attributes: attributes)
         fill = SVGFill(style: style, attributes: attributes)
         stroke = SVGUIStroke(attributes: attributes)
         opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
@@ -83,6 +85,7 @@ struct SVGBaseElement {
         clipPath = other.clipPath
         mask = other.mask
         filter = other.filter ?? SVGFilter(description: attributes["filter", default: ""])
+        font = other.font.flatMap { SVGUIFont(lhs: $0, rhs: Self.parseFont(attributes: attributes)) } ?? Self.parseFont(attributes: attributes)
         fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
         stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
         opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
@@ -105,6 +108,7 @@ struct SVGBaseElement {
         id = other.id
         style = other.style
         className = other.className
+        font = other.font
         fill = SVGFill(style: css) ?? other.fill
         clipPath = other.clipPath
         mask = other.mask
@@ -119,6 +123,19 @@ struct SVGBaseElement {
         display = other.display
         visibility = other.visibility
     }
+
+    private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
+        let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
+        let size = attributes["font-size"]?.trimmingCharacters(in: .whitespaces)
+        let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
+        if name == nil,
+           size == nil,
+           weight == nil
+        {
+            return nil
+        }
+        return SVGUIFont(name: name, size: size, weight: weight)
+    }
 }
 
 protocol SVGDrawableElement: SVGElement {
@@ -131,6 +148,7 @@ protocol SVGDrawableElement: SVGElement {
     var className: String? { get }
     var transform: CGAffineTransform? { get }
     var writingMode: WritingMode? { get }
+    var font: SVGUIFont? { get }
     var fill: SVGFill? { get }
     var stroke: SVGUIStroke { get }
     var color: SVGUIColor? { get }
@@ -160,6 +178,7 @@ extension SVGDrawableElement {
     var className: String? { base.className }
     var transform: CGAffineTransform? { base.transform }
     var writingMode: WritingMode? { base.writingMode }
+    var font: SVGUIFont? { base.font }
     var fill: SVGFill? { base.fill }
     var stroke: SVGUIStroke { base.stroke }
     var clipPath: SVGClipPath? { base.clipPath }
@@ -239,6 +258,9 @@ extension SVGDrawableElement {
         writingMode.map {
             context.push(writingMode: $0)
         }
+        font.map {
+            context.push(font: $0)
+        }
         switch mode {
         case .root, .filter:
             context.pushTagIdStack()
@@ -287,6 +309,9 @@ extension SVGDrawableElement {
         }
         writingMode.map { _ in
             _ = context.popWritingMode()
+        }
+        font.map { _ in
+            _ = context.popFont()
         }
         gContext.endTransparencyLayer()
         context.restoreGState()

@@ -57,8 +57,8 @@ enum SVGLength: Equatable {
     case vmax(CGFloat)
     case q(CGFloat)
 
-    private static let pixelsPerInch: CGFloat = 96.0
-    private static var zeroCodePoint: UniChar = 0x30
+    static let pixelsPerInch: CGFloat = 96.0
+    static var zeroCodePoint: UniChar = 0x30
 
     init(value: Double, unit: CSSUnitType) {
         switch unit {
@@ -84,6 +84,60 @@ enum SVGLength: Equatable {
             self = .rlhs(value)
         default:
             self = .pixel(value)
+        }
+    }
+
+    init(child: SVGLength, parent: SVGLength) {
+        switch child {
+        case let .percent(percent):
+            switch parent {
+            case let .number(value):
+                self = .number(value * percent / 100.0)
+            case let .pixel(value):
+                self = .number(value * percent / 100.0)
+            case let .percent(value):
+                self = .percent(value * percent / 100.0)
+            case let .ems(value):
+                self = .number(value * percent / 100.0)
+            case let .rems(value):
+                self = .number(value * percent / 100.0)
+            case let .exs(value):
+                self = .number(value * percent / 100.0)
+            case let .centimeters(value):
+                self = .number(value * percent / 100.0)
+            case let .millimeters(value):
+                self = .number(value * percent / 100.0)
+            case let .inches(value):
+                self = .number(value * percent / 100.0)
+            case let .points(value):
+                self = .number(value * percent / 100.0)
+            case let .picas(value):
+                self = .number(value * percent / 100.0)
+            case let .chs(value):
+                self = .number(value * percent / 100.0)
+            case let .ic(value):
+                self = .number(value * percent / 100.0)
+            case let .lhs(value):
+                self = .number(value * percent / 100.0)
+            case let .rlhs(value):
+                self = .number(value * percent / 100.0)
+            case let .vw(value):
+                self = .number(value * percent / 100.0)
+            case let .vh(value):
+                self = .number(value * percent / 100.0)
+            case let .vi(value):
+                self = .number(value * percent / 100.0)
+            case let .vb(value):
+                self = .number(value * percent / 100.0)
+            case let .vmin(value):
+                self = .number(value * percent / 100.0)
+            case let .vmax(value):
+                self = .number(value * percent / 100.0)
+            case let .q(value):
+                self = .number(value * percent / 100.0)
+            }
+        default:
+            self = child
         }
     }
 
@@ -255,9 +309,8 @@ enum SVGLength: Equatable {
     }
 
     func value(context: SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse) -> CGFloat {
-        switch self {
-        case let .percent(percent):
-            let total: CGFloat
+        let total: CGFloat
+        if case .percent = self {
             let size: CGSize
             switch unitType {
             case .userSpaceOnUse:
@@ -275,21 +328,60 @@ enum SVGLength: Equatable {
                 let w = size.width
                 total = sqrt(pow(w, 2) + pow(h, 2)) / sqrt(2)
             }
+        } else {
+            total = 0
+        }
+        return value(total: total, context: context)
+    }
+
+    func fontValue(context: SVGLengthContext) -> CGFloat {
+        let total: CGFloat
+        if case .percent = self {
+            total = context.font?.sizeValue(context: context, textScale: 1.0) ?? 16.0
+        } else {
+            total = 0
+        }
+        return value(total: total, context: context)
+    }
+
+    func value(total: CGFloat, context: SVGLengthContext) -> CGFloat {
+        switch self {
+        case let .percent(percent):
             return total * percent / 100.0
         case let .pixel(pixel), let .number(pixel):
             return pixel
         case let .ems(value):
-            guard let font = context.font,
-                  let fontSize = font.size else { return 0 }
-            return value * fontSize
-        case let .rems(value):
-            guard let font = context.rootFont,
-                  let fontSize = font.size else { return 0 }
-            return value * fontSize
-        case let .exs(value):
             guard let font = context.font else { return 0 }
-            let xHeight = CTFontGetXHeight(font.toCTFont)
-            return value * xHeight
+            switch font.size {
+            case let .length(.ems(value)):
+                let fontSize = SVGUIFont.Size.defaultFontSize
+                return Self.ems(value: value, fontSize: fontSize)
+            default:
+                let fontSize = font.sizeValue(context: context)
+                return Self.ems(value: value, fontSize: fontSize)
+            }
+        case let .rems(value):
+            guard let font = context.rootFont else { return 0 }
+            switch font.size {
+            case let .length(.rems(value)):
+                let fontSize = SVGUIFont.Size.defaultFontSize
+                return Self.ems(value: value, fontSize: fontSize)
+            default:
+                let fontSize = font.sizeValue(context: context)
+                return Self.ems(value: value, fontSize: fontSize)
+            }
+        case let .exs(value):
+            guard let font = context.font else {
+                return 0
+            }
+            switch font.size {
+            case .length(.exs(value)):
+                let ctFont = CTFont.standard(context: context)
+                return Self.exs(value: value, ctFont: ctFont)
+            default:
+                let ctFont = font.ctFont(context: context)
+                return Self.exs(value: value, ctFont: ctFont)
+            }
         case let .centimeters(value):
             return value * Self.pixelsPerInch / 2.54
         case let .millimeters(value):
@@ -302,32 +394,42 @@ enum SVGLength: Equatable {
             return value * Self.pixelsPerInch / 6.0
         case let .chs(value):
             guard let font = context.font else { return 0 }
-            let ctFont = font.toCTFont
-            var glyph = CGGlyph()
-            CTFontGetGlyphsForCharacters(ctFont, &Self.zeroCodePoint, &glyph, 1)
-            var advance: CGSize = .zero
-            CTFontGetAdvancesForGlyphs(ctFont, CTFontOrientation.default, &glyph, &advance, 1)
-            let width = advance == .zero ? CTFontGetSize(ctFont) / 2.0 : advance.width
-            return value * width
+            switch font.size {
+            case .length(.chs(value)):
+                let ctFont = CTFont.standard(context: context)
+                return Self.chs(value: value, ctFont: ctFont)
+            default:
+                return Self.chs(value: value, ctFont: font.ctFont(context: context))
+            }
         case let .ic(value):
             guard let font = context.font else { return 0 }
-            return value * CTFontGetSize(font.toCTFont)
+            switch font.size {
+            case .length(.ic(value)):
+                let ctFont = CTFont.standard(context: context)
+                return Self.ic(value: value, ctFont: ctFont)
+            default:
+                return Self.ic(value: value, ctFont: font.ctFont(context: context))
+            }
         case let .lhs(value):
             guard let font = context.font else { return 0 }
-            let ctFont = font.toCTFont
-            let ascent = CTFontGetAscent(ctFont)
-            let lineGap = CTFontGetLeading(ctFont)
-            let descent = CTFontGetDescent(ctFont)
-            let lineSpacing = (ceil(ascent) + ceil(lineGap) + ceil(descent))
-            return value * lineSpacing
+            switch font.size {
+            case .length(.lhs(value)):
+                let ctFont = CTFont.standard(context: context)
+                return Self.lhs(value: value, ctFont: ctFont)
+            default:
+                let ctFont = font.ctFont(context: context)
+                return Self.lhs(value: value, ctFont: ctFont)
+            }
         case let .rlhs(value):
             guard let font = context.rootFont else { return 0 }
-            let ctFont = font.toCTFont
-            let ascent = CTFontGetAscent(ctFont)
-            let lineGap = CTFontGetLeading(ctFont)
-            let descent = CTFontGetDescent(ctFont)
-            let lineSpacing = (ceil(ascent) + ceil(lineGap) + ceil(descent))
-            return value * lineSpacing
+            switch font.size {
+            case .length(.lhs(value)):
+                let ctFont = CTFont.standard(context: context)
+                return Self.lhs(value: value, ctFont: ctFont)
+            default:
+                let ctFont = font.ctFont(context: context)
+                return Self.lhs(value: value, ctFont: ctFont)
+            }
         case let .vw(value):
             return value * context.viewPort.width / 100.0
         case let .vh(value):
@@ -361,6 +463,36 @@ enum SVGLength: Equatable {
         case let .q(value):
             return value * Self.pixelsPerInch / (25.4 * 4.0)
         }
+    }
+
+    private static func ems(value: CGFloat, fontSize: CGFloat) -> CGFloat {
+        value * fontSize
+    }
+
+    private static func exs(value: CGFloat, ctFont: CTFont) -> CGFloat {
+        let xHeight = CTFontGetXHeight(ctFont)
+        return value * xHeight
+    }
+
+    private static func chs(value: CGFloat, ctFont: CTFont) -> CGFloat {
+        var glyph = CGGlyph()
+        CTFontGetGlyphsForCharacters(ctFont, &Self.zeroCodePoint, &glyph, 1)
+        var advance: CGSize = .zero
+        CTFontGetAdvancesForGlyphs(ctFont, CTFontOrientation.default, &glyph, &advance, 1)
+        let width = advance == .zero ? CTFontGetSize(ctFont) / 2.0 : advance.width
+        return value * width
+    }
+
+    private static func ic(value: CGFloat, ctFont: CTFont) -> CGFloat {
+        value * CTFontGetSize(ctFont)
+    }
+
+    private static func lhs(value: CGFloat, ctFont: CTFont) -> CGFloat {
+        let ascent = CTFontGetAscent(ctFont)
+        let lineGap = CTFontGetLeading(ctFont)
+        let descent = CTFontGetDescent(ctFont)
+        let lineSpacing = (ceil(ascent) + ceil(lineGap) + ceil(descent))
+        return value * lineSpacing
     }
 }
 
