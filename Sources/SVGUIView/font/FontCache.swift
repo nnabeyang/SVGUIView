@@ -164,8 +164,7 @@ class FontCache {
         if let result = fontForFamily(fontDescription: fontDescription, familyName: "Times") {
             return result
         }
-        let fontDescriptor = CTFontDescriptorCreateLastResort().takeRetainedValue()
-        let font = CTFontCreateWithFontDescriptor(fontDescriptor, fontDescription.computedSize, nil)
+        let font = CTFontCreateLastResort(fontDescription.computedSize, nil)
         let (syntheticBold, syntheticOblique) = FontFamilySpecificationCoreText.computeNecessarySynthesis(font: font,
                                                                                                           fontDescription: fontDescription).boldObliquePair
         let platformData = FontPlatformData(font: font, size: fontDescription.computedSize,

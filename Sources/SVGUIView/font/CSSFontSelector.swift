@@ -7,12 +7,6 @@ class CSSFontSelector: FontSelector {
     }
 
     func resolveGenericFamily(fontDescription: FontDescription, familyName: String) -> String? {
-        let result = FontDescription.platformResolveGenericFamily(script: fontDescription.script,
-                                                                  locale: fontDescription.locale,
-                                                                  familyName: familyName)
-        if result != nil {
-            return result
-        }
         let script = fontDescription.script
         if let familyNameIndex = familyNames.find(familyName) {
             if let familyString = settings.fontGenericFamilies.fontFamily(family: familyNameIndex, script: script) {

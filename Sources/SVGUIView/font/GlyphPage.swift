@@ -1,4 +1,5 @@
 import _SPI
+import CoreText
 
 class GlyphPage {
     private static let size = 16
@@ -23,18 +24,6 @@ class GlyphPage {
         pageNumber * UInt(Self.size)
     }
 
-    static func shouldFillWithVerticalGlyphs(buffer: [UInt16], bufferLength _: Int, font: Font) -> Bool {
-        if !font.hasVerticalGlyphs {
-            return false
-        }
-        for c in buffer {
-            if !FontCascade.isCJKIdeograph(UInt32(c)) {
-                return true
-            }
-        }
-        return false
-    }
-
     func setGlyphForIndex(index: Int, glyph: Glyph, colorGlyphType: ColorGlyphType) {
         glyphs[index] = glyph
         isColor[index] = colorGlyphType == .color
@@ -55,11 +44,7 @@ class GlyphPage {
     func fill(buffer: inout [UInt16], bufferLength: Int) -> Bool {
         let ctFont = font.platformData.font
         var glyphs = [CGGlyph](repeating: 0, count: 512)
-        if Self.shouldFillWithVerticalGlyphs(buffer: buffer, bufferLength: bufferLength, font: font) {
-            CTFontGetVerticalGlyphsForCharacters(ctFont, buffer, &glyphs, bufferLength)
-        } else {
-            CTFontGetGlyphsForCharacters(ctFont, buffer, &glyphs, bufferLength)
-        }
+        CTFontGetGlyphsForCharacters(ctFont, buffer, &glyphs, bufferLength)
         let glyphStep = bufferLength / GlyphPage.size
         var haveGlyphs = false
         for i in 0 ..< GlyphPage.size {

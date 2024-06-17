@@ -1,4 +1,5 @@
 import _SPI
+import CoreText
 import Foundation
 
 class UnrealizedCoreTextFont {

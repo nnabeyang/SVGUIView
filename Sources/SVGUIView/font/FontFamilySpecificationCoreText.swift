@@ -1,5 +1,6 @@
 import _SPI
 import CoreText
+import UIKit
 
 struct FontFamilySpecificationCoreText {
     let fontDescriptor: CTFontDescriptor
@@ -10,7 +11,7 @@ struct FontFamilySpecificationCoreText {
         unrealizedFont.size = size
         let font = SVGUIView.preparePlatformFont(originalFont: unrealizedFont,
                                                  fontDescription: fontDescription, fontCreationContext: FontCreationContext(), fontTypeForPreparation: .systemFont)!
-        let (syntheticBold, syntheticOblique) = Self.computeNecessarySynthesis(font: font, fontDescription: fontDescription, shouldComputePhysicalTraits: .yes)
+        let (syntheticBold, syntheticOblique) = Self.computeNecessarySynthesis(font: font, fontDescription: fontDescription)
             .boldObliquePair
         let platformData = FontPlatformData(font: font, size: size, orientation: fontDescription.orientation, widthVariant: fontDescription.widthVariant,
                                             syntheticBold: syntheticBold, syntheticOblique: syntheticOblique)
@@ -19,8 +20,7 @@ struct FontFamilySpecificationCoreText {
         return FontRanges(font: FontCache.shared.fontForPlatformData(platformData: platformData))
     }
 
-    static func computeNecessarySynthesis(font: CTFont, fontDescription: FontDescription,
-                                          shouldComputePhysicalTraits: ShouldComputePhysicalTraits = .no, isPlatformFont: Bool = false) -> SynthesisPair
+    static func computeNecessarySynthesis(font: CTFont, fontDescription: FontDescription, isPlatformFont: Bool = false) -> SynthesisPair
     {
         if CTFontIsAppleColorEmoji(font) {
             return SynthesisPair((false, false))
@@ -31,12 +31,7 @@ struct FontFamilySpecificationCoreText {
         let desiredTraits = Self.computeTraits(fontDescription: fontDescription)
         let actualTraits: CTFontSymbolicTraits
         if FontSelectionValue.isItalic(slope: fontDescription.italic) || FontSelectionValue.isFontWeightBold(fontWeight: fontDescription.weight) {
-            switch shouldComputePhysicalTraits {
-            case .yes:
-                actualTraits = CTFontGetPhysicalSymbolicTraits(font)
-            case .no:
-                actualTraits = CTFontGetSymbolicTraits(font)
-            }
+            actualTraits = CTFontGetSymbolicTraits(font)
         } else {
             actualTraits = .zero
         }

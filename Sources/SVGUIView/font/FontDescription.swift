@@ -41,31 +41,27 @@ class FontDescription {
         self.locale = locale
     }
 
-    static func platformResolveGenericFamily(script: UScriptCode, locale: String?, familyName: String) -> String? {
-        precondition((locale == nil && script == .common) || locale != nil)
-        guard let locale = locale else { return nil }
-        switch familyName {
-        case SVGUIView.familyNamesData[.serif]:
-            return SystemFontDatabaseCoreText.shared.serifFamily(locale: locale)
-        case SVGUIView.familyNamesData[.sansSerif]:
-            return SystemFontDatabaseCoreText.shared.sansSerifFamily(locale: locale)
-        case SVGUIView.familyNamesData[.cursive]:
-            return SystemFontDatabaseCoreText.shared.cursiveFamily(locale: locale)
-        case SVGUIView.familyNamesData[.fantasy]:
-            return SystemFontDatabaseCoreText.shared.fantasyFamily(locale: locale)
-        case SVGUIView.familyNamesData[.monospace]:
-            return SystemFontDatabaseCoreText.shared.monospaceFamily(locale: locale)
-        default:
-            return nil
-        }
-    }
-
     static func localeToScriptCodeForFontSelection(locale: String) -> UScriptCode {
-        let canonicalLocale = locale.replacingOccurrences(of: "-", with: "_")
-        if let scriptCode = Self.localeScriptMap[canonicalLocale] {
-            return scriptCode
+        var canonicalLocale = locale.replacingOccurrences(of: "-", with: "_")
+        while !canonicalLocale.isEmpty {
+            if let code = Self.localeScriptMap[canonicalLocale] {
+                return code
+            }
+            guard let underScoreIndex = canonicalLocale.lastIndex(of: "_") else {
+                break
+            }
+            let startIndex = canonicalLocale.index(after: underScoreIndex)
+            let code = Self.scriptNameToCode(scriptName: String(canonicalLocale[startIndex...]))
+            if code != .invalid, code != .common {
+                return code
+            }
+            canonicalLocale = String(canonicalLocale[..<underScoreIndex])
         }
         return .common
+    }
+
+    static func scriptNameToCode(scriptName: String) -> UScriptCode {
+        Self.scriptNameCodeMap[scriptName, default: .invalid]
     }
 
     static let localeScriptMap: [String: UScriptCode] = [
@@ -267,6 +263,115 @@ class FontDescription {
         "zh_hk": .hant,
         "zh_tw": .hant,
         "zu": .latn,
+    ]
+
+    static let scriptNameCodeMap: [String: UScriptCode] = [
+        "arab": .arab,
+        "armn": .armn,
+        "bali": .bali,
+        "batk": .batk,
+        "beng": .beng,
+        "blis": .blis,
+        "bopo": .bopo,
+        "brah": .brah,
+        "brai": .brai,
+        "bugi": .bugi,
+        "buhd": .buhd,
+        "cans": .cans,
+        "cham": .cham,
+        "cher": .cher,
+        "cirt": .cirt,
+        "copt": .copt,
+        "cprt": .cprt,
+        "cyrl": .cyrl,
+        "cyrs": .cyrs,
+        "deva": .deva,
+        "dsrt": .dsrt,
+        "egyd": .egyd,
+        "egyh": .egyh,
+        "egyp": .egyp,
+        "ethi": .ethi,
+        "geok": .geok,
+        "geor": .geor,
+        "glag": .glag,
+        "goth": .goth,
+        "grek": .grek,
+        "gujr": .gujr,
+        "guru": .guru,
+        "hang": .hang,
+        "hani": .hani,
+        "hano": .hano,
+        "hans": .hans,
+        "hant": .hant,
+        "hebr": .hebr,
+        "hira": .kana,
+        "hmng": .hmng,
+        "hrkt": .kana,
+        "hung": .hung,
+        "inds": .inds,
+        "ital": .ital,
+        "java": .java,
+        "jpan": .kana,
+        "kali": .kali,
+        "kana": .kana,
+        "khar": .khar,
+        "khmr": .khmr,
+        "knda": .knda,
+        "kore": .hang,
+        "laoo": .laoo,
+        "latf": .latf,
+        "latg": .latg,
+        "latn": .latn,
+        "lepc": .lepc,
+        "limb": .limb,
+        "lina": .lina,
+        "linb": .linb,
+        "mand": .mand,
+        "maya": .maya,
+        "mero": .mero,
+        "mlym": .mlym,
+        "mong": .mong,
+        "mymr": .mymr,
+        "nkoo": .nkoo,
+        "ogam": .ogam,
+        "orkh": .orkh,
+        "orya": .orya,
+        "osma": .osma,
+        "perm": .perm,
+        "phag": .phag,
+        "phnx": .phnx,
+        "plrd": .plrd,
+        "qaai": .zinh,
+        "roro": .roro,
+        "runr": .runr,
+        "sara": .sara,
+        "shaw": .shaw,
+        "sinh": .sinh,
+        "sylo": .sylo,
+        "syrc": .syrc,
+        "syre": .syre,
+        "syrj": .syrj,
+        "syrn": .syrn,
+        "tagb": .tagb,
+        "tale": .tale,
+        "talu": .talu,
+        "taml": .taml,
+        "telu": .telu,
+        "teng": .teng,
+        "tfng": .tfng,
+        "tglg": .tglg,
+        "thaa": .thaa,
+        "thai": .thai,
+        "tibt": .tibt,
+        "ugar": .ugar,
+        "vaii": .vaii,
+        "visp": .visp,
+        "xpeo": .xpeo,
+        "xsux": .xsux,
+        "yiii": .yiii,
+        "zxxx": .zxxx,
+        "zyyy": .common,
+        "zzzz": .zzzz,
     ]
 }
 

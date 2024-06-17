@@ -21,6 +21,7 @@ struct SVGUIFont {
         }
         fontDescription = FontCascadeDescription()
         fontDescription.setFamilies(familyNames: families)
+        fontDescription.setSpecifiedLocale(locale: Locale.current.identifier)
     }
 
     init(name: String?, weight: Weight?) {

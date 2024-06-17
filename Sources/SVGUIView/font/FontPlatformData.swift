@@ -1,4 +1,5 @@
 import _SPI
+import CoreText
 
 struct FontPlatformData: Hashable {
     struct FontVariationAxis {

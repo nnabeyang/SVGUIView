@@ -2,11 +2,6 @@ import _SPI
 import UIKit
 
 class SystemFontDatabaseCoreText {
-    var serifFamilies = [String: String]()
-    var sansSerifFamilies = [String: String]()
-    var cursiveFamilies = [String: String]()
-    var monospaceFamilies = [String: String]()
-    var fantasyFamilies = [String: String]()
     var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
     var textStyles = [CFString]()
 
@@ -100,9 +95,8 @@ class SystemFontDatabaseCoreText {
     }
 
     static func createTextStyleFont(parameters: CascadeListParameters) -> CTFont? {
-        let locale = parameters.locale.flatMap { $0 as CFString }
-        guard var descriptor = CTFontDescriptorCreateWithTextStyle(parameters.fontName as CFString, Self.contentSizeCategory, locale)?.takeRetainedValue() else { return nil }
-
+        let textStyle = UIFont.TextStyle(rawValue: parameters.fontName)
+        var descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: textStyle) as CTFontDescriptor
         let traits: CTFontSymbolicTraits = [
             parameters.weight >= UIFont.Weight.semibold.rawValue ? .boldTrait : .zero,
             parameters.width >= kCTFontWidthSemiExpanded ? .expandedTrait : .zero,
@@ -273,38 +267,6 @@ class SystemFontDatabaseCoreText {
             if width.double < middleInput { return previous.output }
         }
         return Self.piecewisePoints[n].output
-    }
-
-    static func genericFamily(locale: String, map: inout [String: String], ctKey: CFString) -> String? {
-        if let name = map[locale] {
-            return name
-        }
-        let descriptor = CTFontDescriptorCreateForCSSFamily(ctKey, locale as CFString).takeRetainedValue()
-        guard let name = CTFontDescriptorCopyAttribute(descriptor, kCTFontFamilyNameAttribute) as? String else {
-            return nil
-        }
-        map[locale] = name
-        return name
-    }
-
-    func serifFamily(locale: String) -> String? {
-        Self.genericFamily(locale: locale, map: &serifFamilies, ctKey: kCTFontCSSFamilySerif)
-    }
-
-    func sansSerifFamily(locale: String) -> String? {
-        Self.genericFamily(locale: locale, map: &sansSerifFamilies, ctKey: kCTFontCSSFamilySansSerif)
-    }
-
-    func cursiveFamily(locale: String) -> String? {
-        Self.genericFamily(locale: locale, map: &cursiveFamilies, ctKey: kCTFontCSSFamilyCursive)
-    }
-
-    func fantasyFamily(locale: String) -> String? {
-        Self.genericFamily(locale: locale, map: &fantasyFamilies, ctKey: kCTFontCSSFamilyFantasy)
-    }
-
-    func monospaceFamily(locale: String) -> String? {
-        Self.genericFamily(locale: locale, map: &monospaceFamilies, ctKey: kCTFontCSSFamilyMonospace)
     }
 }
 
