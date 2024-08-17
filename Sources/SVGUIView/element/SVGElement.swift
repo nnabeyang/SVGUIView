@@ -163,7 +163,6 @@ protocol SVGDrawableElement: SVGElement {
     init(other: Self, attributes: [String: String])
     func use(attributes: [String: String]) -> Self
     func toBezierPath(context: SVGContext) -> UIBezierPath?
-    @available(iOS 16.0, *)
     func toClippedBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode)
@@ -226,7 +225,6 @@ extension SVGDrawableElement {
         }
     }
 
-    @available(iOS 16.0, *)
     func toClippedBezierPath(context: SVGContext) -> UIBezierPath? {
         guard let path = toBezierPath(context: context) else { return nil }
         let frame = frame(context: context, path: path)

@@ -139,26 +139,6 @@ struct SVGFeBlendElement: SVGElement, SVGFilterApplier {
                                              vImage_Flags(kvImageNoAllocate),
                                              nil)?.takeRetainedValue()
     }
-
-    private func createImageCGContext(imageBuffer: vImage_Buffer) -> CGContext? {
-        let scale = UIScreen.main.scale
-        let frameWidth = Int((Double(imageBuffer.width) * scale).rounded(.up))
-        let frameHeight = Int((Double(imageBuffer.height) * scale).rounded(.up))
-        let bytesPerRow = 4 * frameWidth
-        let cgContext = CGContext(data: nil,
-                                  width: frameWidth,
-                                  height: frameHeight,
-                                  bitsPerComponent: 8,
-                                  bytesPerRow: bytesPerRow,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-
-        cgContext.map {
-            let transform = CGAffineTransform(scaleX: scale, y: scale)
-            $0.concatenate(transform)
-        }
-        return cgContext
-    }
 }
 
 extension SVGFeBlendElement: Encodable {
