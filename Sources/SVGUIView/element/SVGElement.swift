@@ -163,7 +163,6 @@ protocol SVGDrawableElement: SVGElement {
     init(other: Self, attributes: [String: String])
     func use(attributes: [String: String]) -> Self
     func toBezierPath(context: SVGContext) -> UIBezierPath?
-    func toClippedBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode)
 }
@@ -225,29 +224,6 @@ extension SVGDrawableElement {
         }
     }
 
-    func toClippedBezierPath(context: SVGContext) -> UIBezierPath? {
-        guard let path = toBezierPath(context: context) else { return nil }
-        let frame = frame(context: context, path: path)
-        let result: UIBezierPath
-        if case let .url(id) = clipPath,
-           let clipPath = context.clipPaths[id],
-           context.check(clipId: id)
-        {
-            let bezierPath = clipPath.toBezierPath(context: context, frame: frame)
-            context.remove(clipId: id)
-            if bezierPath.isEmpty {
-                return nil
-            }
-            let clipRule = clipRule ?? false
-            let lcgPath = path.cgPath.normalized(using: clipRule ? .evenOdd : .winding)
-            let cgPath = lcgPath.intersection(bezierPath.cgPath)
-            result = UIBezierPath(cgPath: cgPath)
-        } else {
-            result = path
-        }
-        return result
-    }
-
     func drawWithoutFilter(_ context: SVGContext, index _: Int, depth _: Int, mode: DrawMode) {
         context.saveGState()
         if mode != .filter(isRoot: true) {
@@ -268,25 +244,16 @@ extension SVGDrawableElement {
         default:
             break
         }
-        let path: UIBezierPath?
-        if type != .line {
-            path = toClippedBezierPath(context: context)
-            if let path = toBezierPath(context: context) {
-                let frame = frame(context: context, path: path)
-                mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-            }
-        } else {
-            path = toBezierPath(context: context)
-            if let path = path {
-                let frame = frame(context: context, path: path)
-                clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
-                let lineWidth = stroke.width?.value(context: context, mode: .other)
+        let path = toBezierPath(context: context)
+        if let path = path {
+            let frame = frame(context: context, path: path)
+            clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
+            let lineWidth = stroke.width?.value(context: context, mode: .other)
 
-                if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
-                    context.graphics.clip(to: .zero)
-                } else {
-                    mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-                }
+            if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
+                context.graphics.clip(to: .zero)
+            } else {
+                mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
             }
         }
         let gContext = context.graphics
@@ -350,25 +317,16 @@ extension SVGDrawableElement {
         default:
             break
         }
-        let path: UIBezierPath?
-        if type != .line {
-            path = toClippedBezierPath(context: context)
-            if let path = toBezierPath(context: context) {
-                let frame = frame(context: context, path: path)
-                mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-            }
-        } else {
-            path = toBezierPath(context: context)
-            if let path = path {
-                let frame = frame(context: context, path: path)
-                clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
-                let lineWidth = stroke.width?.value(context: context, mode: .other)
+        let path = toBezierPath(context: context)
+        if let path = path {
+            let frame = frame(context: context, path: path)
+            clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
+            let lineWidth = stroke.width?.value(context: context, mode: .other)
 
-                if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
-                    context.graphics.clip(to: .zero)
-                } else {
-                    mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-                }
+            if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
+                context.graphics.clip(to: .zero)
+            } else {
+                mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
             }
         }
         let gContext = context.graphics

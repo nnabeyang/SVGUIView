@@ -43,17 +43,10 @@ struct SVGClipPathElement: SVGElement {
         transform = other.transform
     }
 
-    func clip(type: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) -> Bool {
-        if type != .line {
-            let bezierPath = toBezierPath(context: context, frame: frame)
-            guard !bezierPath.isEmpty else { return false }
-            bezierPath.addClip()
-            return true
-        } else {
-            guard let maskImage = maskImage(frame: frame, context: context) else { return false }
-            cgContext.clip(to: frame, mask: maskImage)
-            return true
-        }
+    func clip(type _: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) -> Bool {
+        guard let maskImage = maskImage(frame: frame, context: context) else { return false }
+        cgContext.clip(to: frame, mask: maskImage)
+        return true
     }
 
     private func maskImage(frame: CGRect, context: SVGContext) -> CGImage? {
@@ -124,63 +117,8 @@ struct SVGClipPathElement: SVGElement {
         return image
     }
 
-    func toBezierPath(context: SVGContext, frame: CGRect) -> UIBezierPath {
-        let transform: CGAffineTransform
-        let clipPathUnits = clipPathUnits ?? .userSpaceOnUse
-        switch clipPathUnits {
-        case .userSpaceOnUse:
-            transform = self.transform ?? .identity
-        case .objectBoundingBox:
-            transform = (self.transform ?? .identity)
-                .translatedBy(x: frame.origin.x, y: frame.origin.y)
-                .scaledBy(x: frame.width, y: frame.height)
-        }
-        var rootPath: CGPath?
-        for index in contentIds {
-            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            if content is SVGGroupElement ||
-                content is SVGLineElement
-            {
-                continue
-            }
-            if case .hidden = content.visibility {
-                continue
-            }
-            if let display = content.display, case .none = display {
-                continue
-            }
-            content.font.map {
-                context.push(font: $0)
-            }
-            guard let bezierPath = content.toClippedBezierPath(context: context) else { continue }
-            content.font.map { _ in
-                _ = context.popFont()
-            }
-            bezierPath.apply((content.transform ?? .identity).concatenating(transform))
-            var tpath = bezierPath.cgPath
-            let clipRule = content.clipRule ?? clipRule ?? false
-            if case let .url(id) = content.clipPath,
-               context.check(clipId: id),
-               let path = context.clipPaths[id]?.toBezierPath(context: context, frame: frame)
-            {
-                tpath = tpath.intersection(path.cgPath, using: .winding)
-                context.remove(clipId: id)
-            }
-            if rootPath == nil {
-                rootPath = tpath.normalized(using: clipRule ? .evenOdd : .winding)
-            } else {
-                rootPath = rootPath?.union(tpath, using: clipRule ? .evenOdd : .winding)
-            }
-        }
-
-        if case let .url(id) = clipPath,
-           context.check(clipId: id),
-           let path = context.clipPaths[id]?.toBezierPath(context: context, frame: frame)
-        {
-            context.remove(clipId: id)
-            rootPath = rootPath?.intersection(path.cgPath, using: .winding)
-        }
-        return rootPath.map { UIBezierPath(cgPath: $0) } ?? UIBezierPath()
+    func toBezierPath(context _: SVGContext, frame _: CGRect) -> UIBezierPath {
+        fatalError()
     }
 
     func drawWithoutFilter(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
