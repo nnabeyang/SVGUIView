@@ -74,10 +74,6 @@ struct SVGFeBlendElement: SVGElement, SVGFilterApplier {
     let input: SVGFilterInput?
     let input2: SVGFilterInput?
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
-        fatalError()
-    }
-
     func style(with _: CSSStyle, at _: Int) -> any SVGElement {
         self
     }

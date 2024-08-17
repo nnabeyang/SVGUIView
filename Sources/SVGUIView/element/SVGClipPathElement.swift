@@ -43,84 +43,10 @@ struct SVGClipPathElement: SVGElement {
         transform = other.transform
     }
 
-    func clip(type _: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) -> Bool {
-        guard let maskImage = maskImage(frame: frame, context: context) else { return false }
-        cgContext.clip(to: frame, mask: maskImage)
-        return true
-    }
-
     func clip(type _: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) async -> Bool {
         guard let maskImage = await maskImage(frame: frame, context: context) else { return false }
         cgContext.clip(to: frame, mask: maskImage)
         return true
-    }
-
-    private func maskImage(frame: CGRect, context: SVGContext) -> CGImage? {
-        let size = frame.size
-        let scale = UIScreen.main.scale
-        let frameWidth = Int((size.width * scale).rounded(.up))
-        let frameHeight = Int((size.height * scale).rounded(.up))
-        let bytesPerRow = 4 * frameWidth
-        guard let graphics = CGContext(data: nil,
-                                       width: frameWidth,
-                                       height: frameHeight,
-                                       bitsPerComponent: 8,
-                                       bytesPerRow: bytesPerRow,
-                                       space: CGColorSpaceCreateDeviceRGB(),
-                                       bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-        else {
-            return nil
-        }
-
-        let transform: CGAffineTransform
-        let clipPathUnits = clipPathUnits ?? .userSpaceOnUse
-        let t = (self.transform ?? .identity).concatenating(CGAffineTransform(scaleX: scale, y: scale))
-
-        switch clipPathUnits {
-        case .userSpaceOnUse:
-            transform = t
-                .translatedBy(x: -frame.minX, y: -frame.minY)
-        case .objectBoundingBox:
-            transform = t
-                .scaledBy(x: size.width, y: size.height)
-        }
-
-        graphics.concatenate(transform)
-        for index in contentIds {
-            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            if content is SVGGroupElement ||
-                content is SVGLineElement
-            {
-                continue
-            }
-            if case .hidden = content.visibility {
-                continue
-            }
-            if let display = content.display, case .none = display {
-                continue
-            }
-            content.font.map {
-                context.push(font: $0)
-            }
-            guard let bezierPath = content.toBezierPath(context: context) else { continue }
-            content.font.map { _ in
-                _ = context.popFont()
-            }
-            graphics.saveGState()
-            content.transform.map {
-                graphics.concatenate($0)
-            }
-
-            content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
-            let clipRule = content.clipRule ?? clipRule ?? false
-            graphics.addPath(bezierPath.cgPath)
-            graphics.drawPath(using: clipRule ? .eoFill : .fill)
-            graphics.restoreGState()
-        }
-        clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
-        let image = graphics.makeImage()
-        graphics.restoreGState()
-        return image
     }
 
     private func maskImage(frame: CGRect, context: SVGContext) async -> CGImage? {
@@ -194,9 +120,6 @@ struct SVGClipPathElement: SVGElement {
     func toBezierPath(context _: SVGContext, frame _: CGRect) -> UIBezierPath {
         fatalError()
     }
-
-    func drawWithoutFilter(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))

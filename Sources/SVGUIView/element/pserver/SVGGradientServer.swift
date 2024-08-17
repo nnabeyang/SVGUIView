@@ -37,14 +37,6 @@ extension SVGGradientServer {
         contentIds.compactMap { context.contents[$0] as? SVGStopElement }
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
-        fatalError()
-    }
-
-    func drawWithoutFilter(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
-        fatalError()
-    }
-
     func style(with _: CSSStyle, at _: Int) -> SVGElement {
         self
     }

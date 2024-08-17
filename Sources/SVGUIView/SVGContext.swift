@@ -14,7 +14,6 @@ struct SVGContext: SVGLengthContext {
     let graphics: CGContext
     let viewPort: CGRect
 
-    private let startDetectingCyclesAfter: Int
     private let viewBoxStack: Stack<CGRect> = Stack()
     private let patternContentUnitStack = Stack<SVGUnitType>()
     private let fontStack: Stack<SVGUIFont> = Stack()
@@ -30,21 +29,19 @@ struct SVGContext: SVGLengthContext {
     private let tagIdStack = ElementIdStack<Int>()
     private let initCtm: CGAffineTransform
 
-    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, startDetectingCyclesAfter: Int = 1000) {
+    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect) {
         self.base = base
         self.graphics = graphics
         initCtm = graphics.ctm
         self.viewPort = viewPort
-        self.startDetectingCyclesAfter = startDetectingCyclesAfter
         patternIdStack = ElementIdStack<String>()
     }
 
-    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, startDetectingCyclesAfter: Int = 1000, other: Self) {
+    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, other: Self) {
         self.base = base
         self.graphics = graphics
         initCtm = graphics.ctm
         self.viewPort = viewPort
-        self.startDetectingCyclesAfter = startDetectingCyclesAfter
         patternIdStack = other.patternIdStack
     }
 
@@ -85,14 +82,6 @@ struct SVGContext: SVGLengthContext {
 
     subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
         base[id]
-    }
-
-    func detectCycles(type: SVGElementName, depth: Int) -> Bool {
-        let maybeCycling = depth >= startDetectingCyclesAfter
-        if maybeCycling {
-            SVGUIView.logger.debug("encountered a cycle via \(type.rawValue)")
-        }
-        return maybeCycling
     }
 
     var viewBox: CGRect {

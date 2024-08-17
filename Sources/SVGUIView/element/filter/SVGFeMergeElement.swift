@@ -16,10 +16,6 @@ struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
 
     let contentIds: [Int]
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
-        fatalError()
-    }
-
     func style(with _: CSSStyle, at _: Int) -> SVGElement {
         self
     }

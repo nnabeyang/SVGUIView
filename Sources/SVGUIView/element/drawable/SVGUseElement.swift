@@ -90,35 +90,6 @@ struct SVGUseElement: SVGDrawableElement {
         return element.toBezierPath(context: context)
     }
 
-    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
-        guard !context.detectCycles(type: type, depth: depth) else { return }
-        let gContext = context.graphics
-        gContext.saveGState()
-        defer {
-            gContext.restoreGState()
-        }
-        switch mode {
-        case .root, .filter:
-            context.pushTagIdStack()
-            context.pushClipIdStack()
-            context.pushMaskIdStack()
-            context.pushPatternIdStack()
-        default:
-            break
-        }
-        guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
-        newElement.draw(context, index: newIndex, depth: depth + 1, mode: .normal)
-        switch mode {
-        case .root, .filter:
-            context.popTagIdStack()
-            context.popClipIdStack()
-            context.popMaskIdStack()
-            context.popPatternIdStack()
-        default:
-            break
-        }
-    }
-
     func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
         guard !Task.isCancelled else { return }
         let gContext = context.graphics

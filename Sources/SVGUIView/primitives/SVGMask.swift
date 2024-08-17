@@ -22,17 +22,6 @@ enum SVGMask {
         self = clipPath
     }
 
-    func clipIfNeeded(frame: CGRect, context: SVGContext, cgContext: CGContext) {
-        if case let .url(id) = self,
-           context.check(maskId: id),
-           let mask = context.masks[id]
-        {
-            if mask.clip(frame: frame, context: context, cgContext: cgContext) {
-                context.remove(maskId: id)
-            }
-        }
-    }
-
     func clipIfNeeded(frame: CGRect, context: SVGContext, cgContext: CGContext) async {
         if case let .url(id) = self,
            context.check(maskId: id),

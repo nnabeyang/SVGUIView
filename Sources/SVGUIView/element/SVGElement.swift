@@ -2,8 +2,6 @@ import UIKit
 
 protocol SVGElement: Encodable {
     var type: SVGElementName { get }
-    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode)
-    func drawWithoutFilter(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode)
     func draw(_ context: SVGContext, index: Int, mode: DrawMode) async
     func drawWithoutFilter(_ context: SVGContext, index: Int, mode: DrawMode) async
     func style(with style: CSSStyle, at index: Int) -> any SVGElement
@@ -174,7 +172,6 @@ protocol SVGDrawableElement: SVGElement {
     func use(attributes: [String: String]) -> Self
     func toBezierPath(context: SVGContext) -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
-    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) async
 }
 
@@ -233,79 +230,6 @@ extension SVGDrawableElement {
             let size = context.viewBox.size
             return CGAffineTransform(scaleX: size.width, y: size.height)
         }
-    }
-
-    func drawWithoutFilter(_ context: SVGContext, index _: Int, depth _: Int, mode: DrawMode) {
-        context.saveGState()
-        if mode != .filter(isRoot: true) {
-            context.concatenate(transform ?? .identity)
-        }
-        writingMode.map {
-            context.push(writingMode: $0)
-        }
-        font.map {
-            context.push(font: $0)
-        }
-        switch mode {
-        case .root, .filter:
-            context.pushTagIdStack()
-            context.pushClipIdStack()
-            context.pushMaskIdStack()
-            context.pushPatternIdStack()
-        default:
-            break
-        }
-        let path = toBezierPath(context: context)
-        if let path = path {
-            let frame = frame(context: context, path: path)
-            clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
-            let lineWidth = stroke.width?.value(context: context, mode: .other)
-
-            if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
-                context.graphics.clip(to: .zero)
-            } else {
-                mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-            }
-        }
-        let gContext = context.graphics
-        gContext.setAlpha(opacity)
-        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-        if let path = path {
-            applySVGFill(fill: fill, path: path, context: context, mode: mode)
-            applySVGStroke(stroke: stroke, path: path, context: context)
-        }
-        switch mode {
-        case .root, .filter:
-            context.popTagIdStack()
-            context.popClipIdStack()
-            context.popMaskIdStack()
-            context.popPatternIdStack()
-        default:
-            break
-        }
-        writingMode.map { _ in
-            _ = context.popWritingMode()
-        }
-        font.map { _ in
-            _ = context.popFont()
-        }
-        gContext.endTransparencyLayer()
-        context.restoreGState()
-    }
-
-    func draw(_ context: SVGContext, index: Int, depth: Int, mode: DrawMode) {
-        guard !context.detectCycles(type: type, depth: depth) else { return }
-        if let display = display, case .none = display {
-            return
-        }
-        let filter = filter ?? SVGFilter.none
-        if case let .url(id) = filter,
-           let server = context.filters[id]
-        {
-            server.filter(content: self, context: context, cgContext: context.graphics)
-            return
-        }
-        drawWithoutFilter(context, index: index, depth: depth, mode: mode)
     }
 
     func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
@@ -422,79 +346,6 @@ extension SVGDrawableElement {
         cgContext.setLineJoin(stroke.join ?? .miter)
         cgContext.setMiterLimit(stroke.miterLimit ?? 4.0)
         cgContext.drawPath(using: .stroke)
-    }
-
-    func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) {
-        path.usesEvenOddFillRule = eoFill
-        let cgContext = context.graphics
-        guard let fill = fill ?? context.fill else {
-            cgContext.setFillColor(UIColor.black.cgColor)
-            cgContext.addPath(path.cgPath)
-            cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-            return
-        }
-        switch fill {
-        case .inherit:
-            if let fill = context.fill {
-                if case .inherit = fill {
-                    let fill = context.popFill()
-                    if let fill = context.fill {
-                        applySVGFill(fill: fill, path: path, context: context, mode: mode)
-                    }
-                    fill.map {
-                        context.push(fill: $0)
-                    }
-                } else {
-                    applySVGFill(fill: fill, path: path, context: context, mode: mode)
-                }
-            } else {
-                cgContext.setFillColor(UIColor.black.cgColor)
-                cgContext.addPath(path.cgPath)
-                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-            }
-        case .current:
-            if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-                cgContext.setFillColor(uiColor.cgColor)
-            } else {
-                cgContext.setFillColor(UIColor.black.cgColor)
-            }
-            cgContext.addPath(path.cgPath)
-            cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-        case let .color(color, opacity):
-            let opacity = opacity?.value ?? 1.0
-            if let uiColor = color?.toUIColor(opacity: opacity) {
-                cgContext.setFillColor(uiColor.cgColor)
-                cgContext.addPath(path.cgPath)
-                cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-            }
-        case let .url(id, opacity):
-            if let server = context.pservers[id] {
-                switch server.display ?? .inline {
-                case .none:
-                    break
-                default:
-                    applyPServerFill(server: server, path: path, context: context, opacity: opacity?.value ?? 1.0)
-                    return
-                }
-            } else if let pattern = context.patterns[id],
-                      context.check(patternId: id)
-            {
-                let frame = frame(context: context, path: path)
-                let cgContext = context.graphics
-                let opacity = opacity?.value ?? 1.0
-                cgContext.saveGState()
-                cgContext.setAlpha(opacity)
-                cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
-                _ = pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
-                cgContext.endTransparencyLayer()
-                cgContext.restoreGState()
-                context.remove(patternId: id)
-                return
-            }
-            cgContext.setFillColor(UIColor.black.cgColor)
-            cgContext.addPath(path.cgPath)
-            cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-        }
     }
 
     func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext, opacity: CGFloat) {

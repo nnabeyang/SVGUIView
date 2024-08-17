@@ -14,14 +14,6 @@ protocol SVGFilterApplier {
 }
 
 extension SVGFilterApplier {
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
-        fatalError()
-    }
-
-    func drawWithoutFilter(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {
-        fatalError()
-    }
-
     func frame(filter: SVGFilterElement, frame: CGRect, context: SVGContext) -> CGRect {
         let primitiveUnits = filter.primitiveUnits ?? .userSpaceOnUse
         let filterUnits = filter.filterUnits ?? .objectBoundingBox

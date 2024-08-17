@@ -65,17 +65,6 @@ struct SVGMaskElement: SVGDrawableElement {
         fatalError()
     }
 
-    func clip(frame: CGRect, context: SVGContext, cgContext: CGContext) -> Bool {
-        guard let maskImage = maskImage(frame: frame, context: context) else { return false }
-        let x = (x ?? .percent(-10)).value(context: context, mode: .width)
-        let y = (y ?? .percent(-10)).value(context: context, mode: .height)
-        let width = (width ?? .percent(120)).value(context: context, mode: .width)
-        let height = (height ?? .percent(120)).value(context: context, mode: .height)
-        cgContext.clip(to: CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height)))
-        cgContext.clip(to: frame, mask: maskImage)
-        return true
-    }
-
     func clip(frame: CGRect, context: SVGContext, cgContext: CGContext) async -> Bool {
         guard let maskImage = await maskImage(frame: frame, context: context) else { return false }
         let x = (x ?? .percent(-10)).value(context: context, mode: .width)
@@ -85,72 +74,6 @@ struct SVGMaskElement: SVGDrawableElement {
         cgContext.clip(to: CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height)))
         cgContext.clip(to: frame, mask: maskImage)
         return true
-    }
-
-    private func maskImage(frame: CGRect, context: SVGContext) -> CGImage? {
-        let size = frame.size
-        let scale = UIScreen.main.scale
-        let frameWidth = Int((size.width * scale).rounded(.up))
-        let frameHeight = Int((size.height * scale).rounded(.up))
-        let bytesPerRow = 4 * frameWidth
-        guard let graphics = CGContext(data: nil,
-                                       width: frameWidth,
-                                       height: frameHeight,
-                                       bitsPerComponent: 8,
-                                       bytesPerRow: bytesPerRow,
-                                       space: colorSpace,
-                                       bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-        else {
-            return nil
-        }
-
-        let transform: CGAffineTransform
-        let maskContentUnits = maskContentUnits ?? .userSpaceOnUse
-        let t = self.transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
-
-        switch maskContentUnits {
-        case .userSpaceOnUse:
-            transform = t
-                .translatedBy(x: -frame.minX, y: -frame.minY)
-        case .objectBoundingBox:
-            transform = t
-                .scaledBy(x: size.width, y: size.height)
-        }
-
-        let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
-        maskContext.push(viewBox: context.viewBox)
-        graphics.concatenate(transform)
-        for index in contentIds {
-            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            if content is SVGGroupElement ||
-                content is SVGLineElement
-            {
-                continue
-            }
-            if case .hidden = content.visibility {
-                continue
-            }
-            if let display = content.display, case .none = display {
-                continue
-            }
-            content.font.map {
-                context.push(font: $0)
-            }
-            guard let bezierPath = content.toBezierPath(context: context) else { continue }
-            content.font.map { _ in
-                _ = context.popFont()
-            }
-            graphics.saveGState()
-            graphics.concatenate(content.transform ?? .identity)
-            content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
-            content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-            content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext, mode: .root)
-            graphics.restoreGState()
-        }
-        clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: graphics)
-        guard let image = graphics.makeImage() else { return nil }
-        graphics.restoreGState()
-        return convertToLuminance(cgImage: image)
     }
 
     private func maskImage(frame: CGRect, context: SVGContext) async -> CGImage? {
@@ -256,7 +179,6 @@ struct SVGMaskElement: SVGDrawableElement {
         return try? sourceBuffer.createCGImage(format: format)
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
     func draw(_: SVGContext, index _: Int, mode _: DrawMode) async {}
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {

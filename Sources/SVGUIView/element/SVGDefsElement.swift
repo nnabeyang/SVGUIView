@@ -49,8 +49,6 @@ struct SVGDefsElement: SVGDrawableElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
-
     func clip(context: inout SVGBaseContext) {
         clipRule.map {
             context.push(clipRule: $0)

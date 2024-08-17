@@ -66,41 +66,6 @@ struct SVGFilterElement: SVGDrawableElement {
         nil
     }
 
-    func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) {
-        guard !contentIds.isEmpty else { return }
-        let bezierPath = content.toBezierPath(context: context)
-        let frame = content.frame(context: context, path: bezierPath)
-        let effectRect = effectRect(frame: frame, context: context)
-        guard let imageCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
-              let srcImage = srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),
-              let filterCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB) else { return }
-        let scale = UIScreen.main.scale
-        let transform = CGAffineTransform(scaleX: scale, y: scale)
-            .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
-        filterCgContext.concatenate(transform)
-        filterCgContext.saveGState()
-        var results = [String: CGImage]()
-        var inputImage = srcImage
-        var clipRect = effectRect
-        for (i, index) in contentIds.enumerated() {
-            guard let applier = context.contents[index] as? SVGFilterApplier else { continue }
-            filterCgContext.clear(effectRect)
-            filterCgContext.restoreGState()
-            filterCgContext.saveGState()
-            guard let clippedImage = applier.apply(srcImage: srcImage, inImage: inputImage, clipRect: &clipRect,
-                                                   filter: self, frame: frame, effectRect: effectRect, opacity: content.opacity,
-                                                   cgContext: filterCgContext, context: context, results: results, isFirst: i == 0) else { break }
-            if let result = applier.result {
-                results[result] = clippedImage
-            }
-            inputImage = clippedImage
-        }
-        cgContext.saveGState()
-        cgContext.concatenate(content.transform ?? .identity)
-        cgContext.draw(inputImage, in: effectRect)
-        cgContext.restoreGState()
-    }
-
     func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) async {
         guard !contentIds.isEmpty else { return }
         let bezierPath = content.toBezierPath(context: context)
@@ -160,21 +125,6 @@ struct SVGFilterElement: SVGDrawableElement {
         return cgContext
     }
 
-    private func srcImage(content: any SVGDrawableElement, graphics: CGContext, rect: CGRect, context: SVGContext) -> CGImage? {
-        let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
-        let scale = UIScreen.main.scale
-        let transform = CGAffineTransform(scaleX: scale, y: scale)
-            .translatedBy(x: -rect.minX, y: -rect.minY)
-        graphics.concatenate(transform)
-
-        nestContext.push(viewBox: context.viewBox)
-        graphics.saveGState()
-        content.drawWithoutFilter(nestContext, index: 0, depth: 0, mode: .filter(isRoot: true))
-        guard let image = graphics.makeImage() else { return nil }
-        graphics.restoreGState()
-        return image
-    }
-
     private func srcImage(content: any SVGDrawableElement, graphics: CGContext, rect: CGRect, context: SVGContext) async -> CGImage? {
         let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
         let scale = await UIScreen.main.scale
@@ -190,8 +140,6 @@ struct SVGFilterElement: SVGDrawableElement {
         graphics.restoreGState()
         return image
     }
-
-    func draw(_: SVGContext, index _: Int, depth _: Int, mode _: DrawMode) {}
 
     func style(with _: CSSStyle, at index: Int) -> any SVGElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
