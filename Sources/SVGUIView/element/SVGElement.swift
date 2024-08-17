@@ -271,7 +271,7 @@ extension SVGDrawableElement {
             break
         }
         let path: UIBezierPath?
-        if #available(iOS 16.0, *), type != .line {
+        if type != .line {
             path = toClippedBezierPath(context: context)
             if let path = toBezierPath(context: context) {
                 let frame = frame(context: context, path: path)
@@ -330,6 +330,88 @@ extension SVGDrawableElement {
             return
         }
         drawWithoutFilter(context, index: index, depth: depth, mode: mode)
+    }
+
+    func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
+        context.saveGState()
+        if mode != .filter(isRoot: true) {
+            context.concatenate(transform ?? .identity)
+        }
+        writingMode.map {
+            context.push(writingMode: $0)
+        }
+        font.map {
+            context.push(font: $0)
+        }
+        switch mode {
+        case .root, .filter:
+            context.pushTagIdStack()
+            context.pushClipIdStack()
+            context.pushMaskIdStack()
+            context.pushPatternIdStack()
+        default:
+            break
+        }
+        let path: UIBezierPath?
+        if type != .line {
+            path = toClippedBezierPath(context: context)
+            if let path = toBezierPath(context: context) {
+                let frame = frame(context: context, path: path)
+                mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
+            }
+        } else {
+            path = toBezierPath(context: context)
+            if let path = path {
+                let frame = frame(context: context, path: path)
+                clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
+                let lineWidth = stroke.width?.value(context: context, mode: .other)
+
+                if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
+                    context.graphics.clip(to: .zero)
+                } else {
+                    mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
+                }
+            }
+        }
+        let gContext = context.graphics
+        gContext.setAlpha(opacity)
+        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
+        if let path = path {
+            applySVGFill(fill: fill, path: path, context: context, mode: mode)
+            applySVGStroke(stroke: stroke, path: path, context: context)
+        }
+        switch mode {
+        case .root, .filter:
+            context.popTagIdStack()
+            context.popClipIdStack()
+            context.popMaskIdStack()
+            context.popPatternIdStack()
+        default:
+            break
+        }
+        writingMode.map { _ in
+            _ = context.popWritingMode()
+        }
+        font.map { _ in
+            _ = context.popFont()
+        }
+        gContext.endTransparencyLayer()
+        context.restoreGState()
+    }
+
+    func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+        if Task.isCancelled { return }
+        if let display = display, case .none = display {
+            return
+        }
+        let filter = filter ?? SVGFilter.none
+        if case let .url(id) = filter,
+           let server = context.filters[id]
+        {
+            server.filter(content: self, context: context, cgContext: context.graphics)
+            return
+        }
+        await drawWithoutFilter(context, index: index, mode: mode)
     }
 
     private func applyStrokeFill(fill: SVGFill, opacity: Double, path: UIBezierPath, context: SVGContext) {

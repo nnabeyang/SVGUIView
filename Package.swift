@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "SVGUIView",
     platforms: [
-        .iOS(.v14),
+        .iOS(.v16),
     ],
     products: [
         .library(

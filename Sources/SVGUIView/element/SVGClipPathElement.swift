@@ -44,7 +44,7 @@ struct SVGClipPathElement: SVGElement {
     }
 
     func clip(type: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) -> Bool {
-        if #available(iOS 16.0, *), type != .line {
+        if type != .line {
             let bezierPath = toBezierPath(context: context, frame: frame)
             guard !bezierPath.isEmpty else { return false }
             bezierPath.addClip()
@@ -124,7 +124,6 @@ struct SVGClipPathElement: SVGElement {
         return image
     }
 
-    @available(iOS 16.0, *)
     func toBezierPath(context: SVGContext, frame: CGRect) -> UIBezierPath {
         let transform: CGAffineTransform
         let clipPathUnits = clipPathUnits ?? .userSpaceOnUse
