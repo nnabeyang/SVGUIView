@@ -52,6 +52,27 @@ struct SVGImageElement: SVGDrawableElement {
         context.restoreGState()
     }
 
+    func draw(_ context: SVGContext, index _: Int, mode _: DrawMode) async {
+        guard !Task.isCancelled else { return }
+        let cgContext = context.graphics
+        context.saveGState()
+        let x = x?.value(context: context, mode: .width) ?? 0
+        let y = y?.value(context: context, mode: .width) ?? 0
+        let width = width?.value(context: context, mode: .width) ?? 0
+        let height = height?.value(context: context, mode: .height) ?? 0
+        if let data = data,
+           let image = UIImage(data: data),
+           let cgImage = image.cgImage
+        {
+            let s = scale(width: width, height: height, imageSize: image.size)
+            let width = image.size.width * s
+            let height = image.size.height * s
+            cgContext.scaleBy(x: 1, y: -1)
+            cgContext.draw(cgImage, in: CGRect(x: x, y: -height - y, width: width, height: height))
+        }
+        context.restoreGState()
+    }
+
     private func scale(width: CGFloat, height: CGFloat, imageSize size: CGSize) -> CGFloat {
         let sx = width / size.width
         let sy = height / size.height

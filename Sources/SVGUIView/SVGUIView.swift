@@ -19,9 +19,9 @@ public class SVGUIView: UIView {
         self.init(data: data)
     }
 
-    public convenience init?(data: Data) {
+    public convenience init(data: Data) {
         let baseContext = Parser.parse(data: data)
-        guard let svg = baseContext.root else { return nil }
+        let svg = baseContext.root ?? .empty
         self.init(frame: CGRect(origin: .zero, size: svg.size),
                   data: data, svg: svg, baseContext: baseContext)
     }
@@ -111,5 +111,77 @@ public class SVGUIView: UIView {
             preserveAspectRatio = .none
         }
         return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
+    }
+    public func takeSnapshot(rect: CGRect? = nil) async -> UIImage {
+        await makeCGImage(rect: rect).flatMap { UIImage(cgImage: $0) }
+            ?? UIGraphicsImageRenderer(size: bounds.size).image(actions: { _ in })
+    }
+
+    private func makeCGImage(rect: CGRect? = nil) async -> CGImage? {
+        let rect = rect ?? frame
+        let scale = UIScreen.main.scale
+        guard let svg = baseContext.root else { return nil }
+        let viewBox = svg.getViewBox(size: rect.size)
+
+        let frameWidth = Int((rect.width * scale).rounded(.up))
+        let frameHeight = Int((rect.height * scale).rounded(.up))
+        let bytesPerRow = 4 * frameWidth
+
+        let graphics = CGContext(data: nil,
+                                 width: frameWidth,
+                                 height: frameHeight,
+                                 bitsPerComponent: 8,
+                                 bytesPerRow: bytesPerRow,
+                                 space: CGColorSpaceCreateDeviceRGB(),
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)!
+        graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(frameHeight)))
+
+        let context = SVGContext(
+            base: baseContext,
+            graphics: graphics,
+            viewPort: rect
+        )
+        context.saveGState()
+        context.push(viewBox: viewBox)
+        let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
+        let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
+        switch contentMode {
+        case .scaleToFill:
+            let scaleX = viewBox.width / width
+            let scaleY = viewBox.height / height
+            context.concatenate(CGAffineTransform(scaleX: scaleX, y: scaleY))
+        default:
+            break
+        }
+
+        let transform = getTransform(viewBox: viewBox, size: rect.size)
+        context.concatenate(transform)
+        switch contentMode {
+        case .scaleAspectFill, .scaleAspectFit, .scaleToFill:
+            let scale = viewBox.width / width
+            context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
+        default:
+            break
+        }
+        return await withTaskGroup(of: CGImage?.self) { group in
+            group.addTask {
+                await svg.draw(context, index: self.baseContext.contents.count - 1, mode: .root)
+                context.popViewBox()
+                context.restoreGState()
+                guard !Task.isCancelled else { return nil }
+                return graphics.makeImage()
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 1000 * NSEC_PER_MSEC)
+                return nil
+            }
+            defer {
+                group.cancelAll()
+            }
+            guard let image = await group.next() else {
+                return nil
+            }
+            return image
+        }
     }
 }

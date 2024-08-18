@@ -209,6 +209,101 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         drawWithoutFilter(context, index: index, depth: depth, mode: mode)
     }
 
+    func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
+        context.saveGState()
+        let x = (x ?? .pixel(0)).value(context: context, mode: .width)
+        let y = (y ?? .pixel(0)).value(context: context, mode: .height)
+        context.concatenate(CGAffineTransform(translationX: x, y: y))
+        let width = (width ?? .percent(100)).value(context: context, mode: .width)
+        let height = (height ?? .percent(100)).value(context: context, mode: .height)
+
+        guard height > 0, width > 0 else {
+            context.restoreGState()
+            return
+        }
+        let viewPortSize = CGSize(width: width, height: height)
+        let transform = viewBox.map { getTransform(viewBox: $0.toCGRect(), size: viewPortSize) } ?? .identity
+        context.concatenate(transform)
+        let rect = CGRect(origin: .zero, size: viewPortSize).applying(transform.inverted())
+        if let viewBox = viewBox {
+            context.push(viewBox: viewBox.toCGRect())
+        } else {
+            context.push(viewBox: rect)
+        }
+
+        let gContext = context.graphics
+        let overflow = overflow ?? .hidden
+        switch overflow {
+        case .visible, .auto:
+            break
+        default:
+            if self.width != nil, self.height != nil {
+                gContext.addPath(UIBezierPath(roundedRect: rect, cornerSize: .zero).cgPath)
+                gContext.clip()
+            }
+        }
+
+        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
+        let font: SVGUIFont?
+        if mode == .root {
+            font = self.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
+        } else {
+            font = self.font
+        }
+        font.map {
+            context.push(font: $0)
+        }
+        textAnchor.map {
+            context.push(textAnchor: $0)
+        }
+        writingMode.map {
+            context.push(writingMode: $0)
+        }
+        switch mode {
+        case .root, .filter:
+            context.pushClipIdStack()
+            context.pushMaskIdStack()
+        default:
+            break
+        }
+        await clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
+        for index in contentIds {
+            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+            await content.draw(context, index: index, mode: mode)
+        }
+        switch mode {
+        case .root, .filter:
+            context.popClipIdStack()
+            context.popMaskIdStack()
+        default:
+            break
+        }
+        font.map { _ in
+            _ = context.popFont()
+        }
+        textAnchor.map { _ in
+            _ = context.popTextAnchor()
+        }
+        writingMode.map { _ in
+            _ = context.popWritingMode()
+        }
+        context.popViewBox()
+        gContext.endTransparencyLayer()
+        context.restoreGState()
+    }
+
+    func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+        guard !Task.isCancelled else { return }
+        let filter = filter ?? SVGFilter.none
+        if case let .url(id) = filter,
+           let server = context.filters[id]
+        {
+            await server.filter(content: self, context: context, cgContext: context.graphics)
+            return
+        }
+        await drawWithoutFilter(context, index: index, mode: mode)
+    }
+
     func contains(index: Int, context _: SVGContext) -> Bool {
         contentIds.contains(index)
     }
@@ -278,4 +373,8 @@ extension SVGSVGElement {
         let preserveAspectRatio = preserveAspectRatio ?? PreserveAspectRatio()
         return preserveAspectRatio.getTransform(viewBox: viewBox, size: size)
     }
+}
+
+extension SVGSVGElement {
+    static let empty = SVGSVGElement(attributes: [:], contentIds: [])
 }

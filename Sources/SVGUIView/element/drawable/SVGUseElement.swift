@@ -119,6 +119,35 @@ struct SVGUseElement: SVGDrawableElement {
         }
     }
 
+    func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+        guard !Task.isCancelled else { return }
+        let gContext = context.graphics
+        gContext.saveGState()
+        defer {
+            gContext.restoreGState()
+        }
+        switch mode {
+        case .root, .filter:
+            context.pushTagIdStack()
+            context.pushClipIdStack()
+            context.pushMaskIdStack()
+            context.pushPatternIdStack()
+        default:
+            break
+        }
+        guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
+        await newElement.draw(context, index: newIndex, mode: .normal)
+        switch mode {
+        case .root, .filter:
+            context.popTagIdStack()
+            context.popClipIdStack()
+            context.popMaskIdStack()
+            context.popPatternIdStack()
+        default:
+            break
+        }
+    }
+
     func contains(index: Int, context _: SVGContext) -> Bool {
         contentIds.contains(index)
     }

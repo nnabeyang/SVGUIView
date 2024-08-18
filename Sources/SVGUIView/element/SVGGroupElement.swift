@@ -155,6 +155,81 @@ struct SVGGroupElement: SVGDrawableElement {
         drawWithoutFilter(context, index: index, depth: depth, mode: mode)
     }
 
+    func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
+        context.saveGState()
+        if mode != .filter(isRoot: true) {
+            context.concatenate(transform ?? .identity)
+        }
+        context.setAlpha(opacity)
+        let gContext = context.graphics
+        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
+        font.map {
+            context.push(font: $0)
+        }
+        writingMode.map {
+            context.push(writingMode: $0)
+        }
+        fill.map {
+            context.push(fill: $0)
+        }
+        color.map {
+            context.push(color: $0)
+        }
+        context.push(stroke: stroke)
+        textAnchor.map {
+            context.push(textAnchor: $0)
+        }
+        switch mode {
+        case .root, .filter:
+            context.pushClipIdStack()
+            context.pushMaskIdStack()
+        default:
+            break
+        }
+        await clipPath?.clipIfNeeded(type: type, frame: frame(context: context, path: nil), context: context, cgContext: context.graphics)
+        for index in contentIds {
+            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+            await content.draw(context, index: index, mode: mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode)
+        }
+        switch mode {
+        case .root, .filter:
+            context.popClipIdStack()
+            context.popMaskIdStack()
+        default:
+            break
+        }
+        font.map { _ in
+            _ = context.popFont()
+        }
+        writingMode.map { _ in
+            _ = context.popWritingMode()
+        }
+        fill.map { _ in
+            _ = context.popFill()
+        }
+        color.map { _ in
+            _ = context.popColor()
+        }
+        _ = context.popStroke()
+        textAnchor.map { _ in
+            _ = context.popTextAnchor()
+        }
+        gContext.endTransparencyLayer()
+        context.restoreGState()
+    }
+
+    func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+        guard !Task.isCancelled else { return }
+        let filter = filter ?? SVGFilter.none
+        if case let .url(id) = filter,
+           let server = context.filters[id]
+        {
+            await server.filter(content: self, context: context, cgContext: context.graphics)
+            return
+        }
+        await drawWithoutFilter(context, index: index, mode: mode)
+    }
+
     func clip(context: inout SVGBaseContext) {
         clipRule.map {
             context.push(clipRule: $0)
