@@ -35,40 +35,14 @@ public class SVGUIView: UIView {
         }
     }
 
-    override public func draw(_ rect: CGRect) {
-        guard let svg = baseContext.root else { return }
-        let viewBox = svg.getViewBox(size: rect.size)
-        let graphics = UIGraphicsGetCurrentContext()!
-        let context = SVGContext(
-            base: baseContext,
-            graphics: graphics,
-            viewPort: rect
-        )
-        context.saveGState()
-        context.push(viewBox: viewBox)
-        let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
-        let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
-        switch contentMode {
-        case .scaleToFill:
-            let scaleX = viewBox.width / width
-            let scaleY = viewBox.height / height
-            context.concatenate(CGAffineTransform(scaleX: scaleX, y: scaleY))
-        default:
-            break
+    override public func draw(_: CGRect) {
+        Task.detached(priority: .medium) {
+            guard let image = await self.makeCGImage() else { return }
+            await MainActor.run {
+                self.layer.contents = image
+                self.startRendering()
+            }
         }
-
-        let transform = getTransform(viewBox: viewBox, size: rect.size)
-        context.concatenate(transform)
-        switch contentMode {
-        case .scaleAspectFill, .scaleAspectFit, .scaleToFill:
-            let scale = viewBox.width / width
-            context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
-        default:
-            break
-        }
-        svg.draw(context, index: baseContext.contents.count - 1, depth: 1, mode: .root)
-        context.popViewBox()
-        context.restoreGState()
     }
 
     @available(*, unavailable)
@@ -112,6 +86,20 @@ public class SVGUIView: UIView {
         }
         return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
     }
+
+    private func startRendering() {
+        let displayLink = CADisplayLink(
+            target: self,
+            selector: #selector(updateContents)
+        )
+        displayLink.add(to: .main, forMode: .common)
+    }
+
+    @objc
+    private func updateContents(_ displayLink: CADisplayLink) {
+        displayLink.invalidate()
+    }
+
     public func takeSnapshot(rect: CGRect? = nil) async -> UIImage {
         await makeCGImage(rect: rect).flatMap { UIImage(cgImage: $0) }
             ?? UIGraphicsImageRenderer(size: bounds.size).image(actions: { _ in })
