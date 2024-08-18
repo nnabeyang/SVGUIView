@@ -171,7 +171,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
         default:
             break
         }
-        await clipPath?.clipIfNeeded(type: type, frame: context.viewBox, context: context, cgContext: context.graphics)
+        await clipPath?.clipIfNeeded(frame: context.viewBox, context: context, cgContext: context.graphics)
         for index in contentIds {
             guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
             await content.draw(context, index: index, mode: mode)

@@ -22,12 +22,12 @@ enum SVGClipPath {
         self = clipPath
     }
 
-    func clipIfNeeded(type: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) async {
+    func clipIfNeeded(frame: CGRect, context: SVGContext, cgContext: CGContext) async {
         if case let .url(id) = self,
            context.check(clipId: id),
            let clipPath = context.clipPaths[id]
         {
-            if await clipPath.clip(type: type, frame: frame, context: context, cgContext: cgContext) {
+            if await clipPath.clip(frame: frame, context: context, cgContext: cgContext) {
                 context.remove(clipId: id)
             }
         }

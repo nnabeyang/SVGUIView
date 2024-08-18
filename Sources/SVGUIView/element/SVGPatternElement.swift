@@ -265,7 +265,7 @@ struct SVGPatternElement: SVGDrawableElement {
             await content.draw(maskContext, index: index, mode: .normal)
             maskContext.restoreGState()
         }
-        await clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: graphics)
+        await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
         if isRoot {
             maskContext.popTagIdStack()
             maskContext.popClipIdStack()

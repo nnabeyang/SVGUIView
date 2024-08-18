@@ -255,7 +255,7 @@ extension SVGDrawableElement {
         let path = toBezierPath(context: context)
         if let path = path {
             let frame = frame(context: context, path: path)
-            await clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
+            await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
             let lineWidth = stroke.width?.value(context: context, mode: .other)
 
             if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {

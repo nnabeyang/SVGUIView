@@ -43,7 +43,7 @@ struct SVGClipPathElement: SVGElement {
         transform = other.transform
     }
 
-    func clip(type _: SVGElementName, frame: CGRect, context: SVGContext, cgContext: CGContext) async -> Bool {
+    func clip(frame: CGRect, context: SVGContext, cgContext: CGContext) async -> Bool {
         guard let maskImage = await maskImage(frame: frame, context: context) else { return false }
         cgContext.clip(to: frame, mask: maskImage)
         return true
@@ -105,13 +105,13 @@ struct SVGClipPathElement: SVGElement {
                 graphics.concatenate($0)
             }
 
-            await content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
+            await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
             let clipRule = content.clipRule ?? clipRule ?? false
             graphics.addPath(bezierPath.cgPath)
             graphics.drawPath(using: clipRule ? .eoFill : .fill)
             graphics.restoreGState()
         }
-        await clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: context.graphics)
+        await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
         let image = graphics.makeImage()
         graphics.restoreGState()
         return image

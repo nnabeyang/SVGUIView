@@ -131,12 +131,12 @@ struct SVGMaskElement: SVGDrawableElement {
             }
             graphics.saveGState()
             graphics.concatenate(content.transform ?? .identity)
-            await content.clipPath?.clipIfNeeded(type: content.type, frame: frame, context: context, cgContext: graphics)
+            await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
             await content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
             await content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext, mode: .root)
             graphics.restoreGState()
         }
-        await clipPath?.clipIfNeeded(type: type, frame: frame, context: context, cgContext: graphics)
+        await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
         guard let image = graphics.makeImage() else { return nil }
         graphics.restoreGState()
         return convertToLuminance(cgImage: image)
