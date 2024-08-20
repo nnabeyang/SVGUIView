@@ -100,9 +100,8 @@ public class SVGUIView: UIView {
         displayLink.invalidate()
     }
 
-    public func takeSnapshot(rect: CGRect? = nil) async -> UIImage {
+    public func takeSnapshot(rect: CGRect? = nil) async -> UIImage? {
         await makeCGImage(rect: rect).flatMap { UIImage(cgImage: $0) }
-            ?? UIGraphicsImageRenderer(size: bounds.size).image(actions: { _ in })
     }
 
     private func makeCGImage(rect: CGRect? = nil) async -> CGImage? {
