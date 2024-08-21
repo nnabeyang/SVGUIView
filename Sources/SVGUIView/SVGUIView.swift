@@ -35,9 +35,9 @@ public class SVGUIView: UIView {
         }
     }
 
-    override public func draw(_: CGRect) {
+    override public func draw(_ rect: CGRect) {
         Task.detached(priority: .medium) {
-            guard let image = await self.makeCGImage() else { return }
+            guard let image = await self.makeCGImage(rect: rect) else { return }
             await MainActor.run {
                 self.layer.contents = image
                 self.startRendering()
