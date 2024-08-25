@@ -4,40 +4,42 @@ import UIKit
 public class SVGUIView: UIView {
     private var svg: SVGSVGElement
     private var baseContext: SVGBaseContext
+    private var task: Task<Void, Never>?
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
-
-    init(frame: CGRect, data: Data, svg: SVGSVGElement, baseContext: SVGBaseContext) {
-        self.data = data
-        self.svg = svg
-        self.baseContext = baseContext
-        super.init(frame: frame)
-        backgroundColor = .clear
-    }
 
     public convenience init?(contentsOf url: URL) {
         guard let data = try? Data(contentsOf: url) else { return nil }
         self.init(data: data)
     }
 
-    public convenience init(data: Data) {
-        let baseContext = Parser.parse(data: data)
-        let svg = baseContext.root ?? .empty
-        self.init(frame: CGRect(origin: .zero, size: svg.size),
-                  data: data, svg: svg, baseContext: baseContext)
+    public init(data: Data = Data()) {
+        self.data = data
+        baseContext = Parser.parse(data: data)
+        svg = baseContext.root ?? .empty
+        super.init(frame: CGRect(origin: .zero, size: svg.size))
+        backgroundColor = .clear
     }
 
     public var data: Data {
         didSet {
-            baseContext = Parser.parse(data: data)
-            guard let svg = baseContext.root else { return }
-            self.svg = svg
-            setNeedsDisplay()
+            Task {
+                if let task {
+                    while !task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 1 * NSEC_PER_MSEC)
+                    }
+                }
+                baseContext = Parser.parse(data: data)
+                guard let svg = baseContext.root else { return }
+                self.svg = svg
+                self.frame = CGRect(origin: .zero, size: svg.size)
+                setNeedsDisplay()
+            }
         }
     }
 
     override public func draw(_ rect: CGRect) {
-        Task.detached(priority: .medium) {
-            guard let image = await self.makeCGImage(rect: rect) else { return }
+        task = Task.detached(priority: .medium) {
+            let image = await self.makeCGImage(rect: rect)
             await MainActor.run {
                 self.layer.contents = image
                 self.startRendering()
@@ -98,6 +100,7 @@ public class SVGUIView: UIView {
     @objc
     private func updateContents(_ displayLink: CADisplayLink) {
         displayLink.invalidate()
+        task?.cancel()
     }
 
     public func takeSnapshot(rect: CGRect? = nil) async -> UIImage? {
