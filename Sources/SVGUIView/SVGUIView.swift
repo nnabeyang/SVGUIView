@@ -3,7 +3,7 @@ import UIKit
 
 public class SVGUIView: UIView {
     private var baseContext: SVGBaseContext
-    private var task: Task<Void, Never>?
+    private let taskManager = TaskManager()
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
 
     public convenience init?(contentsOf url: URL) {
@@ -33,24 +33,28 @@ public class SVGUIView: UIView {
     public var data: Data {
         didSet {
             Task {
-                if let task {
+                if let task = await taskManager.task {
                     while !task.isCancelled {
                         try? await Task.sleep(nanoseconds: 1 * NSEC_PER_MSEC)
                     }
+                    await taskManager.shiftTask()
                 }
                 baseContext = Parser.parse(data: data)
+                guard baseContext.root != nil else { return }
                 setNeedsDisplay()
             }
         }
     }
 
     override public func draw(_ rect: CGRect) {
-        task = Task.detached(priority: .medium) {
-            let image = await self.makeCGImage(rect: rect)
-            await MainActor.run {
-                self.layer.contents = image
-                self.startRendering()
-            }
+        Task {
+            await taskManager.add(task: Task.detached(priority: .medium) {
+                let image = await self.makeCGImage(rect: rect)
+                await MainActor.run {
+                    self.layer.contents = image
+                }
+                await self.taskManager.startRendering()
+            })
         }
     }
 
@@ -98,20 +102,6 @@ public class SVGUIView: UIView {
             preserveAspectRatio = .none
         }
         return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
-    }
-
-    private func startRendering() {
-        let displayLink = CADisplayLink(
-            target: self,
-            selector: #selector(updateContents)
-        )
-        displayLink.add(to: .main, forMode: .common)
-    }
-
-    @objc
-    private func updateContents(_ displayLink: CADisplayLink) {
-        displayLink.invalidate()
-        task?.cancel()
     }
 
     public func takeSnapshot(rect: CGRect? = nil) async -> UIImage? {
@@ -183,6 +173,44 @@ public class SVGUIView: UIView {
                 return nil
             }
             return image
+        }
+    }
+}
+
+private actor TaskManager {
+    private var tasks: [Task<Void, Never>]
+    init() {
+        tasks = []
+    }
+
+    var task: Task<Void, Never>? {
+        tasks.first
+    }
+
+    func add(task: Task<Void, Never>) {
+        tasks.append(task)
+    }
+
+    func shiftTask() {
+        guard !tasks.isEmpty else { return }
+        tasks.removeFirst()
+    }
+
+    func startRendering() {
+        let displayLink = CADisplayLink(
+            target: self,
+            selector: #selector(updateContents)
+        )
+        displayLink.add(to: .main, forMode: .common)
+    }
+
+    @objc
+    private nonisolated func updateContents(_ displayLink: CADisplayLink) {
+        displayLink.invalidate()
+        Task {
+            if let task = await task {
+                task.cancel()
+            }
         }
     }
 }
