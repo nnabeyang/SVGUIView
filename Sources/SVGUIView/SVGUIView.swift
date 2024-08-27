@@ -11,12 +11,23 @@ public class SVGUIView: UIView {
         self.init(data: data)
     }
 
-    public init(data: Data = Data()) {
+    init(frame: CGRect, baseContext: SVGBaseContext, data: Data = Data()) {
         self.data = data
-        baseContext = Parser.parse(data: data)
-        let svg = baseContext.root
-        super.init(frame: CGRect(origin: .zero, size: svg?.size ?? .zero))
+        self.baseContext = baseContext
+        super.init(frame: frame)
         backgroundColor = .clear
+    }
+
+    public convenience init(frame: CGRect, data: Data? = nil) {
+        let data = data ?? Data()
+        let baseContext = Parser.parse(data: data)
+        self.init(frame: frame, baseContext: baseContext, data: data)
+    }
+
+    public convenience init(data: Data = Data()) {
+        let baseContext = Parser.parse(data: data)
+        let size = baseContext.root?.size ?? .zero
+        self.init(frame: .init(origin: .zero, size: size), baseContext: baseContext, data: data)
     }
 
     public var data: Data {
