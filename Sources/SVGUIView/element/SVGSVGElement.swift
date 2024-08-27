@@ -279,7 +279,3 @@ extension SVGSVGElement {
         return preserveAspectRatio.getTransform(viewBox: viewBox, size: size)
     }
 }
-
-extension SVGSVGElement {
-    static let empty = SVGSVGElement(attributes: [:], contentIds: [])
-}
