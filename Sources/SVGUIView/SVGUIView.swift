@@ -2,7 +2,6 @@ import os
 import UIKit
 
 public class SVGUIView: UIView {
-    private var svg: SVGSVGElement
     private var baseContext: SVGBaseContext
     private var task: Task<Void, Never>?
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
@@ -15,8 +14,8 @@ public class SVGUIView: UIView {
     public init(data: Data = Data()) {
         self.data = data
         baseContext = Parser.parse(data: data)
-        svg = baseContext.root ?? .empty
-        super.init(frame: CGRect(origin: .zero, size: svg.size))
+        let svg = baseContext.root
+        super.init(frame: CGRect(origin: .zero, size: svg?.size ?? .zero))
         backgroundColor = .clear
     }
 
@@ -30,7 +29,6 @@ public class SVGUIView: UIView {
                 }
                 baseContext = Parser.parse(data: data)
                 guard let svg = baseContext.root else { return }
-                self.svg = svg
                 self.frame = CGRect(origin: .zero, size: svg.size)
                 setNeedsDisplay()
             }
@@ -52,8 +50,12 @@ public class SVGUIView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private var svg: SVGSVGElement? {
+        baseContext.root
+    }
+
     override public var intrinsicContentSize: CGSize {
-        svg.size
+        svg?.size ?? .zero
     }
 
     func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {
