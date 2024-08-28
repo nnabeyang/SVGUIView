@@ -35,7 +35,7 @@ public class SVGUIView: UIView {
             Task {
                 if let task = await taskManager.task {
                     while !task.isCancelled {
-                        try? await Task.sleep(nanoseconds: 1 * NSEC_PER_MSEC)
+                        try? await Task.sleep(for: .milliseconds(1))
                     }
                     await taskManager.shiftTask()
                 }
@@ -163,7 +163,7 @@ public class SVGUIView: UIView {
                 return graphics.makeImage()
             }
             group.addTask {
-                try? await Task.sleep(nanoseconds: 1000 * NSEC_PER_MSEC)
+                try? await Task.sleep(for: .seconds(1))
                 return nil
             }
             defer {
