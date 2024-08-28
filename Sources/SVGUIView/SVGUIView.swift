@@ -34,27 +34,22 @@ public class SVGUIView: UIView {
     public var data: Data {
         didSet {
             Task {
-                if let task = await taskManager.task {
-                    while !task.isCancelled {
-                        try? await Task.sleep(for: .milliseconds(1))
-                    }
-                    await taskManager.shiftTask()
+                if await !taskManager.add(data: data) {
+                    baseContext = Parser.parse(data: data)
+                    setNeedsDisplay()
                 }
-                baseContext = Parser.parse(data: data)
-                guard baseContext.root != nil else { return }
-                setNeedsDisplay()
             }
         }
     }
 
     override public func draw(_ rect: CGRect) {
         Task {
-            await taskManager.add(task: Task.detached(priority: configuration.taskPriority) {
+            await taskManager.startTask(priority: configuration.taskPriority, operation: {
                 let image = await self.makeCGImage(rect: rect)
                 await MainActor.run {
                     self.layer.contents = image
+                    self.startRendering()
                 }
-                await self.taskManager.startRendering()
             })
         }
     }
@@ -103,6 +98,34 @@ public class SVGUIView: UIView {
             preserveAspectRatio = .none
         }
         return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
+    }
+
+    private func startRendering() {
+        let displayLink = CADisplayLink(
+            target: self,
+            selector: #selector(updateContents)
+        )
+        displayLink.add(to: .main, forMode: .common)
+    }
+
+    @objc
+    private func updateContents(_ displayLink: CADisplayLink) {
+        Task.detached(priority: configuration.taskPriority) {
+            if let data = await self.taskManager.takeData() {
+                await MainActor.run {
+                    self.baseContext = Parser.parse(data: data)
+                }
+                let image = await self.makeCGImage()
+                await MainActor.run {
+                    self.layer.contents = image
+                }
+            } else {
+                await MainActor.run {
+                    displayLink.invalidate()
+                }
+                await self.taskManager.finishTask()
+            }
+        }
     }
 
     public func takeSnapshot(rect: CGRect? = nil) async -> UIImage? {
@@ -179,39 +202,38 @@ public class SVGUIView: UIView {
 }
 
 private actor TaskManager {
-    private var tasks: [Task<Void, Never>]
+    enum Status {
+        case busy
+        case available
+    }
+
+    private(set) var status: Status = .available
+    private var dataQueue: [Data]
     init() {
-        tasks = []
+        dataQueue = []
     }
 
-    var task: Task<Void, Never>? {
-        tasks.first
+    func startTask(priority: TaskPriority, operation: @escaping @Sendable () async -> Void) {
+        Task.detached(priority: priority, operation: operation)
+        status = .busy
     }
 
-    func add(task: Task<Void, Never>) {
-        tasks.append(task)
+    func finishTask() {
+        status = .available
     }
 
-    func shiftTask() {
-        guard !tasks.isEmpty else { return }
-        tasks.removeFirst()
-    }
-
-    func startRendering() {
-        let displayLink = CADisplayLink(
-            target: self,
-            selector: #selector(updateContents)
-        )
-        displayLink.add(to: .main, forMode: .common)
-    }
-
-    @objc
-    private nonisolated func updateContents(_ displayLink: CADisplayLink) {
-        displayLink.invalidate()
-        Task {
-            if let task = await task {
-                task.cancel()
-            }
+    func add(data: Data) -> Bool {
+        switch status {
+        case .busy:
+            dataQueue.append(data)
+            return true
+        case .available:
+            return false
         }
+    }
+
+    func takeData() -> Data? {
+        guard !dataQueue.isEmpty else { return nil }
+        return dataQueue.removeFirst()
     }
 }
