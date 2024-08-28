@@ -13,6 +13,10 @@ let package = Package(
             name: "SVGUIView",
             targets: ["SVGUIView"]
         ),
+        .library(
+            name: "SVGView",
+            targets: ["SVGView"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/nicklockwood/SwiftFormat", exact: "0.51.2"),
@@ -23,6 +27,10 @@ let package = Package(
         .target(
             name: "SVGUIView",
             dependencies: ["_SPI", "_ICU"]
+        ),
+        .target(
+            name: "SVGView",
+            dependencies: ["SVGUIView"]
         ),
         .testTarget(
             name: "SVGUIViewTests",
