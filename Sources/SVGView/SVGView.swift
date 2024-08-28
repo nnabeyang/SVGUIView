@@ -15,9 +15,10 @@ public struct SVGView: UIViewRepresentable {
         self.init(data: data, contentMode: contentMode)
     }
 
-    public func makeUIView(context _: Context) -> SVGUIView {
+    public func makeUIView(context: Context) -> SVGUIView {
         let uiView = SVGUIView(data: data)
         uiView.contentMode = contentMode.asUIView()
+        uiView.configuration = context.environment.svgViewConfiguration
         return uiView
     }
 
@@ -32,5 +33,17 @@ extension ContentMode {
         case .fill:
             return .scaleAspectFill
         }
+    }
+}
+
+private struct SVGViewConfigurationKey: EnvironmentKey {
+    static let defaultValue: SVGUIViewConfiguration = .init()
+}
+
+public extension EnvironmentValues {
+    @MainActor
+    var svgViewConfiguration: SVGUIViewConfiguration {
+        get { self[SVGViewConfigurationKey.self] }
+        set { self[SVGViewConfigurationKey.self] = newValue }
     }
 }

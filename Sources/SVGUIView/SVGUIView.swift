@@ -4,6 +4,7 @@ import UIKit
 public class SVGUIView: UIView {
     private var baseContext: SVGBaseContext
     private let taskManager = TaskManager()
+    public var configuration: SVGUIViewConfiguration = .init()
     static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
 
     public convenience init?(contentsOf url: URL) {
@@ -48,7 +49,7 @@ public class SVGUIView: UIView {
 
     override public func draw(_ rect: CGRect) {
         Task {
-            await taskManager.add(task: Task.detached(priority: .medium) {
+            await taskManager.add(task: Task.detached(priority: configuration.taskPriority) {
                 let image = await self.makeCGImage(rect: rect)
                 await MainActor.run {
                     self.layer.contents = image
@@ -163,7 +164,7 @@ public class SVGUIView: UIView {
                 return graphics.makeImage()
             }
             group.addTask {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: self.configuration.timeoutDuration)
                 return nil
             }
             defer {
