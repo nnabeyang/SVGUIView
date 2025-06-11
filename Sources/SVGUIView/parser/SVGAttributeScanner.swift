@@ -1,4 +1,5 @@
 import Foundation
+import _CShims
 
 struct SVGAttributeScanner {
     var reader: BufferReader

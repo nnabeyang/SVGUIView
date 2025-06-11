@@ -24,9 +24,10 @@ let package = Package(
     targets: [
         .target(name: "_SPI"),
         .target(name: "_ICU"),
+        .target(name: "_CShims"),
         .target(
             name: "SVGUIView",
-            dependencies: ["_SPI", "_ICU"]
+            dependencies: ["_SPI", "_ICU", "_CShims"]
         ),
         .target(
             name: "SVGView",
