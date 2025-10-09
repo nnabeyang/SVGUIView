@@ -101,7 +101,7 @@ let package = Package(
                 .enableUpcomingFeature("ConciseMagicFile"),
                 .enableUpcomingFeature("ForwardTrailingClosures"),
                 .enableUpcomingFeature("ExistentialAny"),
-                // .enableUpcomingFeature("StrictConcurrency"),
+                .enableUpcomingFeature("StrictConcurrency"),
                 .enableUpcomingFeature("ImplicitOpenExistentials"),
                 .enableUpcomingFeature("BareSlashRegexLiterals"),
                 .enableUpcomingFeature("DeprecateApplicationMain"),
