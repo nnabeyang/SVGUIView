@@ -1,16 +1,16 @@
-import SVGUIView
-import SwiftUI
+public import SVGUIView
+public import SwiftUI
 
 public struct SVGView: UIViewRepresentable {
     let data: Data
-    let contentMode: ContentMode
+    let contentMode: SwiftUI.ContentMode
 
-    public init(data: Data, contentMode: ContentMode = .fit) {
+    public init(data: Data, contentMode: SwiftUI.ContentMode = .fit) {
         self.data = data
         self.contentMode = contentMode
     }
 
-    public init(contentsOf url: URL, contentMode: ContentMode = .fit) {
+    public init(contentsOf url: URL, contentMode: SwiftUI.ContentMode = .fit) {
         let data = (try? Data(contentsOf: url)) ?? Data()
         self.init(data: data, contentMode: contentMode)
     }
@@ -27,7 +27,7 @@ public struct SVGView: UIViewRepresentable {
     }
 }
 
-extension ContentMode {
+public extension SwiftUI.ContentMode {
     func asUIView() -> UIKit.UIView.ContentMode {
         switch self {
         case .fit:

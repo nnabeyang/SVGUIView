@@ -135,7 +135,7 @@ let package = Package(
                 .enableUpcomingFeature("DeprecateApplicationMain"),
                 .enableUpcomingFeature("ImportObjcForwardDeclarations"),
                 .enableUpcomingFeature("DisableOutwardActorInference"),
-                // .enableUpcomingFeature("InternalImportsByDefault"),
+                .enableUpcomingFeature("InternalImportsByDefault"),
                 .enableUpcomingFeature("IsolatedDefaultValues"),
                 .enableUpcomingFeature("GlobalConcurrency"),
                 .enableUpcomingFeature("RegionBasedIsolation"),
