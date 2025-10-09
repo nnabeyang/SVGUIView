@@ -1,5 +1,5 @@
 import os
-import UIKit
+public import UIKit
 
 public class SVGUIView: UIView {
     private var baseContext: SVGBaseContext

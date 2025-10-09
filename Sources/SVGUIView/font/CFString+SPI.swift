@@ -1,5 +1,5 @@
-import CoreFoundation
-import CoreText
+public import CoreFoundation
+public import CoreText
 
 public let kCTFontCSSWeightAttribute = "CTFontCSSWeightAttribute" as CFString
 public let kCTFontCSSWidthAttribute = "CTFontCSSWidthAttribute" as CFString
