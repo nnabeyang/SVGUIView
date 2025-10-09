@@ -54,7 +54,7 @@ struct SVGBaseElement {
     let font: SVGUIFont?
     let fill: SVGFill?
     let stroke: SVGUIStroke
-    let color: SVGUIColor?
+    let color: (any SVGUIColor)?
     let clipPath: SVGClipPath?
     let mask: SVGMask?
     let filter: SVGFilter?
@@ -159,7 +159,7 @@ protocol SVGDrawableElement: SVGElement {
     var font: SVGUIFont? { get }
     var fill: SVGFill? { get }
     var stroke: SVGUIStroke { get }
-    var color: SVGUIColor? { get }
+    var color: (any SVGUIColor)? { get }
     var style: SVGUIStyle { get }
     var display: CSSDisplay? { get }
     var visibility: CSSVisibility? { get }
@@ -190,7 +190,7 @@ extension SVGDrawableElement {
     var clipPath: SVGClipPath? { base.clipPath }
     var mask: SVGMask? { base.mask }
     var filter: SVGFilter? { base.filter }
-    var color: SVGUIColor? { base.color }
+    var color: (any SVGUIColor)? { base.color }
     var style: SVGUIStyle { base.style }
     var display: CSSDisplay? { base.display }
     var visibility: CSSVisibility? { base.visibility }

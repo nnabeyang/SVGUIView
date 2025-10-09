@@ -77,7 +77,7 @@ extension SVGLineElement: Encodable {
         case fill
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(x1, forKey: .x1)
         try container.encode(y1, forKey: .y1)

@@ -138,7 +138,7 @@ struct SVGFeBlendElement: SVGElement, SVGFilterApplier {
 }
 
 extension SVGFeBlendElement: Encodable {
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

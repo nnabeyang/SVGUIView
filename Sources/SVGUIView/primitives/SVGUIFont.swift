@@ -74,17 +74,17 @@ struct SVGUIFont {
         fontDescription.setFamilies(familyNames: families)
     }
 
-    func sizeValue(context: SVGLengthContext, textScale: Double = 1.0) -> CGFloat {
+    func sizeValue(context: any SVGLengthContext, textScale: Double = 1.0) -> CGFloat {
         let size = size ?? .medium
         return size.value(context: context, shouldUseFixedDefaultSize: fontDescription.useFixedDefaultSize) * textScale
     }
 
-    func fontCascade(textScale: Double, context: SVGLengthContext) -> FontCascade {
+    func fontCascade(textScale: Double, context: any SVGLengthContext) -> FontCascade {
         Self.createFontCascade(size: size, weight: weight, fontDescription: fontDescription, textScale: textScale, context: context)
     }
 
     static func createFontCascade(size: Size?, weight: Weight?, fontDescription: FontCascadeDescription,
-                                  textScale: Double, context: SVGLengthContext) -> FontCascade
+                                  textScale: Double, context: any SVGLengthContext) -> FontCascade
     {
         let weight = weight ?? .normal
         let fontSelector = CSSFontSelector()
@@ -99,7 +99,7 @@ struct SVGUIFont {
         return FontCascade(fontDescription: fontDescription, fonts: FontCascadeFonts(fontSelector: fontSelector))
     }
 
-    func ctFont(context: SVGLengthContext, textScale: Double = 1.0) -> CTFont {
+    func ctFont(context: any SVGLengthContext, textScale: Double = 1.0) -> CTFont {
         let font = fontCascade(textScale: textScale, context: context).primaryFont()
         return font.ctFont
     }
@@ -267,7 +267,7 @@ extension SVGUIFont {
             }
         }
 
-        func value(context: SVGLengthContext, shouldUseFixedDefaultSize: Bool) -> CGFloat {
+        func value(context: any SVGLengthContext, shouldUseFixedDefaultSize: Bool) -> CGFloat {
             switch self {
             case .xxSmall: 9
             case .xSmall: shouldUseFixedDefaultSize ? 9 : 10
@@ -319,7 +319,7 @@ extension SVGUIFont {
 }
 
 extension CTFont {
-    static func standard(context: SVGLengthContext) -> CTFont {
+    static func standard(context: any SVGLengthContext) -> CTFont {
         let name = SVGUIView.familyNamesData[.standard]
         let size: SVGUIFont.Size = .length(.pixel(SVGUIFont.Size.defaultFontSize))
         let fontDescription = FontCascadeDescription()

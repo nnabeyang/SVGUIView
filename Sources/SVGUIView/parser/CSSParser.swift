@@ -76,7 +76,7 @@ extension SVGCSSFill: Equatable {
 }
 
 extension SVGCSSFill: Codable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case .inherit:
             try SVGCSSFillType.inherit.rawValue.encode(to: encoder)
@@ -93,7 +93,7 @@ extension SVGCSSFill: Codable {
         }
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         do {
             let container = try decoder.singleValueContainer()
             guard let type = try SVGCSSFillType(rawValue: container.decode(String.self)) else {
@@ -176,7 +176,7 @@ extension CSSValue: Equatable {
 }
 
 extension CSSValue: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case let .fill(value):
             try value.encode(to: encoder)
@@ -191,7 +191,7 @@ extension CSSValue: Encodable {
 }
 
 extension CSSValue: Decodable {
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let value = try? container.decode(SVGCSSFill.self) {
             self = .fill(value)
@@ -218,7 +218,7 @@ enum CSSParseError: String, Error {
 }
 
 extension CSSParseError: Codable {
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         if try container.decode(String.self) != "error" {
             throw DecodingError.valueNotFound(String.self, .init(codingPath: decoder.codingPath, debugDescription: "The give data is invalid"))
@@ -229,7 +229,7 @@ extension CSSParseError: Codable {
         self = value
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode("error")
         try container.encode(rawValue)

@@ -100,7 +100,7 @@ let package = Package(
             swiftSettings: [
                 .enableUpcomingFeature("ConciseMagicFile"),
                 .enableUpcomingFeature("ForwardTrailingClosures"),
-                // .enableUpcomingFeature("ExistentialAny"),
+                .enableUpcomingFeature("ExistentialAny"),
                 // .enableUpcomingFeature("StrictConcurrency"),
                 .enableUpcomingFeature("ImplicitOpenExistentials"),
                 .enableUpcomingFeature("BareSlashRegexLiterals"),

@@ -83,7 +83,7 @@ struct SVGFilterElement: SVGDrawableElement {
         var inputImage = srcImage
         var clipRect = effectRect
         for (i, index) in contentIds.enumerated() {
-            guard let applier = context.contents[index] as? SVGFilterApplier else { continue }
+            guard let applier = context.contents[index] as? (any SVGFilterApplier) else { continue }
             filterCgContext.clear(effectRect)
             filterCgContext.restoreGState()
             filterCgContext.saveGState()
@@ -158,7 +158,7 @@ extension SVGFilterElement: Encodable {
         case fill
     }
 
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

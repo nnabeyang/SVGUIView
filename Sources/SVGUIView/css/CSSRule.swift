@@ -21,7 +21,7 @@ enum CSSRuleType: String {
 }
 
 extension CSSRule: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         switch self {
         case let .qualified(rule):
@@ -33,7 +33,7 @@ extension CSSRule: Encodable {
 }
 
 extension CSSRule: Decodable {
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         guard let type = try CSSRuleType(rawValue: container.decode(String.self)) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))

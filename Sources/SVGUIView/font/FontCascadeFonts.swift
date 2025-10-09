@@ -1,8 +1,8 @@
 class FontCascadeFonts {
-    var fontSelector: FontSelector?
+    var fontSelector: (any FontSelector)?
     var realizedFallbackRanges = [FontRanges]()
     var cachedPrimaryFont: Font?
-    init(fontSelector: FontSelector) {
+    init(fontSelector: any FontSelector) {
         self.fontSelector = fontSelector
     }
 
@@ -34,7 +34,7 @@ class FontCascadeFonts {
         return font
     }
 
-    static func realizeNextFallback(description: FontCascadeDescription, fontSelector: FontSelector?) -> FontRanges {
+    static func realizeNextFallback(description: FontCascadeDescription, fontSelector: (any FontSelector)?) -> FontRanges {
         var index = 0
         let fontCache = FontCache.shared
         let count = description.effectiveFamilyCount

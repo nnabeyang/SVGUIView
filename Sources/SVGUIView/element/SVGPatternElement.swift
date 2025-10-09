@@ -300,7 +300,7 @@ extension SVGPatternElement: Encodable {
         case fill
     }
 
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

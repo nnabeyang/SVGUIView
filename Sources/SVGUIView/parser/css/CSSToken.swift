@@ -226,7 +226,7 @@ enum CSSToken: Equatable {
 }
 
 extension CSSToken: Codable {
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         do {
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
@@ -317,7 +317,7 @@ extension CSSToken: Codable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case let .ident(name):
             var container = encoder.unkeyedContainer()

@@ -27,7 +27,7 @@ class FontRanges {
     struct Range {
         var from: UInt32
         var to: UInt32
-        var fontAccessor: FontAccessor
+        var fontAccessor: any FontAccessor
 
         func font(policy: ExternalResourceDownloadPolicy) -> Font? {
             fontAccessor.font(policy: policy)

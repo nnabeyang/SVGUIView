@@ -125,7 +125,7 @@ struct SVGUseElement: SVGDrawableElement {
 }
 
 extension SVGUseElement: Encodable {
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

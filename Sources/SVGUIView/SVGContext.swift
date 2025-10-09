@@ -19,7 +19,7 @@ struct SVGContext: SVGLengthContext {
     private let fontStack: Stack<SVGUIFont> = Stack()
     private let writingModeStack = Stack<WritingMode>()
     private let fillStack: Stack<SVGFill> = Stack()
-    private let colorStack: Stack<SVGUIColor> = Stack()
+    private let colorStack: Stack<any SVGUIColor> = Stack()
     private let strokeStack: Stack<SVGUIStroke> = Stack()
     private let textAnchorStack: Stack<TextAnchor> = Stack()
     private let clipRuleStack: Stack<Bool> = Stack()
@@ -56,7 +56,7 @@ struct SVGContext: SVGLengthContext {
         base.pservers
     }
 
-    var contents: [SVGElement] {
+    var contents: [any SVGElement] {
         base.contents
     }
 
@@ -112,7 +112,7 @@ struct SVGContext: SVGLengthContext {
         fillStack.last
     }
 
-    var color: SVGUIColor? {
+    var color: (any SVGUIColor)? {
         colorStack.last
     }
 
@@ -209,7 +209,7 @@ struct SVGContext: SVGLengthContext {
         fillStack.push(fill)
     }
 
-    func push(color: SVGUIColor) {
+    func push(color: any SVGUIColor) {
         colorStack.push(color)
     }
 
@@ -248,7 +248,7 @@ struct SVGContext: SVGLengthContext {
     }
 
     @discardableResult
-    func popColor() -> SVGUIColor? {
+    func popColor() -> (any SVGUIColor)? {
         colorStack.pop()
     }
 
@@ -282,7 +282,7 @@ struct SVGContext: SVGLengthContext {
 struct SVGBaseContext {
     let pservers: [String: any SVGGradientServer]
     let contentIdMap: [String: Int]
-    let contents: [SVGElement]
+    let contents: [any SVGElement]
 
     var clipPaths = [String: SVGClipPathElement]()
     var masks = [String: SVGMaskElement]()

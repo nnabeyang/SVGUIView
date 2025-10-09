@@ -5,7 +5,7 @@ struct SVGFeMergeNodeElement: SVGElement {
 
     let input: SVGFilterInput?
 
-    func style(with _: CSSStyle, at _: Int) -> SVGElement {
+    func style(with _: CSSStyle, at _: Int) -> any SVGElement {
         self
     }
 
@@ -15,7 +15,7 @@ struct SVGFeMergeNodeElement: SVGElement {
 }
 
 extension SVGFeMergeNodeElement: Encodable {
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }
