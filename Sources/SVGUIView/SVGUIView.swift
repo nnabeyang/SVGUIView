@@ -110,7 +110,7 @@ public class SVGUIView: UIView {
 
     @objc
     private func updateContents(_ displayLink: CADisplayLink) {
-        Task.detached(priority: configuration.taskPriority) {
+        Task {
             if let data = await self.taskManager.takeData() {
                 await MainActor.run {
                     self.baseContext = Parser.parse(data: data)
