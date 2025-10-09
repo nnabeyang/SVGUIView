@@ -7,7 +7,7 @@ enum Result<Success, Failure> {
 }
 
 extension Result: Encodable where Success: Encodable, Failure: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case let .success(value):
             try value.encode(to: encoder)
@@ -18,7 +18,7 @@ extension Result: Encodable where Success: Encodable, Failure: Encodable {
 }
 
 extension Result: Decodable where Success: Decodable, Failure: Decodable {
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let value = try? container.decode(Success.self) {
             self = .success(value)
