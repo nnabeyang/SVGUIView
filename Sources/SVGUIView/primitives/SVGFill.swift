@@ -1,3 +1,5 @@
+import CoreGraphics
+
 enum SVGFill {
     case inherit
     case current

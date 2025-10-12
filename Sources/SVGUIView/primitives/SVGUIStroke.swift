@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 private enum LineCapType: String {
     case butt

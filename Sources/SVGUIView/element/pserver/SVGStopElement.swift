@@ -1,5 +1,6 @@
 
 import CoreGraphics
+import Foundation
 
 enum StopDimension {
     case absolute(Double)

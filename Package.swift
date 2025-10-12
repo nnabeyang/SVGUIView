@@ -114,7 +114,7 @@ let package = Package(
                 .enableUpcomingFeature("InferSendableFromCaptures"),
                 .enableUpcomingFeature("DynamicActorIsolation"),
                 .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
-                // .enableUpcomingFeature("MemberImportVisibility"),
+                .enableUpcomingFeature("MemberImportVisibility"),
                 .enableUpcomingFeature("NonescapableTypes"),
                 // .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
                 .enableUpcomingFeature("InferIsolatedConformances"),
