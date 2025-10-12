@@ -81,13 +81,13 @@ struct SVGUseElement: SVGDrawableElement {
         return (newIndex, parentElement)
     }
 
-    func toBezierPath(context: SVGContext) -> UIBezierPath? {
+    func toBezierPath(context: SVGContext) async -> UIBezierPath? {
         guard let index = index,
               let (_, element) = getParent(context: context, index: index)
         else {
             return nil
         }
-        return element.toBezierPath(context: context)
+        return await element.toBezierPath(context: context)
     }
 
     func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {

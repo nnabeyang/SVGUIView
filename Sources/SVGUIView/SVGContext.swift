@@ -3,7 +3,7 @@ import UIKit
 protocol SVGLengthContext {
     var viewBoxSize: CGSize { get }
     var font: SVGUIFont? { get }
-    var textScale: Double { get }
+    var textScale: Double { get async }
     var rootFont: SVGUIFont? { get }
     var viewPort: CGRect { get }
     var writingMode: WritingMode? { get }
@@ -46,10 +46,12 @@ struct SVGContext: SVGLengthContext {
     }
 
     var textScale: Double {
-        let scale = UIScreen.main.scale
-        let x = viewPort.width * scale / viewBox.width
-        let y = viewPort.height * scale / viewBox.height
-        return hypot(x, y) / sqrt(2)
+        get async {
+            let scale = await UIScreen.main.scale
+            let x = viewPort.width * scale / viewBox.width
+            let y = viewPort.height * scale / viewBox.height
+            return hypot(x, y) / sqrt(2)
+        }
     }
 
     var pservers: [String: any SVGGradientServer] {

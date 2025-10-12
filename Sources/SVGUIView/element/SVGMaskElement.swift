@@ -125,7 +125,7 @@ struct SVGMaskElement: SVGDrawableElement {
             content.font.map {
                 context.push(font: $0)
             }
-            guard let bezierPath = content.toBezierPath(context: context) else { continue }
+            guard let bezierPath = await content.toBezierPath(context: context) else { continue }
             content.font.map { _ in
                 _ = context.popFont()
             }
