@@ -109,8 +109,8 @@ let package = Package(
                 .enableUpcomingFeature("DisableOutwardActorInference"),
                 .enableUpcomingFeature("InternalImportsByDefault"),
                 .enableUpcomingFeature("IsolatedDefaultValues"),
-                // .enableUpcomingFeature("GlobalConcurrency"),
-                // .enableUpcomingFeature("RegionBasedIsolation"),
+                .enableUpcomingFeature("GlobalConcurrency"),
+                .enableUpcomingFeature("RegionBasedIsolation"),
                 .enableUpcomingFeature("InferSendableFromCaptures"),
                 .enableUpcomingFeature("DynamicActorIsolation"),
                 .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
@@ -119,7 +119,7 @@ let package = Package(
                 // .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
                 .enableUpcomingFeature("InferIsolatedConformances"),
                 .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
-                // .enableUpcomingFeature("InferIsolatedConformances"),
+                .enableUpcomingFeature("InferIsolatedConformances"),
             ]
         ),
         .target(
