@@ -178,26 +178,23 @@ public class SVGUIView: UIView {
         default:
             break
         }
-        return await withTaskGroup(of: CGImage?.self) { group in
-            group.addTask {
-                await svg.draw(context, index: self.baseContext.contents.count - 1, mode: .root)
-                context.popViewBox()
-                context.restoreGState()
-                guard !Task.isCancelled else { return nil }
-                return graphics.makeImage()
-            }
-            group.addTask {
-                try? await Task.sleep(for: self.configuration.timeoutDuration)
+        let drawTask = Task<CGImage?, Never> {
+            await svg.draw(context, index: self.baseContext.contents.count - 1, mode: .root)
+            context.popViewBox()
+            context.restoreGState()
+            guard !Task.isCancelled else {
                 return nil
             }
-            defer {
-                group.cancelAll()
-            }
-            guard let image = await group.next() else {
-                return nil
-            }
-            return image
+            return graphics.makeImage()
         }
+
+        let timeoutTask = Task {
+            try? await Task.sleep(for: self.configuration.timeoutDuration)
+            drawTask.cancel()
+        }
+        let value = await drawTask.value
+        timeoutTask.cancel()
+        return value
     }
 }
 
