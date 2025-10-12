@@ -71,9 +71,9 @@ struct SVGFilterElement: SVGDrawableElement {
         let bezierPath = content.toBezierPath(context: context)
         let frame = content.frame(context: context, path: bezierPath)
         let effectRect = effectRect(frame: frame, context: context)
-        guard let imageCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
+        guard let imageCgContext = await createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
               let srcImage = await srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),
-              let filterCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB) else { return }
+              let filterCgContext = await createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB) else { return }
         let scale = await UIScreen.main.scale
         let transform = CGAffineTransform(scaleX: scale, y: scale)
             .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
@@ -110,8 +110,8 @@ struct SVGFilterElement: SVGDrawableElement {
         return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
     }
 
-    private func createImageCGContext(rect: CGRect, colorInterpolation: SVGColorInterpolation) -> CGContext? {
-        let scale = UIScreen.main.scale
+    private func createImageCGContext(rect: CGRect, colorInterpolation: SVGColorInterpolation) async -> CGContext? {
+        let scale = await UIScreen.main.scale
         let frameWidth = Int((rect.width * scale).rounded(.up))
         let frameHeight = Int((rect.height * scale).rounded(.up))
         let bytesPerRow = 4 * frameWidth
