@@ -94,6 +94,7 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
         colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
     }
 
+    @MainActor
     static func clampedToKernelSize(value: CGFloat) -> UInt32 {
         min(Self.maxKernelSize, UInt32(max(floor(value * 3.0 * sqrt(2 * .pi) as CGFloat / 4 + 0.5) as CGFloat, 2 * UIScreen.main.scale)))
     }
@@ -128,7 +129,7 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     }
 
     func apply(srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
-               filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst: Bool) -> CGImage?
+               filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst: Bool) async -> CGImage?
     {
         let colorSpace: CGColorSpace
         switch input {
@@ -172,12 +173,12 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
                 break
             }
             if x != y {
-                let kernelSizeX = Self.clampedToKernelSize(value: x * UIScreen.main.scale)
-                let kernelSizeY = Self.clampedToKernelSize(value: y * UIScreen.main.scale)
+                let kernelSizeX = await Self.clampedToKernelSize(value: x * UIScreen.main.scale)
+                let kernelSizeY = await Self.clampedToKernelSize(value: y * UIScreen.main.scale)
                 applyUnaccelerated(srcBuffer: &buffer, destBuffer: &destBuffer,
                                    kernelSizeX: kernelSizeX, kernelSizeY: kernelSizeY, context: context)
             } else {
-                let kernelSize = Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
+                let kernelSize = await Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
                 applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
             }
         case let .iso(x):
@@ -186,7 +187,7 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
                 swap(&buffer, &destBuffer)
                 break
             }
-            let kernelSize = Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
+            let kernelSize = await Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
             applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
         }
         guard let image = vImageCreateCGImageFromBuffer(&destBuffer,

@@ -87,9 +87,9 @@ struct SVGFilterElement: SVGDrawableElement {
             filterCgContext.clear(effectRect)
             filterCgContext.restoreGState()
             filterCgContext.saveGState()
-            guard let clippedImage = applier.apply(srcImage: srcImage, inImage: inputImage, clipRect: &clipRect,
-                                                   filter: self, frame: frame, effectRect: effectRect, opacity: content.opacity,
-                                                   cgContext: filterCgContext, context: context, results: results, isFirst: i == 0) else { break }
+            guard let clippedImage = await applier.apply(srcImage: srcImage, inImage: inputImage, clipRect: &clipRect,
+                                                         filter: self, frame: frame, effectRect: effectRect, opacity: content.opacity,
+                                                         cgContext: filterCgContext, context: context, results: results, isFirst: i == 0) else { break }
             if let result = applier.result {
                 results[result] = clippedImage
             }
