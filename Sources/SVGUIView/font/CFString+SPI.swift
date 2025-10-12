@@ -1,19 +1,19 @@
 public import CoreFoundation
 public import CoreText
 
-public let kCTFontCSSWeightAttribute = "CTFontCSSWeightAttribute" as CFString
-public let kCTFontCSSWidthAttribute = "CTFontCSSWidthAttribute" as CFString
-public let kCTFontDescriptorTextStyleAttribute = "NSCTFontUIUsageAttribute" as CFString
-public let kCTFontUIFontDesignTrait = "NSCTFontUIFontDesignTrait" as CFString
+public var kCTFontCSSWeightAttribute: CFString { "CTFontCSSWeightAttribute" as CFString }
+public var kCTFontCSSWidthAttribute: CFString { "CTFontCSSWidthAttribute" as CFString }
+public var kCTFontDescriptorTextStyleAttribute: CFString { "NSCTFontUIUsageAttribute" as CFString }
+public var kCTFontUIFontDesignTrait: CFString { "NSCTFontUIFontDesignTrait" as CFString }
 
-public let kCTFontPostScriptNameAttribute = "NSCTFontPostScriptNameAttribute" as CFString
-public let kCTFontUserInstalledAttribute = "NSCTFontUserInstalledAttribute" as CFString
-public let kCTFontFallbackOptionAttribute = "NSCTFontFallbackOptionAttribute" as CFString
+public var kCTFontPostScriptNameAttribute: CFString { "NSCTFontPostScriptNameAttribute" as CFString }
+public var kCTFontUserInstalledAttribute: CFString { "NSCTFontUserInstalledAttribute" as CFString }
+public var kCTFontFallbackOptionAttribute: CFString { "NSCTFontFallbackOptionAttribute" as CFString }
 
-public let kCTFontUIFontDesignDefault = "NSCTFontUIFontDesignDefault" as CFString
-public let kCTFontUIFontDesignSerif = "NSCTFontUIFontDesignSerif" as CFString
-public let kCTFontUIFontDesignMonospaced = "NSCTFontUIFontDesignMonospaced" as CFString
-public let kCTFontUIFontDesignRounded = "NSCTFontUIFontDesignRounded" as CFString
+public var kCTFontUIFontDesignDefault: CFString { "NSCTFontUIFontDesignDefault" as CFString }
+public var kCTFontUIFontDesignSerif: CFString { "NSCTFontUIFontDesignSerif" as CFString }
+public var kCTFontUIFontDesignMonospaced: CFString { "NSCTFontUIFontDesignMonospaced" as CFString }
+public var kCTFontUIFontDesignRounded: CFString { "NSCTFontUIFontDesignRounded" as CFString }
 
 public let kCTFontWidthUltraCompressed: CGFloat = -0.5
 public let kCTFontWidthExtraCompressed: CGFloat = -0.4
@@ -26,32 +26,32 @@ public let kCTFontWidthSemiExpanded: CGFloat = 0.1
 public let kCTFontWidthExpanded: CGFloat = 0.2
 public let kCTFontWidthExtraExpanded: CGFloat = 0.3
 
-public let kCTUIFontTextStyleShortHeadline = "UICTFontTextStyleShortHeadline" as CFString
-public let kCTUIFontTextStyleShortBody = "UICTFontTextStyleShortBody" as CFString
-public let kCTUIFontTextStyleShortSubhead = "UICTFontTextStyleShortSubhead" as CFString
-public let kCTUIFontTextStyleShortFootnote = "UICTFontTextStyleShortFootnote" as CFString
-public let kCTUIFontTextStyleShortCaption1 = "UICTFontTextStyleShortCaption1" as CFString
-public let kCTUIFontTextStyleTallBody = "UICTFontTextStyleTallBody" as CFString
+public var kCTUIFontTextStyleShortHeadline: CFString { "UICTFontTextStyleShortHeadline" as CFString }
+public var kCTUIFontTextStyleShortBody: CFString { "UICTFontTextStyleShortBody" as CFString }
+public var kCTUIFontTextStyleShortSubhead: CFString { "UICTFontTextStyleShortSubhead" as CFString }
+public var kCTUIFontTextStyleShortFootnote: CFString { "UICTFontTextStyleShortFootnote" as CFString }
+public var kCTUIFontTextStyleShortCaption1: CFString { "UICTFontTextStyleShortCaption1" as CFString }
+public var kCTUIFontTextStyleTallBody: CFString { "UICTFontTextStyleTallBody" as CFString }
 
-public let kCTUIFontTextStyleHeadline = "UICTFontTextStyleHeadline" as CFString
-public let kCTUIFontTextStyleBody = "UICTFontTextStyleBody" as CFString
-public let kCTUIFontTextStyleSubhead = "UICTFontTextStyleSubhead" as CFString
-public let kCTUIFontTextStyleFootnote = "UICTFontTextStyleFootnote" as CFString
-public let kCTUIFontTextStyleCaption1 = "UICTFontTextStyleCaption1" as CFString
-public let kCTUIFontTextStyleCaption2 = "UICTFontTextStyleCaption2" as CFString
+public var kCTUIFontTextStyleHeadline: CFString { "UICTFontTextStyleHeadline" as CFString }
+public var kCTUIFontTextStyleBody: CFString { "UICTFontTextStyleBody" as CFString }
+public var kCTUIFontTextStyleSubhead: CFString { "UICTFontTextStyleSubhead" as CFString }
+public var kCTUIFontTextStyleFootnote: CFString { "UICTFontTextStyleFootnote" as CFString }
+public var kCTUIFontTextStyleCaption1: CFString { "UICTFontTextStyleCaption1" as CFString }
+public var kCTUIFontTextStyleCaption2: CFString { "UICTFontTextStyleCaption2" as CFString }
 
-public let kCTUIFontTextStyleTitle0 = "UICTFontTextStyleTitle0" as CFString
-public let kCTUIFontTextStyleTitle1 = "UICTFontTextStyleTitle1" as CFString
-public let kCTUIFontTextStyleTitle2 = "UICTFontTextStyleTitle2" as CFString
-public let kCTUIFontTextStyleTitle3 = "UICTFontTextStyleTitle3" as CFString
-public let kCTUIFontTextStyleTitle4 = "UICTFontTextStyleTitle4" as CFString
+public var kCTUIFontTextStyleTitle0: CFString { "UICTFontTextStyleTitle0" as CFString }
+public var kCTUIFontTextStyleTitle1: CFString { "UICTFontTextStyleTitle1" as CFString }
+public var kCTUIFontTextStyleTitle2: CFString { "UICTFontTextStyleTitle2" as CFString }
+public var kCTUIFontTextStyleTitle3: CFString { "UICTFontTextStyleTitle3" as CFString }
+public var kCTUIFontTextStyleTitle4: CFString { "UICTFontTextStyleTitle4" as CFString }
 
-public let kCTFontCSSFamilySerif = "serif" as CFString
-public let kCTFontCSSFamilySansSerif = "sans-serif" as CFString
-public let kCTFontCSSFamilyCursive = "cursive" as CFString
-public let kCTFontCSSFamilyFantasy = "fantasy" as CFString
-public let kCTFontCSSFamilyMonospace = "monospace" as CFString
-public let kCTFontCSSFamilySystemUI = "system-ui" as CFString
+public var kCTFontCSSFamilySerif: CFString { "serif" as CFString }
+public var kCTFontCSSFamilySansSerif: CFString { "sans-serif" as CFString }
+public var kCTFontCSSFamilyCursive: CFString { "cursive" as CFString }
+public var kCTFontCSSFamilyFantasy: CFString { "fantasy" as CFString }
+public var kCTFontCSSFamilyMonospace: CFString { "monospace" as CFString }
+public var kCTFontCSSFamilySystemUI: CFString { "system-ui" as CFString }
 
 public func CTFontCreateLastResort(_ size: CGFloat, _ matrix: UnsafePointer<CGAffineTransform>?) -> CTFont {
     CTFontCreateWithName("LastResort" as CFString, size, matrix)
