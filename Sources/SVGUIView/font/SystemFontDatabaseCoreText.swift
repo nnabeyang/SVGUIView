@@ -121,8 +121,6 @@ class SystemFontDatabaseCoreText {
         return CTFontCreateWithFontDescriptor(resultFontDescriptor, size, nil)
     }
 
-    static var contentSizeCategory: CFString = UIApplication.shared.preferredContentSizeCategory.rawValue as CFString
-
     static func createFontByApplyingWeightWidthItalicsAndFallbackBehavior(font: CTFont?, weight: CGFloat, width: CGFloat, italic: Bool, size: Double,
                                                                           allowUserInstalledFonts: AllowUserInstalledFonts, design: CFString? = nil) -> CTFont?
     {
