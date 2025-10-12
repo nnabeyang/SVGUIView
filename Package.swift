@@ -116,7 +116,7 @@ let package = Package(
                 .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
                 .enableUpcomingFeature("MemberImportVisibility"),
                 .enableUpcomingFeature("NonescapableTypes"),
-                // .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
                 .enableUpcomingFeature("InferIsolatedConformances"),
                 .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
                 .enableUpcomingFeature("InferIsolatedConformances"),
