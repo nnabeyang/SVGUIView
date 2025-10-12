@@ -43,15 +43,13 @@ public class SVGUIView: UIView {
     }
 
     override public func draw(_ rect: CGRect) {
-        Task {
-            await taskManager.startTask(priority: configuration.taskPriority, operation: {
-                let image = await self.makeCGImage(rect: rect)
-                await MainActor.run {
-                    self.layer.contents = image
-                    self.startRendering()
-                }
-            })
-        }
+        taskManager.startTask(priority: configuration.taskPriority, operation: {
+            let image = await self.makeCGImage(rect: rect)
+            await MainActor.run {
+                self.layer.contents = image
+                self.startRendering()
+            }
+        })
     }
 
     @available(*, unavailable)
@@ -210,8 +208,14 @@ private actor TaskManager {
         dataQueue = []
     }
 
-    func startTask(priority: TaskPriority, operation: @escaping @Sendable () async -> Void) {
-        Task.detached(priority: priority, operation: operation)
+    nonisolated func startTask(priority: TaskPriority, operation: @escaping @Sendable () async -> Void) {
+        Task.detached(priority: priority) { [weak self] in
+            await self?.setBusy()
+            await operation()
+        }
+    }
+
+    private func setBusy() {
         status = .busy
     }
 
