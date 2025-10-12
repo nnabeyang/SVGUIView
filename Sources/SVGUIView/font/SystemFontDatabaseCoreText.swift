@@ -176,7 +176,7 @@ class SystemFontDatabaseCoreText {
         return result
     }
 
-    private static let compareAsPointer: ((CFString, CFString) -> Bool) = { (lhs: CFString, rhs: CFString) in
+    private static func compareAsPointer(_ lhs: CFString, _ rhs: CFString) -> Bool {
         let result = CFStringCompare(lhs, rhs, CFStringCompareFlags(rawValue: 0))
         switch result {
         case .compareEqualTo, .compareLessThan: return true
