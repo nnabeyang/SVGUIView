@@ -58,7 +58,10 @@ enum SVGLength: Equatable {
     case q(CGFloat)
 
     static let pixelsPerInch: CGFloat = 96.0
-    static var zeroCodePoint: UniChar = 0x30
+    static var zeroCodePoint: UniChar {
+        get { 0x30 }
+        set {}
+    }
 
     init(value: Double, unit: CSSUnitType) {
         switch unit {
