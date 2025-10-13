@@ -207,13 +207,13 @@ struct SVGColorName: SVGUIColor {
 }
 
 extension SVGColorName: Codable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode(SVGColorType.named.rawValue)
         try container.encode(name)
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
@@ -266,13 +266,13 @@ struct SVGHexColor: SVGUIColor {
 }
 
 extension SVGHexColor: Codable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode(SVGColorType.hex.rawValue)
         try container.encode(hex)
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
@@ -312,7 +312,7 @@ enum ColorDimension {
 }
 
 extension ColorDimension: Codable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         switch self {
         case let .absolute(v):
@@ -324,7 +324,7 @@ extension ColorDimension: Codable {
         }
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         guard let type = try ColorDimentionName(rawValue: container.decode(String.self)) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
@@ -369,7 +369,7 @@ struct SVGRGBColor: SVGUIColor {
 }
 
 extension SVGRGBColor: Codable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode(SVGColorType.rgb.rawValue)
         try container.encode(r)
@@ -377,7 +377,7 @@ extension SVGRGBColor: Codable {
         try container.encode(b)
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
@@ -415,7 +415,7 @@ struct SVGRGBAColor: SVGUIColor {
 }
 
 extension SVGRGBAColor: Codable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode(SVGColorType.rgba.rawValue)
         try container.encode(r)
@@ -424,7 +424,7 @@ extension SVGRGBAColor: Codable {
         try container.encode(a)
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))

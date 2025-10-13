@@ -41,7 +41,7 @@ final class Parser: NSObject {
     private var pservers: [String: any SVGGradientServer] = [:]
     private var contentIdMap: [String: Int] = [:]
     private var rules: [CSSRule] = []
-    private var contents: [SVGElement] = []
+    private var contents: [any SVGElement] = []
     private var contentIds: [Int] = []
     private var countList = [Int]()
     private var stack = [(name: SVGElementName, attributes: [String: String])]()
@@ -131,7 +131,7 @@ extension Parser: XMLParserDelegate {
               let count = countList.popLast() else { return }
         precondition(name == element.name)
         let attributes = filter(attributes: element.attributes)
-        let content: SVGElement? = {
+        let content: (any SVGElement)? = {
             let contentIds = self.contentIds.shift(count: count)
             switch element.name {
             case .svg:
@@ -250,7 +250,7 @@ extension Parser: XMLParserDelegate {
         }
     }
 
-    func parser(_: XMLParser, parseErrorOccurred parseError: Error) {
+    func parser(_: XMLParser, parseErrorOccurred parseError: any Error) {
         Self.logger.error("\(parseError.localizedDescription)")
     }
 }

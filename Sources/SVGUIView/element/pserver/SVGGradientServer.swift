@@ -37,7 +37,7 @@ extension SVGGradientServer {
         contentIds.compactMap { context.contents[$0] as? SVGStopElement }
     }
 
-    func style(with _: CSSStyle, at _: Int) -> SVGElement {
+    func style(with _: CSSStyle, at _: Int) -> any SVGElement {
         self
     }
 }
@@ -48,7 +48,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
     }
 
     let display: CSSDisplay?
-    let color: SVGUIColor?
+    let color: (any SVGUIColor)?
     let contentIds: [Int]
     let id: String?
     let parentId: String?
@@ -247,7 +247,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
 }
 
 extension SVGLinearGradientServer {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
         try contentsContainer.encode(contentIds)
@@ -260,7 +260,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     }
 
     let display: CSSDisplay?
-    let color: SVGUIColor?
+    let color: (any SVGUIColor)?
     let contentIds: [Int]
     let spreadMethod: SpreadMethod?
     let gradientUnits: SVGUnitType?
@@ -413,7 +413,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
 }
 
 extension SVGRadialGradientServer {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
         try contentsContainer.encode(contentIds)

@@ -24,7 +24,7 @@ enum CSSSelectorType: String {
 }
 
 extension CSSSelector: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         switch self {
         case let .type(tag: name):
@@ -41,7 +41,7 @@ extension CSSSelector: Encodable {
 }
 
 extension CSSSelector: Decodable {
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         guard let type = try CSSSelectorType(rawValue: container.decode(String.self)) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))

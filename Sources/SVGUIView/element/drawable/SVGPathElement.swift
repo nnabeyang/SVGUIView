@@ -49,7 +49,7 @@ extension SVGPathElement: Encodable {
         case fill
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         var dContainer = container.nestedUnkeyedContainer(forKey: .d)
         for segment in segments {
@@ -301,7 +301,7 @@ enum PathSegmentType: UInt8, Equatable {
 }
 
 extension PathSegmentType: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(name)
     }
@@ -327,7 +327,7 @@ extension MPathArgument: Encodable {
         case y
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CondingKeys.self)
         try container.encode(x, forKey: .x)
         try container.encode(y, forKey: .y)
@@ -431,7 +431,7 @@ private enum PathSegmentCodingKeys: String, CodingKey {
 }
 
 extension PathSegment /* Encodable */ {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: PathSegmentCodingKeys.self)
         try container.encode(type, forKey: .type)
         try container.encode(args, forKey: .args)

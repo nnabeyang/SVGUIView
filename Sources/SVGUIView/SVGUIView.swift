@@ -1,5 +1,5 @@
 import os
-import UIKit
+public import UIKit
 
 public class SVGUIView: UIView {
     private var baseContext: SVGBaseContext
@@ -43,15 +43,13 @@ public class SVGUIView: UIView {
     }
 
     override public func draw(_ rect: CGRect) {
-        Task {
-            await taskManager.startTask(priority: configuration.taskPriority, operation: {
-                let image = await self.makeCGImage(rect: rect)
-                await MainActor.run {
-                    self.layer.contents = image
-                    self.startRendering()
-                }
-            })
-        }
+        taskManager.startTask(priority: configuration.taskPriority, operation: {
+            let image = await self.makeCGImage(rect: rect)
+            await MainActor.run {
+                self.layer.contents = image
+                self.startRendering()
+            }
+        })
     }
 
     @available(*, unavailable)
@@ -110,7 +108,7 @@ public class SVGUIView: UIView {
 
     @objc
     private func updateContents(_ displayLink: CADisplayLink) {
-        Task.detached(priority: configuration.taskPriority) {
+        Task {
             if let data = await self.taskManager.takeData() {
                 await MainActor.run {
                     self.baseContext = Parser.parse(data: data)
@@ -178,26 +176,23 @@ public class SVGUIView: UIView {
         default:
             break
         }
-        return await withTaskGroup(of: CGImage?.self) { group in
-            group.addTask {
-                await svg.draw(context, index: self.baseContext.contents.count - 1, mode: .root)
-                context.popViewBox()
-                context.restoreGState()
-                guard !Task.isCancelled else { return nil }
-                return graphics.makeImage()
-            }
-            group.addTask {
-                try? await Task.sleep(for: self.configuration.timeoutDuration)
+        let drawTask = Task<CGImage?, Never> {
+            await svg.draw(context, index: self.baseContext.contents.count - 1, mode: .root)
+            context.popViewBox()
+            context.restoreGState()
+            guard !Task.isCancelled else {
                 return nil
             }
-            defer {
-                group.cancelAll()
-            }
-            guard let image = await group.next() else {
-                return nil
-            }
-            return image
+            return graphics.makeImage()
         }
+
+        let timeoutTask = Task {
+            try? await Task.sleep(for: self.configuration.timeoutDuration)
+            drawTask.cancel()
+        }
+        let value = await drawTask.value
+        timeoutTask.cancel()
+        return value
     }
 }
 
@@ -213,8 +208,14 @@ private actor TaskManager {
         dataQueue = []
     }
 
-    func startTask(priority: TaskPriority, operation: @escaping @Sendable () async -> Void) {
-        Task.detached(priority: priority, operation: operation)
+    nonisolated func startTask(priority: TaskPriority, operation: @escaping @Sendable () async -> Void) {
+        Task.detached(priority: priority) { [weak self] in
+            await self?.setBusy()
+            await operation()
+        }
+    }
+
+    private func setBusy() {
         status = .busy
     }
 

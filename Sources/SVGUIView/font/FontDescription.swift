@@ -1,4 +1,5 @@
 import _ICU
+import Foundation
 
 class FontDescription {
     var sizeAdjust = FontSizeAdjust()

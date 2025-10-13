@@ -3,10 +3,48 @@ import UIKit
 
 class SystemFontDatabaseCoreText {
     var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
-    var textStyles = [CFString]()
+    let textStyles: [CFString]
+
+    init() {
+        var textStyles = [
+            kCTUIFontTextStyleHeadline,
+            kCTUIFontTextStyleBody,
+            kCTUIFontTextStyleTitle1,
+            kCTUIFontTextStyleTitle2,
+            kCTUIFontTextStyleTitle3,
+            kCTUIFontTextStyleSubhead,
+            kCTUIFontTextStyleFootnote,
+            kCTUIFontTextStyleCaption1,
+            kCTUIFontTextStyleCaption2,
+            kCTUIFontTextStyleShortHeadline,
+            kCTUIFontTextStyleShortBody,
+            kCTUIFontTextStyleShortSubhead,
+            kCTUIFontTextStyleShortFootnote,
+            kCTUIFontTextStyleShortCaption1,
+            kCTUIFontTextStyleTallBody,
+            kCTUIFontTextStyleTitle0,
+            kCTUIFontTextStyleTitle4,
+        ]
+        textStyles.sort(by: Self.compareAsPointer)
+        self.textStyles = textStyles
+    }
 
     static var shared: SystemFontDatabaseCoreText {
         FontCache.shared.systemFontDatabaseCoreText
+    }
+
+    private let lock = NSLock()
+
+    func systemFonts(_ value: [CTFontDescriptor], for key: CascadeListParameters) {
+        lock.lock()
+        defer { lock.unlock() }
+        systemFontCache[key] = value
+    }
+
+    func systemFonts(for key: CascadeListParameters) -> [CTFontDescriptor]? {
+        lock.lock()
+        defer { lock.unlock() }
+        return systemFontCache[key]
     }
 
     struct CascadeListParameters: Hashable {
@@ -121,8 +159,6 @@ class SystemFontDatabaseCoreText {
         return CTFontCreateWithFontDescriptor(resultFontDescriptor, size, nil)
     }
 
-    static var contentSizeCategory: CFString = UIApplication.shared.preferredContentSizeCategory.rawValue as CFString
-
     static func createFontByApplyingWeightWidthItalicsAndFallbackBehavior(font: CTFont?, weight: CGFloat, width: CGFloat, italic: Bool, size: Double,
                                                                           allowUserInstalledFonts: AllowUserInstalledFonts, design: CFString? = nil) -> CTFont?
     {
@@ -178,7 +214,7 @@ class SystemFontDatabaseCoreText {
         return result
     }
 
-    private static let compareAsPointer: ((CFString, CFString) -> Bool) = { (lhs: CFString, rhs: CFString) in
+    private static func compareAsPointer(_ lhs: CFString, _ rhs: CFString) -> Bool {
         let result = CFStringCompare(lhs, rhs, CFStringCompareFlags(rawValue: 0))
         switch result {
         case .compareEqualTo, .compareLessThan: return true
@@ -204,28 +240,6 @@ class SystemFontDatabaseCoreText {
         }
         if SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "ui-rounded") {
             return .uiRounded
-        }
-        if textStyles.isEmpty {
-            textStyles = [
-                kCTUIFontTextStyleHeadline,
-                kCTUIFontTextStyleBody,
-                kCTUIFontTextStyleTitle1,
-                kCTUIFontTextStyleTitle2,
-                kCTUIFontTextStyleTitle3,
-                kCTUIFontTextStyleSubhead,
-                kCTUIFontTextStyleFootnote,
-                kCTUIFontTextStyleCaption1,
-                kCTUIFontTextStyleCaption2,
-                kCTUIFontTextStyleShortHeadline,
-                kCTUIFontTextStyleShortBody,
-                kCTUIFontTextStyleShortSubhead,
-                kCTUIFontTextStyleShortFootnote,
-                kCTUIFontTextStyleShortCaption1,
-                kCTUIFontTextStyleTallBody,
-                kCTUIFontTextStyleTitle0,
-                kCTUIFontTextStyleTitle4,
-            ]
-            textStyles.sort(by: Self.compareAsPointer)
         }
         let index = textStyles.partitioningIndex(where: { $0 == (string as CFString) })
         if index < textStyles.count {

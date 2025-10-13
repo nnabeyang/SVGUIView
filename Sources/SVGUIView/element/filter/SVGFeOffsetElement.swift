@@ -83,7 +83,7 @@ struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
 }
 
 extension SVGFeOffsetElement: Encodable {
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

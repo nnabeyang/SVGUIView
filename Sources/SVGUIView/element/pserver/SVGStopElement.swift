@@ -1,5 +1,6 @@
 
 import CoreGraphics
+import Foundation
 
 enum StopDimension {
     case absolute(Double)
@@ -56,7 +57,7 @@ extension SVGStopElement: Encodable {
         case color = "stop-color"
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(offset.description, forKey: .offset)
         try container.encode(color, forKey: .color)

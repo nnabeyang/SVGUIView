@@ -1,3 +1,5 @@
+import CoreGraphics
+
 enum SVGFill {
     case inherit
     case current
@@ -140,7 +142,7 @@ extension SVGFill: Equatable {
 }
 
 extension SVGFill: Encodable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         switch self {
         case .inherit:
             try "inherit".encode(to: encoder)

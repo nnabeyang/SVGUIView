@@ -14,7 +14,7 @@ struct SVGFeFloodElement: SVGElement, SVGFilterApplier {
 
     let result: String?
 
-    let floodColor: SVGUIColor?
+    let floodColor: (any SVGUIColor)?
     let floodOpacity: Double?
 
     func style(with _: CSSStyle, at _: Int) -> any SVGElement {
@@ -89,7 +89,7 @@ struct SVGFeFloodElement: SVGElement, SVGFilterApplier {
 }
 
 extension SVGFeFloodElement: Encodable {
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

@@ -64,7 +64,7 @@ struct SVGGroupElement: SVGDrawableElement {
         Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
-    func frame(context: SVGContext, path _: UIBezierPath?) -> CGRect {
+    func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
         var rect: CGRect? = nil
         for index in contentIds {
             guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
@@ -72,9 +72,9 @@ struct SVGGroupElement: SVGDrawableElement {
                 continue
             }
             if rect != nil {
-                rect = CGRectUnion(rect!, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
+                rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
             } else {
-                rect = content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity)
+                rect = await content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity)
             }
         }
         return rect ?? .zero
@@ -191,7 +191,7 @@ struct SVGGroupElement: SVGDrawableElement {
 }
 
 extension SVGGroupElement {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(contentIds, forKey: .contentIds)
     }

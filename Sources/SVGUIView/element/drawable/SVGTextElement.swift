@@ -72,7 +72,7 @@ struct SVGTextElement: SVGDrawableElement {
         }
     }
 
-    private func getLine(context: SVGContext) -> CTLine? {
+    private func getLine(context: SVGContext) async -> CTLine? {
         var attributes: [CFString: Any] = [:]
         let font = context.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
         let modifiedFont: SVGUIFont? = {
@@ -90,7 +90,7 @@ struct SVGTextElement: SVGDrawableElement {
             return font
         }()
         guard let modifiedFont = modifiedFont else { return nil }
-        attributes[kCTFontAttributeName] = modifiedFont.ctFont(context: context, textScale: context.textScale)
+        attributes[kCTFontAttributeName] = await modifiedFont.ctFont(context: context, textScale: context.textScale)
 
         guard let attributedText = CFAttributedStringCreate(kCFAllocatorDefault,
                                                             text as NSString,
@@ -98,11 +98,11 @@ struct SVGTextElement: SVGDrawableElement {
         return CTLineCreateWithAttributedString(attributedText)
     }
 
-    func frame(context: SVGContext, path _: UIBezierPath?) -> CGRect {
-        guard let line = getLine(context: context) else { return .zero }
+    func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
+        guard let line = await getLine(context: context) else { return .zero }
         let x = x?.value(context: context, mode: .width) ?? 0
         let y = y?.value(context: context, mode: .height) ?? 0
-        let textScale = context.textScale
+        let textScale = await context.textScale
         var transform = CGAffineTransform(translationX: x, y: y)
             .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
         let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
@@ -112,8 +112,8 @@ struct SVGTextElement: SVGDrawableElement {
         return rect.applying(transform)
     }
 
-    func toBezierPath(context: SVGContext) -> UIBezierPath? {
-        guard let line = getLine(context: context) else { return nil }
+    func toBezierPath(context: SVGContext) async -> UIBezierPath? {
+        guard let line = await getLine(context: context) else { return nil }
         let letters = CGMutablePath()
         let runs = CTLineGetGlyphRuns(line)
         for i in 0 ..< CFArrayGetCount(runs) {
@@ -138,7 +138,7 @@ struct SVGTextElement: SVGDrawableElement {
         let path = UIBezierPath(cgPath: letters)
         let x = x?.value(context: context, mode: .width) ?? 0
         let y = y?.value(context: context, mode: .height) ?? 0
-        let textScale = context.textScale
+        let textScale = await context.textScale
         var transform = CGAffineTransform(translationX: x, y: y)
             .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
 
@@ -162,7 +162,7 @@ extension SVGTextElement: Encodable {
         case fill
     }
 
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(text, forKey: .text)
         if let fill = fill {

@@ -105,11 +105,11 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
     var rootFont: SVGUIFont? { font }
 
-    func frame(context: SVGContext, path _: UIBezierPath?) -> CGRect {
+    func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
         var rect: CGRect = .zero
         for index in contentIds {
             guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            rect = CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)))
+            rect = await CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)))
         }
         return rect
     }
@@ -250,7 +250,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
 }
 
 extension SVGSVGElement {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: Self.CodingKeys.self)
         try container.encode(width, forKey: .width)
         try container.encode(height, forKey: .height)

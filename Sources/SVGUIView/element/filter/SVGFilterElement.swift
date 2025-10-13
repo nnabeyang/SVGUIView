@@ -68,12 +68,12 @@ struct SVGFilterElement: SVGDrawableElement {
 
     func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) async {
         guard !contentIds.isEmpty else { return }
-        let bezierPath = content.toBezierPath(context: context)
-        let frame = content.frame(context: context, path: bezierPath)
+        let bezierPath = await content.toBezierPath(context: context)
+        let frame = await content.frame(context: context, path: bezierPath)
         let effectRect = effectRect(frame: frame, context: context)
-        guard let imageCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
+        guard let imageCgContext = await createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
               let srcImage = await srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),
-              let filterCgContext = createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB) else { return }
+              let filterCgContext = await createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB) else { return }
         let scale = await UIScreen.main.scale
         let transform = CGAffineTransform(scaleX: scale, y: scale)
             .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
@@ -83,13 +83,13 @@ struct SVGFilterElement: SVGDrawableElement {
         var inputImage = srcImage
         var clipRect = effectRect
         for (i, index) in contentIds.enumerated() {
-            guard let applier = context.contents[index] as? SVGFilterApplier else { continue }
+            guard let applier = context.contents[index] as? (any SVGFilterApplier) else { continue }
             filterCgContext.clear(effectRect)
             filterCgContext.restoreGState()
             filterCgContext.saveGState()
-            guard let clippedImage = applier.apply(srcImage: srcImage, inImage: inputImage, clipRect: &clipRect,
-                                                   filter: self, frame: frame, effectRect: effectRect, opacity: content.opacity,
-                                                   cgContext: filterCgContext, context: context, results: results, isFirst: i == 0) else { break }
+            guard let clippedImage = await applier.apply(srcImage: srcImage, inImage: inputImage, clipRect: &clipRect,
+                                                         filter: self, frame: frame, effectRect: effectRect, opacity: content.opacity,
+                                                         cgContext: filterCgContext, context: context, results: results, isFirst: i == 0) else { break }
             if let result = applier.result {
                 results[result] = clippedImage
             }
@@ -110,8 +110,8 @@ struct SVGFilterElement: SVGDrawableElement {
         return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
     }
 
-    private func createImageCGContext(rect: CGRect, colorInterpolation: SVGColorInterpolation) -> CGContext? {
-        let scale = UIScreen.main.scale
+    private func createImageCGContext(rect: CGRect, colorInterpolation: SVGColorInterpolation) async -> CGContext? {
+        let scale = await UIScreen.main.scale
         let frameWidth = Int((rect.width * scale).rounded(.up))
         let frameHeight = Int((rect.height * scale).rounded(.up))
         let bytesPerRow = 4 * frameWidth
@@ -158,7 +158,7 @@ extension SVGFilterElement: Encodable {
         case fill
     }
 
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

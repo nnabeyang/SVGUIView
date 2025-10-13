@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -27,16 +27,17 @@ let package = Package(
         .target(name: "_CShims"),
         .target(
             name: "SVGUIView",
-            dependencies: ["_SPI", "_ICU", "_CShims"]
+            dependencies: ["_SPI", "_ICU", "_CShims"],
         ),
         .target(
             name: "SVGView",
-            dependencies: ["SVGUIView"]
+            dependencies: ["SVGUIView"],
         ),
         .testTarget(
             name: "SVGUIViewTests",
             dependencies: ["SVGUIView"],
-            resources: [.process("assets")]
+            resources: [.process("assets")],
         ),
     ]
 )
+

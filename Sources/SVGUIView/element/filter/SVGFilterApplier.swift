@@ -8,7 +8,7 @@ protocol SVGFilterApplier {
     var height: SVGLength? { get }
     var result: String? { get }
     func apply(srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect, filter: SVGFilterElement, frame: CGRect,
-               effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst: Bool) -> CGImage?
+               effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst: Bool) async -> CGImage?
     func frame(filter: SVGFilterElement, frame: CGRect, context: SVGContext) -> CGRect
     func transform(filter: SVGFilterElement, frame: CGRect) -> CGAffineTransform
 }

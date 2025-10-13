@@ -1,4 +1,4 @@
-import UIKit
+public import UIKit
 
 extension UIBezierPath {
     convenience init(roundedRect rect: CGRect, cornerSize: CGSize) {

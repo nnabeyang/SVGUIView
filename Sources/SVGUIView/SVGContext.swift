@@ -3,7 +3,7 @@ import UIKit
 protocol SVGLengthContext {
     var viewBoxSize: CGSize { get }
     var font: SVGUIFont? { get }
-    var textScale: Double { get }
+    var textScale: Double { get async }
     var rootFont: SVGUIFont? { get }
     var viewPort: CGRect { get }
     var writingMode: WritingMode? { get }
@@ -19,7 +19,7 @@ struct SVGContext: SVGLengthContext {
     private let fontStack: Stack<SVGUIFont> = Stack()
     private let writingModeStack = Stack<WritingMode>()
     private let fillStack: Stack<SVGFill> = Stack()
-    private let colorStack: Stack<SVGUIColor> = Stack()
+    private let colorStack: Stack<any SVGUIColor> = Stack()
     private let strokeStack: Stack<SVGUIStroke> = Stack()
     private let textAnchorStack: Stack<TextAnchor> = Stack()
     private let clipRuleStack: Stack<Bool> = Stack()
@@ -46,17 +46,19 @@ struct SVGContext: SVGLengthContext {
     }
 
     var textScale: Double {
-        let scale = UIScreen.main.scale
-        let x = viewPort.width * scale / viewBox.width
-        let y = viewPort.height * scale / viewBox.height
-        return hypot(x, y) / sqrt(2)
+        get async {
+            let scale = await UIScreen.main.scale
+            let x = viewPort.width * scale / viewBox.width
+            let y = viewPort.height * scale / viewBox.height
+            return hypot(x, y) / sqrt(2)
+        }
     }
 
     var pservers: [String: any SVGGradientServer] {
         base.pservers
     }
 
-    var contents: [SVGElement] {
+    var contents: [any SVGElement] {
         base.contents
     }
 
@@ -112,7 +114,7 @@ struct SVGContext: SVGLengthContext {
         fillStack.last
     }
 
-    var color: SVGUIColor? {
+    var color: (any SVGUIColor)? {
         colorStack.last
     }
 
@@ -209,7 +211,7 @@ struct SVGContext: SVGLengthContext {
         fillStack.push(fill)
     }
 
-    func push(color: SVGUIColor) {
+    func push(color: any SVGUIColor) {
         colorStack.push(color)
     }
 
@@ -248,7 +250,7 @@ struct SVGContext: SVGLengthContext {
     }
 
     @discardableResult
-    func popColor() -> SVGUIColor? {
+    func popColor() -> (any SVGUIColor)? {
         colorStack.pop()
     }
 
@@ -282,7 +284,7 @@ struct SVGContext: SVGLengthContext {
 struct SVGBaseContext {
     let pservers: [String: any SVGGradientServer]
     let contentIdMap: [String: Int]
-    let contents: [SVGElement]
+    let contents: [any SVGElement]
 
     var clipPaths = [String: SVGClipPathElement]()
     var masks = [String: SVGMaskElement]()

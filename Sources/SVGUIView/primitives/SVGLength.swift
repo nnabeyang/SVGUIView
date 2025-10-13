@@ -58,7 +58,10 @@ enum SVGLength: Equatable {
     case q(CGFloat)
 
     static let pixelsPerInch: CGFloat = 96.0
-    static var zeroCodePoint: UniChar = 0x30
+    static var zeroCodePoint: UniChar {
+        get { 0x30 }
+        set {}
+    }
 
     init(value: Double, unit: CSSUnitType) {
         switch unit {
@@ -275,7 +278,7 @@ enum SVGLength: Equatable {
         return nil
     }
 
-    func calculatedLength(frame: CGRect, context: SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse, isPosition: Bool = false) -> CGFloat {
+    func calculatedLength(frame: CGRect, context: any SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse, isPosition: Bool = false) -> CGFloat {
         let value = value(context: context, mode: mode, unitType: unitType)
         let viewBoxSize = context.viewBoxSize
         switch mode {
@@ -308,7 +311,7 @@ enum SVGLength: Equatable {
         }
     }
 
-    func value(context: SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse) -> CGFloat {
+    func value(context: any SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse) -> CGFloat {
         let total: CGFloat
         if case .percent = self {
             let size: CGSize
@@ -334,7 +337,7 @@ enum SVGLength: Equatable {
         return value(total: total, context: context)
     }
 
-    func fontValue(context: SVGLengthContext) -> CGFloat {
+    func fontValue(context: any SVGLengthContext) -> CGFloat {
         let total: CGFloat
         if case .percent = self {
             total = context.font?.sizeValue(context: context, textScale: 1.0) ?? 16.0
@@ -344,7 +347,7 @@ enum SVGLength: Equatable {
         return value(total: total, context: context)
     }
 
-    func value(total: CGFloat, context: SVGLengthContext) -> CGFloat {
+    func value(total: CGFloat, context: any SVGLengthContext) -> CGFloat {
         switch self {
         case let .percent(percent):
             return total * percent / 100.0
@@ -526,7 +529,7 @@ extension SVGLength: CustomStringConvertible {
 }
 
 extension SVGLength: Codable {
-    func encode(to encoder: Encoder) throws {
+    func encode(to encoder: any Encoder) throws {
         var container = encoder.unkeyedContainer()
         switch self {
         case let .number(v):
@@ -598,7 +601,7 @@ extension SVGLength: Codable {
         }
     }
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
         let typeString = try container.decode(String.self)
         guard let type = SVGLengthType(rawValue: typeString) else {

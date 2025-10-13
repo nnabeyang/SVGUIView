@@ -16,7 +16,7 @@ struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
 
     let contentIds: [Int]
 
-    func style(with _: CSSStyle, at _: Int) -> SVGElement {
+    func style(with _: CSSStyle, at _: Int) -> any SVGElement {
         self
     }
 
@@ -84,7 +84,7 @@ struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
 }
 
 extension SVGFeMergeElement: Encodable {
-    func encode(to _: Encoder) throws {
+    func encode(to _: any Encoder) throws {
         fatalError()
     }
 }

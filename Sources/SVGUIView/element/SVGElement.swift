@@ -54,7 +54,7 @@ struct SVGBaseElement {
     let font: SVGUIFont?
     let fill: SVGFill?
     let stroke: SVGUIStroke
-    let color: SVGUIColor?
+    let color: (any SVGUIColor)?
     let clipPath: SVGClipPath?
     let mask: SVGMask?
     let filter: SVGFilter?
@@ -159,18 +159,18 @@ protocol SVGDrawableElement: SVGElement {
     var font: SVGUIFont? { get }
     var fill: SVGFill? { get }
     var stroke: SVGUIStroke { get }
-    var color: SVGUIColor? { get }
+    var color: (any SVGUIColor)? { get }
     var style: SVGUIStyle { get }
     var display: CSSDisplay? { get }
     var visibility: CSSVisibility? { get }
-    func frame(context: SVGContext, path: UIBezierPath?) -> CGRect
+    func frame(context: SVGContext, path: UIBezierPath?) async -> CGRect
     func scale(context: SVGContext) -> CGAffineTransform
     init(text: String, attributes: [String: String])
     init(base: SVGBaseElement, text: String, attributes: [String: String])
     init(other: Self, index: Int, css: SVGUIStyle)
     init(other: Self, attributes: [String: String])
     func use(attributes: [String: String]) -> Self
-    func toBezierPath(context: SVGContext) -> UIBezierPath?
+    func toBezierPath(context: SVGContext) async -> UIBezierPath?
     func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
     func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) async
 }
@@ -190,7 +190,7 @@ extension SVGDrawableElement {
     var clipPath: SVGClipPath? { base.clipPath }
     var mask: SVGMask? { base.mask }
     var filter: SVGFilter? { base.filter }
-    var color: SVGUIColor? { base.color }
+    var color: (any SVGUIColor)? { base.color }
     var style: SVGUIStyle { base.style }
     var display: CSSDisplay? { base.display }
     var visibility: CSSVisibility? { base.visibility }
@@ -252,9 +252,9 @@ extension SVGDrawableElement {
         default:
             break
         }
-        let path = toBezierPath(context: context)
+        let path = await toBezierPath(context: context)
         if let path = path {
-            let frame = frame(context: context, path: path)
+            let frame = await frame(context: context, path: path)
             await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
             let lineWidth = stroke.width?.value(context: context, mode: .other)
 
@@ -414,7 +414,7 @@ extension SVGDrawableElement {
             } else if let pattern = context.patterns[id],
                       context.check(patternId: id)
             {
-                let frame = frame(context: context, path: path)
+                let frame = await frame(context: context, path: path)
                 let cgContext = context.graphics
                 let opacity = opacity?.value ?? 1.0
                 cgContext.saveGState()
