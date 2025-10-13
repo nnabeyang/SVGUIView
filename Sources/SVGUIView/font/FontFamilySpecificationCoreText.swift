@@ -16,7 +16,7 @@ struct FontFamilySpecificationCoreText {
         let platformData = FontPlatformData(font: font, size: size, orientation: fontDescription.orientation, widthVariant: fontDescription.widthVariant,
                                             syntheticBold: syntheticBold, syntheticOblique: syntheticOblique)
         let key = FontFamilySpecificationKey(fontDescriptor: fontDescriptor, fontDescription: fontDescription)
-        FontFamilySpecificationCoreTextCache.shared.fonts[key] = platformData
+        FontFamilySpecificationCoreTextCache.shared.font(platformData, for: key)
         return FontRanges(font: FontCache.shared.fontForPlatformData(platformData: platformData))
     }
 

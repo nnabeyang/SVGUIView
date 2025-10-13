@@ -1,16 +1,46 @@
 import _SPI
+import Foundation
 
 class FontCache {
-    var fontFamilySpecificationCoreTextCache = FontFamilySpecificationCoreTextCache()
-    var systemFontDatabaseCoreText = SystemFontDatabaseCoreText()
+    let fontFamilySpecificationCoreTextCache = FontFamilySpecificationCoreTextCache()
+    let systemFontDatabaseCoreText = SystemFontDatabaseCoreText()
     var seenFamiliesForPrewarming = [String]()
 
-    struct FontDataCaches {
-        var platformData = [FontPlatformDataCacheKey: FontPlatformData]()
-        var data = [FontPlatformData: Font]()
+    class FontDataCaches {
+        private var platformData = [FontPlatformDataCacheKey: FontPlatformData]()
+        private var data = [FontPlatformData: Font]()
+        private let lock = NSLock()
+
+        func platformData(for key: FontPlatformDataCacheKey) -> FontPlatformData? {
+            lock.lock()
+            defer { lock.unlock() }
+            return platformData[key]
+        }
+
+        func platformData(_ value: FontPlatformData?, for key: FontPlatformDataCacheKey) {
+            lock.lock()
+            defer {
+                lock.unlock()
+            }
+            platformData[key] = value
+        }
+
+        func data(for key: FontPlatformData) -> Font? {
+            lock.lock()
+            defer { lock.unlock() }
+            return data[key]
+        }
+
+        func data(_ font: Font, for key: FontPlatformData) {
+            lock.lock()
+            defer {
+                lock.unlock()
+            }
+            data[key] = font
+        }
     }
 
-    static let shared = FontCache()
+    nonisolated(unsafe) static let shared = FontCache()
     var fontDataCaches = FontDataCaches()
 
     func createFontPlatformData(fontDescription: FontDescription, familyName: String, fontCreationContext: FontCreationContext) -> FontPlatformData? {
@@ -34,7 +64,7 @@ class FontCache {
 
     func fontForPlatformData(platformData: FontPlatformData) -> Font {
         let font = Font(platformData: platformData, origin: .local)
-        fontDataCaches.data[platformData] = font
+        fontDataCaches.data(font, for: platformData)
         return font
     }
 
@@ -43,15 +73,15 @@ class FontCache {
     {
         let key = FontPlatformDataCacheKey(descriptionKey: .init(description: fontDescription),
                                            familyName: familyName, fontCreationContext: fontCreationContext)
-        guard let value = fontDataCaches.platformData[key] else {
+        guard let value = fontDataCaches.platformData(for: key) else {
             let value = createFontPlatformData(fontDescription: fontDescription, familyName: familyName, fontCreationContext: fontCreationContext)
-            fontDataCaches.platformData[key] = value
+            fontDataCaches.platformData(value, for: key)
             if value == nil, !checkingAlternateName {
                 if let alternateName = Self.alternateFamilyName(familyName: familyName) {
                     if let alternateData = cachedFontPlatformData(fontDescription: fontDescription, familyName: alternateName,
                                                                   fontCreationContext: fontCreationContext, checkingAlternateName: true)
                     {
-                        fontDataCaches.platformData[key] = alternateData
+                        fontDataCaches.platformData(alternateData, for: key)
                         return alternateData
                     }
                 }

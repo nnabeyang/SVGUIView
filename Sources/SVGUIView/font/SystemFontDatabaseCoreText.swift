@@ -33,6 +33,20 @@ class SystemFontDatabaseCoreText {
         FontCache.shared.systemFontDatabaseCoreText
     }
 
+    private let lock = NSLock()
+
+    func systemFonts(_ value: [CTFontDescriptor], for key: CascadeListParameters) {
+        lock.lock()
+        defer { lock.unlock() }
+        systemFontCache[key] = value
+    }
+
+    func systemFonts(for key: CascadeListParameters) -> [CTFontDescriptor]? {
+        lock.lock()
+        defer { lock.unlock() }
+        return systemFontCache[key]
+    }
+
     struct CascadeListParameters: Hashable {
         var fontName: String = ""
         var locale: String? = nil
