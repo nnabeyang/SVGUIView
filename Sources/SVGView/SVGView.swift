@@ -15,14 +15,16 @@ public struct SVGView: UIViewRepresentable {
         self.init(data: data, contentMode: contentMode)
     }
 
-    public func makeUIView(context: Context) -> SVGUIView {
-        let uiView = SVGUIView(data: data)
-        uiView.contentMode = contentMode.asUIView()
-        uiView.configuration = context.environment.svgViewConfiguration
+    public func makeUIView(context _: Context) -> SVGUIView {
+        let uiView = SVGUIView()
         return uiView
     }
 
-    public func updateUIView(_: SVGUIView, context _: Context) {}
+    public func updateUIView(_ uiView: SVGUIView, context: Context) {
+        uiView.data = data
+        uiView.contentMode = contentMode.asUIView()
+        uiView.configuration = context.environment.svgViewConfiguration
+    }
 }
 
 extension ContentMode {
