@@ -3,7 +3,31 @@ import UIKit
 
 class SystemFontDatabaseCoreText {
     var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
-    var textStyles = [CFString]()
+    let textStyles: [CFString]
+
+    init() {
+        var textStyles = [
+            kCTUIFontTextStyleHeadline,
+            kCTUIFontTextStyleBody,
+            kCTUIFontTextStyleTitle1,
+            kCTUIFontTextStyleTitle2,
+            kCTUIFontTextStyleTitle3,
+            kCTUIFontTextStyleSubhead,
+            kCTUIFontTextStyleFootnote,
+            kCTUIFontTextStyleCaption1,
+            kCTUIFontTextStyleCaption2,
+            kCTUIFontTextStyleShortHeadline,
+            kCTUIFontTextStyleShortBody,
+            kCTUIFontTextStyleShortSubhead,
+            kCTUIFontTextStyleShortFootnote,
+            kCTUIFontTextStyleShortCaption1,
+            kCTUIFontTextStyleTallBody,
+            kCTUIFontTextStyleTitle0,
+            kCTUIFontTextStyleTitle4,
+        ]
+        textStyles.sort(by: Self.compareAsPointer)
+        self.textStyles = textStyles
+    }
 
     static var shared: SystemFontDatabaseCoreText {
         FontCache.shared.systemFontDatabaseCoreText
@@ -202,28 +226,6 @@ class SystemFontDatabaseCoreText {
         }
         if SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "ui-rounded") {
             return .uiRounded
-        }
-        if textStyles.isEmpty {
-            textStyles = [
-                kCTUIFontTextStyleHeadline,
-                kCTUIFontTextStyleBody,
-                kCTUIFontTextStyleTitle1,
-                kCTUIFontTextStyleTitle2,
-                kCTUIFontTextStyleTitle3,
-                kCTUIFontTextStyleSubhead,
-                kCTUIFontTextStyleFootnote,
-                kCTUIFontTextStyleCaption1,
-                kCTUIFontTextStyleCaption2,
-                kCTUIFontTextStyleShortHeadline,
-                kCTUIFontTextStyleShortBody,
-                kCTUIFontTextStyleShortSubhead,
-                kCTUIFontTextStyleShortFootnote,
-                kCTUIFontTextStyleShortCaption1,
-                kCTUIFontTextStyleTallBody,
-                kCTUIFontTextStyleTitle0,
-                kCTUIFontTextStyleTitle4,
-            ]
-            textStyles.sort(by: Self.compareAsPointer)
         }
         let index = textStyles.partitioningIndex(where: { $0 == (string as CFString) })
         if index < textStyles.count {
