@@ -1,389 +1,391 @@
 import UIKit
 
 protocol SVGLengthContext {
-    var viewBoxSize: CGSize { get }
-    var font: SVGUIFont? { get }
-    var textScale: Double { get async }
-    var rootFont: SVGUIFont? { get }
-    var viewPort: CGRect { get }
-    var writingMode: WritingMode? { get }
+  var viewBoxSize: CGSize { get }
+  var font: SVGUIFont? { get }
+  var textScale: Double { get async }
+  var rootFont: SVGUIFont? { get }
+  var viewPort: CGRect { get }
+  var writingMode: WritingMode? { get }
 }
 
 struct SVGContext: SVGLengthContext {
-    let base: SVGBaseContext
-    let graphics: CGContext
-    let viewPort: CGRect
+  let base: SVGBaseContext
+  let graphics: CGContext
+  let viewPort: CGRect
 
-    private let viewBoxStack: Stack<CGRect> = Stack()
-    private let patternContentUnitStack = Stack<SVGUnitType>()
-    private let fontStack: Stack<SVGUIFont> = Stack()
-    private let writingModeStack = Stack<WritingMode>()
-    private let fillStack: Stack<SVGFill> = Stack()
-    private let colorStack: Stack<any SVGUIColor> = Stack()
-    private let strokeStack: Stack<SVGUIStroke> = Stack()
-    private let textAnchorStack: Stack<TextAnchor> = Stack()
-    private let clipRuleStack: Stack<Bool> = Stack()
-    private let clipIdStack = ElementIdStack<String>()
-    private let maskIdStack = ElementIdStack<String>()
-    private let patternIdStack: ElementIdStack<String>
-    private let tagIdStack = ElementIdStack<Int>()
-    private let initCtm: CGAffineTransform
+  private let viewBoxStack: Stack<CGRect> = Stack()
+  private let patternContentUnitStack = Stack<SVGUnitType>()
+  private let fontStack: Stack<SVGUIFont> = Stack()
+  private let writingModeStack = Stack<WritingMode>()
+  private let fillStack: Stack<SVGFill> = Stack()
+  private let colorStack: Stack<any SVGUIColor> = Stack()
+  private let strokeStack: Stack<SVGUIStroke> = Stack()
+  private let textAnchorStack: Stack<TextAnchor> = Stack()
+  private let clipRuleStack: Stack<Bool> = Stack()
+  private let clipIdStack = ElementIdStack<String>()
+  private let maskIdStack = ElementIdStack<String>()
+  private let patternIdStack: ElementIdStack<String>
+  private let tagIdStack = ElementIdStack<Int>()
+  private let initCtm: CGAffineTransform
 
-    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect) {
-        self.base = base
-        self.graphics = graphics
-        initCtm = graphics.ctm
-        self.viewPort = viewPort
-        patternIdStack = ElementIdStack<String>()
+  init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect) {
+    self.base = base
+    self.graphics = graphics
+    initCtm = graphics.ctm
+    self.viewPort = viewPort
+    patternIdStack = ElementIdStack<String>()
+  }
+
+  init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, other: Self) {
+    self.base = base
+    self.graphics = graphics
+    initCtm = graphics.ctm
+    self.viewPort = viewPort
+    patternIdStack = other.patternIdStack
+  }
+
+  var textScale: Double {
+    get async {
+      let scale = await UIScreen.main.scale
+      let x = viewPort.width * scale / viewBox.width
+      let y = viewPort.height * scale / viewBox.height
+      return hypot(x, y) / sqrt(2)
     }
+  }
 
-    init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, other: Self) {
-        self.base = base
-        self.graphics = graphics
-        initCtm = graphics.ctm
-        self.viewPort = viewPort
-        patternIdStack = other.patternIdStack
-    }
+  var pservers: [String: any SVGGradientServer] {
+    base.pservers
+  }
 
-    var textScale: Double {
-        get async {
-            let scale = await UIScreen.main.scale
-            let x = viewPort.width * scale / viewBox.width
-            let y = viewPort.height * scale / viewBox.height
-            return hypot(x, y) / sqrt(2)
-        }
-    }
+  var contents: [any SVGElement] {
+    base.contents
+  }
 
-    var pservers: [String: any SVGGradientServer] {
-        base.pservers
-    }
+  var clipPaths: [String: SVGClipPathElement] {
+    base.clipPaths
+  }
 
-    var contents: [any SVGElement] {
-        base.contents
-    }
+  var masks: [String: SVGMaskElement] {
+    base.masks
+  }
 
-    var clipPaths: [String: SVGClipPathElement] {
-        base.clipPaths
-    }
+  var patterns: [String: SVGPatternElement] {
+    base.patterns
+  }
 
-    var masks: [String: SVGMaskElement] {
-        base.masks
-    }
+  var filters: [String: SVGFilterElement] {
+    base.filters
+  }
 
-    var patterns: [String: SVGPatternElement] {
-        base.patterns
-    }
+  var transform: CGAffineTransform {
+    graphics.ctm.concatenating(initCtm.inverted())
+  }
 
-    var filters: [String: SVGFilterElement] {
-        base.filters
-    }
+  subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
+    base[id]
+  }
 
-    var transform: CGAffineTransform {
-        graphics.ctm.concatenating(initCtm.inverted())
-    }
+  var viewBox: CGRect {
+    viewBoxStack.last!
+  }
 
-    subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
-        base[id]
-    }
+  var viewBoxSize: CGSize {
+    viewBox.size
+  }
 
-    var viewBox: CGRect {
-        viewBoxStack.last!
-    }
+  var patternContentUnit: SVGUnitType? {
+    patternContentUnitStack.last
+  }
 
-    var viewBoxSize: CGSize {
-        viewBox.size
-    }
+  var rootFont: SVGUIFont? {
+    fontStack.first
+  }
 
-    var patternContentUnit: SVGUnitType? {
-        patternContentUnitStack.last
-    }
+  var font: SVGUIFont? {
+    fontStack.last
+  }
 
-    var rootFont: SVGUIFont? {
-        fontStack.first
-    }
+  var writingMode: WritingMode? {
+    writingModeStack.last
+  }
 
-    var font: SVGUIFont? {
-        fontStack.last
-    }
+  var fill: SVGFill? {
+    fillStack.last
+  }
 
-    var writingMode: WritingMode? {
-        writingModeStack.last
-    }
+  var color: (any SVGUIColor)? {
+    colorStack.last
+  }
 
-    var fill: SVGFill? {
-        fillStack.last
-    }
+  var stroke: SVGUIStroke? {
+    strokeStack.last
+  }
 
-    var color: (any SVGUIColor)? {
-        colorStack.last
-    }
+  var textAnchor: TextAnchor? {
+    textAnchorStack.last
+  }
 
-    var stroke: SVGUIStroke? {
-        strokeStack.last
-    }
+  func pushClipIdStack() {
+    clipIdStack.push()
+  }
 
-    var textAnchor: TextAnchor? {
-        textAnchorStack.last
-    }
+  func check(clipId: String) -> Bool {
+    clipIdStack.check(elementId: clipId)
+  }
 
-    func pushClipIdStack() {
-        clipIdStack.push()
-    }
+  func remove(clipId: String) {
+    clipIdStack.remove(elementId: clipId)
+  }
 
-    func check(clipId: String) -> Bool {
-        clipIdStack.check(elementId: clipId)
-    }
+  func popClipIdStack() {
+    clipIdStack.pop()
+  }
 
-    func remove(clipId: String) {
-        clipIdStack.remove(elementId: clipId)
-    }
+  func pushMaskIdStack() {
+    maskIdStack.push()
+  }
 
-    func popClipIdStack() {
-        clipIdStack.pop()
-    }
+  func check(maskId: String) -> Bool {
+    maskIdStack.check(elementId: maskId)
+  }
 
-    func pushMaskIdStack() {
-        maskIdStack.push()
-    }
+  func remove(maskId: String) {
+    maskIdStack.remove(elementId: maskId)
+  }
 
-    func check(maskId: String) -> Bool {
-        maskIdStack.check(elementId: maskId)
-    }
+  func popMaskIdStack() {
+    maskIdStack.pop()
+  }
 
-    func remove(maskId: String) {
-        maskIdStack.remove(elementId: maskId)
-    }
+  func pushTagIdStack() {
+    tagIdStack.push()
+  }
 
-    func popMaskIdStack() {
-        maskIdStack.pop()
-    }
+  func check(tagId: Int) -> Bool {
+    tagIdStack.check(elementId: tagId)
+  }
 
-    func pushTagIdStack() {
-        tagIdStack.push()
-    }
+  func remove(tagId: Int) {
+    tagIdStack.remove(elementId: tagId)
+  }
 
-    func check(tagId: Int) -> Bool {
-        tagIdStack.check(elementId: tagId)
-    }
+  func popTagIdStack() {
+    clipIdStack.pop()
+  }
 
-    func remove(tagId: Int) {
-        tagIdStack.remove(elementId: tagId)
-    }
+  func pushPatternIdStack() {
+    patternIdStack.push()
+  }
 
-    func popTagIdStack() {
-        clipIdStack.pop()
-    }
+  func check(patternId: String) -> Bool {
+    patternIdStack.check(elementId: patternId)
+  }
 
-    func pushPatternIdStack() {
-        patternIdStack.push()
-    }
+  func remove(patternId: String) {
+    patternIdStack.remove(elementId: patternId)
+  }
 
-    func check(patternId: String) -> Bool {
-        patternIdStack.check(elementId: patternId)
-    }
+  func popPatternIdStack() {
+    patternIdStack.pop()
+  }
 
-    func remove(patternId: String) {
-        patternIdStack.remove(elementId: patternId)
-    }
+  func push(viewBox: CGRect) {
+    viewBoxStack.push(viewBox)
+  }
 
-    func popPatternIdStack() {
-        patternIdStack.pop()
-    }
+  func push(patternContentUnit: SVGUnitType) {
+    patternContentUnitStack.push(patternContentUnit)
+  }
 
-    func push(viewBox: CGRect) {
-        viewBoxStack.push(viewBox)
-    }
+  func push(writingMode: WritingMode) {
+    writingModeStack.push(writingMode)
+  }
 
-    func push(patternContentUnit: SVGUnitType) {
-        patternContentUnitStack.push(patternContentUnit)
-    }
+  func push(font: SVGUIFont) {
+    let font = SVGUIFont(child: font, context: self)
+    fontStack.push(font)
+  }
 
-    func push(writingMode: WritingMode) {
-        writingModeStack.push(writingMode)
-    }
+  func push(fill: SVGFill) {
+    fillStack.push(fill)
+  }
 
-    func push(font: SVGUIFont) {
-        let font = SVGUIFont(child: font, context: self)
-        fontStack.push(font)
-    }
+  func push(color: any SVGUIColor) {
+    colorStack.push(color)
+  }
 
-    func push(fill: SVGFill) {
-        fillStack.push(fill)
-    }
+  func push(stroke: SVGUIStroke) {
+    let stroke = SVGUIStroke(lhs: stroke, rhs: self.stroke)
+    strokeStack.push(stroke)
+  }
 
-    func push(color: any SVGUIColor) {
-        colorStack.push(color)
-    }
+  func push(textAnchor: TextAnchor) {
+    textAnchorStack.push(textAnchor)
+  }
 
-    func push(stroke: SVGUIStroke) {
-        let stroke = SVGUIStroke(lhs: stroke, rhs: self.stroke)
-        strokeStack.push(stroke)
-    }
+  @discardableResult
+  func popViewBox() -> CGRect? {
+    viewBoxStack.pop()
+  }
 
-    func push(textAnchor: TextAnchor) {
-        textAnchorStack.push(textAnchor)
-    }
+  @discardableResult
+  func popPatternContentUnit() -> SVGUnitType? {
+    patternContentUnitStack.pop()
+  }
 
-    @discardableResult
-    func popViewBox() -> CGRect? {
-        viewBoxStack.pop()
-    }
+  @discardableResult
+  func popWritingMode() -> WritingMode? {
+    writingModeStack.pop()
+  }
 
-    @discardableResult
-    func popPatternContentUnit() -> SVGUnitType? {
-        patternContentUnitStack.pop()
-    }
+  @discardableResult
+  func popFont() -> SVGUIFont? {
+    fontStack.pop()
+  }
 
-    @discardableResult
-    func popWritingMode() -> WritingMode? {
-        writingModeStack.pop()
-    }
+  @discardableResult
+  func popFill() -> SVGFill? {
+    fillStack.pop()
+  }
 
-    @discardableResult
-    func popFont() -> SVGUIFont? {
-        fontStack.pop()
-    }
+  @discardableResult
+  func popColor() -> (any SVGUIColor)? {
+    colorStack.pop()
+  }
 
-    @discardableResult
-    func popFill() -> SVGFill? {
-        fillStack.pop()
-    }
+  @discardableResult
+  func popStroke() -> SVGUIStroke? {
+    strokeStack.pop()
+  }
 
-    @discardableResult
-    func popColor() -> (any SVGUIColor)? {
-        colorStack.pop()
-    }
+  @discardableResult
+  func popTextAnchor() -> TextAnchor? {
+    textAnchorStack.pop()
+  }
 
-    @discardableResult
-    func popStroke() -> SVGUIStroke? {
-        strokeStack.pop()
-    }
+  func saveGState() {
+    graphics.saveGState()
+  }
 
-    @discardableResult
-    func popTextAnchor() -> TextAnchor? {
-        textAnchorStack.pop()
-    }
+  func concatenate(_ transform: CGAffineTransform) {
+    graphics.concatenate(transform)
+  }
 
-    func saveGState() {
-        graphics.saveGState()
-    }
+  func restoreGState() {
+    graphics.restoreGState()
+  }
 
-    func concatenate(_ transform: CGAffineTransform) {
-        graphics.concatenate(transform)
-    }
-
-    func restoreGState() {
-        graphics.restoreGState()
-    }
-
-    func setAlpha(_ rawAlpha: CGFloat) {
-        graphics.setAlpha(rawAlpha)
-    }
+  func setAlpha(_ rawAlpha: CGFloat) {
+    graphics.setAlpha(rawAlpha)
+  }
 }
 
 struct SVGBaseContext {
-    let pservers: [String: any SVGGradientServer]
-    let contentIdMap: [String: Int]
-    let contents: [any SVGElement]
+  let pservers: [String: any SVGGradientServer]
+  let contentIdMap: [String: Int]
+  let contents: [any SVGElement]
 
-    var clipPaths = [String: SVGClipPathElement]()
-    var masks = [String: SVGMaskElement]()
-    var patterns = [String: SVGPatternElement]()
-    var filters = [String: SVGFilterElement]()
-    private let clipRuleStack: Stack<Bool> = Stack()
+  var clipPaths = [String: SVGClipPathElement]()
+  var masks = [String: SVGMaskElement]()
+  var patterns = [String: SVGPatternElement]()
+  var filters = [String: SVGFilterElement]()
+  private let clipRuleStack: Stack<Bool> = Stack()
 
-    var root: SVGSVGElement? {
-        contents.last as? SVGSVGElement
+  var root: SVGSVGElement? {
+    contents.last as? SVGSVGElement
+  }
+
+  var clipRule: Bool? {
+    clipRuleStack.last
+  }
+
+  mutating func setClipPath(id: String, value: SVGClipPathElement) {
+    if clipPaths[id] == nil {
+      clipPaths[id] = value
     }
+  }
 
-    var clipRule: Bool? {
-        clipRuleStack.last
+  mutating func setMask(id: String, value: SVGMaskElement) {
+    if masks[id] == nil {
+      masks[id] = value
     }
+  }
 
-    mutating func setClipPath(id: String, value: SVGClipPathElement) {
-        if clipPaths[id] == nil {
-            clipPaths[id] = value
-        }
+  mutating func setPattern(id: String, value: SVGPatternElement) {
+    if patterns[id] == nil {
+      patterns[id] = value
     }
+  }
 
-    mutating func setMask(id: String, value: SVGMaskElement) {
-        if masks[id] == nil {
-            masks[id] = value
-        }
+  mutating func setFilter(id: String, value: SVGFilterElement) {
+    if filters[id] == nil {
+      filters[id] = value
     }
+  }
 
-    mutating func setPattern(id: String, value: SVGPatternElement) {
-        if patterns[id] == nil {
-            patterns[id] = value
-        }
-    }
+  subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
+    guard let idx = contentIdMap[id],
+      let element = contents[idx] as? (any SVGDrawableElement)
+    else { return nil }
+    return (Index: idx, element: element)
+  }
 
-    mutating func setFilter(id: String, value: SVGFilterElement) {
-        if filters[id] == nil {
-            filters[id] = value
-        }
-    }
+  func push(clipRule: Bool) {
+    clipRuleStack.push(clipRule)
+  }
 
-    subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
-        guard let idx = contentIdMap[id],
-              let element = contents[idx] as? (any SVGDrawableElement) else { return nil }
-        return (Index: idx, element: element)
-    }
-
-    func push(clipRule: Bool) {
-        clipRuleStack.push(clipRule)
-    }
-
-    @discardableResult
-    func popClipRule() -> Bool? {
-        clipRuleStack.pop()
-    }
+  @discardableResult
+  func popClipRule() -> Bool? {
+    clipRuleStack.pop()
+  }
 }
 
 private class Stack<T> {
-    var fonts: [T] = []
+  var fonts: [T] = []
 
-    var first: T? {
-        fonts.first
-    }
+  var first: T? {
+    fonts.first
+  }
 
-    var last: T? {
-        fonts.last
-    }
+  var last: T? {
+    fonts.last
+  }
 
-    func push(_ font: T) {
-        fonts.append(font)
-    }
+  func push(_ font: T) {
+    fonts.append(font)
+  }
 
-    func pop() -> T? {
-        fonts.popLast()
-    }
+  func pop() -> T? {
+    fonts.popLast()
+  }
 }
 
 private class ElementIdStack<T: Equatable> {
-    var values = [[T]]()
+  var values = [[T]]()
 
-    func check(elementId: T) -> Bool {
-        if values.last?.contains(elementId) ?? true {
-            return false
-        }
-        values[values.count - 1].append(elementId)
-        return true
+  func check(elementId: T) -> Bool {
+    if values.last?.contains(elementId) ?? true {
+      return false
     }
+    values[values.count - 1].append(elementId)
+    return true
+  }
 
-    func remove(elementId: T) {
-        guard var value = values.last,
-              let index = value.lastIndex(of: elementId) else { return }
-        value.remove(at: index)
-        values[values.count - 1] = value
-    }
+  func remove(elementId: T) {
+    guard var value = values.last,
+      let index = value.lastIndex(of: elementId)
+    else { return }
+    value.remove(at: index)
+    values[values.count - 1] = value
+  }
 
-    func push() {
-        values.append([])
-    }
+  func push() {
+    values.append([])
+  }
 
-    @discardableResult
-    func pop() -> [T]? {
-        values.popLast()
-    }
+  @discardableResult
+  func pop() -> [T]? {
+    values.popLast()
+  }
 }

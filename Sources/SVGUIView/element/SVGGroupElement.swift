@@ -1,196 +1,196 @@
 import UIKit
 
 struct SVGGroupElement: SVGDrawableElement {
-    var type: SVGElementName {
-        .g
+  var type: SVGElementName {
+    .g
+  }
+
+  let base: SVGBaseElement
+
+  let contentIds: [Int]
+  let textAnchor: TextAnchor?
+
+  private enum CodingKeys: String, CodingKey {
+    case contentIds
+  }
+
+  init(attributes: [String: String], contentIds: [Int]) {
+    base = SVGBaseElement(attributes: attributes)
+    self.contentIds = contentIds
+    textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
+  }
+
+  init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
+    fatalError()
+  }
+
+  init(other: Self, attributes: [String: String]) {
+    base = SVGBaseElement(other: other.base, attributes: attributes)
+    contentIds = other.contentIds
+    textAnchor = other.textAnchor
+  }
+
+  init(other: SVGGroupElement, index: Int, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, index: index, css: css)
+    contentIds = other.contentIds
+    textAnchor = other.textAnchor
+  }
+
+  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+    nil
+  }
+
+  private static func parseColor(description: String) -> (any SVGUIColor)? {
+    var data = description
+    return data.withUTF8 {
+      let bytes = BufferView(unsafeBufferPointer: $0)!
+      var scanner = SVGAttributeScanner(bytes: bytes)
+      return scanner.scanColor()
     }
+  }
 
-    let base: SVGBaseElement
-
-    let contentIds: [Int]
-    let textAnchor: TextAnchor?
-
-    private enum CodingKeys: String, CodingKey {
-        case contentIds
+  private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
+    let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
+    let size = attributes["font-size"]
+    let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
+    if name == nil,
+      size == nil,
+      weight == nil
+    {
+      return nil
     }
+    return SVGUIFont(name: name, size: size, weight: weight)
+  }
 
-    init(attributes: [String: String], contentIds: [Int]) {
-        base = SVGBaseElement(attributes: attributes)
-        self.contentIds = contentIds
-        textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
+  func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
+    var rect: CGRect? = nil
+    for index in contentIds {
+      guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+      if case .none = content.display ?? .inline {
+        continue
+      }
+      if rect != nil {
+        rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
+      } else {
+        rect = await content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity)
+      }
     }
+    return rect ?? .zero
+  }
 
-    init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
-        fatalError()
+  func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
+    context.saveGState()
+    if mode != .filter(isRoot: true) {
+      context.concatenate(transform ?? .identity)
     }
+    context.setAlpha(opacity)
+    let gContext = context.graphics
+    gContext.beginTransparencyLayer(auxiliaryInfo: nil)
+    font.map {
+      context.push(font: $0)
+    }
+    writingMode.map {
+      context.push(writingMode: $0)
+    }
+    fill.map {
+      context.push(fill: $0)
+    }
+    color.map {
+      context.push(color: $0)
+    }
+    context.push(stroke: stroke)
+    textAnchor.map {
+      context.push(textAnchor: $0)
+    }
+    switch mode {
+    case .root, .filter:
+      context.pushClipIdStack()
+      context.pushMaskIdStack()
+    default:
+      break
+    }
+    await clipPath?.clipIfNeeded(frame: frame(context: context, path: nil), context: context, cgContext: context.graphics)
+    for index in contentIds {
+      guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+      await content.draw(context, index: index, mode: mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode)
+    }
+    switch mode {
+    case .root, .filter:
+      context.popClipIdStack()
+      context.popMaskIdStack()
+    default:
+      break
+    }
+    font.map { _ in
+      _ = context.popFont()
+    }
+    writingMode.map { _ in
+      _ = context.popWritingMode()
+    }
+    fill.map { _ in
+      _ = context.popFill()
+    }
+    color.map { _ in
+      _ = context.popColor()
+    }
+    _ = context.popStroke()
+    textAnchor.map { _ in
+      _ = context.popTextAnchor()
+    }
+    gContext.endTransparencyLayer()
+    context.restoreGState()
+  }
 
-    init(other: Self, attributes: [String: String]) {
-        base = SVGBaseElement(other: other.base, attributes: attributes)
-        contentIds = other.contentIds
-        textAnchor = other.textAnchor
+  func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+    guard !Task.isCancelled else { return }
+    let filter = filter ?? SVGFilter.none
+    if case .url(let id) = filter,
+      let server = context.filters[id]
+    {
+      await server.filter(content: self, context: context, cgContext: context.graphics)
+      return
     }
+    await drawWithoutFilter(context, index: index, mode: mode)
+  }
 
-    init(other: SVGGroupElement, index: Int, css: SVGUIStyle) {
-        base = SVGBaseElement(other: other.base, index: index, css: css)
-        contentIds = other.contentIds
-        textAnchor = other.textAnchor
+  func clip(context: inout SVGBaseContext) {
+    clipRule.map {
+      context.push(clipRule: $0)
     }
+    for index in contentIds {
+      context.contents[index].clip(context: &context)
+    }
+    clipRule.map { _ in
+      _ = context.popClipRule()
+    }
+  }
 
-    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
-        nil
+  func mask(context: inout SVGBaseContext) {
+    for index in contentIds {
+      context.contents[index].mask(context: &context)
     }
+  }
 
-    private static func parseColor(description: String) -> (any SVGUIColor)? {
-        var data = description
-        return data.withUTF8 {
-            let bytes = BufferView(unsafeBufferPointer: $0)!
-            var scanner = SVGAttributeScanner(bytes: bytes)
-            return scanner.scanColor()
-        }
+  func pattern(context: inout SVGBaseContext) {
+    for index in contentIds {
+      context.contents[index].pattern(context: &context)
     }
+  }
 
-    private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
-        let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
-        let size = attributes["font-size"]
-        let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
-        if name == nil,
-           size == nil,
-           weight == nil
-        {
-            return nil
-        }
-        return SVGUIFont(name: name, size: size, weight: weight)
+  func filter(context: inout SVGBaseContext) {
+    for index in contentIds {
+      context.contents[index].filter(context: &context)
     }
+  }
 
-    func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
-        var rect: CGRect? = nil
-        for index in contentIds {
-            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            if case .none = content.display ?? .inline {
-                continue
-            }
-            if rect != nil {
-                rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
-            } else {
-                rect = await content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity)
-            }
-        }
-        return rect ?? .zero
-    }
-
-    func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
-        context.saveGState()
-        if mode != .filter(isRoot: true) {
-            context.concatenate(transform ?? .identity)
-        }
-        context.setAlpha(opacity)
-        let gContext = context.graphics
-        gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-        font.map {
-            context.push(font: $0)
-        }
-        writingMode.map {
-            context.push(writingMode: $0)
-        }
-        fill.map {
-            context.push(fill: $0)
-        }
-        color.map {
-            context.push(color: $0)
-        }
-        context.push(stroke: stroke)
-        textAnchor.map {
-            context.push(textAnchor: $0)
-        }
-        switch mode {
-        case .root, .filter:
-            context.pushClipIdStack()
-            context.pushMaskIdStack()
-        default:
-            break
-        }
-        await clipPath?.clipIfNeeded(frame: frame(context: context, path: nil), context: context, cgContext: context.graphics)
-        for index in contentIds {
-            guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            await content.draw(context, index: index, mode: mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode)
-        }
-        switch mode {
-        case .root, .filter:
-            context.popClipIdStack()
-            context.popMaskIdStack()
-        default:
-            break
-        }
-        font.map { _ in
-            _ = context.popFont()
-        }
-        writingMode.map { _ in
-            _ = context.popWritingMode()
-        }
-        fill.map { _ in
-            _ = context.popFill()
-        }
-        color.map { _ in
-            _ = context.popColor()
-        }
-        _ = context.popStroke()
-        textAnchor.map { _ in
-            _ = context.popTextAnchor()
-        }
-        gContext.endTransparencyLayer()
-        context.restoreGState()
-    }
-
-    func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
-        guard !Task.isCancelled else { return }
-        let filter = filter ?? SVGFilter.none
-        if case let .url(id) = filter,
-           let server = context.filters[id]
-        {
-            await server.filter(content: self, context: context, cgContext: context.graphics)
-            return
-        }
-        await drawWithoutFilter(context, index: index, mode: mode)
-    }
-
-    func clip(context: inout SVGBaseContext) {
-        clipRule.map {
-            context.push(clipRule: $0)
-        }
-        for index in contentIds {
-            context.contents[index].clip(context: &context)
-        }
-        clipRule.map { _ in
-            _ = context.popClipRule()
-        }
-    }
-
-    func mask(context: inout SVGBaseContext) {
-        for index in contentIds {
-            context.contents[index].mask(context: &context)
-        }
-    }
-
-    func pattern(context: inout SVGBaseContext) {
-        for index in contentIds {
-            context.contents[index].pattern(context: &context)
-        }
-    }
-
-    func filter(context: inout SVGBaseContext) {
-        for index in contentIds {
-            context.contents[index].filter(context: &context)
-        }
-    }
-
-    func contains(index: Int, context _: SVGContext) -> Bool {
-        contentIds.contains(index)
-    }
+  func contains(index: Int, context _: SVGContext) -> Bool {
+    contentIds.contains(index)
+  }
 }
 
 extension SVGGroupElement {
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: Self.CodingKeys.self)
-        try container.encode(contentIds, forKey: .contentIds)
-    }
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: Self.CodingKeys.self)
+    try container.encode(contentIds, forKey: .contentIds)
+  }
 }

@@ -54,18 +54,18 @@ public var kCTFontCSSFamilyMonospace: CFString { "monospace" as CFString }
 public var kCTFontCSSFamilySystemUI: CFString { "system-ui" as CFString }
 
 public func CTFontCreateLastResort(_ size: CGFloat, _ matrix: UnsafePointer<CGAffineTransform>?) -> CTFont {
-    CTFontCreateWithName("LastResort" as CFString, size, matrix)
+  CTFontCreateWithName("LastResort" as CFString, size, matrix)
 }
 
 public func CTFontIsAppleColorEmoji(_ font: CTFont) -> Bool {
-    CTFontCopyFullName(font) as String == "Apple Color Emoji"
+  CTFontCopyFullName(font) as String == "Apple Color Emoji"
 }
 
 public func CTFontDescriptorIsSystemUIFont(_ descriptor: CTFontDescriptor) -> Bool {
-    switch CTFontDescriptorCopyAttribute(descriptor, kCTFontFamilyNameAttribute) as? String {
-    case ".AppleSystemUIFont", ".AppleSystemUIFontMonospaced":
-        return true
-    default:
-        return false
-    }
+  switch CTFontDescriptorCopyAttribute(descriptor, kCTFontFamilyNameAttribute) as? String {
+  case ".AppleSystemUIFont", ".AppleSystemUIFontMonospaced":
+    return true
+  default:
+    return false
+  }
 }

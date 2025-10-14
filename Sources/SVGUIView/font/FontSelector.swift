@@ -1,12 +1,12 @@
 protocol FontAccessor {
-    func font(policy: ExternalResourceDownloadPolicy) -> Font
+  func font(policy: ExternalResourceDownloadPolicy) -> Font
 }
 
 enum ExternalResourceDownloadPolicy {
-    case forbid
-    case allow
+  case forbid
+  case allow
 }
 
 protocol FontSelector {
-    func fontRangesForFamily(fontDescription: FontDescription, familyName: String) -> FontRanges
+  func fontRangesForFamily(fontDescription: FontDescription, familyName: String) -> FontRanges
 }
