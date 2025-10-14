@@ -118,7 +118,7 @@ struct SVGBaseElement {
         className = other.className
         font = other.font
         fill = SVGFill(style: css) ?? other.fill
-        clipPath = other.clipPath
+        clipPath = SVGClipPath(style: css) ?? other.clipPath
         mask = other.mask
         filter = other.filter
         color = other.color

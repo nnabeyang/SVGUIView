@@ -41,6 +41,7 @@ enum CSSValueType: String, Hashable, Codable {
     case y
     case transform
     case fillOpacity = "fill-opacity"
+    case clipPath = "clip-path"
 }
 
 enum SVGCSSFillType: String {
@@ -156,6 +157,7 @@ enum CSSValue {
     case number(Double)
     case length(SVGLength)
     case transform(CGAffineTransform)
+    case clipPath(SVGClipPath)
 }
 
 extension CSSValue: Equatable {
@@ -186,6 +188,8 @@ extension CSSValue: Encodable {
             try value.encode(to: encoder)
         case let .number(value):
             try value.encode(to: encoder)
+        case .clipPath:
+            try "clip-path".encode(to: encoder)
         }
     }
 }
@@ -397,6 +401,9 @@ struct CSSParser {
                 }
                 return .success(CSSDeclaration(type: .transform, value: .transform(transform)))
             }
+        case .clipPath:
+            guard case let .url(url) = tokenizer.next(), url.hasPrefix("#") else { return .failure(.invalid) }
+            return .success(CSSDeclaration(type: .clipPath, value: .clipPath(.url(url: String(url.dropFirst())))))
         }
     }
 
