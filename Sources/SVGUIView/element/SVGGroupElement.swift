@@ -30,8 +30,10 @@ struct SVGGroupElement: SVGDrawableElement {
         textAnchor = other.textAnchor
     }
 
-    init(other: SVGGroupElement, index _: Int, css _: SVGUIStyle) {
-        self = other
+    init(other: SVGGroupElement, index: Int, css: SVGUIStyle) {
+        base = SVGBaseElement(other: other.base, index: index, css: css)
+        contentIds = other.contentIds
+        textAnchor = other.textAnchor
     }
 
     func toBezierPath(context _: SVGContext) -> UIBezierPath? {
@@ -58,10 +60,6 @@ struct SVGGroupElement: SVGDrawableElement {
             return nil
         }
         return SVGUIFont(name: name, size: size, weight: weight)
-    }
-
-    func style(with _: CSSStyle, at index: Int) -> any SVGElement {
-        Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
     }
 
     func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
