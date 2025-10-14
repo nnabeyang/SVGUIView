@@ -31,37 +31,22 @@ struct SVGImageElement: SVGDrawableElement {
         height = other.height
     }
 
-    func draw(_ context: SVGContext, index _: Int, mode _: DrawMode) async {
-        guard !Task.isCancelled else { return }
-        let cgContext = context.graphics
-        context.saveGState()
+    func toBezierPath(context: SVGContext) -> UIBezierPath? {
         let x = x?.value(context: context, mode: .width) ?? 0
         let y = y?.value(context: context, mode: .width) ?? 0
         let width = width?.value(context: context, mode: .width) ?? 0
         let height = height?.value(context: context, mode: .height) ?? 0
-        if let data = data,
-           let image = UIImage(data: data),
-           let cgImage = image.cgImage
-        {
-            let s = scale(width: width, height: height, imageSize: image.size)
-            let width = image.size.width * s
-            let height = image.size.height * s
-            cgContext.scaleBy(x: 1, y: -1)
-            cgContext.draw(cgImage, in: CGRect(x: x, y: -height - y, width: width, height: height))
+
+        guard width > 0, height > 0 else {
+            return nil
         }
-        context.restoreGState()
+        let path = UIBezierPath(rect: .init(x: x, y: y, width: width, height: height))
+        path.apply(scale(context: context))
+        return path
     }
 
-    private func scale(width: CGFloat, height: CGFloat, imageSize size: CGSize) -> CGFloat {
-        let sx = width / size.width
-        let sy = height / size.height
-        if width == 0 { return sy }
-        if height == 0 { return sx }
-        return width > height ? sy : sx
-    }
-
-    func toBezierPath(context _: SVGContext) -> UIBezierPath? {
-        nil
+    var fill: SVGFill? {
+        .image(data: data)
     }
 }
 

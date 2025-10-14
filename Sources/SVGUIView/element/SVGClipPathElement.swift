@@ -82,9 +82,7 @@ struct SVGClipPathElement: SVGElement {
         graphics.concatenate(transform)
         for index in contentIds {
             guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-            if content is SVGGroupElement ||
-                content is SVGLineElement
-            {
+            if content is SVGGroupElement || content is SVGLineElement || content is SVGImageElement {
                 continue
             }
             if case .hidden = content.visibility {
