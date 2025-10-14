@@ -1,10 +1,12 @@
 import CoreGraphics
+import Foundation
 
 enum SVGFill {
     case inherit
     case current
     case color(color: (any SVGUIColor)?, opacity: SVGOpacity?)
     case url(url: String, opacity: SVGOpacity?)
+    case image(data: Data?)
 
     init?(style: SVGUIStyle) {
         let opacity: SVGOpacity? = {
@@ -135,6 +137,8 @@ extension SVGFill: Equatable {
             return l?.description == r?.description && lo == ro
         case let (.url(l, lo), .url(r, ro)):
             return l == r && lo == ro
+        case let (.image(l), .image(r)):
+            return l == r
         default:
             return false
         }
@@ -158,6 +162,8 @@ extension SVGFill: Encodable {
             }
         case let .url(str, _):
             try "url(\(str))".encode(to: encoder)
+        case let .image(data):
+            try data?.encode(to: encoder)
         }
     }
 }

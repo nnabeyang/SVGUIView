@@ -159,6 +159,8 @@ struct SVGLinearGradientServer: SVGGradientServer {
             case .inherit, .url, .none:
                 // TODO: implement inherit, url(...), auto case
                 return nil
+            case .image:
+                fatalError("Images not supported in gradient")
             }
         }
         guard !colors.isEmpty else { return }
@@ -367,6 +369,8 @@ struct SVGRadialGradientServer: SVGGradientServer {
             case .inherit, .url, .none:
                 // TODO: implement inherit, url(...), auto case
                 return nil
+            case .image:
+                fatalError("Images not supported in gradient")
             }
         }
         guard !colors.isEmpty else { return }

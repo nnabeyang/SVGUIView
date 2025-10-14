@@ -326,6 +326,8 @@ extension SVGDrawableElement {
         case .url:
             // TODO: implement url color case
             break
+        case .image:
+            fatalError("Images not supported in stroke fill")
         }
     }
 
@@ -429,6 +431,27 @@ extension SVGDrawableElement {
             cgContext.setFillColor(UIColor.black.cgColor)
             cgContext.addPath(path.cgPath)
             cgContext.drawPath(using: eoFill ? .eoFill : .fill)
+        case let .image(data):
+            if let data = data,
+               let image = UIImage(data: data),
+               let cgImage = image.cgImage
+            {
+                let bounds = path.bounds
+                let imageWidth = CGFloat(cgImage.width)
+                let imageHeight = CGFloat(cgImage.height)
+                let scale = scale(width: bounds.width, height: bounds.height, imageSize: .init(width: imageWidth, height: imageHeight))
+                let frame = CGRect(origin: bounds.origin, size: .init(width: imageWidth * scale, height: imageHeight * scale))
+                cgContext.scaleBy(x: 1, y: -1)
+                cgContext.draw(cgImage, in: CGRect(x: frame.minX, y: -frame.height - frame.minY, width: frame.width, height: frame.height))
+            }
         }
+    }
+
+    private func scale(width: CGFloat, height: CGFloat, imageSize size: CGSize) -> CGFloat {
+        let sx = width / size.width
+        let sy = height / size.height
+        if width == 0 { return sy }
+        if height == 0 { return sx }
+        return width > height ? sy : sx
     }
 }

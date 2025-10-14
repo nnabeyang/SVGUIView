@@ -69,6 +69,8 @@ struct SVGTextElement: SVGDrawableElement {
         case .url:
             // FIXME: implement url color case
             break
+        case .image:
+            fatalError("Images not supported in text")
         }
     }
 
