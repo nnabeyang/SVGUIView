@@ -1,4 +1,5 @@
 import Foundation
+import _CSSParser
 import os
 
 enum SVGElementName: String, Equatable {
@@ -206,11 +207,10 @@ extension Parser: XMLParserDelegate {
       case .radialGradient:
         return SVGRadialGradientServer(attributes: attributes, contentIds: contentIds)
       case .style:
-        text.withUTF8 {
-          let bytes = BufferView(unsafeBufferPointer: $0)!
-          var parser = CSSParser(bytes: bytes)
-          rules.append(contentsOf: parser.parseRules())
-        }
+        let parseInput = ParserInput(input: text)
+        let input = _CSSParser.Parser(input: parseInput)
+        var parser = CSSParser(input: input)
+        rules.append(contentsOf: parser.parseRules())
         fallthrough
       case .unknown:
         if !countList.isEmpty {

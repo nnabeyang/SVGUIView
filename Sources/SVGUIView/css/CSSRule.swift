@@ -27,7 +27,10 @@ extension CSSRule: Encodable {
     case .qualified(let rule):
       try container.encode(CSSRuleType.qualified.rawValue)
       try container.encode(rule.selectors)
-      try container.encode(rule.declarations)
+      let declarations = rule.declarations.values.sorted(by: {
+        $0.type.rawValue < $1.type.rawValue
+      })
+      try container.encode(declarations)
     }
   }
 }

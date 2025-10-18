@@ -1,8 +1,9 @@
 import XCTest
+import _CSSParser
 
 @testable import SVGUIView
 
-enum Result<Success, Failure> {
+enum Result<Success, Failure: Error> {
   case success(Success)
   case failure(Failure)
 }
@@ -54,80 +55,37 @@ struct TestData<T: Codable>: Codable {
 final class CSSParserTests: XCTestCase {
   private static let encoder: JSONEncoder = {
     let encoder = JSONEncoder()
-    encoder.outputFormatting = .prettyPrinted
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     return encoder
   }()
 
   private static let decoder = JSONDecoder()
 
-  private func parseTokens(src: String) -> [CSSToken] {
-    var data = src
-    return data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var tokenizer = CSSTopTokenizer(bytes: bytes)
-      var tokens = [CSSToken]()
-      while true {
-        let token = tokenizer.nextToken()
-        if case .eof = token {
-          break
-        }
-        tokens.append(token)
-      }
-      return tokens
-    }
-  }
-
-  private func parseDeclarations(src: String) -> [Result<CSSDeclaration, CSSParseError>] {
-    var data = src
-    return data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var parser = CSSParser(bytes: bytes)
-      var results = [Result<CSSDeclaration, CSSParseError>]()
-      var tokenizer = parser.tokenizer
-      while true {
-        switch tokenizer.peek() {
-        case .ident:
-          let startIndex = tokenizer.readIndex
-          tokenizer.consumeUntilSemicolon()
-          var declaration = tokenizer.makeSubTokenizer(startIndex: startIndex, endIndex: tokenizer.readIndex)
-          let result = parser.parseDeclaration(tokenizer: &declaration)
-          switch result {
-          case .success(let v):
-            results.append(.success(v))
-          case .failure(let e):
-            results.append(.failure(e))
-          }
-        default:
-          return results
-        }
-      }
+  private func parseDeclaration(src: String) -> Result<CSSDeclaration, CSSParseError> {
+    let parseInput = ParserInput(input: src)
+    var input = Parser(input: parseInput)
+    var parser = CSSDeclarationParser()
+    switch parseOneDeclaration(input: &input, parser: &parser) {
+    case .success(let decl):
+      return .success(decl)
+    case .failure(let err):
+      fatalError(err.localizedDescription)
     }
   }
 
   private func parseRule(src: String) -> CSSRule {
-    var data = src
-    return data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var parser = CSSParser(bytes: bytes)
-      return parser.parseRule()
-    }
-  }
-
-  func testComponentValueList() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "component_value_list", withExtension: "json")!)
-    let tests = try Self.decoder.decode([TestData<[CSSToken]>].self, from: Data(json.utf8))
-    for test in tests {
-      let tokens = parseTokens(src: test.src)
-      XCTAssertEqual(tokens, test.want)
-    }
+    let parseInput = ParserInput(input: src)
+    var input = Parser(input: parseInput)
+    var parser = CSSParser(input: input)
+    return try! parseOneRule(input: &input, parser: &parser).get()
   }
 
   func testDeclarationList() throws {
     let json = try String(contentsOf: Bundle.module.url(forResource: "declaration_list", withExtension: "json")!)
-    let tests = try Self.decoder.decode([TestData<[Result<CSSDeclaration, CSSParseError>]>].self, from: Data(json.utf8))
+    let tests = try Self.decoder.decode([TestData<Result<CSSDeclaration, CSSParseError>>].self, from: Data(json.utf8))
     for test in tests {
-      let results = parseDeclarations(src: test.src)
-      XCTAssertEqual(results, test.want)
+      let result = parseDeclaration(src: test.src)
+      XCTAssertEqual(result, test.want)
     }
   }
 
