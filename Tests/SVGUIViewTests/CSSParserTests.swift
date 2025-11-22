@@ -17,7 +17,7 @@ final class CSSParserTests: XCTestCase {
 
   private static let decoder = JSONDecoder()
 
-  private func parseDeclaration(src: String) -> Result<CSSDeclaration, CSSParseError> {
+  private func parseDeclaration(src: String) -> Result<CSSDeclaration, StyleParseErrorKind> {
     let parseInput = ParserInput(input: src)
     var input = Parser(input: parseInput)
     var parser = CSSDeclarationParser()

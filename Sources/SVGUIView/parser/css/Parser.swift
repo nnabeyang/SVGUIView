@@ -13,4 +13,6 @@ protocol Parse {
 }
 
 typealias ParseError = _CSSParser.ParseError<StyleParseErrorKind>
-enum StyleParseErrorKind: Error, Equatable {}
+enum StyleParseErrorKind: Error, Equatable {
+  case invalid
+}

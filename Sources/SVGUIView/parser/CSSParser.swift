@@ -218,10 +218,6 @@ extension CSSValue: Decodable {
   }
 }
 
-enum CSSParseError: String, Error {
-  case invalid
-}
-
 struct CSSParser {
   private var input: _CSSParser.Parser
   init(input: _CSSParser.Parser) {
@@ -234,7 +230,7 @@ struct CSSParser {
   }
 
   mutating func parseRules() -> [CSSRule] {
-    let bodyParser: RuleBodyParser<CSSParser, CSSRule, CSSParseError> = RuleBodyParser(input: input, parser: self)
+    let bodyParser: RuleBodyParser<CSSParser, CSSRule, StyleParseErrorKind> = RuleBodyParser(input: input, parser: self)
     var rules = [CSSRule]()
     for element in bodyParser {
       if case .success(let rule) = element {
@@ -250,7 +246,7 @@ extension CSSParser: AtRuleParser {
 }
 
 extension CSSParser: DeclarationParser {
-  typealias Error = CSSParseError
+  typealias Error = StyleParseErrorKind
   typealias Declaration = DeclOrRule
 }
 
@@ -268,7 +264,7 @@ extension CSSParser: QualifiedRuleParser {
   typealias Prelude = [CSSSelector]
   typealias QualifiedRule = DeclOrRule
 
-  mutating func parseQualifiedBlock(prelude: Prelude, start: _CSSParser.ParserState, input: inout _CSSParser.Parser) -> Result<CSSRule, _CSSParser.ParseError<CSSParseError>> {
+  mutating func parseQualifiedBlock(prelude: Prelude, start: _CSSParser.ParserState, input: inout _CSSParser.Parser) -> Result<CSSRule, _CSSParser.ParseError<StyleParseErrorKind>> {
     var declarations = [CSSValueType: CSSDeclaration]()
     var parser = CSSDeclarationParser()
     while true {
@@ -283,7 +279,7 @@ extension CSSParser: QualifiedRuleParser {
     return .success(.qualified(.init(selectors: prelude, declarations: declarations)))
   }
 
-  public typealias Element = Result<CSSDeclaration, RuleBodyError<CSSParseError>>
+  public typealias Element = Result<CSSDeclaration, RuleBodyError<StyleParseErrorKind>>
   public mutating func next(input: inout _CSSParser.Parser, parser: inout CSSDeclarationParser) -> Element? {
     while true {
       input.skipWhitespace()
@@ -300,7 +296,7 @@ extension CSSParser: QualifiedRuleParser {
           if parser.parseDeclarations() {
             let parseQualified: Bool = parser.parseQualified()
             let errorBehavior: ParseUntilErrorBehavior = parseQualified ? .stop : .consume
-            let result: Result<CSSDeclaration, _CSSParser.ParseError<CSSParseError>> = parseUntilAfter(parser: &input, delimiters: .semicolon, errorBehavior: errorBehavior) { input in
+            let result: Result<CSSDeclaration, _CSSParser.ParseError<StyleParseErrorKind>> = parseUntilAfter(parser: &input, delimiters: .semicolon, errorBehavior: errorBehavior) { input in
               if case .failure(let error) = input.expectColon() {
                 return .failure(.init(basic: error))
               }
@@ -315,7 +311,7 @@ extension CSSParser: QualifiedRuleParser {
             return result.mapError { .init(parseError: $0, message: input.slice(from: start.sourcePosition)) }
           }
         case let token:
-          let result: Result<CSSDeclaration, _CSSParser.ParseError<CSSParseError>>
+          let result: Result<CSSDeclaration, _CSSParser.ParseError<StyleParseErrorKind>>
           if parser.parseQualified() {
             input.reset(state: start)
             let nested = parser.parseDeclarations()
@@ -362,10 +358,10 @@ extension CSSParser: QualifiedRuleParser {
 }
 
 struct CSSDeclarationParser: DeclarationParser {
-  typealias Error = CSSParseError
+  typealias Error = StyleParseErrorKind
   typealias Declaration = CSSDeclaration
 
-  mutating func parseValue(name: String, input: inout _CSSParser.Parser, declarationStart: inout _CSSParser.ParserState) -> Result<CSSDeclaration, _CSSParser.ParseError<CSSParseError>> {
+  mutating func parseValue(name: String, input: inout _CSSParser.Parser, declarationStart: inout _CSSParser.ParserState) -> Result<CSSDeclaration, _CSSParser.ParseError<StyleParseErrorKind>> {
     guard let type = CSSValueType(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
     switch type {
     case .fill:
