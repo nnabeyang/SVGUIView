@@ -107,7 +107,7 @@ extension SVGCSSFill: Codable {
       case .current:
         self = .current
       default:
-        throw CSSParseError.invalid
+        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
       }
     } catch {
       var container = try decoder.unkeyedContainer()
@@ -118,7 +118,7 @@ extension SVGCSSFill: Codable {
       case .color:
         var nestedContainer = try container.nestedUnkeyedContainer()
         guard let colorType = try SVGColorType(rawValue: nestedContainer.decode(String.self)) else {
-          throw CSSParseError.invalid
+          throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
         }
         switch colorType {
         case .hex:
@@ -142,12 +142,12 @@ extension SVGCSSFill: Codable {
           let name = try nestedContainer.decode(String.self)
           self = .color(SVGColorName(name: name))
         default:
-          throw CSSParseError.invalid
+          throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
         }
       case .url:
         self = try .url(container.decode(String.self))
       default:
-        throw CSSParseError.invalid
+        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
       }
     }
   }
