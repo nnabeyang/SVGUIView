@@ -222,25 +222,6 @@ enum CSSParseError: String, Error {
   case invalid
 }
 
-extension CSSParseError: Codable {
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    if try container.decode(String.self) != "error" {
-      throw DecodingError.valueNotFound(String.self, .init(codingPath: decoder.codingPath, debugDescription: "The give data is invalid"))
-    }
-    guard let value = try CSSParseError(rawValue: container.decode(String.self)) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    self = value
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    try container.encode("error")
-    try container.encode(rawValue)
-  }
-}
-
 struct CSSParser {
   private var input: _CSSParser.Parser
   init(input: _CSSParser.Parser) {
