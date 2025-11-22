@@ -9,7 +9,7 @@ struct SVGUIStyle: Encodable {
 
   init(description: String) {
     let parseInput = ParserInput(input: description)
-    var input = _CSSParser.Parser(input: parseInput)
+    var input = Parser(input: parseInput)
     var parser = CSSParser(input: input)
     let result = parser.parseQualifiedBlock(prelude: [], start: input.state, input: &input)
     switch result {

@@ -219,8 +219,8 @@ extension CSSValue: Decodable {
 }
 
 struct CSSParser {
-  private var input: _CSSParser.Parser
-  init(input: _CSSParser.Parser) {
+  private var input: Parser
+  init(input: Parser) {
     self.input = input
   }
 
@@ -264,7 +264,7 @@ extension CSSParser: QualifiedRuleParser {
   typealias Prelude = [CSSSelector]
   typealias QualifiedRule = DeclOrRule
 
-  mutating func parseQualifiedBlock(prelude: Prelude, start: _CSSParser.ParserState, input: inout _CSSParser.Parser) -> Result<CSSRule, CSSParseError> {
+  mutating func parseQualifiedBlock(prelude: Prelude, start: ParserState, input: inout Parser) -> Result<CSSRule, CSSParseError> {
     var declarations = [CSSValueType: CSSDeclaration]()
     var parser = CSSDeclarationParser()
     while true {
@@ -280,7 +280,7 @@ extension CSSParser: QualifiedRuleParser {
   }
 
   public typealias Element = Result<CSSDeclaration, RuleBodyError<StyleParseErrorKind>>
-  public mutating func next(input: inout _CSSParser.Parser, parser: inout CSSDeclarationParser) -> Element? {
+  public mutating func next(input: inout Parser, parser: inout CSSDeclarationParser) -> Element? {
     while true {
       input.skipWhitespace()
       var start = input.state
@@ -332,7 +332,7 @@ extension CSSParser: QualifiedRuleParser {
     }
   }
 
-  mutating func parseQualifiedPrelude(input: inout _CSSParser.Parser) -> Result<Prelude, CSSParseError> {
+  mutating func parseQualifiedPrelude(input: inout Parser) -> Result<Prelude, CSSParseError> {
     var selectors = [CSSSelector]()
     while case .success(let token) = input.nextIncludingWhitespace() {
       switch token {
@@ -361,7 +361,7 @@ struct CSSDeclarationParser: DeclarationParser {
   typealias Error = StyleParseErrorKind
   typealias Declaration = CSSDeclaration
 
-  mutating func parseValue(name: String, input: inout _CSSParser.Parser, declarationStart: inout _CSSParser.ParserState) -> Result<CSSDeclaration, CSSParseError> {
+  mutating func parseValue(name: String, input: inout Parser, declarationStart: inout ParserState) -> Result<CSSDeclaration, CSSParseError> {
     guard let type = CSSValueType(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
     switch type {
     case .fill:

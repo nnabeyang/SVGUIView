@@ -2,7 +2,7 @@ import Foundation
 import _CSSParser
 
 extension CGAffineTransform: Parse {
-  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<CGAffineTransform, CSSParseError> {
+  static func parse(context: ParserContext, input: inout Parser) -> Result<CGAffineTransform, CSSParseError> {
     if case .success = input.tryParse({ input in
       input.expectIdentMatching(expectedValue: "none")
     }) {
@@ -69,7 +69,7 @@ extension CGAffineTransform: Parse {
     }
   }
 
-  private static func expectComma(input: inout _CSSParser.Parser) -> Bool {
+  private static func expectComma(input: inout Parser) -> Bool {
     switch input.tryParse({ input in
       input.expectComma()
     }) {

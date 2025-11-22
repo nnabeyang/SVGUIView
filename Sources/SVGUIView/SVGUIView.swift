@@ -21,12 +21,12 @@ public class SVGUIView: UIView {
 
   public convenience init(frame: CGRect, data: Data? = nil) {
     let data = data ?? Data()
-    let baseContext = Parser.parse(data: data)
+    let baseContext = SVGParser.parse(data: data)
     self.init(frame: frame, baseContext: baseContext, data: data)
   }
 
   public convenience init(data: Data = Data()) {
-    let baseContext = Parser.parse(data: data)
+    let baseContext = SVGParser.parse(data: data)
     let size = baseContext.root?.size ?? .zero
     self.init(frame: .init(origin: .zero, size: size), baseContext: baseContext, data: data)
   }
@@ -35,7 +35,7 @@ public class SVGUIView: UIView {
     didSet {
       Task {
         if await !taskManager.add(data: data) {
-          baseContext = Parser.parse(data: data)
+          baseContext = SVGParser.parse(data: data)
           setNeedsDisplay()
         }
       }
@@ -113,7 +113,7 @@ public class SVGUIView: UIView {
     Task {
       if let data = await self.taskManager.takeData() {
         await MainActor.run {
-          self.baseContext = Parser.parse(data: data)
+          self.baseContext = SVGParser.parse(data: data)
         }
         let image = await self.makeCGImage()
         await MainActor.run {

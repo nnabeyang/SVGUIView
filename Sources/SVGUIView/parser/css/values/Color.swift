@@ -1,7 +1,7 @@
 import _CSSParser
 
 extension SVGRGBAColor: Parse {
-  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<SVGRGBAColor, CSSParseError> {
+  static func parse(context: ParserContext, input: inout Parser) -> Result<SVGRGBAColor, CSSParseError> {
     input.parseNestedBlock { input in
       do throws(CSSParseError) {
         let r = try Number.parse(context: context, input: &input).get().value
@@ -18,14 +18,14 @@ extension SVGRGBAColor: Parse {
     }
   }
 
-  private static func expectComma(input: inout _CSSParser.Parser) throws(CSSParseError) {
+  private static func expectComma(input: inout Parser) throws(CSSParseError) {
     guard case .failure(let error) = input.expectComma() else { return }
     throw .init(basic: error)
   }
 }
 
 extension SVGRGBColor: Parse {
-  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<SVGRGBColor, CSSParseError> {
+  static func parse(context: ParserContext, input: inout Parser) -> Result<SVGRGBColor, CSSParseError> {
     input.parseNestedBlock { input in
       do throws(CSSParseError) {
         let r = try Number.parse(context: context, input: &input).get().value
@@ -40,7 +40,7 @@ extension SVGRGBColor: Parse {
     }
   }
 
-  private static func expectComma(input: inout _CSSParser.Parser) throws(CSSParseError) {
+  private static func expectComma(input: inout Parser) throws(CSSParseError) {
     guard case .failure(let error) = input.expectComma() else { return }
     throw .init(basic: error)
   }

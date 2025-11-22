@@ -9,7 +9,7 @@ public class ParserContext {
 }
 
 protocol Parse {
-  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<Self, CSSParseError>
+  static func parse(context: ParserContext, input: inout Parser) -> Result<Self, CSSParseError>
 }
 
 typealias CSSParseError = ParseError<StyleParseErrorKind>

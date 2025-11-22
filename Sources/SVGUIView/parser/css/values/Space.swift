@@ -5,7 +5,7 @@ struct Space: Separator {
     " "
   }
 
-  func parse<T, E>(input: inout _CSSParser.Parser, parseOne: (inout _CSSParser.Parser) -> Result<T, _CSSParser.ParseError<E>>) -> Result<[T], _CSSParser.ParseError<E>> where E: Equatable & Sendable {
+  func parse<T, E>(input: inout Parser, parseOne: (inout Parser) -> Result<T, ParseError<E>>) -> Result<[T], ParseError<E>> where E: Equatable & Sendable {
     input.skipWhitespace()
     var result: [T]
     switch parseOne(&input) {
