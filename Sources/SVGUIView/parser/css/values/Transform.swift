@@ -2,13 +2,13 @@ import Foundation
 import _CSSParser
 
 extension CGAffineTransform: Parse {
-  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<CGAffineTransform, ParseError> {
+  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<CGAffineTransform, CSSParseError> {
     if case .success = input.tryParse({ input in
       input.expectIdentMatching(expectedValue: "none")
     }) {
       return .success(.identity)
     }
-    let result: Result<[any TransformOperator], ParseError> = Space().parse(input: &input) { input in
+    let result: Result<[any TransformOperator], CSSParseError> = Space().parse(input: &input) { input in
       let function: String
       switch input.expectFunction() {
       case .success(let string):
@@ -18,7 +18,7 @@ extension CGAffineTransform: Parse {
       }
       guard let type = TransformType(rawValue: function.lowercased()) else { return .failure(.init(basic: input.newBasicError(kind: .qualifiedRuleInvalid))) }
       return input.parseNestedBlock(parse: { input in
-        do throws(ParseError) {
+        do throws(CSSParseError) {
           switch type {
           case .scale:
             let x = try Number.parse(context: context, input: &input).get().value

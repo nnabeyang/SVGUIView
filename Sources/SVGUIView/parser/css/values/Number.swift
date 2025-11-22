@@ -41,7 +41,7 @@ struct Number {
 }
 
 /// Parse a `<number>` value, with a given clamping mode.
-func parseNumberWithClampingMode(context: ParserContext, input: inout _CSSParser.Parser, clampingMode: AllowedNumericType) -> Result<Number, ParseError> {
+func parseNumberWithClampingMode(context: ParserContext, input: inout _CSSParser.Parser, clampingMode: AllowedNumericType) -> Result<Number, CSSParseError> {
   let location = input.currentSourceLocation
   let result = input.next()
   if case .failure(let error) = result {
@@ -60,7 +60,7 @@ func parseNumberWithClampingMode(context: ParserContext, input: inout _CSSParser
 }
 
 extension Number: Parse {
-  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<Number, ParseError> {
+  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<Number, CSSParseError> {
     parseNumberWithClampingMode(context: context, input: &input, clampingMode: .all)
   }
 }

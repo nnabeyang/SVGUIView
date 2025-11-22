@@ -9,10 +9,10 @@ public class ParserContext {
 }
 
 protocol Parse {
-  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<Self, ParseError>
+  static func parse(context: ParserContext, input: inout _CSSParser.Parser) -> Result<Self, CSSParseError>
 }
 
-typealias ParseError = _CSSParser.ParseError<StyleParseErrorKind>
+typealias CSSParseError = ParseError<StyleParseErrorKind>
 enum StyleParseErrorKind: Error, Equatable {
   case invalid
 }
