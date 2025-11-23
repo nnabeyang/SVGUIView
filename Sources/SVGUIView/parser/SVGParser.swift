@@ -1,4 +1,5 @@
 import Foundation
+import _CSSParser
 import os
 
 enum SVGElementName: String, Equatable {
@@ -37,7 +38,7 @@ enum SVGXmlNameSpace: String {
   case xlink = "http://www.w3.org/1999/xlink"
 }
 
-final class Parser: NSObject {
+final class SVGParser: NSObject {
   private var pservers: [String: any SVGGradientServer] = [:]
   private var contentIdMap: [String: Int] = [:]
   private var rules: [CSSRule] = []
@@ -51,7 +52,7 @@ final class Parser: NSObject {
   private static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "parser")
 
   static func parse(data: Data) -> SVGBaseContext {
-    let parser = Parser()
+    let parser = SVGParser()
     return parser.parse(data: data)
   }
 
@@ -80,7 +81,7 @@ final class Parser: NSObject {
   }
 }
 
-extension Parser: XMLParserDelegate {
+extension SVGParser: XMLParserDelegate {
   private func filter(attributes oldValue: [String: String]) -> [String: String] {
     var attributes = [String: String]()
     for element in oldValue {
@@ -206,11 +207,10 @@ extension Parser: XMLParserDelegate {
       case .radialGradient:
         return SVGRadialGradientServer(attributes: attributes, contentIds: contentIds)
       case .style:
-        text.withUTF8 {
-          let bytes = BufferView(unsafeBufferPointer: $0)!
-          var parser = CSSParser(bytes: bytes)
-          rules.append(contentsOf: parser.parseRules())
-        }
+        let parseInput = ParserInput(input: text)
+        let input = Parser(input: parseInput)
+        var parser = CSSParser(input: input)
+        rules.append(contentsOf: parser.parseRules())
         fallthrough
       case .unknown:
         if !countList.isEmpty {

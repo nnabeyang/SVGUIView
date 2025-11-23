@@ -1,4 +1,5 @@
 import UIKit
+import _CSSParser
 
 struct SVGUIStyle: Encodable {
   let decratations: [CSSValueType: CSSDeclaration]
@@ -7,11 +8,15 @@ struct SVGUIStyle: Encodable {
   }
 
   init(description: String) {
-    var data = description
-    decratations = data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var parser = CSSParser(bytes: bytes)
-      return parser.parseDeclarations()
+    let parseInput = ParserInput(input: description)
+    var input = Parser(input: parseInput)
+    var parser = CSSParser(input: input)
+    let result = parser.parseQualifiedBlock(prelude: [], start: input.state, input: &input)
+    switch result {
+    case .success(let rule):
+      decratations = rule.declarations
+    case .failure:
+      decratations = [:]
     }
   }
 
