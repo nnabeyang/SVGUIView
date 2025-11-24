@@ -48,7 +48,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
   }
 
   let display: CSSDisplay?
-  let color: (any SVGUIColor)?
+  let color: SVGColor?
   let contentIds: [Int]
   let id: String?
   let parentId: String?
@@ -156,7 +156,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
       case .color(let color, let colorOpacity):
         let colorOpacity = colorOpacity?.value ?? 1.0
         return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
-      case .inherit, .url, .none:
+      case .inherit, .none:
         // TODO: implement inherit, url(...), auto case
         return nil
       case .image:
@@ -264,7 +264,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
   }
 
   let display: CSSDisplay?
-  let color: (any SVGUIColor)?
+  let color: SVGColor?
   let contentIds: [Int]
   let spreadMethod: SpreadMethod?
   let gradientUnits: SVGUnitType?
@@ -368,7 +368,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
       case .color(let color, let colorOpacity):
         let colorOpacity = colorOpacity?.value ?? 1.0
         return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
-      case .inherit, .url, .none:
+      case .inherit, .none:
         // TODO: implement inherit, url(...), auto case
         return nil
       case .image:

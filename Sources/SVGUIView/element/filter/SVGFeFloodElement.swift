@@ -14,7 +14,7 @@ struct SVGFeFloodElement: SVGElement, SVGFilterApplier {
 
   let result: String?
 
-  let floodColor: (any SVGUIColor)?
+  let floodColor: SVGColor?
   let floodOpacity: Double?
 
   func style(with _: CSSStyle, at _: Int) -> any SVGElement {
@@ -45,7 +45,7 @@ struct SVGFeFloodElement: SVGElement, SVGFilterApplier {
         bitmapInfo: srcImage.bitmapInfo),
       var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
     else { return nil }
-    let floodColor = floodColor ?? SVGColorName(name: "black")
+    let floodColor = floodColor ?? .named(SVGColorName(name: "black"))
     let floodOpacity = floodOpacity ?? 1.0
     let (red:r, green:g, blue:b, alpha:a) = floodColor.rgba
 

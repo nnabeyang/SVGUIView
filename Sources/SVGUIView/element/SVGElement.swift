@@ -54,7 +54,7 @@ struct SVGBaseElement {
   let font: SVGUIFont?
   let fill: SVGFill?
   let stroke: SVGUIStroke
-  let color: (any SVGUIColor)?
+  let color: SVGColor?
   let clipPath: SVGClipPath?
   let mask: SVGMask?
   let filter: SVGFilter?
@@ -159,7 +159,7 @@ protocol SVGDrawableElement: SVGElement {
   var font: SVGUIFont? { get }
   var fill: SVGFill? { get }
   var stroke: SVGUIStroke { get }
-  var color: (any SVGUIColor)? { get }
+  var color: SVGColor? { get }
   var style: SVGUIStyle { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
@@ -190,7 +190,7 @@ extension SVGDrawableElement {
   var clipPath: SVGClipPath? { base.clipPath }
   var mask: SVGMask? { base.mask }
   var filter: SVGFilter? { base.filter }
-  var color: (any SVGUIColor)? { base.color }
+  var color: SVGColor? { base.color }
   var style: SVGUIStyle { base.style }
   var display: CSSDisplay? { base.display }
   var visibility: CSSVisibility? { base.visibility }
@@ -317,15 +317,13 @@ extension SVGDrawableElement {
         cgContext.setStrokeColor(uiColor.cgColor)
       }
     case .color(let color, let colorOpacity):
+      if case .url = color { return }
       let colorOpacity = colorOpacity?.value ?? 1.0
       if let uiColor = color?.toUIColor(opacity: opacity * colorOpacity) {
         cgContext.setStrokeColor(uiColor.cgColor)
       } else {
         cgContext.setStrokeColor(UIColor.clear.cgColor)
       }
-    case .url:
-      // TODO: implement url color case
-      break
     case .image:
       fatalError("Images not supported in stroke fill")
     }
@@ -399,38 +397,37 @@ extension SVGDrawableElement {
       cgContext.drawPath(using: eoFill ? .eoFill : .fill)
     case .color(let color, let opacity):
       let opacity = opacity?.value ?? 1.0
-      if let uiColor = color?.toUIColor(opacity: opacity) {
+      if case .url(let id) = color {
+        if let server = context.pservers[id] {
+          switch server.display ?? .inline {
+          case .none:
+            break
+          default:
+            applyPServerFill(server: server, path: path, context: context, opacity: opacity)
+            return
+          }
+        } else if let pattern = context.patterns[id],
+          context.check(patternId: id)
+        {
+          let frame = await frame(context: context, path: path)
+          let cgContext = context.graphics
+          cgContext.saveGState()
+          cgContext.setAlpha(opacity)
+          cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
+          _ = await pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
+          cgContext.endTransparencyLayer()
+          cgContext.restoreGState()
+          context.remove(patternId: id)
+          return
+        }
+        cgContext.setFillColor(UIColor.black.cgColor)
+        cgContext.addPath(path.cgPath)
+        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
+      } else if let uiColor = color?.toUIColor(opacity: opacity) {
         cgContext.setFillColor(uiColor.cgColor)
         cgContext.addPath(path.cgPath)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
-    case .url(let id, let opacity):
-      if let server = context.pservers[id] {
-        switch server.display ?? .inline {
-        case .none:
-          break
-        default:
-          applyPServerFill(server: server, path: path, context: context, opacity: opacity?.value ?? 1.0)
-          return
-        }
-      } else if let pattern = context.patterns[id],
-        context.check(patternId: id)
-      {
-        let frame = await frame(context: context, path: path)
-        let cgContext = context.graphics
-        let opacity = opacity?.value ?? 1.0
-        cgContext.saveGState()
-        cgContext.setAlpha(opacity)
-        cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
-        _ = await pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
-        cgContext.endTransparencyLayer()
-        cgContext.restoreGState()
-        context.remove(patternId: id)
-        return
-      }
-      cgContext.setFillColor(UIColor.black.cgColor)
-      cgContext.addPath(path.cgPath)
-      cgContext.drawPath(using: eoFill ? .eoFill : .fill)
     case .image(let data):
       if let data = data,
         let image = UIImage(data: data),

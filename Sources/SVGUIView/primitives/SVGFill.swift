@@ -4,8 +4,7 @@ import Foundation
 enum SVGFill {
   case inherit
   case current
-  case color(color: (any SVGUIColor)?, opacity: SVGOpacity?)
-  case url(url: String, opacity: SVGOpacity?)
+  case color(color: SVGColor?, opacity: SVGOpacity?)
   case image(data: Data?)
 
   init?(style: SVGUIStyle) {
@@ -23,8 +22,6 @@ enum SVGFill {
         self = .inherit
       case .current:
         self = .current
-      case .url(let url):
-        self = .url(url: url, opacity: opacity)
       case .color(let color):
         self = .color(color: color, opacity: opacity)
       }
@@ -51,8 +48,6 @@ enum SVGFill {
         self = .inherit
       case .current:
         self = .current
-      case .url(let url):
-        self = .url(url: url, opacity: opacity)
       case .color(let color):
         self = .color(color: color, opacity: opacity)
       }
@@ -113,15 +108,6 @@ enum SVGFill {
       return
     }
     switch (lhs, rhs) {
-    case (.color(let rc, let lo), .url(let ru, let ro)):
-      if rc != nil {
-        self = .color(color: rc, opacity: lo ?? ro)
-      } else {
-        self = .url(url: ru, opacity: lo ?? ro)
-      }
-    case (.url(let lu, let lo), .color(_, let ro)),
-      (.url(let lu, let lo), .url(_, let ro)):
-      self = .url(url: lu, opacity: lo ?? ro)
     case (.color(let lc, let lo), .color(let rc, let ro)):
       self = .color(color: lc ?? rc, opacity: lo ?? ro)
     default:
@@ -135,8 +121,6 @@ extension SVGFill: Equatable {
     switch (lhs, rhs) {
     case (.color(let l, let lo), .color(let r, let ro)):
       return l?.description == r?.description && lo == ro
-    case (.url(let l, let lo), .url(let r, let ro)):
-      return l == r && lo == ro
     case (.image(let l), .image(let r)):
       return l == r
     default:
@@ -160,8 +144,6 @@ extension SVGFill: Encodable {
       if let opacity = opacity {
         try container.encode(opacity)
       }
-    case .url(let str, _):
-      try "url(\(str))".encode(to: encoder)
     case .image(let data):
       try data?.encode(to: encoder)
     }

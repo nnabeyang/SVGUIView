@@ -19,7 +19,7 @@ struct SVGContext: SVGLengthContext {
   private let fontStack: Stack<SVGUIFont> = Stack()
   private let writingModeStack = Stack<WritingMode>()
   private let fillStack: Stack<SVGFill> = Stack()
-  private let colorStack: Stack<any SVGUIColor> = Stack()
+  private let colorStack: Stack<SVGColor> = Stack()
   private let strokeStack: Stack<SVGUIStroke> = Stack()
   private let textAnchorStack: Stack<TextAnchor> = Stack()
   private let clipRuleStack: Stack<Bool> = Stack()
@@ -114,7 +114,7 @@ struct SVGContext: SVGLengthContext {
     fillStack.last
   }
 
-  var color: (any SVGUIColor)? {
+  var color: SVGColor? {
     colorStack.last
   }
 
@@ -211,7 +211,7 @@ struct SVGContext: SVGLengthContext {
     fillStack.push(fill)
   }
 
-  func push(color: any SVGUIColor) {
+  func push(color: SVGColor) {
     colorStack.push(color)
   }
 
@@ -250,7 +250,7 @@ struct SVGContext: SVGLengthContext {
   }
 
   @discardableResult
-  func popColor() -> (any SVGUIColor)? {
+  func popColor() -> SVGColor? {
     colorStack.pop()
   }
 

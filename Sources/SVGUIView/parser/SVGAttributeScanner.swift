@@ -417,7 +417,7 @@ extension SVGAttributeScanner {
     guard let ascii = reader.consumeWhitespace() else { return nil }
     if ascii == UInt8(ascii: "#") {
       guard let hex = scanHex() else { return nil }
-      return .color(color: SVGHexColor(hex: hex), opacity: opacity)
+      return .color(color: SVGHexColor(hex: hex).flatMap({ .hex($0) }), opacity: opacity)
     }
 
     guard let name = scanIdentity() else {
@@ -425,7 +425,7 @@ extension SVGAttributeScanner {
     }
     guard let type = SVGFillType(rawValue: name.lowercased()) else {
       _ = reader.consumeWhitespace()
-      return reader.isEOF ? .color(color: SVGColorName(name: name), opacity: opacity) : .color(color: SVGColorName(name: "black"), opacity: opacity)
+      return reader.isEOF ? .color(color: .named(SVGColorName(name: name)), opacity: opacity) : .color(color: .named(SVGColorName(name: "black")), opacity: opacity)
     }
     switch type {
     case .current:
@@ -440,27 +440,27 @@ extension SVGAttributeScanner {
       consumeWhitespaceIfNext(UInt8(ascii: "#"))
       guard let id = scanIdentity() else { return nil }
       guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return .url(url: id, opacity: opacity)
+      return .color(color: .url(id), opacity: opacity)
     }
   }
 
-  mutating func scanColor() -> (any SVGUIColor)? {
+  mutating func scanColor() -> SVGColor? {
     guard let ascii = reader.consumeWhitespace() else { return nil }
     if ascii == UInt8(ascii: "#") {
       guard let hex = scanHex() else { return nil }
-      return SVGHexColor(hex: hex)
+      return SVGHexColor(hex: hex).flatMap({ .hex($0) })
     }
 
     guard let name = scanIdentity() else {
       return nil
     }
     guard let type = SVGFillType(rawValue: name) else {
-      return SVGColorName(name: name)
+      return .named(SVGColorName(name: name))
     }
     return scanColor(type: type)
   }
 
-  private mutating func scanColor(type: SVGFillType) -> (any SVGUIColor)? {
+  private mutating func scanColor(type: SVGFillType) -> SVGColor? {
     switch type {
     case .rgb:
       guard consume(ascii: UInt8(ascii: "(")) else { return nil }
@@ -471,7 +471,7 @@ extension SVGAttributeScanner {
       consumeWhitespaceIfNext(UInt8(ascii: ","))
       guard let b = scanColorDimension() else { return nil }
       guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return SVGRGBColor(r: r, g: g, b: b)
+      return .rgb(SVGRGBColor(r: r, g: g, b: b))
     case .rgba:
       guard consume(ascii: UInt8(ascii: "(")) else { return nil }
       _ = reader.consumeWhitespace()
@@ -483,13 +483,13 @@ extension SVGAttributeScanner {
       consumeWhitespaceIfNext(UInt8(ascii: ","))
       guard let a = scanNumber() else { return nil }
       guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return SVGRGBAColor(r: r, g: g, b: b, a: a)
+      return .rgba(SVGRGBAColor(r: r, g: g, b: b, a: a))
     case .url, .inherit, .current:
       return nil
     }
   }
 
-  static func parseColor(description: String) -> (any SVGUIColor)? {
+  static func parseColor(description: String) -> SVGColor? {
     var data = description
     return data.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
