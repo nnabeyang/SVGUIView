@@ -66,9 +66,6 @@ struct SVGTextElement: SVGDrawableElement {
         cgContext.addPath(path.cgPath)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
-    case .url:
-      // FIXME: implement url color case
-      break
     case .image:
       fatalError("Images not supported in text")
     }

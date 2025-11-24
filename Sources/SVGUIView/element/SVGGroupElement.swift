@@ -40,15 +40,6 @@ struct SVGGroupElement: SVGDrawableElement {
     nil
   }
 
-  private static func parseColor(description: String) -> (any SVGUIColor)? {
-    var data = description
-    return data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanColor()
-    }
-  }
-
   private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
     let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
     let size = attributes["font-size"]

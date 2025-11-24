@@ -55,8 +55,7 @@ enum SVGCSSFillType: String {
 enum SVGCSSFill {
   case inherit
   case current
-  case color(any SVGUIColor)
-  case url(String)
+  case color(SVGColor)
 }
 
 enum CSSFuncName: String {
@@ -69,8 +68,6 @@ extension SVGCSSFill: Equatable {
     switch (lhs, rhs) {
     case (.color(let lhs), .color(let rhs)):
       return lhs.description == rhs.description
-    case (.url(let lhs), .url(let rhs)):
-      return lhs == rhs
     default:
       return false
     }
@@ -88,10 +85,6 @@ extension SVGCSSFill: Codable {
       var container = encoder.unkeyedContainer()
       try container.encode(SVGCSSFillType.color.rawValue)
       try container.encode(color)
-    case .url(let str):
-      var container = encoder.unkeyedContainer()
-      try container.encode(SVGCSSFillType.url.rawValue)
-      try container.encode(str)
     }
   }
 
@@ -126,26 +119,26 @@ extension SVGCSSFill: Codable {
           guard let color = SVGHexColor(hex: value) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
           }
-          self = .color(color)
+          self = .color(.hex(color))
         case .rgb:
           let r = try nestedContainer.decode(ColorDimension.self)
           let g = try nestedContainer.decode(ColorDimension.self)
           let b = try nestedContainer.decode(ColorDimension.self)
-          self = .color(SVGRGBColor(r: r, g: g, b: b))
+          self = .color(.rgb(SVGRGBColor(r: r, g: g, b: b)))
         case .rgba:
           let r = try nestedContainer.decode(ColorDimension.self)
           let g = try nestedContainer.decode(ColorDimension.self)
           let b = try nestedContainer.decode(ColorDimension.self)
           let a = try nestedContainer.decode(Double.self)
-          self = .color(SVGRGBAColor(r: r, g: g, b: b, a: a))
+          self = .color(.rgba(SVGRGBAColor(r: r, g: g, b: b, a: a)))
         case .named:
           let name = try nestedContainer.decode(String.self)
-          self = .color(SVGColorName(name: name))
+          self = .color(.named(SVGColorName(name: name)))
         default:
           throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
         }
       case .url:
-        self = try .url(container.decode(String.self))
+        self = try .color(.url(container.decode(String.self)))
       default:
         throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
       }
@@ -369,29 +362,29 @@ struct CSSDeclarationParser: DeclarationParser {
       case .success(let token):
         switch token {
         case .ident(let color):
-          return .success(CSSDeclaration(type: type, value: .fill(.color(SVGColorName(name: color)))))
+          return .success(CSSDeclaration(type: type, value: .fill(.color(.named(SVGColorName(name: color))))))
         case .idHash(let hash), .hash(let hash):
           guard let color = SVGHexColor(hex: hash) else { return .failure(input.newCustomError(error: .invalid)) }
-          return .success(CSSDeclaration(type: type, value: .fill(.color(color))))
+          return .success(CSSDeclaration(type: type, value: .fill(.color(.hex(color)))))
         case .unquotedUrl(let url):
           guard url.hasPrefix("#") else {
             return .failure(input.newCustomError(error: .invalid))
           }
-          return .success(CSSDeclaration(type: type, value: .fill(.url(String(url.dropFirst())))))
+          return .success(CSSDeclaration(type: type, value: .fill(.color(.url(String(url.dropFirst()))))))
         case .function(let name):
           guard let fname = CSSFuncName(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
           switch fname {
           case .rgb:
             switch SVGRGBColor.parse(context: .init(), input: &input) {
             case .success(let color):
-              return .success(CSSDeclaration(type: type, value: .fill(.color(color))))
+              return .success(CSSDeclaration(type: type, value: .fill(.color(.rgb(color)))))
             case .failure:
               return .failure(input.newCustomError(error: .invalid))
             }
           case .rgba:
             switch SVGRGBAColor.parse(context: .init(), input: &input) {
             case .success(let color):
-              return .success(CSSDeclaration(type: type, value: .fill(.color(color))))
+              return .success(CSSDeclaration(type: type, value: .fill(.color(.rgba(color)))))
             case .failure:
               return .failure(input.newCustomError(error: .invalid))
             }

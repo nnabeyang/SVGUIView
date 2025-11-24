@@ -23,6 +23,59 @@ protocol SVGUIColor: CustomStringConvertible, Codable {
   var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) { get }
 }
 
+enum SVGColor: SVGUIColor {
+  case named(SVGColorName)
+  case hex(SVGHexColor)
+  case rgb(SVGRGBColor)
+  case rgba(SVGRGBAColor)
+  case url(String)
+
+  func toUIColor(opacity: Double) -> UIColor? {
+    switch self {
+    case .named(let value):
+      value.toUIColor(opacity: opacity)
+    case .hex(let value):
+      value.toUIColor(opacity: opacity)
+    case .rgb(let value):
+      value.toUIColor(opacity: opacity)
+    case .rgba(let value):
+      value.toUIColor(opacity: opacity)
+    case .url:
+      nil
+    }
+  }
+
+  var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+    switch self {
+    case .named(let value):
+      value.rgba
+    case .hex(let value):
+      value.rgba
+    case .rgb(let value):
+      value.rgba
+    case .rgba(let value):
+      value.rgba
+    case .url:
+      fatalError("should not happen")
+    }
+  }
+
+  var description: String {
+    switch self {
+    case .named(let value):
+      value.description
+    case .hex(let value):
+      value.description
+    case .rgb(let value):
+      value.description
+    case .rgba(let value):
+      value.description
+    case .url(let value):
+      "url(\(value))"
+    }
+  }
+}
+
 struct SVGColorName: SVGUIColor {
   let name: String
   func toUIColor(opacity: Double) -> UIColor? {
