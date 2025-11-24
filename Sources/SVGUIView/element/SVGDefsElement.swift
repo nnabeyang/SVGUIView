@@ -36,15 +36,6 @@ struct SVGDefsElement: SVGDrawableElement {
     nil
   }
 
-  private static func parseColor(description: String) -> (any SVGUIColor)? {
-    var data = description
-    return data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanColor()
-    }
-  }
-
   func style(with _: CSSStyle, at index: Int) -> any SVGElement {
     Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
   }

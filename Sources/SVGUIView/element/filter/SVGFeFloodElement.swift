@@ -29,17 +29,8 @@ struct SVGFeFloodElement: SVGElement, SVGFilterApplier {
 
     result = attributes["result"]
 
-    floodColor = Self.parseColor(description: attributes["flood-color", default: ""])
+    floodColor = SVGAttributeScanner.parseColor(description: attributes["flood-color", default: ""])
     floodOpacity = Double(attributes["flood-opacity", default: ""])
-  }
-
-  private static func parseColor(description: String) -> (any SVGUIColor)? {
-    var data = description
-    return data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanColor()
-    }
   }
 
   func apply(

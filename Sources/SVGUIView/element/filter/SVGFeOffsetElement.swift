@@ -32,15 +32,6 @@ struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
     dy = Double(attributes["dy", default: ""])
   }
 
-  private static func parseColor(description: String) -> (any SVGUIColor)? {
-    var data = description
-    return data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanColor()
-    }
-  }
-
   func apply(
     srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
     filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results _: [String: CGImage], isFirst _: Bool
