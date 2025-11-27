@@ -88,7 +88,7 @@ public struct Parser {
     currentSourceLocation.newError(kind: kind)
   }
 
-  public func newCustomError<E1: Into, E2>(error: E1) -> ParseError<E2> {
+  public func newCustomError<E1: Into, E2: From>(error: E1) -> ParseError<E2> where E2.From == E1 {
     currentSourceLocation.newCustomError(error: error)
   }
 
@@ -724,7 +724,7 @@ public enum ParseErrorKind<CustomType: Equatable & Sendable>: Sendable {
   case basic(BasicParseErrorKind)
   case custom(CustomType)
 
-  public func into<U>() -> ParseErrorKind<U> where CustomType: Into {
+  public func into<T: From>() -> ParseErrorKind<T> where CustomType: Into, T.From == CustomType {
     switch self {
     case .basic(let basic):
       .basic(basic)
@@ -766,7 +766,7 @@ public struct ParseError<E: Equatable & Sendable>: Error, Equatable {
     }
   }
 
-  public func into<U>() -> ParseError<U> where E: Into {
+  public func into<U: From>() -> ParseError<U> where E: Into, U.From == E {
     ParseError<U>(kind: kind.into(), location: location)
   }
 }
@@ -810,7 +810,7 @@ extension SourceLocation {
     .init(kind: .basic(kind), location: self)
   }
 
-  public func newCustomError<E1: Into, E2>(error: E1) -> ParseError<E2> {
+  public func newCustomError<E1: Into, E2: From>(error: E1) -> ParseError<E2> where E2.From == E1 {
     .init(kind: .custom(error.into()), location: self)
   }
 
