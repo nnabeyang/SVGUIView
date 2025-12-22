@@ -35,6 +35,51 @@ struct SVGUIStroke {
         offset = Self.parseNumber(description: attributes["stroke-dashoffset", default: ""])
     }
 
+    init(style: SVGUIStyle, attributes: [String: String] = [:]) {
+        switch style[.stroke] {
+        case let .fill(value):
+            switch value {
+            case .inherit:
+                fill = .inherit
+            case .current:
+                fill = .current
+            case let .url(url):
+                fill = .url(url: url, opacity: .number(1.0))
+            case let .color(color):
+                fill = .color(color: color, opacity: .number(1.0))
+            }
+        default:
+            fill = SVGFill(description: attributes["stroke", default: ""])
+        }
+        opacity = Self.parseNumber(description: attributes["stroke-opacity", default: ""])
+        switch style[.strokeWidth] {
+        case let .number(value):
+            width = .number(CGFloat(value))
+        default:
+            width = SVGLength(attributes["stroke-width"])
+        }
+        switch style[.strokeLinecap] {
+        case let .linecap(value):
+            cap = value
+        default:
+            cap = Self.getCap(attribute: attributes["stroke-linecap", default: ""])
+        }
+        switch style[.strokeLinejoin] {
+        case let .linejoin(value):
+            join = value
+        default:
+            join = Self.getStrokeJoin(attribute: attributes["stroke-linejoin", default: ""])
+        }
+        switch style[.strokeMiterlimit] {
+        case let .number(value):
+            miterLimit = value
+        default:
+            miterLimit = Self.parseNumber(description: attributes["stroke-miterlimit", default: ""])
+        }
+        dashes = Self.parseDashes(description: attributes["stroke-dasharray", default: ""])
+        offset = Self.parseNumber(description: attributes["stroke-dashoffset", default: ""])
+    }
+
     init(lhs: SVGUIStroke, rhs: SVGUIStroke?) {
         guard let rhs = rhs else {
             self = lhs
