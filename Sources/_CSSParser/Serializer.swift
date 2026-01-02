@@ -134,7 +134,7 @@ func charEscape(_ byte: UInt8, dest: inout some TextOutputStream) {
   dest.write(String(decoding: [UInt8(ascii: "\\"), byte], as: UTF8.self))
 }
 
-func serializeIdentifier(_ value: String, dest: inout some TextOutputStream) {
+public func serializeIdentifier(_ value: String, dest: inout some TextOutputStream) {
   guard !value.isEmpty else {
     return
   }

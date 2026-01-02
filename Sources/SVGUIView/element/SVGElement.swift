@@ -1,4 +1,5 @@
 import UIKit
+import _SelectorParser
 
 protocol SVGElement: Encodable {
   var type: SVGElementName { get }
@@ -146,10 +147,11 @@ struct SVGBaseElement {
   }
 }
 
-protocol SVGDrawableElement: SVGElement {
+protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SelectorImpl {
   var id: String? { get }
   var index: Int? { get }
   var base: SVGBaseElement { get }
+  var type: SVGElementName { get }
   var opacity: Double { get }
   var eoFill: Bool { get }
   var clipRule: Bool? { get }
@@ -194,6 +196,22 @@ extension SVGDrawableElement {
   var style: SVGUIStyle { base.style }
   var display: CSSDisplay? { base.display }
   var visibility: CSSVisibility? { base.visibility }
+
+  func hasLocalName(_ localName: Impl.LocalName) -> Bool {
+    Impl.LocalName.from(type.rawValue) == localName
+  }
+
+  func hasId(id: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
+    self.id == id.rawValue
+  }
+
+  func hasClass(name: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
+    self.className == name.rawValue
+  }
+
+  var isHtmlElementInHtmlDocument: Bool {
+    false
+  }
 
   init(text: String, attributes: [String: String]) {
     let base = SVGBaseElement(attributes: attributes)

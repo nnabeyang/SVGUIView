@@ -11,7 +11,7 @@ struct SVGUIStyle: Encodable {
     let parseInput = ParserInput(input: description)
     var input = Parser(input: parseInput)
     var parser = CSSParser(input: input)
-    let result = parser.parseQualifiedBlock(prelude: [], start: input.state, input: &input)
+    let result = parser.parseQualifiedBlock(prelude: .init(slice: []), start: input.state, input: &input)
     switch result {
     case .success(let rule):
       decratations = rule.declarations
