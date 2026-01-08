@@ -24,7 +24,7 @@ let package = Package(
     .target(name: "_CShims"),
     .target(
       name: "SVGUIView",
-      dependencies: ["_SPI", "_ICU", "_CShims", "_CSSParser"],
+      dependencies: ["_SPI", "_ICU", "_CShims", "_CSSParser", "_SelectorParser"],
     ),
     .target(
       name: "SVGView",
@@ -33,15 +33,22 @@ let package = Package(
     .target(
       name: "_CSSParser"
     ),
+    .target(
+      name: "_SelectorParser",
+      dependencies: ["_CSSParser"]
+    ),
     .testTarget(
       name: "SVGUIViewTests",
       dependencies: ["SVGUIView"],
-      resources: [.process("assets")],
     ),
     .testTarget(
       name: "_CSSParserTests",
       dependencies: ["_CSSParser"],
       resources: [.process("assets")],
+    ),
+    .testTarget(
+      name: "_SelectorParserTests",
+      dependencies: ["_SelectorParser"]
     ),
   ]
 )

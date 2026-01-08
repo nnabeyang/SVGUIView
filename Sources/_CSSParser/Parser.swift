@@ -794,7 +794,7 @@ extension BlockType {
 }
 
 extension SourceLocation {
-  func newBasicUnexpectedTokenError(token: Token) -> BasicParseError {
+  public func newBasicUnexpectedTokenError(token: Token) -> BasicParseError {
     newBasicError(kind: .unexpectedToken(token))
   }
 

@@ -1,3 +1,5 @@
+import _SelectorParser
+
 enum CSSRule: Equatable {
   case qualified(QualifiedCSSRule)
 
@@ -20,42 +22,21 @@ enum CSSRuleType: String {
   case qualified
 }
 
-extension CSSRule: Encodable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    switch self {
-    case .qualified(let rule):
-      try container.encode(CSSRuleType.qualified.rawValue)
-      try container.encode(rule.selectors)
-      let declarations = rule.declarations.values.sorted(by: {
-        $0.type.rawValue < $1.type.rawValue
-      })
-      try container.encode(declarations)
-    }
-  }
-}
-
-extension CSSRule: Decodable {
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    guard let type = try CSSRuleType(rawValue: container.decode(String.self)) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    switch type {
-    case .qualified:
-      let selectors = try container.decode([CSSSelector].self)
-      let declarations = try container.decode([CSSValueType: CSSDeclaration].self)
-      self = .qualified(QualifiedCSSRule(selectors: selectors, declarations: declarations))
-    }
-  }
-}
-
 struct QualifiedCSSRule: Equatable {
-  let selectors: [CSSSelector]
+  let selectors: SelectorList<SelectorImpl>
   let declarations: [CSSValueType: CSSDeclaration]
 
-  func matches(element: any SVGDrawableElement) -> Bool {
-    selectors.contains(where: { $0.matches(element: element) })
+  func matches(element: some SVGDrawableElement) -> Bool {
+    var context = LocalMatchingContext<SelectorImpl>(shared: .init(), rightmost: .no, quirksData: nil)
+    for selector in selectors.slice {
+      var iter = selector.makeIterator()
+      while let component = iter.next() {
+        if matchesSimpleSelector(selector: component, element: element, context: &context).toBool(unknown: false) {
+          return true
+        }
+      }
+    }
+    return false
   }
 
   subscript(key: CSSValueType) -> CSSValue? {

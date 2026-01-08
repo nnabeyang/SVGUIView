@@ -1,5 +1,7 @@
 import CoreGraphics
+import Foundation
 import _CSSParser
+import _SelectorParser
 
 enum CSSDisplay: String {
   case inline
@@ -212,8 +214,8 @@ extension CSSValue: Decodable {
 }
 
 struct CSSParser {
-  private var input: Parser
-  init(input: Parser) {
+  private var input: _CSSParser.Parser
+  init(input: _CSSParser.Parser) {
     self.input = input
   }
 
@@ -254,10 +256,10 @@ extension CSSParser: RuleBodyItemParser {
 }
 
 extension CSSParser: QualifiedRuleParser {
-  typealias Prelude = [CSSSelector]
+  typealias Prelude = SelectorList<SelectorImpl>
   typealias QualifiedRule = DeclOrRule
 
-  mutating func parseQualifiedBlock(prelude: Prelude, start: ParserState, input: inout Parser) -> Result<CSSRule, CSSParseError> {
+  mutating func parseQualifiedBlock(prelude: Prelude, start: ParserState, input: inout _CSSParser.Parser) -> Result<CSSRule, CSSParseError> {
     var declarations = [CSSValueType: CSSDeclaration]()
     var parser = CSSDeclarationParser()
     while true {
@@ -273,7 +275,7 @@ extension CSSParser: QualifiedRuleParser {
   }
 
   public typealias Element = Result<CSSDeclaration, RuleBodyError<StyleParseErrorKind>>
-  public mutating func next(input: inout Parser, parser: inout CSSDeclarationParser) -> Element? {
+  public mutating func next(input: inout _CSSParser.Parser, parser: inout CSSDeclarationParser) -> Element? {
     while true {
       input.skipWhitespace()
       var start = input.state
@@ -325,28 +327,9 @@ extension CSSParser: QualifiedRuleParser {
     }
   }
 
-  mutating func parseQualifiedPrelude(input: inout Parser) -> Result<Prelude, CSSParseError> {
-    var selectors = [CSSSelector]()
-    while case .success(let token) = input.nextIncludingWhitespace() {
-      switch token {
-      case .delim(let ch):
-        switch ch {
-        case ".":
-          guard case .success(let name) = input.expectIdent() else { return .failure(input.newCustomError(error: .invalid)) }
-          selectors.append(.class(name: name))
-        default:
-          return .failure(input.newCustomError(error: .invalid))
-        }
-      case .ident(let name):
-        guard let tag = SVGElementName(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
-        selectors.append(.type(tag: tag))
-      case .idHash(let value):
-        selectors.append(.id(value))
-      default:
-        break
-      }
-    }
-    return .success(selectors)
+  mutating func parseQualifiedPrelude(input: inout _CSSParser.Parser) -> Result<Prelude, CSSParseError> {
+    let selectorParser = SelectorParser(stylesheetOrigin: .author, namespaces: .default(), urlData: .init(URL(string: "https://example.com")!), forSupportsRule: false)
+    return SelectorList.parse(parser: selectorParser, input: &input, parseRelative: .no)
   }
 }
 
@@ -354,7 +337,7 @@ struct CSSDeclarationParser: DeclarationParser {
   typealias Error = StyleParseErrorKind
   typealias Declaration = CSSDeclaration
 
-  mutating func parseValue(name: String, input: inout Parser, declarationStart: inout ParserState) -> Result<CSSDeclaration, CSSParseError> {
+  mutating func parseValue(name: String, input: inout _CSSParser.Parser, declarationStart: inout ParserState) -> Result<CSSDeclaration, CSSParseError> {
     guard let type = CSSValueType(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
     switch type {
     case .fill:
