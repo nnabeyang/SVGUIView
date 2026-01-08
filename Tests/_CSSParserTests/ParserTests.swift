@@ -149,19 +149,6 @@ final class ParserTests: XCTestCase {
     }
   }
 
-  func testAA() throws {
-    let parseInput = ParserInput(input: "fill:rgba(43,43,43,.35)")
-    var input = Parser(input: parseInput)
-    var parser = JSONParser()
-    let result = parseOneDeclaration(input: &input, parser: &parser)
-
-    let value = try result.get()
-    let encoder = JSONEncoder()
-    let data2 = try encoder.encode(value)
-    let string = String(decoding: data2, as: UTF8.self)
-    print(string)
-  }
-
   func testOneRule() throws {
     let json = try String(contentsOf: Bundle.module.url(forResource: "one_rule", withExtension: "json")!)
     runJSONTests(jsonData: json) { input in

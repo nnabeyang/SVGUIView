@@ -19,7 +19,7 @@ extension UInt8 {
     return self < 0x80
   }
 
-  fileprivate var isASCIIDigit: Bool {
+  var isASCIIDigit: Bool {
     (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(self)
   }
 }
