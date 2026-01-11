@@ -45,6 +45,11 @@ enum CSSValueType: String, Hashable, Codable {
   case transform
   case fillOpacity = "fill-opacity"
   case clipPath = "clip-path"
+  case stroke
+  case strokeWidth = "stroke-width"
+  case strokeLinecap = "stroke-linecap"
+  case strokeLinejoin = "stroke-linejoin"
+  case strokeMiterlimit = "stroke-miterlimit"
 }
 
 enum SVGCSSFillType: String {
@@ -154,6 +159,8 @@ enum CSSValue {
   case length(SVGLength)
   case transform(CGAffineTransform)
   case clipPath(SVGClipPath)
+  case linecap(CGLineCap)
+  case linejoin(CGLineJoin)
 }
 
 extension CSSValue: Equatable {
@@ -184,6 +191,10 @@ extension CSSValue: Encodable {
       try value.encode(to: encoder)
     case .number(let value):
       try value.encode(to: encoder)
+    case .linecap(let value):
+      try value.rawValue.encode(to: encoder)
+    case .linejoin(let value):
+      try value.rawValue.encode(to: encoder)
     case .clipPath:
       try "clip-path".encode(to: encoder)
     }
@@ -340,7 +351,7 @@ struct CSSDeclarationParser: DeclarationParser {
   mutating func parseValue(name: String, input: inout _CSSParser.Parser, declarationStart: inout ParserState) -> Result<CSSDeclaration, CSSParseError> {
     guard let type = CSSValueType(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
     switch type {
-    case .fill:
+    case .fill, .stroke:
       switch input.next() {
       case .success(let token):
         switch token {
@@ -378,7 +389,7 @@ struct CSSDeclarationParser: DeclarationParser {
       case .failure(let error):
         return .failure(.init(basic: error))
       }
-    case .fillOpacity:
+    case .fillOpacity, .strokeMiterlimit, .strokeWidth:
       switch input.next() {
       case .success(let token):
         switch token {
@@ -410,6 +421,52 @@ struct CSSDeclarationParser: DeclarationParser {
         return .success(CSSDeclaration(type: .transform, value: .transform(transform)))
       case .failure:
         return .failure(input.newCustomError(error: .invalid))
+      }
+    case .strokeLinecap:
+      switch input.next() {
+      case .success(let token):
+        switch token {
+        case .ident(let value):
+          let lineCap: CGLineCap =
+            switch value.lowercased() {
+            case "butt":
+              .butt
+            case "square":
+              .square
+            case "round":
+              .round
+            default:
+              .butt
+            }
+          return .success(CSSDeclaration(type: type, value: .linecap(lineCap)))
+        default:
+          return .failure(input.newCustomError(error: .invalid))
+        }
+      case .failure(let error):
+        return .failure(.init(basic: error))
+      }
+    case .strokeLinejoin:
+      switch input.next() {
+      case .success(let token):
+        switch token {
+        case .ident(let value):
+          let lineJoin: CGLineJoin =
+            switch value.lowercased() {
+            case "miter":
+              .miter
+            case "round":
+              .round
+            case "bevel":
+              .bevel
+            default:
+              .miter
+            }
+          return .success(CSSDeclaration(type: type, value: .linejoin(lineJoin)))
+        default:
+          return .failure(input.newCustomError(error: .invalid))
+        }
+      case .failure(let error):
+        return .failure(.init(basic: error))
       }
     case .clipPath:
       switch input.next() {
