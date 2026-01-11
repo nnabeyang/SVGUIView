@@ -75,7 +75,7 @@ struct SVGBaseElement {
     filter = SVGFilter(description: attributes["filter", default: ""])
     font = Self.parseFont(attributes: attributes)
     fill = SVGFill(style: style, attributes: attributes)
-    stroke = SVGUIStroke(attributes: attributes)
+    stroke = SVGUIStroke(style: style, attributes: attributes)
     opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
     transform = CGAffineTransform(style: style[.transform], description: attributes["transform", default: ""])
     writingMode = WritingMode(rawValue: attributes["writing-mode", default: ""])
@@ -123,7 +123,7 @@ struct SVGBaseElement {
     mask = other.mask
     filter = other.filter
     color = other.color
-    stroke = other.stroke
+    stroke = SVGUIStroke(lhs: SVGUIStroke(style: css), rhs: other.stroke)
     opacity = other.opacity
     transform = CGAffineTransform(style: css[.transform]) ?? other.transform
     writingMode = other.writingMode
