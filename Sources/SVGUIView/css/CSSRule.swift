@@ -43,7 +43,3 @@ struct QualifiedCSSRule: Equatable {
     declarations[key]?.value
   }
 }
-
-struct CSSStyle: Equatable {
-  let rules: [CSSRule]
-}

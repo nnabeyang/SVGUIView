@@ -59,7 +59,7 @@ final class SVGParser: NSObject {
   private func parse(parser: XMLParser) -> SVGBaseContext {
     parser.delegate = self
     parser.parse()
-    let css = CSSStyle(rules: rules)
+    let css = Stylesheet(rules: rules)
     contents = contents.enumerated().map { index, element in
       element.style(with: css, at: index)
     }

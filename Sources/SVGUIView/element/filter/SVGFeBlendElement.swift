@@ -74,7 +74,7 @@ struct SVGFeBlendElement: SVGElement, SVGFilterApplier {
   let input: SVGFilterInput?
   let input2: SVGFilterInput?
 
-  func style(with _: CSSStyle, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
     self
   }
 

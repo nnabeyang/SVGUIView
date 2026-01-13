@@ -16,7 +16,7 @@ struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
 
   let contentIds: [Int]
 
-  func style(with _: CSSStyle, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
     self
   }
 

@@ -280,7 +280,7 @@ struct SVGPatternElement: SVGDrawableElement {
 
   func draw(_: SVGContext, index _: Int, mode _: DrawMode) async {}
 
-  func style(with _: CSSStyle, at index: Int) -> any SVGElement {
+  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
     Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
   }
 

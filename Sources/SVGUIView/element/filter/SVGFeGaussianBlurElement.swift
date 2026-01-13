@@ -75,7 +75,7 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
 
   let colorInterpolationFilters: SVGColorInterpolation?
 
-  func style(with _: CSSStyle, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
     self
   }
 

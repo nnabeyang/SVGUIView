@@ -10,3 +10,7 @@ extension Namespaces: Default {
     .init(default: nil, prefixes: [:])
   }
 }
+
+struct Stylesheet: Equatable {
+  let rules: [CSSRule]
+}

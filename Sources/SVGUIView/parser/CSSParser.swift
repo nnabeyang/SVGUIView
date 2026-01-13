@@ -192,9 +192,9 @@ struct CSSParser {
     self.input = input
   }
 
-  mutating func parse() -> CSSStyle {
+  mutating func parse() -> Stylesheet {
     let rules = parseRules()
-    return CSSStyle(rules: rules)
+    return Stylesheet(rules: rules)
   }
 
   mutating func parseRules() -> [CSSRule] {

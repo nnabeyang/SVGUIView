@@ -146,7 +146,7 @@ struct SVGFilterElement: SVGDrawableElement {
     return image
   }
 
-  func style(with _: CSSStyle, at index: Int) -> any SVGElement {
+  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
     Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
   }
 
