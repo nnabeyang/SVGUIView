@@ -31,12 +31,12 @@ enum CSSVisibility: String {
   case inherit
 }
 
-struct CSSDeclaration: Equatable, Codable {
+struct CSSDeclaration: Equatable {
   let type: CSSValueType
   let value: CSSValue
 }
 
-enum CSSValueType: String, Hashable, Codable {
+enum CSSValueType: String, Hashable {
   case fill
   case height
   case width
@@ -177,50 +177,6 @@ extension CSSValue: Equatable {
     default:
       return false
     }
-  }
-}
-
-extension CSSValue: Encodable {
-  func encode(to encoder: any Encoder) throws {
-    switch self {
-    case .fill(let value):
-      try value.encode(to: encoder)
-    case .length(let value):
-      try value.encode(to: encoder)
-    case .transform(let value):
-      try value.encode(to: encoder)
-    case .number(let value):
-      try value.encode(to: encoder)
-    case .linecap(let value):
-      try value.rawValue.encode(to: encoder)
-    case .linejoin(let value):
-      try value.rawValue.encode(to: encoder)
-    case .clipPath:
-      try "clip-path".encode(to: encoder)
-    }
-  }
-}
-
-extension CSSValue: Decodable {
-  init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    if let value = try? container.decode(SVGCSSFill.self) {
-      self = .fill(value)
-      return
-    }
-    if let value = try? container.decode(Double.self) {
-      self = .number(value)
-      return
-    }
-    if let value = try? container.decode(CGAffineTransform.self) {
-      self = .transform(value)
-      return
-    }
-    if let value = try? container.decode(SVGLength.self) {
-      self = .length(value)
-      return
-    }
-    throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
   }
 }
 
