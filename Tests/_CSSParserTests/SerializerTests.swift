@@ -1,177 +1,190 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import _CSSParser
 
-final class SerializerTests: XCTestCase {
-  func testWriteNumeric() {
+@Suite("Serializer tests")
+struct SerializerTests {
+  @Test("writeNumeric formats numbers and signs")
+  func writeNumeric() {
     do {
       var dest = ""
-      writeNumeric(value: 0.0, intValue: nil, hasSign: true, dest: &dest)
-      XCTAssertEqual(dest, "+0")
+      _CSSParser.writeNumeric(value: 0.0, intValue: nil, hasSign: true, dest: &dest)
+      #expect(dest == "+0")
     }
     do {
       var dest = ""
-      writeNumeric(value: -233333333.54, intValue: nil, hasSign: false, dest: &dest)
-      XCTAssertEqual(dest, "-2.333e+08")
+      _CSSParser.writeNumeric(value: -233333333.54, intValue: nil, hasSign: false, dest: &dest)
+      #expect(dest == "-2.333e+08")
     }
     do {
       var dest = ""
-      writeNumeric(value: -233.33333333354, intValue: nil, hasSign: false, dest: &dest)
-      XCTAssertEqual(dest, "-233.3")
-    }
-  }
-
-  func testHexEscape() {
-    do {
-      var dest = ""
-      hexEscape(UInt8(ascii: "f"), dest: &dest)
-      XCTAssertEqual(dest, "\\66 ")
-    }
-    do {
-      var dest = ""
-      hexEscape(UInt8(ascii: "0"), dest: &dest)
-      XCTAssertEqual(dest, "\\30 ")
+      _CSSParser.writeNumeric(value: -233.33333333354, intValue: nil, hasSign: false, dest: &dest)
+      #expect(dest == "-233.3")
     }
   }
 
-  func testSerializeName() {
+  @Test("hexEscape emits hex with trailing space")
+  func hexEscape() {
+    do {
+      var dest = ""
+      _CSSParser.hexEscape(UInt8(ascii: "f"), dest: &dest)
+      #expect(dest == "\\66 ")
+    }
+    do {
+      var dest = ""
+      _CSSParser.hexEscape(UInt8(ascii: "0"), dest: &dest)
+      #expect(dest == "\\30 ")
+    }
+  }
+
+  @Test("serializeName escapes spaces")
+  func serializeName() {
     var dest = ""
-    serializeName("abc  def", dest: &dest)
-    XCTAssertEqual(dest, "abc\\ \\ def")
+    _CSSParser.serializeName("abc  def", dest: &dest)
+    #expect(dest == "abc\\ \\ def")
   }
 
-  func testUnquotedUrl() {
+  @Test("serializeUnquotedUrl escapes spaces")
+  func unquotedUrl() {
     var dest = ""
-    serializeUnquotedUrl("images/my bg.jpg", dest: &dest)
-    XCTAssertEqual(dest, "images/my\\20 bg.jpg")
+    _CSSParser.serializeUnquotedUrl("images/my bg.jpg", dest: &dest)
+    #expect(dest == "images/my\\20 bg.jpg")
   }
 
-  func testSerializeIdentifier_BasicAndEdgeCases() {
+  @Test("serializeIdentifier basic and edge cases")
+  func serializeIdentifier_BasicAndEdgeCases() {
     do {
       var dest = ""
       serializeIdentifier("abc", dest: &dest)
-      XCTAssertEqual(dest, "abc")
+      #expect(dest == "abc")
     }
     do {
       var dest = ""
       serializeIdentifier("--custom-prop", dest: &dest)
-      XCTAssertEqual(dest, "--custom-prop")
+      #expect(dest == "--custom-prop")
     }
     do {
       var dest = ""
       serializeIdentifier("-abc", dest: &dest)
-      XCTAssertEqual(dest, "-abc")
+      #expect(dest == "-abc")
     }
     do {
       var dest = ""
       serializeIdentifier("0abc", dest: &dest)
-      XCTAssertEqual(dest, "\\30 abc")
+      #expect(dest == "\\30 abc")
     }
     do {
       var dest = ""
       serializeIdentifier("-", dest: &dest)
-      XCTAssertEqual(dest, "\\-")
+      #expect(dest == "\\-")
     }
   }
 
-  func testSerializeName_EscapesControlsAndNonNameChars() {
+  @Test("serializeName escapes controls and non-name chars")
+  func serializeName_EscapesControlsAndNonNameChars() {
     do {
       var dest = ""
-      serializeName("abc  def", dest: &dest)
-      XCTAssertEqual(dest, "abc\\ \\ def")
+      _CSSParser.serializeName("abc  def", dest: &dest)
+      #expect(dest == "abc\\ \\ def")
     }
     do {
       var dest = ""
-      serializeName("\u{0007}bell", dest: &dest)
-      XCTAssertEqual(dest, "\\7 bell")
+      _CSSParser.serializeName("\u{0007}bell", dest: &dest)
+      #expect(dest == "\\7 bell")
     }
     do {
       var dest = ""
-      serializeName("a*b", dest: &dest)
-      XCTAssertEqual(dest, "a\\*b")
-    }
-  }
-
-  func testSerializeUnquotedUrl_EscapesSpacesAndParens() {
-    do {
-      var dest = ""
-      serializeUnquotedUrl("images/my bg.jpg", dest: &dest)
-      XCTAssertEqual(dest, "images/my\\20 bg.jpg")
-    }
-    do {
-      var dest = ""
-      serializeUnquotedUrl("a(b)c", dest: &dest)
-      XCTAssertEqual(dest, "a\\(b\\)c")
+      _CSSParser.serializeName("a*b", dest: &dest)
+      #expect(dest == "a\\*b")
     }
   }
 
-  func testSerializeString_QuotesAndEscapes() {
+  @Test("serializeUnquotedUrl escapes spaces and parens")
+  func serializeUnquotedUrl_EscapesSpacesAndParens() {
+    do {
+      var dest = ""
+      _CSSParser.serializeUnquotedUrl("images/my bg.jpg", dest: &dest)
+      #expect(dest == "images/my\\20 bg.jpg")
+    }
+    do {
+      var dest = ""
+      _CSSParser.serializeUnquotedUrl("a(b)c", dest: &dest)
+      #expect(dest == "a\\(b\\)c")
+    }
+  }
+
+  @Test("serializeString quotes and escapes content")
+  func serializeString_QuotesAndEscapes() {
     var dest = ""
-    serializeString("a\"b\\c\0d", dest: &dest)
-    XCTAssertEqual(dest, "\"a\\\"b\\\\c\u{FFFD}d\"")
+    _CSSParser.serializeString("a\"b\\c\0d", dest: &dest)
+    #expect(dest == "\"a\\\"b\\\\c\u{FFFD}d\"")
   }
 
-  func testCssStringWriter_WritesEscapedContentOnly() {
+  @Test("CssStringWriter writes escaped content only")
+  func cssStringWriter_WritesEscapedContentOnly() {
     var inner = ""
     var writer = CssStringWriter(&inner)
     writer.write("a\"b\\c\0d")
-    XCTAssertEqual(inner, "a\\\"b\\\\c\u{FFFD}d")
+    #expect(inner == "a\\\"b\\\\c\u{FFFD}d")
   }
 
-  func testTokenToCSS_SimpleTokens() {
-    XCTAssertEqual(Token.ident("abc").toCSSString(), "abc")
-    XCTAssertEqual(Token.atKeyword("media").toCSSString(), "@media")
-    XCTAssertEqual(Token.hash("fff").toCSSString(), "#fff")
-    XCTAssertEqual(Token.idHash("id").toCSSString(), "#id")
-    XCTAssertEqual(Token.quotedString("hi").toCSSString(), "\"hi\"")
-    XCTAssertEqual(Token.unquotedUrl("http://e").toCSSString(), "url(http://e)")
-    XCTAssertEqual(Token.delim(":").toCSSString(), ":")
-    XCTAssertEqual(Token.colon.toCSSString(), ":")
-    XCTAssertEqual(Token.semicolon.toCSSString(), ";")
-    XCTAssertEqual(Token.comma.toCSSString(), ",")
-    XCTAssertEqual(Token.includeMatch.toCSSString(), "~=")
-    XCTAssertEqual(Token.dashMatch.toCSSString(), "|=")
-    XCTAssertEqual(Token.prefixMatch.toCSSString(), "^=")
-    XCTAssertEqual(Token.suffixMatch.toCSSString(), "$=")
-    XCTAssertEqual(Token.substringMatch.toCSSString(), "*=")
-    XCTAssertEqual(Token.cdo.toCSSString(), "<!--")
-    XCTAssertEqual(Token.cdc.toCSSString(), "-->")
-    XCTAssertEqual(Token.function("url").toCSSString(), "url(")
-    XCTAssertEqual(Token.parenthesisBlock.toCSSString(), "(")
-    XCTAssertEqual(Token.squareBracketBlock.toCSSString(), "[")
-    XCTAssertEqual(Token.curlyBracketBlock.toCSSString(), "{")
-    XCTAssertEqual(Token.badUrl("oops").toCSSString(), "url(oops)")
-    XCTAssertEqual(Token.closeParenthesis.toCSSString(), ")")
-    XCTAssertEqual(Token.closeSquareBracket.toCSSString(), "]")
-    XCTAssertEqual(Token.closeCurlyBracket.toCSSString(), "}")
+  @Test("Token.toCSSString for simple tokens")
+  func tokenToCSS_SimpleTokens() {
+    #expect(Token.ident("abc").toCSSString() == "abc")
+    #expect(Token.atKeyword("media").toCSSString() == "@media")
+    #expect(Token.hash("fff").toCSSString() == "#fff")
+    #expect(Token.idHash("id").toCSSString() == "#id")
+    #expect(Token.quotedString("hi").toCSSString() == "\"hi\"")
+    #expect(Token.unquotedUrl("http://e").toCSSString() == "url(http://e)")
+    #expect(Token.delim(":").toCSSString() == ":")
+    #expect(Token.colon.toCSSString() == ":")
+    #expect(Token.semicolon.toCSSString() == ";")
+    #expect(Token.comma.toCSSString() == ",")
+    #expect(Token.includeMatch.toCSSString() == "~=")
+    #expect(Token.dashMatch.toCSSString() == "|=")
+    #expect(Token.prefixMatch.toCSSString() == "^=")
+    #expect(Token.suffixMatch.toCSSString() == "$=")
+    #expect(Token.substringMatch.toCSSString() == "*=")
+    #expect(Token.cdo.toCSSString() == "<!--")
+    #expect(Token.cdc.toCSSString() == "-->")
+    #expect(Token.function("url").toCSSString() == "url(")
+    #expect(Token.parenthesisBlock.toCSSString() == "(")
+    #expect(Token.squareBracketBlock.toCSSString() == "[")
+    #expect(Token.curlyBracketBlock.toCSSString() == "{")
+    #expect(Token.badUrl("oops").toCSSString() == "url(oops)")
+    #expect(Token.closeParenthesis.toCSSString() == ")")
+    #expect(Token.closeSquareBracket.toCSSString() == "]")
+    #expect(Token.closeCurlyBracket.toCSSString() == "}")
   }
 
-  func testTokenToCSS_NumberPercentageDimension() {
+  @Test("Token.toCSSString for number/percentage/dimension")
+  func tokenToCSS_NumberPercentageDimension() {
     do {
       let n = Token.Number(value: 12.0, intValue: 12, hasSign: false)
-      XCTAssertEqual(Token.number(n).toCSSString(), "12")
+      #expect(Token.number(n).toCSSString() == "12")
     }
     do {
       let n = Token.Number(value: 0.0, intValue: 0, hasSign: true)
-      XCTAssertEqual(Token.number(n).toCSSString(), "+0")
+      #expect(Token.number(n).toCSSString() == "+0")
     }
     do {
       let p = Token.Percentage(unitValue: 0.5, intValue: 50, hasSign: false)
-      XCTAssertEqual(Token.percentage(p).toCSSString(), "50%")
+      #expect(Token.percentage(p).toCSSString() == "50%")
     }
     do {
       let d = Token.Dimention(value: 12.0, intValue: 12, hasSign: false, unit: "px")
-      XCTAssertEqual(Token.dimention(d).toCSSString(), "12px")
+      #expect(Token.dimention(d).toCSSString() == "12px")
     }
     do {
       let d = Token.Dimention(value: 1.0, intValue: 1, hasSign: false, unit: "e-3")
-      XCTAssertEqual(Token.dimention(d).toCSSString(), "1\\65 -3")
+      #expect(Token.dimention(d).toCSSString() == "1\\65 -3")
     }
   }
 
-  func testTokenToCSS_BadStringAddsOpeningQuoteAndEscapes() {
+  @Test("Bad string adds opening quote and escapes")
+  func tokenToCSS_BadStringAddsOpeningQuoteAndEscapes() {
     let t = Token.badString("a\"b")
-    XCTAssertEqual(t.toCSSString(), "\"a\\\"b")
+    #expect(t.toCSSString() == "\"a\\\"b")
   }
 }
