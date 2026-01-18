@@ -23,11 +23,11 @@ enum CSSRuleType: String {
 }
 
 struct QualifiedCSSRule: Equatable {
-  let selectors: SelectorList<SelectorImpl>
+  let selectors: SelectorList<SVGSelectorImpl>
   let declarations: [CSSValueType: CSSDeclaration]
 
   func matches(element: some SVGDrawableElement) -> Bool {
-    var context = LocalMatchingContext<SelectorImpl>(shared: .init(), rightmost: .no, quirksData: nil)
+    var context = LocalMatchingContext<SVGSelectorImpl>(shared: .init(), rightmost: .no, quirksData: nil)
     for selector in selectors.slice {
       var iter = selector.makeIterator()
       while let component = iter.next() {

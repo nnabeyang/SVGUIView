@@ -229,7 +229,7 @@ extension CSSParser: RuleBodyItemParser {
 }
 
 extension CSSParser: QualifiedRuleParser {
-  typealias Prelude = SelectorList<SelectorImpl>
+  typealias Prelude = SelectorList<SVGSelectorImpl>
   typealias QualifiedRule = DeclOrRule
 
   mutating func parseQualifiedBlock(prelude: Prelude, start: ParserState, input: inout _CSSParser.Parser) -> Result<CSSRule, CSSParseError> {

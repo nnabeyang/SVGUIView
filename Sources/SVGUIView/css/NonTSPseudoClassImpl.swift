@@ -41,7 +41,7 @@ public enum NonTSPseudoClassImpl: Equatable {
 }
 
 extension NonTSPseudoClassImpl: NonTSPseudoClass {
-  public typealias Impl = SelectorImpl
+  public typealias Impl = SVGSelectorImpl
 
   public func isActiveOrHover() -> Bool {
     switch self {

@@ -147,7 +147,7 @@ struct SVGBaseElement {
   }
 }
 
-protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SelectorImpl {
+protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SVGSelectorImpl {
   var id: String? { get }
   var index: Int? { get }
   var base: SVGBaseElement { get }

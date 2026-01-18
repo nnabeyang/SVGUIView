@@ -2,7 +2,7 @@ import Foundation
 import _CSSParser
 import _SelectorParser
 
-public typealias AttrValue = SelectorImpl.AttrValue
+public typealias AttrValue = SVGSelectorImpl.AttrValue
 
 public struct SelectorParser {
   public let stylesheetOrigin: Origin
@@ -10,7 +10,7 @@ public struct SelectorParser {
   public let urlData: URLExtraData
   public let forSupportsRule: Bool
 
-  public func parseAuthorOriginNoNamespace(input: String, urlData: URLExtraData) -> Result<SelectorList<SelectorImpl>, ParseError<Failure>> {
+  public func parseAuthorOriginNoNamespace(input: String, urlData: URLExtraData) -> Result<SelectorList<SVGSelectorImpl>, ParseError<Failure>> {
     let namespaces = Namespaces.default()
     let parser = SelectorParser(stylesheetOrigin: .author, namespaces: namespaces, urlData: urlData, forSupportsRule: false)
     let input = ParserInput(input: input)
@@ -31,7 +31,7 @@ public struct SelectorParser {
 }
 
 extension SelectorParser: _SelectorParser.Parser {
-  public typealias Impl = SelectorImpl
+  public typealias Impl = SVGSelectorImpl
   public typealias Failure = StyleParseErrorKind
 
   public func parseSlotted() -> Bool {
@@ -68,7 +68,7 @@ extension SelectorParser: _SelectorParser.Parser {
   public func parseNonTSPseudoClass(location: SourceLocation, name: String)
     -> Result<Impl.NonTSPseudoClass, ParseError<Failure>>
   {
-    let pseudoClass: SelectorImpl.NonTSPseudoClass
+    let pseudoClass: SVGSelectorImpl.NonTSPseudoClass
     switch name.lowercased() {
     case "active": pseudoClass = .active
     case "any-link": pseudoClass = .anyLink

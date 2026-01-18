@@ -34,5 +34,5 @@ extension PseudoElementImpl: ToCSS {
 }
 
 extension PseudoElementImpl: PseudoElement {
-  public typealias Impl = SelectorImpl
+  public typealias Impl = SVGSelectorImpl
 }

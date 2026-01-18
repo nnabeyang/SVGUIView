@@ -12,12 +12,12 @@ extension CustomState: ToCSS {
   }
 }
 
-public typealias AtomIdent = SelectorImpl.Identifier
-public typealias LocalName = SelectorImpl.LocalName
-public typealias Namespace = SelectorImpl.NamespaceUrl
-public typealias Prefix = SelectorImpl.NamespacePrefix
+public typealias AtomIdent = SVGSelectorImpl.Identifier
+public typealias LocalName = SVGSelectorImpl.LocalName
+public typealias Namespace = SVGSelectorImpl.NamespaceUrl
+public typealias Prefix = SVGSelectorImpl.NamespacePrefix
 
-public enum SelectorImpl: _SelectorParser.SelectorImpl {
+public enum SVGSelectorImpl: _SelectorParser.SelectorImpl {
   public typealias AttrValue = AtomString
   public typealias Identifier = GenericAtomIdent<IdentStaticSet>
   public typealias LocalName = GenericAtomIdent<LocalNameStaticSet>
