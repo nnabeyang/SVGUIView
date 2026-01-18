@@ -1,7 +1,7 @@
 import UIKit
 import _CSSParser
 
-struct SVGUIStyle: Encodable {
+struct SVGUIStyle {
   let decratations: [CSSValueType: CSSDeclaration]
   init(decratations: [CSSValueType: CSSDeclaration]) {
     self.decratations = decratations

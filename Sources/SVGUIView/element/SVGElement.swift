@@ -5,7 +5,7 @@ protocol SVGElement: Encodable {
   var type: SVGElementName { get }
   func draw(_ context: SVGContext, index: Int, mode: DrawMode) async
   func drawWithoutFilter(_ context: SVGContext, index: Int, mode: DrawMode) async
-  func style(with style: CSSStyle, at index: Int) -> any SVGElement
+  func style(with style: Stylesheet, at index: Int) -> any SVGElement
   func contains(index: Int, context: SVGContext) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
@@ -147,7 +147,7 @@ struct SVGBaseElement {
   }
 }
 
-protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SelectorImpl {
+protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SVGSelectorImpl {
   var id: String? { get }
   var index: Int? { get }
   var base: SVGBaseElement { get }
@@ -227,7 +227,7 @@ extension SVGDrawableElement {
     Self(other: self, attributes: attributes)
   }
 
-  func style(with style: CSSStyle, at index: Int) -> any SVGElement {
+  func style(with style: Stylesheet, at index: Int) -> any SVGElement {
     var properties: [CSSValueType: CSSDeclaration] = [:]
     for rule in style.rules.filter({ $0.matches(element: self) }) {
       properties.merge(rule.declarations) { current, _ in current }

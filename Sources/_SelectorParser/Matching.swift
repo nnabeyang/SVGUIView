@@ -89,6 +89,215 @@ package func compoundMatchesFeaturelessHost<Impl: SelectorImpl>(
   return matches
 }
 
+public func matchesSelectorList<E: Element>(
+  selectorList: SelectorList<E.Impl>,
+  element: E,
+  context: inout MatchingContext<E.Impl>,
+) -> Bool {
+  for selector in selectorList.slice {
+    if matchesSelector(selector: selector, offset: 0, element: element, context: &context) {
+      return true
+    }
+  }
+  return false
+}
+
+enum SelectorMatchingResult: Equatable {
+  case matched
+  case notMatchedAndRestartFromClosestLaterSibling
+  case notMatchedAndRestartFromClosestDescendant
+  case notMatchedGlobally
+  case unknown
+
+  func into() -> KleeneValue {
+    .init(from: self)
+  }
+}
+
+extension KleeneValue {
+  init(from result: SelectorMatchingResult) {
+    switch result {
+    case .matched: self = .true
+    case .unknown: self = .unknown
+    case .notMatchedAndRestartFromClosestDescendant,
+      .notMatchedAndRestartFromClosestLaterSibling,
+      .notMatchedGlobally:
+      self = .false
+    }
+  }
+}
+
+public func matchesSelector<E: Element>(
+  selector: Selector<E.Impl>,
+  offset: Int,
+  element: E,
+  context: inout MatchingContext<E.Impl>
+) -> Bool {
+  let result = matchesSelectorKleene(selector: selector, offset: offset, element: element, context: &context)
+  return result.toBool(unknown: true)
+}
+
+public func matchesSelectorKleene<E: Element>(
+  selector: Selector<E.Impl>,
+  offset: Int,
+  element: E,
+  context: inout MatchingContext<E.Impl>
+) -> KleeneValue {
+  matchesComplexSelector(
+    iter: selector.iter(from: offset),
+    element: element,
+    context: &context,
+    rightmost: selector.isRightmost(offset: offset) ? .yes : .no)
+}
+
+func matchesComplexSelector<E: Element>(
+  iter: SelectorIter<E.Impl>,
+  element: E,
+  context: inout MatchingContext<E.Impl>,
+  rightmost: SubjectOrPseudoElement
+) -> KleeneValue {
+  var iter = iter
+  if context.matchingMode == .forStatelessPseudoElement && !context.isNested {
+    switch iter.next() {
+    case .pseudoElement(let pseudo):
+      if let f = context.pseudoElementMatchingFn, !f(pseudo) {
+        return .false
+      }
+    case .some(let other):
+      assertionFailure("Used MatchingMode.forStatelessPseudoElement in a non-pseudo selector \(other)")
+      return .false
+    case .none:
+      return .unknown
+    }
+    if !iter.matchesForStatelessPseudoElement() {
+      return .false
+    }
+    assert(iter.nextSequence() == .pseudoElement)
+  }
+  return matchesComplexSelectorInternal(
+    selectorIter: iter,
+    element: element,
+    context: &context,
+    rightmost: rightmost,
+    firstSubjectCompound: .yes
+  ).into()
+}
+
+func nextElementForCombinator<E: Element>(
+  element: E,
+  combinator: Combinator,
+  context: MatchingContext<E.Impl>
+) -> (nextElement: E?, featureless: Bool) {
+  (nil, false)
+}
+
+func matchesComplexSelectorInternal<E: Element>(
+  selectorIter: SelectorIter<E.Impl>,
+  element: E,
+  context: inout MatchingContext<E.Impl>,
+  rightmost: SubjectOrPseudoElement,
+  firstSubjectCompound: SubjectOrPseudoElement
+) -> SelectorMatchingResult {
+  var selectorIter = selectorIter
+  var rightmost = rightmost
+  var firstSubjectCompound = firstSubjectCompound
+  let matches = matchesCompoundSelector(selectorIter: &selectorIter, element: element, context: &context, rightmost: rightmost)
+
+  guard let combinator = selectorIter.nextSequence() else {
+    switch matches {
+    case .false: return .notMatchedAndRestartFromClosestLaterSibling
+    case .true: return .matched
+    case .unknown: return .unknown
+    }
+  }
+  let isPseudoCombinator = combinator.isPseudoElement
+  if context.featureless && !isPseudoCombinator {
+    return .notMatchedGlobally
+  }
+
+  let isSiblingCombinator = combinator.isSibling
+
+  if matches == .false {
+    return .notMatchedAndRestartFromClosestLaterSibling
+  }
+  if !isPseudoCombinator {
+    rightmost = .no
+    firstSubjectCompound = .no
+  }
+  let candidateNotFound: SelectorMatchingResult = isSiblingCombinator ? .notMatchedAndRestartFromClosestDescendant : .notMatchedGlobally
+
+  var element = element
+  while true {
+    let (nextElement, featureless) = nextElementForCombinator(element: element, combinator: combinator, context: context)
+    guard let nextElement else {
+      return candidateNotFound
+    }
+    element = nextElement
+    let result = context.withFeatureless(featureless: featureless) { context in
+      matchesComplexSelectorInternal(
+        selectorIter: selectorIter,
+        element: element,
+        context: &context,
+        rightmost: rightmost,
+        firstSubjectCompound: firstSubjectCompound
+      )
+    }
+    switch result {
+    case .matched:
+      assert(matches.toBool(unknown: true), "Compound didn't match?")
+      if !matches.toBool(unknown: false) {
+        return .unknown
+      }
+      return result
+    case .unknown, .notMatchedGlobally:
+      return result
+    default:
+      break
+    }
+    switch combinator {
+    case .descendant:
+      break
+    case .child:
+      return .notMatchedAndRestartFromClosestDescendant
+    case .laterSibling:
+      if case .notMatchedAndRestartFromClosestDescendant = result {
+        return result
+      }
+    case .nextSibling, .pseudoElement, .part, .slotAssignment:
+      return result
+    }
+    if featureless {
+      return candidateNotFound
+    }
+  }
+}
+
+public func matchesCompoundSelector<E: Element>(
+  selectorIter: inout SelectorIter<E.Impl>,
+  element: E,
+  context: inout MatchingContext<E.Impl>,
+  rightmost: SubjectOrPseudoElement
+) -> KleeneValue {
+  var iter = selectorIter
+  if context.featureless
+    && compoundMatchesFeaturelessHost(iter: &iter, scopeMatchesFeaturelessHost: true) == .never
+  {
+    return .false
+  }
+  var quirksData: SelectorIter<E.Impl>?
+  if case .quirks = context.quirksMode {
+    quirksData = selectorIter
+  }
+  var localContext = LocalMatchingContext(
+    shared: context,
+    rightmost: rightmost,
+    quirksData: quirksData
+  )
+  return KleeneValue.anyFalse(iter: selectorIter) { simple in
+    matchesSimpleSelector(selector: simple, element: element, context: &localContext)
+  }
+}
+
 public func matchesSimpleSelector<E: Element>(
   selector: Component<E.Impl>,
   element: E,

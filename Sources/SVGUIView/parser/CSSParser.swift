@@ -31,12 +31,18 @@ enum CSSVisibility: String {
   case inherit
 }
 
-struct CSSDeclaration: Equatable, Codable {
+struct CSSDeclaration: Equatable {
   let type: CSSValueType
   let value: CSSValue
+  let importance: Importance
 }
 
-enum CSSValueType: String, Hashable, Codable {
+enum Importance: Equatable {
+  case normal
+  case important
+}
+
+enum CSSValueType: String, Hashable {
   case fill
   case height
   case width
@@ -180,59 +186,15 @@ extension CSSValue: Equatable {
   }
 }
 
-extension CSSValue: Encodable {
-  func encode(to encoder: any Encoder) throws {
-    switch self {
-    case .fill(let value):
-      try value.encode(to: encoder)
-    case .length(let value):
-      try value.encode(to: encoder)
-    case .transform(let value):
-      try value.encode(to: encoder)
-    case .number(let value):
-      try value.encode(to: encoder)
-    case .linecap(let value):
-      try value.rawValue.encode(to: encoder)
-    case .linejoin(let value):
-      try value.rawValue.encode(to: encoder)
-    case .clipPath:
-      try "clip-path".encode(to: encoder)
-    }
-  }
-}
-
-extension CSSValue: Decodable {
-  init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    if let value = try? container.decode(SVGCSSFill.self) {
-      self = .fill(value)
-      return
-    }
-    if let value = try? container.decode(Double.self) {
-      self = .number(value)
-      return
-    }
-    if let value = try? container.decode(CGAffineTransform.self) {
-      self = .transform(value)
-      return
-    }
-    if let value = try? container.decode(SVGLength.self) {
-      self = .length(value)
-      return
-    }
-    throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-  }
-}
-
 struct CSSParser {
   private var input: _CSSParser.Parser
   init(input: _CSSParser.Parser) {
     self.input = input
   }
 
-  mutating func parse() -> CSSStyle {
+  mutating func parse() -> Stylesheet {
     let rules = parseRules()
-    return CSSStyle(rules: rules)
+    return Stylesheet(rules: rules)
   }
 
   mutating func parseRules() -> [CSSRule] {
@@ -267,7 +229,7 @@ extension CSSParser: RuleBodyItemParser {
 }
 
 extension CSSParser: QualifiedRuleParser {
-  typealias Prelude = SelectorList<SelectorImpl>
+  typealias Prelude = SelectorList<SVGSelectorImpl>
   typealias QualifiedRule = DeclOrRule
 
   mutating func parseQualifiedBlock(prelude: Prelude, start: ParserState, input: inout _CSSParser.Parser) -> Result<CSSRule, CSSParseError> {
@@ -349,6 +311,27 @@ struct CSSDeclarationParser: DeclarationParser {
   typealias Declaration = CSSDeclaration
 
   mutating func parseValue(name: String, input: inout _CSSParser.Parser, declarationStart: inout ParserState) -> Result<CSSDeclaration, CSSParseError> {
+    let result = input.parseUntilBefore(delimiters: .bang) { input in
+      return parseValueCore(name: name, input: &input, declarationStart: &declarationStart)
+    }
+    switch result {
+    case .success((let type, let value)):
+      let importance: Importance =
+        switch input.tryParse(parseImportant(parser:)) {
+        case .success:
+          .important
+        case .failure:
+          .normal
+        }
+      return .success(.init(type: type, value: value, importance: importance))
+    case .failure(let error):
+      return .failure(error)
+    }
+  }
+
+  mutating private func parseValueCore(name: String, input: inout _CSSParser.Parser, declarationStart: inout ParserState)
+    -> Result<(type: CSSValueType, value: CSSValue), CSSParseError>
+  {
     guard let type = CSSValueType(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
     switch type {
     case .fill, .stroke:
@@ -356,29 +339,29 @@ struct CSSDeclarationParser: DeclarationParser {
       case .success(let token):
         switch token {
         case .ident(let color):
-          return .success(CSSDeclaration(type: type, value: .fill(.color(.named(SVGColorName(name: color))))))
+          return .success((type: type, value: .fill(.color(.named(SVGColorName(name: color))))))
         case .idHash(let hash), .hash(let hash):
           guard let color = SVGHexColor(hex: hash) else { return .failure(input.newCustomError(error: .invalid)) }
-          return .success(CSSDeclaration(type: type, value: .fill(.color(.hex(color)))))
+          return .success((type: type, value: .fill(.color(.hex(color)))))
         case .unquotedUrl(let url):
           guard url.hasPrefix("#") else {
             return .failure(input.newCustomError(error: .invalid))
           }
-          return .success(CSSDeclaration(type: type, value: .fill(.color(.url(String(url.dropFirst()))))))
+          return .success((type: type, value: .fill(.color(.url(String(url.dropFirst()))))))
         case .function(let name):
           guard let fname = CSSFuncName(rawValue: name) else { return .failure(input.newCustomError(error: .invalid)) }
           switch fname {
           case .rgb:
             switch SVGRGBColor.parse(context: .init(), input: &input) {
             case .success(let color):
-              return .success(CSSDeclaration(type: type, value: .fill(.color(.rgb(color)))))
+              return .success((type: type, value: .fill(.color(.rgb(color)))))
             case .failure:
               return .failure(input.newCustomError(error: .invalid))
             }
           case .rgba:
             switch SVGRGBAColor.parse(context: .init(), input: &input) {
             case .success(let color):
-              return .success(CSSDeclaration(type: type, value: .fill(.color(.rgba(color)))))
+              return .success((type: type, value: .fill(.color(.rgba(color)))))
             case .failure:
               return .failure(input.newCustomError(error: .invalid))
             }
@@ -394,7 +377,7 @@ struct CSSDeclarationParser: DeclarationParser {
       case .success(let token):
         switch token {
         case .number(let value):
-          return .success(CSSDeclaration(type: type, value: .number(Double(value.value))))
+          return .success((type: type, value: .number(Double(value.value))))
         default:
           return .failure(input.newCustomError(error: .invalid))
         }
@@ -406,9 +389,9 @@ struct CSSDeclarationParser: DeclarationParser {
       case .success(let token):
         switch token {
         case .number(let value):
-          return .success(CSSDeclaration(type: type, value: .length(SVGLength(value: Double(value.value), unit: .number))))
+          return .success((type: type, value: .length(SVGLength(value: Double(value.value), unit: .number))))
         case .dimention(let value):
-          return .success(CSSDeclaration(type: type, value: .length(SVGLength(value: Double(value.value), unit: .init(value.unit)))))
+          return .success((type: type, value: .length(SVGLength(value: Double(value.value), unit: .init(value.unit)))))
         default:
           return .failure(input.newCustomError(error: .invalid))
         }
@@ -418,7 +401,7 @@ struct CSSDeclarationParser: DeclarationParser {
     case .transform:
       switch CGAffineTransform.parse(context: .init(), input: &input) {
       case .success(let transform):
-        return .success(CSSDeclaration(type: .transform, value: .transform(transform)))
+        return .success((type: .transform, value: .transform(transform)))
       case .failure:
         return .failure(input.newCustomError(error: .invalid))
       }
@@ -438,7 +421,7 @@ struct CSSDeclarationParser: DeclarationParser {
             default:
               .butt
             }
-          return .success(CSSDeclaration(type: type, value: .linecap(lineCap)))
+          return .success((type: type, value: .linecap(lineCap)))
         default:
           return .failure(input.newCustomError(error: .invalid))
         }
@@ -461,7 +444,7 @@ struct CSSDeclarationParser: DeclarationParser {
             default:
               .miter
             }
-          return .success(CSSDeclaration(type: type, value: .linejoin(lineJoin)))
+          return .success((type: type, value: .linejoin(lineJoin)))
         default:
           return .failure(input.newCustomError(error: .invalid))
         }
@@ -476,7 +459,7 @@ struct CSSDeclarationParser: DeclarationParser {
           guard url.hasPrefix("#") else {
             return .failure(input.newCustomError(error: .invalid))
           }
-          return .success(CSSDeclaration(type: .clipPath, value: .clipPath(.url(url: String(url.dropFirst())))))
+          return .success((type: .clipPath, value: .clipPath(.url(url: String(url.dropFirst())))))
         default:
           return .failure(input.newCustomError(error: .invalid))
         }

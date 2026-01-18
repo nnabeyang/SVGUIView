@@ -23,17 +23,14 @@ enum CSSRuleType: String {
 }
 
 struct QualifiedCSSRule: Equatable {
-  let selectors: SelectorList<SelectorImpl>
+  let selectors: SelectorList<SVGSelectorImpl>
   let declarations: [CSSValueType: CSSDeclaration]
 
   func matches(element: some SVGDrawableElement) -> Bool {
-    var context = LocalMatchingContext<SelectorImpl>(shared: .init(), rightmost: .no, quirksData: nil)
+    var context = MatchingContext<SVGSelectorImpl>()
     for selector in selectors.slice {
-      var iter = selector.makeIterator()
-      while let component = iter.next() {
-        if matchesSimpleSelector(selector: component, element: element, context: &context).toBool(unknown: false) {
-          return true
-        }
+      if matchesSelector(selector: selector, offset: 0, element: element, context: &context) {
+        return true
       }
     }
     return false
@@ -42,8 +39,4 @@ struct QualifiedCSSRule: Equatable {
   subscript(key: CSSValueType) -> CSSValue? {
     declarations[key]?.value
   }
-}
-
-struct CSSStyle: Equatable {
-  let rules: [CSSRule]
 }
