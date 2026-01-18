@@ -27,13 +27,10 @@ struct QualifiedCSSRule: Equatable {
   let declarations: [CSSValueType: CSSDeclaration]
 
   func matches(element: some SVGDrawableElement) -> Bool {
-    var context = LocalMatchingContext<SVGSelectorImpl>(shared: .init(), rightmost: .no, quirksData: nil)
+    var context = MatchingContext<SVGSelectorImpl>()
     for selector in selectors.slice {
-      var iter = selector.makeIterator()
-      while let component = iter.next() {
-        if matchesSimpleSelector(selector: component, element: element, context: &context).toBool(unknown: false) {
-          return true
-        }
+      if matchesSelector(selector: selector, offset: 0, element: element, context: &context) {
+        return true
       }
     }
     return false
