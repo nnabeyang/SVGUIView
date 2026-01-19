@@ -7,19 +7,6 @@ struct SVGUIStyle {
     self.decratations = decratations
   }
 
-  init(description: String) {
-    let parseInput = ParserInput(input: description)
-    var input = Parser(input: parseInput)
-    var parser = CSSParser(input: input)
-    let result = parser.parseQualifiedBlock(prelude: .init(slice: []), start: input.state, input: &input)
-    switch result {
-    case .success(let rule):
-      decratations = rule.declarations
-    case .failure:
-      decratations = [:]
-    }
-  }
-
   subscript(key: CSSValueType) -> CSSValue? {
     decratations[key]?.value
   }

@@ -34,8 +34,8 @@ struct SVGMaskElement: SVGDrawableElement {
     colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
     x = .init(attributes["x"])
     y = .init(attributes["y"])
-    width = SVGLength(style: base.style[.width], value: attributes["width"])
-    height = SVGLength(style: base.style[.height], value: attributes["height"])
+    width = SVGLength(attributes["width"])
+    height = SVGLength(attributes["height"])
     maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
     self.contentIds = contentIds
   }

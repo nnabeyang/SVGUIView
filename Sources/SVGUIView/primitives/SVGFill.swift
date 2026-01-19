@@ -92,7 +92,9 @@ enum SVGFill {
       return scanner.scanFill(opacity: opacity)
     }
     guard let fill = fill else {
-      return nil
+      guard let opacity else { return nil }
+      self = .color(color: nil, opacity: opacity)
+      return
     }
     self = fill
   }

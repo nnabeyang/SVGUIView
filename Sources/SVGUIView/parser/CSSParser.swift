@@ -31,10 +31,33 @@ enum CSSVisibility: String {
   case inherit
 }
 
-struct CSSDeclaration: Equatable {
+struct CSSDeclaration: Equatable, Comparable {
   let type: CSSValueType
   let value: CSSValue
   let importance: Importance
+  let specificity: Specificity
+  var sourceOrder: Int
+
+  static func < (lhs: Self, rhs: Self) -> Bool {
+    let precA = lhs.cascadePrecedence()
+    let precB = rhs.cascadePrecedence()
+    if precA != precB {
+      return precA < precB
+    }
+    if lhs.specificity != rhs.specificity {
+      return lhs.specificity < rhs.specificity
+    }
+    return lhs.sourceOrder < rhs.sourceOrder
+  }
+
+  private func cascadePrecedence() -> Int {
+    switch importance {
+    case .normal:
+      1
+    case .important:
+      2
+    }
+  }
 }
 
 enum Importance: Equatable {
@@ -200,8 +223,11 @@ struct CSSParser {
   mutating func parseRules() -> [CSSRule] {
     let bodyParser: RuleBodyParser<CSSParser, CSSRule, StyleParseErrorKind> = RuleBodyParser(input: input, parser: self)
     var rules = [CSSRule]()
+    var sourceOrder = 0
     for element in bodyParser {
-      if case .success(let rule) = element {
+      if case .success(var rule) = element {
+        rule.sourceOrder = sourceOrder
+        sourceOrder += 1
         rules.append(rule)
       }
     }
@@ -233,18 +259,19 @@ extension CSSParser: QualifiedRuleParser {
   typealias QualifiedRule = DeclOrRule
 
   mutating func parseQualifiedBlock(prelude: Prelude, start: ParserState, input: inout _CSSParser.Parser) -> Result<CSSRule, CSSParseError> {
-    var declarations = [CSSValueType: CSSDeclaration]()
+    var declarations = [CSSDeclaration]()
     var parser = CSSDeclarationParser()
+    var sourceOrder = 0
     while true {
       let item = next(input: &input, parser: &parser)
       guard let item else { break }
-      if case .success(let decl) = item {
-        if declarations[decl.type] == nil {
-          declarations[decl.type] = decl
-        }
+      if case .success(var decl) = item {
+        decl.sourceOrder = sourceOrder
+        declarations.append(decl)
+        sourceOrder += 1
       }
     }
-    return .success(.qualified(.init(selectors: prelude, declarations: declarations)))
+    return .success(CSSRule(selectors: prelude, declarations: declarations, sourceOrder: 0))
   }
 
   public typealias Element = Result<CSSDeclaration, RuleBodyError<StyleParseErrorKind>>
@@ -323,7 +350,7 @@ struct CSSDeclarationParser: DeclarationParser {
         case .failure:
           .normal
         }
-      return .success(.init(type: type, value: value, importance: importance))
+      return .success(CSSDeclaration(type: type, value: value, importance: importance, specificity: .default(), sourceOrder: 0))
     case .failure(let error):
       return .failure(error)
     }

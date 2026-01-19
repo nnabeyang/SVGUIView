@@ -15,12 +15,12 @@ struct SVGRectElement: SVGDrawableElement {
 
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
-    x = SVGLength(style: base.style[.x], value: attributes["x"])
-    y = SVGLength(style: base.style[.y], value: attributes["y"])
+    x = SVGLength(attributes["x"])
+    y = SVGLength(attributes["y"])
     rx = .init(attributes["rx"])
     ry = .init(attributes["ry"])
-    width = SVGLength(style: base.style[.width], value: attributes["width"])
-    height = SVGLength(style: base.style[.height], value: attributes["height"])
+    width = SVGLength(attributes["width"])
+    height = SVGLength(attributes["height"])
   }
 
   init(other: Self, index: Int, css: SVGUIStyle) {
