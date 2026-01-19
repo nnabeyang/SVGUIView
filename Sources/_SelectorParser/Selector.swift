@@ -1,10 +1,26 @@
 import Foundation
 import _CSSParser
 
-public struct Specificity: Into, Default {
+public struct Specificity: Into, Default, Equatable, Comparable, Sendable {
   public var idSelectors: UInt32
   public var classLikeSelectors: UInt32
   public var elementSelectors: UInt32
+
+  public init(idSelectors: UInt32, classLikeSelectors: UInt32, elementSelectors: UInt32) {
+    self.idSelectors = idSelectors
+    self.classLikeSelectors = classLikeSelectors
+    self.elementSelectors = elementSelectors
+  }
+
+  public static func < (lhs: Self, rhs: Self) -> Bool {
+    if lhs.idSelectors != rhs.idSelectors {
+      return lhs.idSelectors < rhs.idSelectors
+    }
+    if lhs.classLikeSelectors != rhs.classLikeSelectors {
+      return lhs.classLikeSelectors < rhs.classLikeSelectors
+    }
+    return lhs.elementSelectors < rhs.elementSelectors
+  }
 
   public static func singleClassLike() -> Self {
     Specificity(idSelectors: 0, classLikeSelectors: 1, elementSelectors: 0)
@@ -13,6 +29,8 @@ public struct Specificity: Into, Default {
   public static func `default`() -> Self {
     Specificity(idSelectors: 0, classLikeSelectors: 0, elementSelectors: 0)
   }
+
+  public static let max = Specificity(idSelectors: MAX_10BIT, classLikeSelectors: MAX_10BIT, elementSelectors: MAX_10BIT)
 }
 
 func + (lhs: Specificity, rhs: Specificity) -> Specificity {

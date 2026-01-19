@@ -33,8 +33,8 @@ struct SVGFilterElement: SVGDrawableElement {
     colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
     x = .init(attributes["x"])
     y = .init(attributes["y"])
-    width = SVGLength(style: base.style[.width], value: attributes["width"])
-    height = SVGLength(style: base.style[.height], value: attributes["height"])
+    width = SVGLength(attributes["width"])
+    height = SVGLength(attributes["height"])
     filterUnits = SVGUnitType(rawValue: attributes["filterUnits", default: ""])
     primitiveUnits = SVGUnitType(rawValue: attributes["primitiveUnits", default: ""])
     self.contentIds = contentIds

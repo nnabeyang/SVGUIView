@@ -62,22 +62,22 @@ struct SVGBaseElement {
   let display: CSSDisplay?
   let visibility: CSSVisibility?
   let writingMode: WritingMode?
-  let style: SVGUIStyle
+  let style: SVGUIInlineStyle
 
   init(attributes: [String: String]) {
     index = nil
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
-    style = SVGUIStyle(description: attributes["style", default: ""])
+    style = SVGUIInlineStyle(description: attributes["style", default: ""])
     color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
     clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
     mask = SVGMask(description: attributes["mask", default: ""])
     filter = SVGFilter(description: attributes["filter", default: ""])
     font = Self.parseFont(attributes: attributes)
-    fill = SVGFill(style: style, attributes: attributes)
-    stroke = SVGUIStroke(style: style, attributes: attributes)
+    fill = SVGFill(attributes: attributes)
+    stroke = SVGUIStroke(attributes: attributes)
     opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
-    transform = CGAffineTransform(style: style[.transform], description: attributes["transform", default: ""])
+    transform = CGAffineTransform(description: attributes["transform", default: ""])
     writingMode = WritingMode(rawValue: attributes["writing-mode", default: ""])
     eoFill = attributes["fill-rule", default: ""].trimmingCharacters(in: .whitespaces) == "evenodd"
     clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
@@ -162,7 +162,7 @@ protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SVGSelectorI
   var fill: SVGFill? { get }
   var stroke: SVGUIStroke { get }
   var color: SVGColor? { get }
-  var style: SVGUIStyle { get }
+  var style: SVGUIInlineStyle { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
   func frame(context: SVGContext, path: UIBezierPath?) async -> CGRect
@@ -193,7 +193,7 @@ extension SVGDrawableElement {
   var mask: SVGMask? { base.mask }
   var filter: SVGFilter? { base.filter }
   var color: SVGColor? { base.color }
-  var style: SVGUIStyle { base.style }
+  var style: SVGUIInlineStyle { base.style }
   var display: CSSDisplay? { base.display }
   var visibility: CSSVisibility? { base.visibility }
 
@@ -228,11 +228,8 @@ extension SVGDrawableElement {
   }
 
   func style(with style: Stylesheet, at index: Int) -> any SVGElement {
-    var properties: [CSSValueType: CSSDeclaration] = [:]
-    for rule in style.rules.filter({ $0.matches(element: self) }) {
-      properties.merge(rule.declarations) { current, _ in current }
-    }
-    return Self(other: self, index: index, css: SVGUIStyle(decratations: properties))
+    let css = cascadeElement(element: self, stylesheets: [style], inlineStyle: self.style.declarations)
+    return Self(other: self, index: index, css: css)
   }
 
   func frame(context _: SVGContext, path: UIBezierPath?) -> CGRect {

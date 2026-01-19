@@ -13,4 +13,29 @@ extension Namespaces: Default {
 
 struct Stylesheet: Equatable {
   let rules: [CSSRule]
+
+  func matchElement(element: some SVGDrawableElement) -> [RuleMatch] {
+    var matches = [RuleMatch]()
+    for rule in self.rules {
+      guard let selector = rule.matchSelector(element: element) else { continue }
+      let specificity = selector.specificity
+      var declarations = [CSSDeclaration]()
+      for declaration in rule.declarations {
+        declarations.append(
+          CSSDeclaration(
+            type: declaration.type,
+            value: declaration.value,
+            importance: declaration.importance,
+            specificity: .from(specificity),
+            sourceOrder: rule.sourceOrder * 10000 + declaration.sourceOrder
+          ))
+      }
+      matches.append(
+        RuleMatch(
+          specificity: .from(specificity),
+          declarations: declarations,
+          sourceOrder: rule.sourceOrder))
+    }
+    return matches
+  }
 }

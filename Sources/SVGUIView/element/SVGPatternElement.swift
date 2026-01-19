@@ -39,8 +39,8 @@ struct SVGPatternElement: SVGDrawableElement {
     colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
-    width = SVGLength(style: base.style[.width], value: attributes["width"])
-    height = SVGLength(style: base.style[.height], value: attributes["height"])
+    width = SVGLength(attributes["width"])
+    height = SVGLength(attributes["height"])
 
     patternTransform = CGAffineTransform(description: attributes["patternTransform", default: ""])
     patternUnits = SVGUnitType(rawValue: attributes["patternUnits", default: ""])

@@ -18,8 +18,8 @@ struct SVGImageElement: SVGDrawableElement {
     data = src.last.flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
     x = SVGLength(attributes["x"]) ?? .pixel(0)
     y = SVGLength(attributes["y"]) ?? .pixel(0)
-    width = SVGLength(style: base.style[.width], value: attributes["width"])
-    height = SVGLength(style: base.style[.height], value: attributes["height"])
+    width = SVGLength(attributes["width"])
+    height = SVGLength(attributes["height"])
   }
 
   init(other: Self, index: Int, css: SVGUIStyle) {
