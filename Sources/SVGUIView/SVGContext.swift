@@ -26,7 +26,7 @@ struct SVGContext: SVGLengthContext {
   private let clipIdStack = ElementIdStack<String>()
   private let maskIdStack = ElementIdStack<String>()
   private let patternIdStack: ElementIdStack<String>
-  private let tagIdStack = ElementIdStack<Int>()
+  private let tagIdStack = ElementIdStack<ObjectIdentifier>()
   private let initCtm: CGAffineTransform
 
   init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect) {
@@ -58,7 +58,7 @@ struct SVGContext: SVGLengthContext {
     base.pservers
   }
 
-  var contents: [any SVGElement] {
+  var contents: [ObjectIdentifier: any SVGElement] {
     base.contents
   }
 
@@ -82,7 +82,7 @@ struct SVGContext: SVGLengthContext {
     graphics.ctm.concatenating(initCtm.inverted())
   }
 
-  subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
+  subscript(id: String) -> (any SVGDrawableElement)? {
     base[id]
   }
 
@@ -162,11 +162,11 @@ struct SVGContext: SVGLengthContext {
     tagIdStack.push()
   }
 
-  func check(tagId: Int) -> Bool {
+  func check(tagId: ObjectIdentifier) -> Bool {
     tagIdStack.check(elementId: tagId)
   }
 
-  func remove(tagId: Int) {
+  func remove(tagId: ObjectIdentifier) {
     tagIdStack.remove(elementId: tagId)
   }
 
@@ -282,19 +282,16 @@ struct SVGContext: SVGLengthContext {
 }
 
 struct SVGBaseContext {
+  let root: SVGSVGElement?
   let pservers: [String: any SVGGradientServer]
-  let contentIdMap: [String: Int]
-  let contents: [any SVGElement]
+  let contentIdMap: [String: ObjectIdentifier]
+  let contents: [ObjectIdentifier: any SVGElement]
 
   var clipPaths = [String: SVGClipPathElement]()
   var masks = [String: SVGMaskElement]()
   var patterns = [String: SVGPatternElement]()
   var filters = [String: SVGFilterElement]()
   private let clipRuleStack: Stack<Bool> = Stack()
-
-  var root: SVGSVGElement? {
-    contents.last as? SVGSVGElement
-  }
 
   var clipRule: Bool? {
     clipRuleStack.last
@@ -324,11 +321,11 @@ struct SVGBaseContext {
     }
   }
 
-  subscript(id: String) -> (Index: Int, element: any SVGDrawableElement)? {
+  subscript(id: String) -> (any SVGDrawableElement)? {
     guard let idx = contentIdMap[id],
       let element = contents[idx] as? (any SVGDrawableElement)
     else { return nil }
-    return (Index: idx, element: element)
+    return element
   }
 
   func push(clipRule: Bool) {

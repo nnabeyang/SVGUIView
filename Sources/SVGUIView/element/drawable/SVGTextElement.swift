@@ -6,7 +6,11 @@ enum TextAnchor: String {
   case end
 }
 
-struct SVGTextElement: SVGDrawableElement {
+final class SVGTextElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .text
+  }
+
   var type: SVGElementName {
     .text
   }
@@ -25,7 +29,7 @@ struct SVGTextElement: SVGDrawableElement {
     y = SVGLength(attributes["y"])
   }
 
-  init(other: Self, attributes: [String: String]) {
+  init(other: SVGTextElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     text = other.text
     textAnchor = other.textAnchor ?? TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
@@ -33,8 +37,8 @@ struct SVGTextElement: SVGDrawableElement {
     y = other.y
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGTextElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     text = other.text
     textAnchor = other.textAnchor
     x = other.x

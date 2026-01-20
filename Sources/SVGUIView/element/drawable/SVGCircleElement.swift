@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGCircleElement: SVGDrawableElement {
+final class SVGCircleElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .circle
+  }
+
   var type: SVGElementName {
     .circle
   }
@@ -17,14 +21,14 @@ struct SVGCircleElement: SVGDrawableElement {
     r = .init(attributes["r"])
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGCircleElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     cx = other.cx
     cy = other.cy
     r = other.r
   }
 
-  init(other: Self, attributes: [String: String]) {
+  init(other: SVGCircleElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     cx = other.cx
     cy = other.cy

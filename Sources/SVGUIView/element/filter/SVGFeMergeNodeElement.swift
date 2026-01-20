@@ -1,15 +1,22 @@
-struct SVGFeMergeNodeElement: SVGElement {
+final class SVGFeMergeNodeElement: SVGElement {
+  static var type: SVGElementName {
+    .feMergeNode
+  }
+
   var type: SVGElementName {
     .feMergeNode
   }
 
+  let base: SVGBaseElement
   let input: SVGFilterInput?
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 
-  init(attributes: [String: String]) {
+  init(base: SVGBaseElement, contents _: [any SVGElement]) {
+    let attributes = base.attributes
+    self.base = base
     input = SVGFilterInput(rawValue: attributes["in", default: ""])
   }
 }

@@ -52,7 +52,7 @@ func collectDeclarations(matches: [RuleMatch], inlineStyle declarations: [CSSDec
   return allDeclarations
 }
 
-func cascadeElement(element: some SVGDrawableElement, stylesheets: [Stylesheet], inlineStyle declarations: [CSSDeclaration]) -> SVGUIStyle {
+func cascadeElement(element: SVGBaseElement, stylesheets: [Stylesheet], inlineStyle declarations: [CSSDeclaration]) -> SVGUIStyle {
   var allMatches = [RuleMatch]()
   for stylesheet in stylesheets {
     allMatches.append(contentsOf: stylesheet.matchElement(element: element))

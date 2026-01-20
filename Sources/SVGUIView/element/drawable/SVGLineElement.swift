@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGLineElement: SVGDrawableElement {
+final class SVGLineElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .line
+  }
+
   var type: SVGElementName {
     .line
   }
@@ -19,8 +23,8 @@ struct SVGLineElement: SVGDrawableElement {
     y2 = .init(attributes["y2"])
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGLineElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     x1 = other.x1
     y1 = other.y1
     x2 = other.x2

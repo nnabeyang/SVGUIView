@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGPathElement: SVGDrawableElement {
+final class SVGPathElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .path
+  }
+
   var type: SVGElementName {
     .path
   }
@@ -21,12 +25,12 @@ struct SVGPathElement: SVGDrawableElement {
     }
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGPathElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     segments = other.segments
   }
 
-  init(other: Self, attributes: [String: String]) {
+  init(other: SVGPathElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     segments = other.segments
   }

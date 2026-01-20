@@ -6,13 +6,17 @@ enum SVGColorInterpolation: String {
   case linearRGB
 }
 
-struct SVGMaskElement: SVGDrawableElement {
+final class SVGMaskElement: SVGDrawableElement {
   var base: SVGBaseElement
   let colorInterpolation: SVGColorInterpolation?
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?
   let height: SVGLength?
+
+  static var type: SVGElementName {
+    .mask
+  }
 
   var type: SVGElementName {
     .mask
@@ -22,25 +26,26 @@ struct SVGMaskElement: SVGDrawableElement {
     .identity
   }
 
-  let contentIds: [Int]
+  let children: [any SVGElement]
   let maskContentUnits: SVGUnitType?
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
   }
 
-  init(attributes: [String: String], contentIds: [Int]) {
-    base = SVGBaseElement(attributes: attributes)
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
     x = .init(attributes["x"])
     y = .init(attributes["y"])
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
-    self.contentIds = contentIds
   }
 
-  init(other: Self, index _: Int, css _: SVGUIStyle) {
+  init(other: SVGMaskElement, css _: SVGUIStyle) {
     base = other.base
     colorInterpolation = other.colorInterpolation
     x = other.x
@@ -48,7 +53,7 @@ struct SVGMaskElement: SVGDrawableElement {
     width = other.width
     height = other.height
     maskContentUnits = other.maskContentUnits
-    contentIds = other.contentIds
+    children = other.children
   }
 
   var colorSpace: CGColorSpace {
@@ -113,8 +118,8 @@ struct SVGMaskElement: SVGDrawableElement {
     let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
     maskContext.push(viewBox: context.viewBox)
     graphics.concatenate(transform)
-    for index in contentIds {
-      guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+    for child in children {
+      guard let content = child as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement {
         continue
       }
@@ -183,10 +188,10 @@ struct SVGMaskElement: SVGDrawableElement {
     return try? sourceBuffer.createCGImage(format: format)
   }
 
-  func draw(_: SVGContext, index _: Int, mode _: DrawMode) async {}
+  func draw(_: SVGContext, mode _: DrawMode) async {}
 
-  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
-    Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
+  func style(with _: Stylesheet) -> any SVGElement {
+    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   func mask(context: inout SVGBaseContext) {

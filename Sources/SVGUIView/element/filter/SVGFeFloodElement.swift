@@ -1,12 +1,17 @@
 import Accelerate
 import UIKit
 
-struct SVGFeFloodElement: SVGElement, SVGFilterApplier {
+final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
   private static let maxKernelSize: UInt32 = 100
+  static var type: SVGElementName {
+    .feFlood
+  }
+
   var type: SVGElementName {
     .feFlood
   }
 
+  let base: SVGBaseElement
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?
@@ -17,11 +22,13 @@ struct SVGFeFloodElement: SVGElement, SVGFilterApplier {
   let floodColor: SVGColor?
   let floodOpacity: Double?
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 
-  init(attributes: [String: String]) {
+  init(base: SVGBaseElement, contents _: [any SVGElement]) {
+    self.base = base
+    let attributes = base.attributes
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])

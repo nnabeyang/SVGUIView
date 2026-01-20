@@ -40,9 +40,8 @@ enum SVGXmlNameSpace: String {
 
 final class SVGParser: NSObject {
   private var pservers: [String: any SVGGradientServer] = [:]
-  private var contentIdMap: [String: Int] = [:]
   private var rules: [CSSRule] = []
-  private var contents: [any SVGElement] = []
+  private var contents: [SVGBaseElement] = []
   private var contentIds: [Int] = []
   private var countList = [Int]()
   private var stack = [(name: SVGElementName, attributes: [String: String])]()
@@ -59,17 +58,42 @@ final class SVGParser: NSObject {
   private func parse(parser: XMLParser) -> SVGBaseContext {
     parser.delegate = self
     parser.parse()
+    var contentIdMap: [String: ObjectIdentifier] = [:]
+    var contentsMap: [ObjectIdentifier: any SVGElement] = [:]
+    guard let rootNode = contents.last else {
+      return SVGBaseContext(root: nil, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
+    }
     let css = Stylesheet(rules: rules)
-    contents = contents.enumerated().map { index, element in
-      element.style(with: css, at: index)
+    guard let root = rootNode.createElement(with: css) as? SVGSVGElement else {
+      return SVGBaseContext(root: nil, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
     }
-    var context = SVGBaseContext(pservers: pservers, contentIdMap: contentIdMap, contents: contents)
-    contents.last.map {
-      $0.clip(context: &context)
-      $0.mask(context: &context)
-      $0.pattern(context: &context)
-      $0.filter(context: &context)
+
+    let contents = root.elements
+    for content in contents {
+      let identifier = content.index
+      contentsMap[identifier] = content
+      switch content {
+      case let content as any SVGDrawableElement:
+        if let id = content.id,
+          contentIdMap[id] == nil
+        {
+          contentIdMap[id] = identifier
+        }
+      case let pserver as any SVGGradientServer:
+        if let id = pserver.id, pservers[id] == nil {
+          pservers[id] = pserver
+        }
+      default:
+        break
+      }
     }
+
+    var context = SVGBaseContext(root: root, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
+
+    root.clip(context: &context)
+    root.mask(context: &context)
+    root.pattern(context: &context)
+    root.filter(context: &context)
     return context
   }
 
@@ -133,79 +157,13 @@ extension SVGParser: XMLParserDelegate {
     else { return }
     precondition(name == element.name)
     let attributes = filter(attributes: element.attributes)
-    let content: (any SVGElement)? = {
+    let content: SVGBaseElement? = {
       let contentIds = self.contentIds.shift(count: count)
+      var children = [SVGBaseElement]()
+      for id in contentIds {
+        children.append(contents[id])
+      }
       switch element.name {
-      case .svg:
-        return SVGSVGElement(attributes: attributes, contentIds: contentIds)
-      case .g:
-        return SVGGroupElement(attributes: attributes, contentIds: contentIds)
-      case .clipPath:
-        return SVGClipPathElement(attributes: attributes, contentIds: contentIds)
-      case .mask:
-        return SVGMaskElement(attributes: attributes, contentIds: contentIds)
-      case .pattern:
-        return SVGPatternElement(attributes: attributes, contentIds: contentIds)
-      case .filter:
-        return SVGFilterElement(attributes: attributes, contentIds: contentIds)
-      case .feMerge:
-        return SVGFeMergeElement(attributes: attributes, contentIds: contentIds)
-      case .feGaussianBlur:
-        return SVGFeGaussianBlurElement(attributes: attributes)
-      case .feFlood:
-        return SVGFeFloodElement(attributes: attributes)
-      case .feBlend:
-        return SVGFeBlendElement(attributes: attributes)
-      case .feOffset:
-        return SVGFeOffsetElement(attributes: attributes)
-      case .feMergeNode:
-        return SVGFeMergeNodeElement(attributes: attributes)
-      case .text:
-        return SVGTextElement(text: text, attributes: attributes)
-      case .image:
-        return SVGImageElement(text: text, attributes: attributes)
-      case .line:
-        return SVGLineElement(text: text, attributes: attributes)
-      case .circle:
-        return SVGCircleElement(text: text, attributes: attributes)
-      case .ellipse:
-        return SVGEllipseElement(text: text, attributes: attributes)
-      case .rect:
-        return SVGRectElement(text: text, attributes: attributes)
-      case .path:
-        return SVGPathElement(text: text, attributes: attributes)
-      case .polyline:
-        return SVGPolylineElement(text: text, attributes: attributes)
-      case .polygon:
-        return SVGPolygonElement(text: text, attributes: attributes)
-      case .stop:
-        return SVGStopElement(attributes: attributes)
-      case .use:
-        return SVGUseElement(attributes: attributes, contentIds: contentIds)
-      case .defs:
-        let element = SVGDefsElement(attributes: attributes, contentIds: contentIds)
-        if case .none = (element.display ?? .inline) {
-          for index in element.contentIds {
-            let content = contents[index]
-            switch content {
-            case let content as (any SVGDrawableElement):
-              if let id = content.id {
-                contentIdMap.removeValue(forKey: id)
-              }
-            case let content as (any SVGGradientServer):
-              if let id = content.id {
-                pservers.removeValue(forKey: id)
-              }
-            default:
-              break
-            }
-          }
-        }
-        return element
-      case .linearGradient:
-        return SVGLinearGradientServer(attributes: attributes, contentIds: contentIds)
-      case .radialGradient:
-        return SVGRadialGradientServer(attributes: attributes, contentIds: contentIds)
       case .style:
         let parseInput = ParserInput(input: text)
         let input = Parser(input: parseInput)
@@ -217,29 +175,16 @@ extension SVGParser: XMLParserDelegate {
           countList[countList.count - 1] -= 1
         }
         return nil
+      default:
+        return SVGBaseElement.create(name: element.name, text: text, attributes: attributes, children: children)
       }
     }()
-    contentIds = Array(contentIds.dropLast(count - 1))
+    self.contentIds = Array(contentIds.dropLast(count - 1))
     text = ""
-    content.map {
-      let idx = contents.count
-      contentIds.append(idx)
-      contents.append($0)
-      switch $0 {
-      case let content as any SVGDrawableElement:
-        if let id = content.id,
-          contentIdMap[id] == nil
-        {
-          contentIdMap[id] = idx
-        }
-      case let pserver as any SVGGradientServer:
-        if let id = pserver.id, pservers[id] == nil {
-          pservers[id] = pserver
-        }
-      default:
-        break
-      }
-    }
+    guard let content else { return }
+    let idx = contents.count
+    contents.append(content)
+    self.contentIds.append(idx)
   }
 
   func parser(_: XMLParser, foundCharacters fragment: String) {

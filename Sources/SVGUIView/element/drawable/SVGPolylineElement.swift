@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGPolylineElement: SVGDrawableElement {
+final class SVGPolylineElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .polyline
+  }
+
   var type: SVGElementName {
     .polyline
   }
@@ -13,8 +17,8 @@ struct SVGPolylineElement: SVGDrawableElement {
     points = .init(description: attributes["points", default: ""])
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGPolylineElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     points = other.points
   }
 

@@ -57,12 +57,17 @@ enum SVGBlendMode: String {
   }
 }
 
-struct SVGFeBlendElement: SVGElement, SVGFilterApplier {
+final class SVGFeBlendElement: SVGElement, SVGFilterApplier {
   private static let maxKernelSize: UInt32 = 100
+  static var type: SVGElementName {
+    .feBlend
+  }
+
   var type: SVGElementName {
     .feBlend
   }
 
+  let base: SVGBaseElement
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?
@@ -74,11 +79,13 @@ struct SVGFeBlendElement: SVGElement, SVGFilterApplier {
   let input: SVGFilterInput?
   let input2: SVGFilterInput?
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 
-  init(attributes: [String: String]) {
+  init(base: SVGBaseElement, contents _: [any SVGElement]) {
+    self.base = base
+    let attributes = base.attributes
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])

@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGUseElement: SVGDrawableElement {
+final class SVGUseElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .use
+  }
+
   var type: SVGElementName {
     .use
   }
@@ -12,24 +16,25 @@ struct SVGUseElement: SVGDrawableElement {
   let height: SVGLength?
   let parentId: String?
   let attributes: [String: String]
-  let contentIds: [Int]
+  let children: [any SVGElement]
 
-  init(attributes: [String: String], contentIds: [Int]) {
-    base = SVGBaseElement(attributes: attributes)
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     parentId = Self.parseLink(description: attributes["href"])
     self.attributes = attributes
-    self.contentIds = contentIds
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
   }
 
-  init(other: Self, attributes: [String: String]) {
+  init(other: SVGUseElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     x = other.x
     y = other.y
@@ -37,18 +42,18 @@ struct SVGUseElement: SVGDrawableElement {
     height = other.height
     parentId = other.parentId
     self.attributes = other.attributes
-    contentIds = other.contentIds
+    children = other.children
   }
 
-  init(other: SVGUseElement, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGUseElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     x = other.x
     y = other.y
     width = other.width
     height = other.height
     parentId = other.parentId
     attributes = other.attributes
-    contentIds = other.contentIds
+    children = other.children
   }
 
   private static func parseLink(description: String?) -> String? {
@@ -60,15 +65,15 @@ struct SVGUseElement: SVGDrawableElement {
     return nil
   }
 
-  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
-    Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
+  func style(with _: Stylesheet) -> any SVGElement {
+    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
-  private func getParent(context: SVGContext, index: Int) -> (Int, any SVGDrawableElement)? {
+  private func getParent(context: SVGContext, index: ObjectIdentifier) -> (any SVGDrawableElement)? {
     _ = context.check(tagId: index)
     guard let parentId = parentId,
-      let (newIndex, element) = context[parentId],
-      context.check(tagId: newIndex),
+      let element = context[parentId],
+      context.check(tagId: element.index),
       !element.contains(index: index, context: context)
     else {
       return nil
@@ -78,19 +83,18 @@ struct SVGUseElement: SVGDrawableElement {
     let transform = CGAffineTransform(translationX: x, y: y)
     context.concatenate(transform)
     let parentElement = element.use(attributes: attributes)
-    return (newIndex, parentElement)
+    return parentElement
   }
 
   func toBezierPath(context: SVGContext) async -> UIBezierPath? {
-    guard let index = index,
-      let (_, element) = getParent(context: context, index: index)
+    guard let element = getParent(context: context, index: index)
     else {
       return nil
     }
     return await element.toBezierPath(context: context)
   }
 
-  func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+  func draw(_ context: SVGContext, mode: DrawMode) async {
     guard !Task.isCancelled else { return }
     let gContext = context.graphics
     gContext.saveGState()
@@ -106,8 +110,8 @@ struct SVGUseElement: SVGDrawableElement {
     default:
       break
     }
-    guard let (newIndex, newElement) = getParent(context: context, index: index) else { return }
-    await newElement.draw(context, index: newIndex, mode: .normal)
+    guard let newElement = getParent(context: context, index: index) else { return }
+    await newElement.draw(context, mode: .normal)
     switch mode {
     case .root, .filter:
       context.popTagIdStack()
@@ -119,8 +123,8 @@ struct SVGUseElement: SVGDrawableElement {
     }
   }
 
-  func contains(index: Int, context _: SVGContext) -> Bool {
-    contentIds.contains(index)
+  func contains(index: ObjectIdentifier, context _: SVGContext) -> Bool {
+    self.index == index || children.contains(where: { $0.index == index })
   }
 }
 

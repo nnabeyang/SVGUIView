@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGPolygonElement: SVGDrawableElement {
+final class SVGPolygonElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .polygon
+  }
+
   var type: SVGElementName {
     .polygon
   }
@@ -13,8 +17,8 @@ struct SVGPolygonElement: SVGDrawableElement {
     points = .init(description: attributes["points", default: ""])
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGPolygonElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     points = other.points
   }
 

@@ -12,11 +12,10 @@ protocol SVGGradientServer: SVGElement {
   var parentIds: [String] { get }
   var id: String? { get }
   var display: CSSDisplay? { get }
-  var contentIds: [Int] { get }
+  var children: [any SVGElement] { get }
   func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
   func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
   func stops(context: SVGContext) -> [SVGStopElement]
-  init(attributes: [String: String], contentIds: [Int])
   init?(lhs: Self, rhs: SVGLinearGradientServer)
   init?(lhs: Self, rhs: SVGRadialGradientServer)
 }
@@ -34,22 +33,27 @@ extension SVGGradientServer {
   }
 
   func stops(context: SVGContext) -> [SVGStopElement] {
-    contentIds.compactMap { context.contents[$0] as? SVGStopElement }
+    children.compactMap { $0 as? SVGStopElement }
   }
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 }
 
-struct SVGLinearGradientServer: SVGGradientServer {
+final class SVGLinearGradientServer: SVGGradientServer {
+  static var type: SVGElementName {
+    .linearGradient
+  }
+
   var type: SVGElementName {
     .linearGradient
   }
 
+  let base: SVGBaseElement
   let display: CSSDisplay?
   let color: SVGColor?
-  let contentIds: [Int]
+  let children: [any SVGElement]
   let id: String?
   let parentId: String?
   let gradientUnits: SVGUnitType?
@@ -65,7 +69,10 @@ struct SVGLinearGradientServer: SVGGradientServer {
     case stops
   }
 
-  init(attributes: [String: String], contentIds: [Int]) {
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     display = CSSDisplay(rawValue: attributes["display", default: ""])
 
@@ -74,7 +81,6 @@ struct SVGLinearGradientServer: SVGGradientServer {
     x2 = SVGLength(attributes["x2"])
     y2 = SVGLength(attributes["y2"])
     color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
-    self.contentIds = contentIds
 
     parentId = Self.parseLink(description: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
@@ -87,7 +93,7 @@ struct SVGLinearGradientServer: SVGGradientServer {
     }
   }
 
-  init?(lhs: Self, rhs: SVGLinearGradientServer) {
+  init?(lhs: SVGLinearGradientServer, rhs: SVGLinearGradientServer) {
     if let id = lhs.id {
       guard !rhs.parentIds.contains(id) else { return nil }
       parentIds = lhs.parentIds + rhs.parentIds
@@ -95,19 +101,20 @@ struct SVGLinearGradientServer: SVGGradientServer {
       parentIds = lhs.parentIds
     }
     id = lhs.id
+    self.base = lhs.base
     display = lhs.display ?? rhs.display
     x1 = lhs.x1 ?? rhs.x1
     y1 = lhs.y1 ?? rhs.y1
     x2 = lhs.x2 ?? rhs.x2
     y2 = lhs.y2 ?? rhs.y2
     color = lhs.color ?? rhs.color
-    contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
+    children = lhs.children.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
   }
 
-  init?(lhs: Self, rhs: SVGRadialGradientServer) {
+  init?(lhs: SVGLinearGradientServer, rhs: SVGRadialGradientServer) {
     if let id = lhs.id {
       guard !lhs.parentIds.contains(id) else { return nil }
       parentIds = lhs.parentIds + rhs.parentIds
@@ -115,13 +122,14 @@ struct SVGLinearGradientServer: SVGGradientServer {
       parentIds = lhs.parentIds
     }
     id = lhs.id
+    base = lhs.base
     display = lhs.display ?? rhs.display
     x1 = lhs.x1
     y1 = lhs.y1
     x2 = lhs.x2
     y2 = lhs.y2
     color = lhs.color ?? rhs.color
-    contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
+    children = lhs.children.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
@@ -252,20 +260,23 @@ struct SVGLinearGradientServer: SVGGradientServer {
 
 extension SVGLinearGradientServer {
   func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
-    try contentsContainer.encode(contentIds)
+    fatalError()
   }
 }
 
-struct SVGRadialGradientServer: SVGGradientServer {
+final class SVGRadialGradientServer: SVGGradientServer {
+  static var type: SVGElementName {
+    .radialGradient
+  }
+
   var type: SVGElementName {
     .radialGradient
   }
 
+  let base: SVGBaseElement
   let display: CSSDisplay?
   let color: SVGColor?
-  let contentIds: [Int]
+  let children: [any SVGElement]
   let spreadMethod: SpreadMethod?
   let gradientUnits: SVGUnitType?
 
@@ -283,7 +294,10 @@ struct SVGRadialGradientServer: SVGGradientServer {
     case stops
   }
 
-  init(attributes: [String: String], contentIds: [Int]) {
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     display = CSSDisplay(rawValue: attributes["display", default: ""])
     color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
@@ -292,7 +306,6 @@ struct SVGRadialGradientServer: SVGGradientServer {
     fx = SVGLength(attributes["fx"])
     fy = SVGLength(attributes["fy"])
     r = SVGLength(attributes["r"])
-    self.contentIds = contentIds
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
     parentId = Self.parseLink(description: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
@@ -300,7 +313,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     parentIds = []
   }
 
-  init?(lhs: Self, rhs: SVGRadialGradientServer) {
+  init?(lhs: SVGRadialGradientServer, rhs: SVGRadialGradientServer) {
     if let id = rhs.id {
       guard !lhs.parentIds.contains(id) else { return nil }
       parentIds = lhs.parentIds + [id]
@@ -308,6 +321,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
       parentIds = lhs.parentIds
     }
     id = lhs.id
+    base = lhs.base
     display = lhs.display ?? rhs.display
     color = lhs.color ?? rhs.color
     cx = lhs.cx ?? rhs.cx
@@ -315,13 +329,13 @@ struct SVGRadialGradientServer: SVGGradientServer {
     fx = lhs.fx ?? rhs.fx
     fy = lhs.fy ?? rhs.fy
     r = lhs.r ?? rhs.r
-    contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
+    children = lhs.children.isEmpty ? rhs.children : lhs.children
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
   }
 
-  init?(lhs: Self, rhs: SVGLinearGradientServer) {
+  init?(lhs: SVGRadialGradientServer, rhs: SVGLinearGradientServer) {
     if let id = rhs.id {
       guard !lhs.parentIds.contains(id) else { return nil }
       parentIds = lhs.parentIds + [id]
@@ -329,6 +343,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
       parentIds = lhs.parentIds
     }
     id = lhs.id
+    base = lhs.base
     display = lhs.display ?? rhs.display
     color = lhs.color ?? rhs.color
     cx = lhs.cx
@@ -336,7 +351,7 @@ struct SVGRadialGradientServer: SVGGradientServer {
     fx = lhs.fx
     fy = lhs.fy
     r = lhs.r
-    contentIds = lhs.contentIds.isEmpty ? rhs.contentIds : lhs.contentIds
+    children = lhs.children.isEmpty ? rhs.children : lhs.children
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
@@ -425,8 +440,6 @@ struct SVGRadialGradientServer: SVGGradientServer {
 
 extension SVGRadialGradientServer {
   func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    var contentsContainer = container.nestedUnkeyedContainer(forKey: .stops)
-    try contentsContainer.encode(contentIds)
+    fatalError()
   }
 }

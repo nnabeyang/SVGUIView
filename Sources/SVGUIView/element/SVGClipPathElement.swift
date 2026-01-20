@@ -1,45 +1,51 @@
 import UIKit
 
-struct SVGClipPathElement: SVGElement {
+final class SVGClipPathElement: SVGElement {
+  static var type: SVGElementName {
+    .clipPath
+  }
+
   var type: SVGElementName {
     .clipPath
   }
 
-  let contentIds: [Int]
+  let base: SVGBaseElement
+  let children: [any SVGElement]
   let transform: CGAffineTransform?
   let clipPathUnits: SVGUnitType?
   let clipRule: Bool?
   let clipPath: SVGClipPath?
   let id: String?
-  let index: Int?
 
-  init(attributes: [String: String], contentIds: [Int]) {
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+
+    let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
-    index = nil
     clipPathUnits = SVGUnitType(rawValue: attributes["clipPathUnits", default: ""])
     clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
     clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
     transform = CGAffineTransform(description: attributes["transform", default: ""])
-    self.contentIds = contentIds
   }
 
-  init(other: Self, index: Int, css _: SVGUIStyle) {
+  init(other: SVGClipPathElement, css _: SVGUIStyle) {
     id = other.id
-    self.index = index
+    base = other.base
     clipPathUnits = other.clipPathUnits
     clipRule = other.clipRule
     clipPath = other.clipPath
     transform = other.transform
-    contentIds = other.contentIds
+    children = other.children
   }
 
-  init(other: Self, clipRule: Bool?) {
+  init(other: SVGClipPathElement, clipRule: Bool?) {
     id = other.id
-    index = other.index
+    base = other.base
     clipPathUnits = other.clipPathUnits
     self.clipRule = other.clipRule ?? clipRule
     clipPath = other.clipPath
-    contentIds = other.contentIds
+    children = other.children
     transform = other.transform
   }
 
@@ -84,8 +90,8 @@ struct SVGClipPathElement: SVGElement {
     }
 
     graphics.concatenate(transform)
-    for index in contentIds {
-      guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+    for content in children {
+      guard let content = content as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement || content is SVGImageElement {
         continue
       }
@@ -123,8 +129,8 @@ struct SVGClipPathElement: SVGElement {
     fatalError()
   }
 
-  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
-    Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
+  func style(with _: Stylesheet) -> any SVGElement {
+    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   func clip(context: inout SVGBaseContext) {

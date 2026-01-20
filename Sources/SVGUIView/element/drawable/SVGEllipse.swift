@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGEllipseElement: SVGDrawableElement {
+final class SVGEllipseElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .ellipse
+  }
+
   var type: SVGElementName {
     .ellipse
   }
@@ -19,8 +23,8 @@ struct SVGEllipseElement: SVGDrawableElement {
     ry = SVGLength(attributes["ry"])
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGEllipseElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     cx = other.cx
     cy = other.cy
     rx = other.rx
