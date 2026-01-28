@@ -1,5 +1,8 @@
 # SVGUIView
 
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fnnabeyang%2FSVGUIView%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/nnabeyang/SVGUIView)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fnnabeyang%2FSVGUIView%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/nnabeyang/SVGUIView)
+
 An UIView that displays a single SVG image in your interface.
 
 ## Usage
