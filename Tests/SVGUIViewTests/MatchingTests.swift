@@ -23,56 +23,56 @@ func matchesSelector(element: SVGBaseElement, css: String) -> Bool {
 struct MatchingTests {
   @Test("match type selector")
   func matchTypeSelector() {
-    let element = SVGRectElement(text: "", attributes: [:])
-    #expect(matchesSelector(element: element.base, css: "rect"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: ["class": "foo"], children: [])
+    #expect(matchesSelector(element: rect, css: "rect"))
   }
 
   @Test("match type selector - no match")
   func matchTypeSelectorNoMatch() {
-    let element = SVGRectElement(text: "", attributes: [:])
-    #expect(!matchesSelector(element: element.base, css: "circle"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: [:], children: [])
+    #expect(!matchesSelector(element: rect, css: "circle"))
   }
 
   @Test("match class selector")
   func matchClassSelector() {
-    let element = SVGRectElement(text: "", attributes: ["class": "foo"])
-    #expect(matchesSelector(element: element.base, css: ".foo"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: ["class": "foo"], children: [])
+    #expect(matchesSelector(element: rect, css: ".foo"))
   }
 
   @Test("match class selector - no match")
   func matchClassSelectorNoMatch() {
-    let element = SVGRectElement(text: "", attributes: ["class": "foo"])
-    #expect(matchesSelector(element: element.base, css: ".foo"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: ["class": "foo"], children: [])
+    #expect(matchesSelector(element: rect, css: ".foo"))
   }
 
   @Test("match id selector")
   func matchIdSelector() {
-    let element = SVGRectElement(text: "", attributes: ["id": "main"])
-    #expect(matchesSelector(element: element.base, css: "#main"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: ["id": "main"], children: [])
+    #expect(matchesSelector(element: rect, css: "#main"))
   }
 
   @Test("match id selector - no match")
   func matchIdSelectorNoMatch() {
-    let element = SVGRectElement(text: "", attributes: ["id": "main"])
-    #expect(!matchesSelector(element: element.base, css: "#other"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: ["id": "main"], children: [])
+    #expect(!matchesSelector(element: rect, css: "#other"))
   }
 
   @Test("match universal selector")
   func matchUniversalSelector() {
-    let element = SVGRectElement(text: "", attributes: [:])
-    #expect(matchesSelector(element: element.base, css: "*"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: [:], children: [])
+    #expect(matchesSelector(element: rect, css: "*"))
   }
 
   @Test("match compound selector")
   func matchCompoundSelector() {
-    let element = SVGRectElement(text: "", attributes: ["class": "foo", "id": "bar"])
-    #expect(matchesSelector(element: element.base, css: "rect.foo#bar"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: ["class": "foo", "id": "bar"], children: [])
+    #expect(matchesSelector(element: rect, css: "rect.foo#bar"))
   }
 
   @Test("match compound selector - partial match fails")
   func matchCompoundSelectorNoMatch() {
-    let element = SVGRectElement(text: "", attributes: ["class": "foo"])
-    #expect(!matchesSelector(element: element.base, css: "rect.foo#bar"))
+    let rect = SVGBaseElement.create(name: .rect, text: "", attributes: ["class": "foo"], children: [])
+    #expect(!matchesSelector(element: rect, css: "rect.foo#bar"))
   }
 
   @Test("match child combinator")
