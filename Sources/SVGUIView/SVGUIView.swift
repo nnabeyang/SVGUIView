@@ -180,7 +180,7 @@ public class SVGUIView: UIView {
       break
     }
     let drawTask = Task<CGImage?, Never> {
-      await svg.draw(context, index: self.baseContext.contents.count - 1, mode: .root)
+      await svg.draw(context, mode: .root)
       context.popViewBox()
       context.restoreGState()
       guard !Task.isCancelled else {

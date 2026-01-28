@@ -1,20 +1,45 @@
 import UIKit
 import _SelectorParser
 
-protocol SVGElement: Encodable {
+protocol SVGElement: AnyObject, Encodable {
+  static var type: SVGElementName { get }
   var type: SVGElementName { get }
-  func draw(_ context: SVGContext, index: Int, mode: DrawMode) async
-  func drawWithoutFilter(_ context: SVGContext, index: Int, mode: DrawMode) async
-  func style(with style: Stylesheet, at index: Int) -> any SVGElement
-  func contains(index: Int, context: SVGContext) -> Bool
+  var base: SVGBaseElement { get }
+  var index: ObjectIdentifier { get }
+  func draw(_ context: SVGContext, mode: DrawMode) async
+  func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async
+  func style(with style: Stylesheet) -> any SVGElement
+  func contains(index: ObjectIdentifier, context: SVGContext) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
   func pattern(context: inout SVGBaseContext)
   func filter(context: inout SVGBaseContext)
+
+  var children: [any SVGElement] { get }
+  var elements: [any SVGElement] { get }
+
+  init(base: SVGBaseElement, contents: [any SVGElement])
 }
 
 extension SVGElement {
-  func contains(index _: Int, context _: SVGContext) -> Bool {
+  var index: ObjectIdentifier {
+    base.index
+  }
+
+  var children: [any SVGElement] {
+    []
+  }
+
+  var elements: [any SVGElement] {
+    var elements = [any SVGElement]()
+    elements.append(self)
+    for child in children {
+      elements.append(contentsOf: child.elements)
+    }
+    return elements
+  }
+
+  func contains(index _: ObjectIdentifier, context _: SVGContext) -> Bool {
     false
   }
 
@@ -23,11 +48,11 @@ extension SVGElement {
   func pattern(context _: inout SVGBaseContext) {}
   func filter(context _: inout SVGBaseContext) {}
 
-  func draw(_: SVGContext, index _: Int, mode _: DrawMode) async {
+  func draw(_: SVGContext, mode _: DrawMode) async {
     fatalError("Not Implemented")
   }
 
-  func drawWithoutFilter(_: SVGContext, index _: Int, mode _: DrawMode) async {
+  func drawWithoutFilter(_: SVGContext, mode _: DrawMode) async {
     fatalError("Not Implemented")
   }
 }
@@ -44,9 +69,17 @@ enum DrawMode: Equatable {
   case filter(isRoot: Bool)
 }
 
-struct SVGBaseElement {
+final class SVGBaseElement: Element {
+  typealias Impl = SVGSelectorImpl
+
+  let name: SVGElementName
+  let text: String
+  weak var parent: SVGBaseElement?
+  weak var prevSibling: SVGBaseElement?
+  weak var nextSibling: SVGBaseElement?
+  let children: [SVGBaseElement]
   let id: String?
-  let index: Int?
+  var index: ObjectIdentifier { ObjectIdentifier(self) }
   let opacity: Double
   let eoFill: Bool
   let clipRule: Bool?
@@ -63,9 +96,13 @@ struct SVGBaseElement {
   let visibility: CSSVisibility?
   let writingMode: WritingMode?
   let style: SVGUIInlineStyle
+  let attributes: [String: String]
 
-  init(attributes: [String: String]) {
-    index = nil
+  init(name: SVGElementName, text: String, attributes: [String: String], children: [SVGBaseElement]) {
+    self.name = name
+    self.text = text
+    self.children = children
+    self.attributes = attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
     style = SVGUIInlineStyle(description: attributes["style", default: ""])
@@ -85,8 +122,29 @@ struct SVGBaseElement {
     visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
   }
 
-  init(other: Self, attributes: [String: String]) {
-    index = other.index
+  static func create(name: SVGElementName, text: String, attributes: [String: String], children: [SVGBaseElement]) -> SVGBaseElement {
+    let element = SVGBaseElement(name: name, text: text, attributes: attributes, children: children)
+    let n = element.children.count
+    var i = 0
+    while i < n {
+      let child = element.children[i]
+      child.parent = element
+      if i > 0 {
+        child.prevSibling = element.children[i - 1]
+      }
+      if i < n - 1 {
+        child.nextSibling = element.children[i + 1]
+      }
+      i += 1
+    }
+    return element
+  }
+
+  init(other: SVGBaseElement, attributes: [String: String]) {
+    self.name = other.name
+    self.text = other.text
+    self.children = other.children
+    self.attributes = attributes
     id = other.id
     className = other.className
     style = other.style
@@ -112,8 +170,11 @@ struct SVGBaseElement {
     self.visibility = visibility ?? other.visibility
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    self.index = index
+  init(other: SVGBaseElement, css: SVGUIStyle) {
+    self.name = other.name
+    self.text = other.text
+    self.children = other.children
+    self.attributes = other.attributes
     id = other.id
     style = other.style
     className = other.className
@@ -133,6 +194,71 @@ struct SVGBaseElement {
     visibility = other.visibility
   }
 
+  func createElement(with css: Stylesheet) -> any SVGElement {
+    var contents = [any SVGElement]()
+    for child in children {
+      contents.append(child.createElement(with: css))
+    }
+    let element: any SVGElement =
+      switch name {
+      case .svg:
+        SVGSVGElement(base: self, contents: contents)
+      case .g:
+        SVGGroupElement(base: self, contents: contents)
+      case .clipPath:
+        SVGClipPathElement(base: self, contents: contents)
+      case .mask:
+        SVGMaskElement(base: self, contents: contents)
+      case .pattern:
+        SVGPatternElement(base: self, contents: contents)
+      case .filter:
+        SVGFilterElement(base: self, contents: contents)
+      case .feMerge:
+        SVGFeMergeElement(base: self, contents: contents)
+      case .feGaussianBlur:
+        SVGFeGaussianBlurElement(base: self, contents: contents)
+      case .feFlood:
+        SVGFeFloodElement(base: self, contents: contents)
+      case .feBlend:
+        SVGFeBlendElement(base: self, contents: contents)
+      case .feOffset:
+        SVGFeOffsetElement(base: self, contents: contents)
+      case .feMergeNode:
+        SVGFeMergeNodeElement(base: self, contents: contents)
+      case .text:
+        SVGTextElement(base: self, contents: contents)
+      case .image:
+        SVGImageElement(base: self, contents: contents)
+      case .line:
+        SVGLineElement(base: self, contents: contents)
+      case .circle:
+        SVGCircleElement(base: self, contents: contents)
+      case .ellipse:
+        SVGEllipseElement(base: self, contents: contents)
+      case .rect:
+        SVGRectElement(base: self, contents: contents)
+      case .path:
+        SVGPathElement(base: self, contents: contents)
+      case .polyline:
+        SVGPolylineElement(base: self, contents: contents)
+      case .polygon:
+        SVGPolygonElement(base: self, contents: contents)
+      case .stop:
+        SVGStopElement(base: self, contents: contents)
+      case .use:
+        SVGUseElement(base: self, contents: contents)
+      case .linearGradient:
+        SVGLinearGradientServer(base: self, contents: contents)
+      case .radialGradient:
+        SVGRadialGradientServer(base: self, contents: contents)
+      case .defs:
+        SVGDefsElement(base: self, contents: contents)
+      case .style, .unknown:
+        fatalError("unknown element: \(name.rawValue)")
+      }
+    return element.style(with: css)
+  }
+
   private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
     let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
     let size = attributes["font-size"]?.trimmingCharacters(in: .whitespaces)
@@ -145,11 +271,22 @@ struct SVGBaseElement {
     }
     return SVGUIFont(name: name, size: size, weight: weight)
   }
+
+  func hasLocalName(_ localName: Impl.LocalName) -> Bool {
+    Impl.LocalName.from(name.rawValue) == localName
+  }
+
+  func hasId(id: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
+    self.id == id.rawValue
+  }
+
+  func hasClass(name: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
+    self.className == name.rawValue
+  }
 }
 
-protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SVGSelectorImpl {
+protocol SVGDrawableElement: SVGElement {
   var id: String? { get }
-  var index: Int? { get }
   var base: SVGBaseElement { get }
   var type: SVGElementName { get }
   var opacity: Double { get }
@@ -169,7 +306,7 @@ protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SVGSelectorI
   func scale(context: SVGContext) -> CGAffineTransform
   init(text: String, attributes: [String: String])
   init(base: SVGBaseElement, text: String, attributes: [String: String])
-  init(other: Self, index: Int, css: SVGUIStyle)
+  init(other: Self, css: SVGUIStyle)
   init(other: Self, attributes: [String: String])
   func use(attributes: [String: String]) -> Self
   func toBezierPath(context: SVGContext) async -> UIBezierPath?
@@ -179,7 +316,7 @@ protocol SVGDrawableElement: SVGElement, Element where Self.Impl == SVGSelectorI
 
 extension SVGDrawableElement {
   var id: String? { base.id }
-  var index: Int? { base.index }
+  var index: ObjectIdentifier { base.index }
   var opacity: Double { base.opacity }
   var eoFill: Bool { base.eoFill }
   var clipRule: Bool? { base.clipRule }
@@ -197,24 +334,12 @@ extension SVGDrawableElement {
   var display: CSSDisplay? { base.display }
   var visibility: CSSVisibility? { base.visibility }
 
-  func hasLocalName(_ localName: Impl.LocalName) -> Bool {
-    Impl.LocalName.from(type.rawValue) == localName
-  }
-
-  func hasId(id: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
-    self.id == id.rawValue
-  }
-
-  func hasClass(name: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
-    self.className == name.rawValue
-  }
-
-  var isHtmlElementInHtmlDocument: Bool {
-    false
+  init(base: SVGBaseElement, contents: [any SVGElement]) {
+    self.init(base: base, text: base.text, attributes: base.attributes)
   }
 
   init(text: String, attributes: [String: String]) {
-    let base = SVGBaseElement(attributes: attributes)
+    let base = SVGBaseElement(name: Self.type, text: text, attributes: attributes, children: [])
     self.init(base: base, text: text, attributes: attributes)
   }
 
@@ -227,9 +352,9 @@ extension SVGDrawableElement {
     Self(other: self, attributes: attributes)
   }
 
-  func style(with style: Stylesheet, at index: Int) -> any SVGElement {
-    let css = cascadeElement(element: self, stylesheets: [style], inlineStyle: self.style.declarations)
-    return Self(other: self, index: index, css: css)
+  func style(with style: Stylesheet) -> any SVGElement {
+    let css = cascadeElement(element: base, stylesheets: [style], inlineStyle: self.style.declarations)
+    return Self(other: self, css: css)
   }
 
   func frame(context _: SVGContext, path: UIBezierPath?) -> CGRect {
@@ -247,7 +372,7 @@ extension SVGDrawableElement {
     }
   }
 
-  func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
+  func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
     context.saveGState()
     if mode != .filter(isRoot: true) {
       context.concatenate(transform ?? .identity)
@@ -305,7 +430,7 @@ extension SVGDrawableElement {
     context.restoreGState()
   }
 
-  func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+  func draw(_ context: SVGContext, mode: DrawMode) async {
     guard !Task.isCancelled else { return }
     if let display = display, case .none = display {
       return
@@ -317,7 +442,7 @@ extension SVGDrawableElement {
       await server.filter(content: self, context: context, cgContext: context.graphics)
       return
     }
-    await drawWithoutFilter(context, index: index, mode: mode)
+    await drawWithoutFilter(context, mode: mode)
   }
 
   private func applyStrokeFill(fill: SVGFill, opacity: Double, path: UIBezierPath, context: SVGContext) {

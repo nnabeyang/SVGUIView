@@ -188,7 +188,14 @@ func nextElementForCombinator<E: Element>(
   combinator: Combinator,
   context: MatchingContext<E.Impl>
 ) -> (nextElement: E?, featureless: Bool) {
-  (nil, false)
+  switch combinator {
+  case .nextSibling, .laterSibling:
+    return (element.prevSibling, false)
+  case .child, .descendant:
+    return (element.parent, false)
+  default:
+    return (nil, true)
+  }
 }
 
 func matchesComplexSelectorInternal<E: Element>(
@@ -278,9 +285,8 @@ public func matchesCompoundSelector<E: Element>(
   context: inout MatchingContext<E.Impl>,
   rightmost: SubjectOrPseudoElement
 ) -> KleeneValue {
-  var iter = selectorIter
   if context.featureless
-    && compoundMatchesFeaturelessHost(iter: &iter, scopeMatchesFeaturelessHost: true) == .never
+    && compoundMatchesFeaturelessHost(iter: &selectorIter, scopeMatchesFeaturelessHost: true) == .never
   {
     return .false
   }
@@ -293,7 +299,7 @@ public func matchesCompoundSelector<E: Element>(
     rightmost: rightmost,
     quirksData: quirksData
   )
-  return KleeneValue.anyFalse(iter: selectorIter) { simple in
+  return KleeneValue.anyFalse(iter: &selectorIter) { simple in
     matchesSimpleSelector(selector: simple, element: element, context: &localContext)
   }
 }

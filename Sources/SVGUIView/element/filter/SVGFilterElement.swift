@@ -1,7 +1,7 @@
 import Accelerate
 import UIKit
 
-struct SVGFilterElement: SVGDrawableElement {
+final class SVGFilterElement: SVGDrawableElement {
   var base: SVGBaseElement
   let x: SVGLength?
   let y: SVGLength?
@@ -13,6 +13,10 @@ struct SVGFilterElement: SVGDrawableElement {
   let colorInterpolation: SVGColorInterpolation?
   let colorInterpolationFilters: SVGColorInterpolation?
 
+  static var type: SVGElementName {
+    .filter
+  }
+
   var type: SVGElementName {
     .filter
   }
@@ -21,14 +25,16 @@ struct SVGFilterElement: SVGDrawableElement {
     .identity
   }
 
-  let contentIds: [Int]
+  let children: [any SVGElement]
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
   }
 
-  init(attributes: [String: String], contentIds: [Int]) {
-    base = SVGBaseElement(attributes: attributes)
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
     colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
     x = .init(attributes["x"])
@@ -37,10 +43,9 @@ struct SVGFilterElement: SVGDrawableElement {
     height = SVGLength(attributes["height"])
     filterUnits = SVGUnitType(rawValue: attributes["filterUnits", default: ""])
     primitiveUnits = SVGUnitType(rawValue: attributes["primitiveUnits", default: ""])
-    self.contentIds = contentIds
   }
 
-  init(other: Self, index _: Int, css _: SVGUIStyle) {
+  init(other: SVGFilterElement, css _: SVGUIStyle) {
     base = other.base
     colorInterpolation = other.colorInterpolation
     colorInterpolationFilters = other.colorInterpolationFilters
@@ -50,7 +55,7 @@ struct SVGFilterElement: SVGDrawableElement {
     height = other.height
     filterUnits = other.filterUnits
     primitiveUnits = other.primitiveUnits
-    contentIds = other.contentIds
+    children = other.children
   }
 
   private func colorSpace(colorInterpolation: SVGColorInterpolation) -> CGColorSpace {
@@ -67,7 +72,7 @@ struct SVGFilterElement: SVGDrawableElement {
   }
 
   func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) async {
-    guard !contentIds.isEmpty else { return }
+    guard !children.isEmpty else { return }
     let bezierPath = await content.toBezierPath(context: context)
     let frame = await content.frame(context: context, path: bezierPath)
     let effectRect = effectRect(frame: frame, context: context)
@@ -83,8 +88,8 @@ struct SVGFilterElement: SVGDrawableElement {
     var results = [String: CGImage]()
     var inputImage = srcImage
     var clipRect = effectRect
-    for (i, index) in contentIds.enumerated() {
-      guard let applier = context.contents[index] as? (any SVGFilterApplier) else { continue }
+    for (i, applier) in children.enumerated() {
+      guard let applier = applier as? (any SVGFilterApplier) else { continue }
       filterCgContext.clear(effectRect)
       filterCgContext.restoreGState()
       filterCgContext.saveGState()
@@ -140,14 +145,14 @@ struct SVGFilterElement: SVGDrawableElement {
     nestContext.push(viewBox: context.viewBox)
     graphics.saveGState()
     guard !Task.isCancelled else { return nil }
-    await content.drawWithoutFilter(nestContext, index: 0, mode: .filter(isRoot: true))
+    await content.drawWithoutFilter(nestContext, mode: .filter(isRoot: true))
     guard let image = graphics.makeImage() else { return nil }
     graphics.restoreGState()
     return image
   }
 
-  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
-    Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
+  func style(with _: Stylesheet) -> any SVGElement {
+    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   func filter(context: inout SVGBaseContext) {

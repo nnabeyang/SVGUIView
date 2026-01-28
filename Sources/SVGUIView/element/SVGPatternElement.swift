@@ -6,7 +6,7 @@ enum SVGUnitType: String {
   case objectBoundingBox
 }
 
-struct SVGPatternElement: SVGDrawableElement {
+final class SVGPatternElement: SVGDrawableElement {
   var base: SVGBaseElement
   let colorInterpolation: SVGColorInterpolation?
   let x: SVGLength?
@@ -19,6 +19,10 @@ struct SVGPatternElement: SVGDrawableElement {
   let viewBox: SVGElementRect?
   let parentId: String?
 
+  static var type: SVGElementName {
+    .pattern
+  }
+
   var type: SVGElementName {
     .pattern
   }
@@ -27,15 +31,17 @@ struct SVGPatternElement: SVGDrawableElement {
     .identity
   }
 
-  let contentIds: [Int]
+  let children: [any SVGElement]
   let patternUnits: SVGUnitType?
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
   }
 
-  init(attributes: [String: String], contentIds: [Int]) {
-    base = SVGBaseElement(attributes: attributes)
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
@@ -48,11 +54,9 @@ struct SVGPatternElement: SVGDrawableElement {
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
     viewBox = Self.parseViewBox(attributes["viewBox"])
     parentId = Self.parseLink(description: attributes["href"])
-
-    self.contentIds = contentIds
   }
 
-  init(other: Self, index _: Int, css _: SVGUIStyle) {
+  init(other: SVGPatternElement, css _: SVGUIStyle) {
     base = other.base
     colorInterpolation = other.colorInterpolation
     x = other.x
@@ -65,10 +69,10 @@ struct SVGPatternElement: SVGDrawableElement {
     preserveAspectRatio = other.preserveAspectRatio
     viewBox = other.viewBox
     parentId = other.parentId
-    contentIds = other.contentIds
+    children = other.children
   }
 
-  init(lhs: Self, rhs: Self) {
+  init(lhs: SVGPatternElement, rhs: SVGPatternElement) {
     base = rhs.base
     colorInterpolation = lhs.colorInterpolation ?? rhs.colorInterpolation
     x = lhs.x ?? rhs.x
@@ -81,10 +85,10 @@ struct SVGPatternElement: SVGDrawableElement {
     preserveAspectRatio = lhs.preserveAspectRatio ?? rhs.preserveAspectRatio
     viewBox = lhs.viewBox ?? rhs.viewBox
     parentId = rhs.parentId
-    if !rhs.contentIds.isEmpty {
-      contentIds = rhs.contentIds
+    if !rhs.children.isEmpty {
+      children = rhs.children
     } else {
-      contentIds = lhs.contentIds
+      children = lhs.children
     }
   }
 
@@ -252,8 +256,8 @@ struct SVGPatternElement: SVGDrawableElement {
       maskContext.pushClipIdStack()
       maskContext.pushMaskIdStack()
     }
-    for index in contentIds {
-      guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+    for child in children {
+      guard let content = child as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement {
         continue
       }
@@ -264,7 +268,7 @@ struct SVGPatternElement: SVGDrawableElement {
         continue
       }
       maskContext.saveGState()
-      await content.draw(maskContext, index: index, mode: .normal)
+      await content.draw(maskContext, mode: .normal)
       maskContext.restoreGState()
     }
     await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
@@ -278,10 +282,10 @@ struct SVGPatternElement: SVGDrawableElement {
     return image
   }
 
-  func draw(_: SVGContext, index _: Int, mode _: DrawMode) async {}
+  func draw(_: SVGContext, mode _: DrawMode) async {}
 
-  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
-    Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
+  func style(with _: Stylesheet) -> any SVGElement {
+    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   func pattern(context: inout SVGBaseContext) {

@@ -58,12 +58,17 @@ enum SVGFilterInput {
   }
 }
 
-struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
+final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
   private static let maxKernelSize: UInt32 = 100
+  static var type: SVGElementName {
+    .feGaussianBlur
+  }
+
   var type: SVGElementName {
     .feGaussianBlur
   }
 
+  let base: SVGBaseElement
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?
@@ -75,12 +80,15 @@ struct SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
 
   let colorInterpolationFilters: SVGColorInterpolation?
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 
   let stdDeviation: StdDeviation?
-  init(attributes: [String: String]) {
+
+  init(base: SVGBaseElement, contents _: [any SVGElement]) {
+    self.base = base
+    let attributes = base.attributes
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])

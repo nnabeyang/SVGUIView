@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGRectElement: SVGDrawableElement {
+final class SVGRectElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .rect
+  }
+
   var type: SVGElementName {
     .rect
   }
@@ -23,8 +27,8 @@ struct SVGRectElement: SVGDrawableElement {
     height = SVGLength(attributes["height"])
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGRectElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     x = SVGLength(style: css[.x], value: nil) ?? other.x
     y = SVGLength(style: css[.y], value: nil) ?? other.y
     rx = other.rx
@@ -33,7 +37,7 @@ struct SVGRectElement: SVGDrawableElement {
     height = SVGLength(style: css[.height], value: nil) ?? other.height
   }
 
-  init(other: Self, attributes: [String: String]) {
+  init(other: SVGRectElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     x = other.x
     y = other.y

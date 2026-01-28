@@ -1,7 +1,8 @@
 import Accelerate
 import UIKit
 
-struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
+final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
+  let base: SVGBaseElement
   var x: SVGLength?
   var y: SVGLength?
   var width: SVGLength?
@@ -10,17 +11,24 @@ struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
   var result: String?
   let colorInterpolationFilters: SVGColorInterpolation?
 
+  static var type: SVGElementName {
+    .feMergeNode
+  }
+
   var type: SVGElementName {
     .feMergeNode
   }
 
-  let contentIds: [Int]
+  let children: [any SVGElement]
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 
-  init(attributes: [String: String], contentIds: [Int]) {
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
@@ -28,8 +36,6 @@ struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
 
     result = attributes["result"]
     colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
-
-    self.contentIds = contentIds
   }
 
   private func colorSpace(colorInterpolation: SVGColorInterpolation) -> CGColorSpace {
@@ -56,8 +62,9 @@ struct SVGFeMergeElement: SVGElement, SVGFilterApplier {
     let transform = transform(filter: filter, frame: frame)
     cgContext.concatenate(transform)
     cgContext.setAlpha(opacity)
-    for index in contentIds {
-      guard let node = context.contents[index] as? SVGFeMergeNodeElement else { continue }
+
+    for node in children {
+      guard let node = node as? SVGFeMergeNodeElement else { continue }
       guard
         let image = inputImage(
           input: node.input, format: &format,

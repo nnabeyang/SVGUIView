@@ -1,6 +1,10 @@
 import UIKit
 
-struct SVGImageElement: SVGDrawableElement {
+final class SVGImageElement: SVGDrawableElement {
+  static var type: SVGElementName {
+    .circle
+  }
+
   var type: SVGElementName {
     .circle
   }
@@ -22,8 +26,8 @@ struct SVGImageElement: SVGDrawableElement {
     height = SVGLength(attributes["height"])
   }
 
-  init(other: Self, index: Int, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, index: index, css: css)
+  init(other: SVGImageElement, css: SVGUIStyle) {
+    base = SVGBaseElement(other: other.base, css: css)
     data = other.data
     x = other.x
     y = other.y

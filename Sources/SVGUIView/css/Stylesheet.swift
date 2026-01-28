@@ -14,7 +14,7 @@ extension Namespaces: Default {
 struct Stylesheet: Equatable {
   let rules: [CSSRule]
 
-  func matchElement(element: some SVGDrawableElement) -> [RuleMatch] {
+  func matchElement(element: SVGBaseElement) -> [RuleMatch] {
     var matches = [RuleMatch]()
     for rule in self.rules {
       guard let selector = rule.matchSelector(element: element) else { continue }

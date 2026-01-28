@@ -18,7 +18,11 @@ private struct SVGLengthContextProxy: SVGLengthContext {
   var textScale: Double { 1.0 }
 }
 
-struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
+final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
+  static var type: SVGElementName {
+    .svg
+  }
+
   var type: SVGElementName {
     .svg
   }
@@ -31,7 +35,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   let width: SVGLength?
   let height: SVGLength?
   let viewBox: SVGElementRect?
-  let contentIds: [Int]
+  let children: [any SVGElement]
 
   let textAnchor: TextAnchor?
 
@@ -41,12 +45,12 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     case width
     case height
     case viewBox
-    case contentIds
   }
 
-  init(attributes: [String: String], contentIds: [Int]) {
-    base = SVGBaseElement(attributes: attributes)
-
+  init(base: SVGBaseElement, contents children: [any SVGElement]) {
+    self.base = base
+    self.children = children
+    let attributes = base.attributes
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
@@ -55,14 +59,13 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
     overflow = SVGOverflow(rawValue: attributes["overflow", default: ""].trimmingCharacters(in: .whitespaces))
-    self.contentIds = contentIds
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
   }
 
-  init(other: Self, attributes: [String: String]) {
+  init(other: SVGSVGElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
 
     x = other.x
@@ -71,21 +74,30 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     height = .init(attributes["height"]) ?? other.height
     viewBox = other.viewBox
     textAnchor = other.textAnchor
-    contentIds = other.contentIds
+    children = other.children
     preserveAspectRatio = other.preserveAspectRatio
     overflow = other.overflow
   }
 
-  init(other: SVGSVGElement, index _: Int, css _: SVGUIStyle) {
-    self = other
+  init(other: SVGSVGElement, css _: SVGUIStyle) {
+    base = other.base
+    preserveAspectRatio = other.preserveAspectRatio
+    overflow = other.overflow
+    x = other.x
+    y = other.y
+    width = other.width
+    height = other.height
+    viewBox = other.viewBox
+    children = other.children
+    textAnchor = other.textAnchor
   }
 
   var viewPort: CGRect {
     fatalError("not implemented")
   }
 
-  func style(with _: Stylesheet, at index: Int) -> any SVGElement {
-    Self(other: self, index: index, css: SVGUIStyle(decratations: [:]))
+  func style(with _: Stylesheet) -> any SVGElement {
+    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
@@ -107,14 +119,14 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
 
   func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
     var rect: CGRect = .zero
-    for index in contentIds {
-      guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
+    for child in children {
+      guard let content = child as? (any SVGDrawableElement) else { continue }
       rect = await CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)))
     }
     return rect
   }
 
-  func drawWithoutFilter(_ context: SVGContext, index _: Int, mode: DrawMode) async {
+  func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
     context.saveGState()
     let x = (x ?? .pixel(0)).value(context: context, mode: .width)
     let y = (y ?? .pixel(0)).value(context: context, mode: .height)
@@ -172,9 +184,9 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       break
     }
     await clipPath?.clipIfNeeded(frame: context.viewBox, context: context, cgContext: context.graphics)
-    for index in contentIds {
-      guard let content = context.contents[index] as? (any SVGDrawableElement) else { continue }
-      await content.draw(context, index: index, mode: mode)
+    for child in children {
+      guard let content = child as? (any SVGDrawableElement) else { continue }
+      await content.draw(context, mode: mode)
     }
     switch mode {
     case .root, .filter:
@@ -197,7 +209,7 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     context.restoreGState()
   }
 
-  func draw(_ context: SVGContext, index: Int, mode: DrawMode) async {
+  func draw(_ context: SVGContext, mode: DrawMode) async {
     guard !Task.isCancelled else { return }
     let filter = filter ?? SVGFilter.none
     if case .url(let id) = filter,
@@ -206,34 +218,34 @@ struct SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       await server.filter(content: self, context: context, cgContext: context.graphics)
       return
     }
-    await drawWithoutFilter(context, index: index, mode: mode)
+    await drawWithoutFilter(context, mode: mode)
   }
 
-  func contains(index: Int, context _: SVGContext) -> Bool {
-    contentIds.contains(index)
+  func contains(index: ObjectIdentifier, context _: SVGContext) -> Bool {
+    children.contains(where: { $0.index == index })
   }
 
   func clip(context: inout SVGBaseContext) {
-    for index in contentIds {
-      context.contents[index].clip(context: &context)
+    for child in children {
+      child.clip(context: &context)
     }
   }
 
   func mask(context: inout SVGBaseContext) {
-    for index in contentIds {
-      context.contents[index].mask(context: &context)
+    for child in children {
+      child.mask(context: &context)
     }
   }
 
   func pattern(context: inout SVGBaseContext) {
-    for index in contentIds {
-      context.contents[index].pattern(context: &context)
+    for child in children {
+      child.pattern(context: &context)
     }
   }
 
   func filter(context: inout SVGBaseContext) {
-    for index in contentIds {
-      context.contents[index].filter(context: &context)
+    for child in children {
+      child.filter(context: &context)
     }
   }
 
@@ -256,7 +268,6 @@ extension SVGSVGElement {
     try container.encode(width, forKey: .width)
     try container.encode(height, forKey: .height)
     try container.encodeIfPresent(viewBox, forKey: .viewBox)
-    try container.encode(contentIds, forKey: .contentIds)
   }
 }
 

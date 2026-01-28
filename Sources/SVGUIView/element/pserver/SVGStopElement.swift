@@ -26,19 +26,27 @@ extension StopDimension: CustomStringConvertible {
   }
 }
 
-struct SVGStopElement: SVGElement {
+final class SVGStopElement: SVGElement {
+  static var type: SVGElementName {
+    .stop
+  }
+
   var type: SVGElementName {
     .stop
   }
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 
+  let base: SVGBaseElement
   let offset: StopDimension
   let color: SVGFill?
   let opacity: Double
-  init(attributes: [String: String]) {
+
+  init(base: SVGBaseElement, contents _: [any SVGElement]) {
+    self.base = base
+    let attributes = base.attributes
     let attribute = attributes["offset", default: ""].trimmingCharacters(in: .whitespaces)
     if attribute.hasSuffix("%") {
       offset = .percent(Double(String(attribute.dropLast()).trimmingCharacters(in: .whitespaces)) ?? 0)

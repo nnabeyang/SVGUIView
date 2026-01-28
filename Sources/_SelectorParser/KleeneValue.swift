@@ -29,20 +29,19 @@ extension KleeneValue: From {
 }
 
 extension KleeneValue {
-  public static func any<T>(iter: some IteratorProtocol<T>, f: @escaping (T) -> Self) -> Self {
-    anyValue(iter: iter, value: .true, onEmpty: .false, op: { (a, b) in a | b }, f: f)
+  public static func any<T>(iter: inout some IteratorProtocol<T>, f: @escaping (T) -> Self) -> Self {
+    anyValue(iter: &iter, value: .true, onEmpty: .false, op: { (a, b) in a | b }, f: f)
   }
 
-  public static func anyFalse<T>(iter: some IteratorProtocol<T>, f: @escaping (T) -> Self) -> Self {
-    anyValue(iter: iter, value: .false, onEmpty: .true, op: { (a, b) in a & b }, f: f)
+  public static func anyFalse<T>(iter: inout some IteratorProtocol<T>, f: @escaping (T) -> Self) -> Self {
+    anyValue(iter: &iter, value: .false, onEmpty: .true, op: { (a, b) in a & b }, f: f)
   }
 
   static func anyValue<T>(
-    iter: some IteratorProtocol<T>, value: Self, onEmpty: Self,
+    iter: inout some IteratorProtocol<T>, value: Self, onEmpty: Self,
     op: @escaping (Self, Self) -> Self, f: @escaping (T) -> Self
   ) -> Self {
     var result: Self? = nil
-    var iter = iter
     while let item = iter.next() {
       let r = f(item)
       if r == value {

@@ -179,7 +179,7 @@ struct CascadeTests {
     var parser = CSSParser(input: input)
     let stylesheet: Stylesheet = parser.parse()
     let element = SVGRectElement(text: "", attributes: ["class": "foo"])
-    let result = cascadeElement(element: element, stylesheets: [stylesheet], inlineStyle: [])
+    let result = cascadeElement(element: element.base, stylesheets: [stylesheet], inlineStyle: [])
     #expect(result[.width] == .length(.init(value: 100, unit: .px)))
   }
 
@@ -190,7 +190,7 @@ struct CascadeTests {
     var parser = CSSParser(input: input)
     let stylesheet: Stylesheet = parser.parse()
     let element = SVGRectElement(text: "", attributes: ["class": "foo"])
-    let result = cascadeElement(element: element, stylesheets: [stylesheet], inlineStyle: [])
+    let result = cascadeElement(element: element.base, stylesheets: [stylesheet], inlineStyle: [])
     #expect(result[.width] == nil)
   }
 
@@ -205,7 +205,7 @@ struct CascadeTests {
     var parser = CSSParser(input: input)
     let stylesheet: Stylesheet = parser.parse()
     let element = SVGRectElement(text: "", attributes: ["class": "container", "id": "main"])
-    let result = cascadeElement(element: element, stylesheets: [stylesheet], inlineStyle: [])
+    let result = cascadeElement(element: element.base, stylesheets: [stylesheet], inlineStyle: [])
     #expect(result[.width] == .length(.init(value: 200, unit: .px)))
   }
 
@@ -220,7 +220,7 @@ struct CascadeTests {
     var parser = CSSParser(input: input)
     let stylesheet: Stylesheet = parser.parse()
     let element = SVGRectElement(text: "", attributes: ["class": "highlight"])
-    let result = cascadeElement(element: element, stylesheets: [stylesheet], inlineStyle: [])
+    let result = cascadeElement(element: element.base, stylesheets: [stylesheet], inlineStyle: [])
     #expect(result[.fill] == .fill(.color(.named(.init(name: "blue")))))
   }
 }

@@ -1,11 +1,16 @@
 import Accelerate
 import UIKit
 
-struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
+final class SVGFeOffsetElement: SVGElement, SVGFilterApplier {
+  static var type: SVGElementName {
+    .feOffset
+  }
+
   var type: SVGElementName {
     .feOffset
   }
 
+  let base: SVGBaseElement
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?
@@ -16,11 +21,13 @@ struct SVGFeOffsetElement: SVGElement, SVGFilterApplier {
   let dx: Double?
   let dy: Double?
 
-  func style(with _: Stylesheet, at _: Int) -> any SVGElement {
+  func style(with _: Stylesheet) -> any SVGElement {
     self
   }
 
-  init(attributes: [String: String]) {
+  init(base: SVGBaseElement, contents _: [any SVGElement]) {
+    self.base = base
+    let attributes = base.attributes
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
