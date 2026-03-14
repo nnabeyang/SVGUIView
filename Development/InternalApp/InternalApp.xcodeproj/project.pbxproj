@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3268737F2F6598A90081D72C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 3268737E2F6598A90081D72C /* AppIcon.icon */; };
 		32B3DDD82F651F8A00D0FB9B /* SVGSnapshotAssets in Frameworks */ = {isa = PBXBuildFile; productRef = 32B3DDD72F651F8A00D0FB9B /* SVGSnapshotAssets */; };
 		32B3DDDB2F651FE700D0FB9B /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 32B3DDDA2F651FE700D0FB9B /* SnapshotTesting */; };
 		32FECAA32F655CE700A56608 /* SVGUIView in Frameworks */ = {isa = PBXBuildFile; productRef = 32FECAA22F655CE700A56608 /* SVGUIView */; };
@@ -31,6 +32,7 @@
 
 /* Begin PBXFileReference section */
 		322C23432F65762A004562D5 /* InternalApp.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; name = InternalApp.xctestplan; path = ../../InternalApp.xctestplan; sourceTree = "<group>"; };
+		3268737E2F6598A90081D72C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		32B3DDD22F651F5C00D0FB9B /* SnapshotAssets */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = SnapshotAssets; path = Packages/SnapshotAssets; sourceTree = "<group>"; };
 		32CD1ACB2F651CA900A86A26 /* InternalApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InternalApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		32CD1AD82F651CA900A86A26 /* InternalAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InternalAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -93,6 +95,7 @@
 		32CD1AC22F651CA900A86A26 = {
 			isa = PBXGroup;
 			children = (
+				3268737E2F6598A90081D72C /* AppIcon.icon */,
 				322C23432F65762A004562D5 /* InternalApp.xctestplan */,
 				32B3DDD22F651F5C00D0FB9B /* SnapshotAssets */,
 				32CD1ACD2F651CA900A86A26 /* InternalApp */,
@@ -239,6 +242,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3268737F2F6598A90081D72C /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
