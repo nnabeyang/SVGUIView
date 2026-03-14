@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		32B3DDD52F651F7B00D0FB9B /* SVGUIView in Frameworks */ = {isa = PBXBuildFile; productRef = 32B3DDD42F651F7B00D0FB9B /* SVGUIView */; };
 		32B3DDD82F651F8A00D0FB9B /* SVGSnapshotAssets in Frameworks */ = {isa = PBXBuildFile; productRef = 32B3DDD72F651F8A00D0FB9B /* SVGSnapshotAssets */; };
 		32B3DDDB2F651FE700D0FB9B /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 32B3DDDA2F651FE700D0FB9B /* SnapshotTesting */; };
+		32FECAA32F655CE700A56608 /* SVGUIView in Frameworks */ = {isa = PBXBuildFile; productRef = 32FECAA22F655CE700A56608 /* SVGUIView */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,9 +67,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				32FECAA32F655CE700A56608 /* SVGUIView in Frameworks */,
 				32B3DDDB2F651FE700D0FB9B /* SnapshotTesting in Frameworks */,
 				32B3DDD82F651F8A00D0FB9B /* SVGSnapshotAssets in Frameworks */,
-				32B3DDD52F651F7B00D0FB9B /* SVGUIView in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -156,9 +156,9 @@
 			);
 			name = InternalAppTests;
 			packageProductDependencies = (
-				32B3DDD42F651F7B00D0FB9B /* SVGUIView */,
 				32B3DDD72F651F8A00D0FB9B /* SVGSnapshotAssets */,
 				32B3DDDA2F651FE700D0FB9B /* SnapshotTesting */,
+				32FECAA22F655CE700A56608 /* SVGUIView */,
 			);
 			productName = InternalAppTests;
 			productReference = 32CD1AD82F651CA900A86A26 /* InternalAppTests.xctest */;
@@ -220,7 +220,6 @@
 			mainGroup = 32CD1AC22F651CA900A86A26;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				32B3DDD32F651F7B00D0FB9B /* XCLocalSwiftPackageReference "../../../SVGUIView" */,
 				32B3DDD92F651FE700D0FB9B /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -644,13 +643,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		32B3DDD32F651F7B00D0FB9B /* XCLocalSwiftPackageReference "../../../SVGUIView" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../../SVGUIView;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
 		32B3DDD92F651FE700D0FB9B /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -663,10 +655,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		32B3DDD42F651F7B00D0FB9B /* SVGUIView */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SVGUIView;
-		};
 		32B3DDD72F651F8A00D0FB9B /* SVGSnapshotAssets */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SVGSnapshotAssets;
@@ -675,6 +663,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 32B3DDD92F651FE700D0FB9B /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
 			productName = SnapshotTesting;
+		};
+		32FECAA22F655CE700A56608 /* SVGUIView */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SVGUIView;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
