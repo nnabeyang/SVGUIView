@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <Group
+      location = "group:Development/InternalApp"
+      name = "InternalApp">
+      <FileRef
+         location = "group:InternalApp.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:InternalApp.xctestplan">
+      </FileRef>
+      <Group
+         location = "group:InternalAppUITests"
+         name = "InternalAppUITests">
+         <FileRef
+            location = "group:InternalAppUITestsLaunchTests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:InternalAppUITests.swift">
+         </FileRef>
+      </Group>
+      <Group
+         location = "group:InternalApp"
+         name = "InternalApp">
+         <FileRef
+            location = "group:Assets.xcassets">
+         </FileRef>
+         <FileRef
+            location = "group:ContentView.swift">
+         </FileRef>
+         <FileRef
+            location = "group:InternalAppApp.swift">
+         </FileRef>
+      </Group>
+      <Group
+         location = "group:Packages"
+         name = "Packages">
+         <FileRef
+            location = "group:SnapshotAssets">
+         </FileRef>
+      </Group>
+      <Group
+         location = "group:ci_scripts"
+         name = "ci_scripts">
+      </Group>
+      <Group
+         location = "group:InternalAppTests"
+         name = "InternalAppTests">
+         <FileRef
+            location = "group:SVGUIViewShapesTests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:SnapshotTesting+Extension.swift">
+         </FileRef>
+         <FileRef
+            location = "group:InternalAppTests.swift">
+         </FileRef>
+      </Group>
+   </Group>
+   <FileRef
+         location = "group:."
+         name = "SVGUIView">
+   </FileRef>
+</Workspace>
