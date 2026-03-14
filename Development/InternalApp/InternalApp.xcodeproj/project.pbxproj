@@ -30,8 +30,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		322C23432F65762A004562D5 /* InternalApp.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; name = InternalApp.xctestplan; path = ../../InternalApp.xctestplan; sourceTree = "<group>"; };
 		32B3DDD22F651F5C00D0FB9B /* SnapshotAssets */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = SnapshotAssets; path = Packages/SnapshotAssets; sourceTree = "<group>"; };
-		32C8AE792F6531DE00F8F4E7 /* InternalApp.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = InternalApp.xctestplan; sourceTree = "<group>"; };
 		32CD1ACB2F651CA900A86A26 /* InternalApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InternalApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		32CD1AD82F651CA900A86A26 /* InternalAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InternalAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		32CD1AE22F651CA900A86A26 /* InternalAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InternalAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -93,7 +93,7 @@
 		32CD1AC22F651CA900A86A26 = {
 			isa = PBXGroup;
 			children = (
-				32C8AE792F6531DE00F8F4E7 /* InternalApp.xctestplan */,
+				322C23432F65762A004562D5 /* InternalApp.xctestplan */,
 				32B3DDD22F651F5C00D0FB9B /* SnapshotAssets */,
 				32CD1ACD2F651CA900A86A26 /* InternalApp */,
 				32CD1ADB2F651CA900A86A26 /* InternalAppTests */,
