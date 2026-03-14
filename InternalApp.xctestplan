@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "4F1DEC45-E9A7-4DF9-962E-BA9BCD9C69A0",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:InternalApp.xcodeproj",
+        "identifier" : "32CD1AD72F651CA900A86A26",
+        "name" : "InternalAppTests"
+      }
+    }
+  ],
+  "version" : 1
+}
