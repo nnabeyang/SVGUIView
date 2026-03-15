@@ -38,10 +38,6 @@
          </FileRef>
       </Group>
       <Group
-         location = "group:ci_scripts"
-         name = "ci_scripts">
-      </Group>
-      <Group
          location = "group:InternalAppTests"
          name = "InternalAppTests">
          <FileRef

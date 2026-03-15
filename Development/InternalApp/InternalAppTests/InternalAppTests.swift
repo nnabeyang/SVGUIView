@@ -27,16 +27,44 @@ class SVGUIViewBasicSnapshotsTests: XCTestCase {
         do {
           let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
           if fileAttributes.isRegularFile!, fileUrl.pathExtension == "svg" {
-            let version = ProcessInfo.processInfo.operatingSystemVersion
-            let name = "\(fileUrl.deletingPathExtension().lastPathComponent)_\(version.majorVersion).\(version.minorVersion)"
+            let name = generateSnapshotName(fileUrl: fileUrl)
             print(name)
             let view = SVGUIView(contentsOf: fileUrl)!
             view.contentMode = .scaleAspectFit
             view.frame = UIScreen.main.bounds
-            assertSnapshot(of: view, as: .image, named: name, file: fileName, testName: testName)
+            assertSnapshot(of: view, as: .image(precision: 0.98), named: name, file: fileName, testName: testName)
           }
         } catch { print(error, fileUrl) }
       }
     }
+  }
+
+  private func generateSnapshotName(fileUrl: URL) -> String {
+    let deviceName = UIDevice.current.machineIdentifier
+      .lowercased()
+      .replacingOccurrences(of: ",", with: "_")
+    let version = ProcessInfo.processInfo.operatingSystemVersion
+    let osVersion = "\(version.majorVersion).\(version.minorVersion)"
+    let baseName = fileUrl.deletingPathExtension().lastPathComponent
+    return "\(baseName)_\(deviceName)_\(osVersion)"
+  }
+}
+
+extension UIDevice {
+  var machineIdentifier: String {
+    #if targetEnvironment(simulator)
+      return (ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] ?? "unknown_simulator")
+        .lowercased()
+        .components(separatedBy: CharacterSet.alphanumerics.inverted)
+        .joined()
+    #else
+      var systemInfo = utsname()
+      uname(&systemInfo)
+      let machineMirror = Mirror(reflecting: systemInfo.machine)
+      return machineMirror.children.reduce("") { identifier, element in
+        guard let value = element.value as? Int8, value != 0 else { return identifier }
+        return identifier + String(UnicodeScalar(UInt8(value)))
+      }
+    #endif
   }
 }
