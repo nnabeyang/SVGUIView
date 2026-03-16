@@ -12,7 +12,7 @@ let package = Package(
   targets: [
     .binaryTarget(
       name: "SVGSnapshotAssets",
-      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/374092343.zip",
-      checksum: "ee9a0a9ffadd9aa844b48846dc046b72f46e070e791ae77be4e720e0235e996e")
+      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/374940855.zip",
+      checksum: "27807086d48d351da3dcf1b65ff90b32a5a57c1d7a4f74aefec9534018d889f2")
   ]
 )
