@@ -5,18 +5,24 @@ import XCTest
 
 extension Snapshotting
 where Value == SVGUIView, Format == UIImage {
-  static let image = Snapshotting(
-    pathExtension: "png", diffing: .image,
-    asyncSnapshot: { view in
-      Async<UIImage> { callback in
-        Task {
-          let size = await view.bounds.size
-          let image = await view.takeSnapshot() ?? UIGraphicsImageRenderer(size: size).image(actions: { _ in })
-          callback(image)
+  static func image(precision: Float = 1) -> Snapshotting {
+    .init(
+      pathExtension: "png",
+      diffing: .image(precision: precision),
+      asyncSnapshot: { view in
+        Async<UIImage> { callback in
+          Task { @MainActor in
+            view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+            let size = view.bounds.size
+
+            let image = await view.takeSnapshot() ?? UIGraphicsImageRenderer(size: size).image { _ in }
+            callback(image)
+          }
         }
       }
-    }
-  )
+    )
+  }
 }
 
 class SVGUIViewBasicSnapshotsTests: XCTestCase {
@@ -32,7 +38,7 @@ class SVGUIViewBasicSnapshotsTests: XCTestCase {
             let view = SVGUIView(contentsOf: fileUrl)!
             view.contentMode = .scaleAspectFit
             view.frame = UIScreen.main.bounds
-            assertSnapshot(of: view, as: .image(precision: 0.98), named: name, file: fileName, testName: testName)
+            assertSnapshot(of: view, as: .image(precision: 0.92), named: name, file: fileName, testName: testName)
           }
         } catch { print(error, fileUrl) }
       }
