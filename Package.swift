@@ -50,5 +50,6 @@ let package = Package(
       name: "_SelectorParserTests",
       dependencies: ["_SelectorParser"]
     ),
-  ]
+  ],
+  swiftLanguageModes: [.v5]
 )
