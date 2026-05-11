@@ -7,7 +7,7 @@ enum SVGUnitType: String {
 }
 
 final class SVGPatternElement: SVGDrawableElement {
-  var base: SVGBaseElement
+  let base: SVGBaseElement
   let colorInterpolation: SVGColorInterpolation?
   let x: SVGLength?
   let y: SVGLength?

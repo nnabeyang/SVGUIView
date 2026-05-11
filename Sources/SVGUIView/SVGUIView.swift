@@ -43,13 +43,20 @@ public class SVGUIView: UIView {
   }
 
   override public func draw(_ rect: CGRect) {
+    let scale = UIScreen.main.scale
+    let capturedBase = baseContext
+    let capturedMode = contentMode
+    let timeoutDuration = configuration.timeoutDuration
     taskManager.startTask(
       priority: configuration.taskPriority,
-      operation: {
-        let image = await self.makeCGImage(rect: rect)
+      operation: { [weak self] in
+        let image = await SVGUIView.makeImage(
+          rect: rect, scale: scale, base: capturedBase,
+          contentMode: capturedMode, timeoutDuration: timeoutDuration
+        )
         await MainActor.run {
-          self.layer.contents = image
-          self.startRendering()
+          self?.layer.contents = image
+          self?.startRendering()
         }
       })
   }
@@ -67,7 +74,9 @@ public class SVGUIView: UIView {
     svg?.size ?? .zero
   }
 
-  func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {
+  private nonisolated static func getTransform(
+    viewBox: CGRect, size: CGSize, contentMode: UIView.ContentMode
+  ) -> CGAffineTransform {
     let preserveAspectRatio: PreserveAspectRatio
     switch contentMode {
     case .scaleToFill, .redraw:
@@ -111,31 +120,46 @@ public class SVGUIView: UIView {
   @objc
   private func updateContents(_ displayLink: CADisplayLink) {
     Task {
-      if let data = await self.taskManager.takeData() {
-        await MainActor.run {
-          self.baseContext = SVGParser.parse(data: data)
-        }
-        let image = await self.makeCGImage()
-        await MainActor.run {
-          self.layer.contents = image
-        }
+      if let data = await taskManager.takeData() {
+        let newBase = SVGParser.parse(data: data)
+        baseContext = newBase
+        let scale = UIScreen.main.scale
+        let capturedMode = contentMode
+        let capturedFrame = frame
+        let timeoutDuration = configuration.timeoutDuration
+        let image = await SVGUIView.makeImage(
+          rect: capturedFrame, scale: scale, base: newBase,
+          contentMode: capturedMode, timeoutDuration: timeoutDuration
+        )
+        layer.contents = image
       } else {
-        await MainActor.run {
-          displayLink.invalidate()
-        }
-        await self.taskManager.finishTask()
+        displayLink.invalidate()
+        await taskManager.finishTask()
       }
     }
   }
 
   public func takeSnapshot(rect: CGRect? = nil) async -> UIImage? {
-    await makeCGImage(rect: rect).flatMap { UIImage(cgImage: $0) }
-  }
-
-  private func makeCGImage(rect: CGRect? = nil) async -> CGImage? {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
-    guard let svg = baseContext.root else { return nil }
+    let capturedBase = baseContext
+    let capturedMode = contentMode
+    let timeoutDuration = configuration.timeoutDuration
+    return await SVGUIView.makeImage(
+      rect: rect, scale: scale, base: capturedBase,
+      contentMode: capturedMode, timeoutDuration: timeoutDuration
+    ).flatMap { UIImage(cgImage: $0) }
+  }
+
+  @concurrent
+  private static func makeImage(
+    rect: CGRect,
+    scale: CGFloat,
+    base: SVGBaseContext,
+    contentMode: UIView.ContentMode,
+    timeoutDuration: Duration
+  ) async -> CGImage? {
+    guard let svg = base.root else { return nil }
     let viewBox = svg.getViewBox(size: rect.size)
 
     let frameWidth = Int((rect.width * scale).rounded(.up))
@@ -153,7 +177,7 @@ public class SVGUIView: UIView {
     graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(frameHeight)))
 
     let context = SVGContext(
-      base: baseContext,
+      base: base,
       graphics: graphics,
       viewPort: rect
     )
@@ -170,7 +194,7 @@ public class SVGUIView: UIView {
       break
     }
 
-    let transform = getTransform(viewBox: viewBox, size: rect.size)
+    let transform = getTransform(viewBox: viewBox, size: rect.size, contentMode: contentMode)
     context.concatenate(transform)
     switch contentMode {
     case .scaleAspectFill, .scaleAspectFit, .scaleToFill:
@@ -190,7 +214,7 @@ public class SVGUIView: UIView {
     }
 
     let timeoutTask = Task {
-      try? await Task.sleep(for: self.configuration.timeoutDuration)
+      try? await Task.sleep(for: timeoutDuration)
       drawTask.cancel()
     }
     let value = await drawTask.value
