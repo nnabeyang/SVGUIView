@@ -51,5 +51,5 @@ let package = Package(
       dependencies: ["_SelectorParser"]
     ),
   ],
-  swiftLanguageModes: [.v5]
+  swiftLanguageModes: [.v6]
 )

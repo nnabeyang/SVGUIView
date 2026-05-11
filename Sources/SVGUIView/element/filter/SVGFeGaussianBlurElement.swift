@@ -102,9 +102,9 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
   }
 
-  @MainActor
-  static func clampedToKernelSize(value: CGFloat) -> UInt32 {
-    min(Self.maxKernelSize, UInt32(max(floor(value * 3.0 * sqrt(2 * .pi) as CGFloat / 4 + 0.5) as CGFloat, 2 * UIScreen.main.scale)))
+  static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {
+    let calculatedRadius = max(floor(value * 3.0 * sqrt(2 * .pi) / 4 + 0.5), 2 * scale)
+    return min(Self.maxKernelSize, UInt32(calculatedRadius))
   }
 
   private func dropRGBColor(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer) {
@@ -140,6 +140,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
     filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst: Bool
   ) async -> CGImage? {
+    let scale = await UIScreen.main.scale
     let colorSpace: CGColorSpace
     switch input {
     case .none:
@@ -185,13 +186,13 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
         break
       }
       if x != y {
-        let kernelSizeX = await Self.clampedToKernelSize(value: x * UIScreen.main.scale)
-        let kernelSizeY = await Self.clampedToKernelSize(value: y * UIScreen.main.scale)
+        let kernelSizeX = Self.clampedToKernelSize(value: x * scale, scale: scale)
+        let kernelSizeY = Self.clampedToKernelSize(value: y * scale, scale: scale)
         applyUnaccelerated(
           srcBuffer: &buffer, destBuffer: &destBuffer,
           kernelSizeX: kernelSizeX, kernelSizeY: kernelSizeY, context: context)
       } else {
-        let kernelSize = await Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
+        let kernelSize = Self.clampedToKernelSize(value: x * scale, scale: scale) | 1
         applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
       }
     case .iso(let x):
@@ -200,7 +201,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
         swap(&buffer, &destBuffer)
         break
       }
-      let kernelSize = await Self.clampedToKernelSize(value: x * UIScreen.main.scale) | 1
+      let kernelSize = Self.clampedToKernelSize(value: x * scale, scale: scale) | 1
       applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
     }
     guard

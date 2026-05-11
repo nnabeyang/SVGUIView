@@ -7,7 +7,7 @@ enum SVGColorInterpolation: String {
 }
 
 final class SVGMaskElement: SVGDrawableElement {
-  var base: SVGBaseElement
+  let base: SVGBaseElement
   let colorInterpolation: SVGColorInterpolation?
   let x: SVGLength?
   let y: SVGLength?

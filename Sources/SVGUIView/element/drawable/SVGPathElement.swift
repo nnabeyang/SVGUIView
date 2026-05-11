@@ -388,7 +388,7 @@ struct APathArgument: PathSegmentArgument {
   }
 }
 
-protocol PathSegment: Equatable, Encodable {
+protocol PathSegment: Equatable, Encodable, Sendable {
   associatedtype Argument: PathSegmentArgument
   var type: PathSegmentType { get }
   var args: [Argument] { get }

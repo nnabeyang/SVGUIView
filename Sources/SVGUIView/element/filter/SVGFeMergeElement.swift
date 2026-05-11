@@ -3,12 +3,12 @@ import UIKit
 
 final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
   let base: SVGBaseElement
-  var x: SVGLength?
-  var y: SVGLength?
-  var width: SVGLength?
-  var height: SVGLength?
+  let x: SVGLength?
+  let y: SVGLength?
+  let width: SVGLength?
+  let height: SVGLength?
 
-  var result: String?
+  let result: String?
   let colorInterpolationFilters: SVGColorInterpolation?
 
   static var type: SVGElementName {

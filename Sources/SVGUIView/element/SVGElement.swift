@@ -1,7 +1,7 @@
 import UIKit
 import _SelectorParser
 
-protocol SVGElement: AnyObject, Encodable {
+protocol SVGElement: AnyObject, Encodable, Sendable {
   static var type: SVGElementName { get }
   var type: SVGElementName { get }
   var base: SVGBaseElement { get }
@@ -69,7 +69,7 @@ enum DrawMode: Equatable {
   case filter(isRoot: Bool)
 }
 
-final class SVGBaseElement: Element {
+final class SVGBaseElement: Element, @unchecked Sendable {
   typealias Impl = SVGSelectorImpl
 
   let name: SVGElementName

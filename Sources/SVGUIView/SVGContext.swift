@@ -9,7 +9,7 @@ protocol SVGLengthContext {
   var writingMode: WritingMode? { get }
 }
 
-struct SVGContext: SVGLengthContext {
+struct SVGContext: SVGLengthContext, @unchecked Sendable {
   let base: SVGBaseContext
   let graphics: CGContext
   let viewPort: CGRect
@@ -338,7 +338,7 @@ struct SVGBaseContext {
   }
 }
 
-private class Stack<T> {
+private class Stack<T>: @unchecked Sendable {
   var fonts: [T] = []
 
   var first: T? {

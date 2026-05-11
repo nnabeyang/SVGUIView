@@ -2,7 +2,7 @@ import Accelerate
 import UIKit
 
 final class SVGFilterElement: SVGDrawableElement {
-  var base: SVGBaseElement
+  let base: SVGBaseElement
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?
