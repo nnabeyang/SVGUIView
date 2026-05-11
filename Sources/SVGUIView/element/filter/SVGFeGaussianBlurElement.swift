@@ -103,7 +103,8 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
   }
 
   static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {
-    min(Self.maxKernelSize, UInt32(max(floor(value * 3.0 * sqrt(2 * .pi) / 4 + 0.5), 2 * scale)))
+    let calculatedRadius = max(floor(value * 3.0 * sqrt(2 * .pi) / 4 + 0.5), 2 * scale)
+    return min(Self.maxKernelSize, UInt32(calculatedRadius))
   }
 
   private func dropRGBColor(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer) {
