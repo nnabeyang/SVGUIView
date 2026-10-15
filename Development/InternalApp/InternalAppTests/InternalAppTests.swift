@@ -12,7 +12,7 @@ where Value == SVGUIView, Format == UIImage {
         Async<UIImage> { callback in
           Task { @MainActor in
             view.layoutIfNeeded()
-            try await Task.sleep(for: .milliseconds(10))
+            try? await Task.sleep(for: .milliseconds(10))
             let size = view.bounds.size
 
             let image = await view.takeSnapshot() ?? UIGraphicsImageRenderer(size: size).image { _ in }
