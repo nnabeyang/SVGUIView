@@ -2,7 +2,7 @@
 <Workspace
    version = "1.1">
    <Group
-      location = "group:Development/InternalApp"
+      location = "group:InternalApp"
       name = "InternalApp">
       <FileRef
          location = "group:InternalApp.xcodeproj">
@@ -52,7 +52,7 @@
       </Group>
    </Group>
    <FileRef
-      location = "group:."
+      location = "group:.."
       name = "SVGUIView">
    </FileRef>
 </Workspace>
