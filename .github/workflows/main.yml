@@ -33,3 +33,23 @@ jobs:
             -scheme SVGUIView-Package \
             -destination "$DESTINATION" \
             | xcpretty
+
+  # Builds the DocC catalogs the Swift Package Index publishes, so a broken
+  # catalog or an unresolvable documentation link fails here rather than
+  # silently degrading the hosted documentation.
+  documentation:
+    name: Build documentation
+    # Xcode 27 is only available on the xcode-27 image for now.
+    runs-on: xcode-27
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Xcode 27.0
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '27.0'
+
+      - name: Build DocC documentation
+        run: ./scripts/build-documentation.sh --strict

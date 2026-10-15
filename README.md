@@ -5,6 +5,10 @@
 
 An UIView that displays a single SVG image in your interface.
 
+## Documentation
+
+The documentation is hosted on the [Swift Package Index](https://swiftpackageindex.com/nnabeyang/SVGUIView/documentation/svguiview).
+
 ## Usage
 
 Creating a SVGUIView:
