@@ -1,17 +1,17 @@
 import Foundation
-import SVGSnapshotAssets
+import SVGTestSuite
 
 final class SVGUIViewPaintServersTests: SVGUIViewBasicSnapshotsTests {
   func testLinearGradient() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "linearGradient"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "linearGradient"))
   }
 
   func testPattern() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "pattern"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "pattern"))
   }
 
   func testRadialGradient() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "radialGradient"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "radialGradient"))
   }
 
 }

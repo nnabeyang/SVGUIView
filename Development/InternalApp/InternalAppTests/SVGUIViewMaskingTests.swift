@@ -1,12 +1,12 @@
 import Foundation
-import SVGSnapshotAssets
+import SVGTestSuite
 
 final class SVGUIViewMaskingTests: SVGUIViewBasicSnapshotsTests {
   func testClipPath() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "masking", "clipPath"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "masking", "clipPath"))
   }
 
   func testMask() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "masking", "mask"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "masking", "mask"))
   }
 }
