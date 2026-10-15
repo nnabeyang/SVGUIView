@@ -1,4 +1,4 @@
-import SVGSnapshotAssets
+import SVGSnapshotReferences
 import SnapshotTesting
 import SwiftUI
 import XCTest
@@ -21,8 +21,8 @@ extension XCTestCase {
     let snapshotDirectory: String?
     if FileManager.default.fileExists(atPath: localSnapshotDirectoryUrl.path(percentEncoded: false)) {
       snapshotDirectory = localSnapshotDirectoryUrl.path(percentEncoded: false)
-    } else if FileManager.default.fileExists(atPath: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "__Snapshots__", fileName).path(percentEncoded: false)) {
-      snapshotDirectory = SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "__Snapshots__", fileName).path(percentEncoded: false)
+    } else if FileManager.default.fileExists(atPath: SnapshotReferences.bundle.bundleURL.appending(components: "Resources", "__Snapshots__", fileName).path(percentEncoded: false)) {
+      snapshotDirectory = SnapshotReferences.bundle.bundleURL.appending(components: "Resources", "__Snapshots__", fileName).path(percentEncoded: false)
     } else {
       snapshotDirectory = nil
     }

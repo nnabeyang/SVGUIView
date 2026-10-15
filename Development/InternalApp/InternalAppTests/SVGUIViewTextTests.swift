@@ -1,20 +1,20 @@
 import Foundation
-import SVGSnapshotAssets
+import SVGTestSuite
 
 final class SVGUIViewTextTests: SVGUIViewBasicSnapshotsTests {
   func testText() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "text"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "text"))
   }
 
   func testFontWeight() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-weight"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-weight"))
   }
 
   func testFontFamily() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-family"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-family"))
   }
 
   func testFontSize() throws {
-    try testBase(root: SnapshotAssets.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-size"))
+    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-size"))
   }
 }

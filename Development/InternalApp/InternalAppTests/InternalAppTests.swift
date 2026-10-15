@@ -1,4 +1,3 @@
-import SVGSnapshotAssets
 import SVGUIView
 import SnapshotTesting
 import XCTest
