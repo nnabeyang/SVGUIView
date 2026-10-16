@@ -57,3 +57,7 @@ let image = await svgView.takeSnapshot()
 ### Configuring rendering
 
 - ``SVGUIViewConfiguration``
+
+### Design
+
+- <doc:AnimationArchitecture>
