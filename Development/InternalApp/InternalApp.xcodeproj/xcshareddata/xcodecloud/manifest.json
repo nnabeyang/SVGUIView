@@ -2,8 +2,8 @@
   "id" : "e95dba7b-3298-4e4a-b86e-944f42b2ca72",
   "targets" : [
     {
-      "id" : "3637cafd-4133-4bc1-ba87-fac19d32acc3",
-      "name" : "InternalApp"
+      "id" : "5be95819-fb24-4696-b67f-f386eba30ce3",
+      "name" : "SVGUIViewCI"
     }
   ]
 }
