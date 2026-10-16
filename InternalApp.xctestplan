@@ -16,7 +16,7 @@
       "target" : {
         "containerPath" : "container:InternalApp.xcodeproj",
         "identifier" : "32CD1AD72F651CA900A86A26",
-        "name" : "InternalAppTests"
+        "name" : "SVGUIViewCITests"
       }
     }
   ],
