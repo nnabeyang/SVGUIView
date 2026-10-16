@@ -2,9 +2,9 @@ name: Swift Package Tests
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "epic/animation"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "epic/animation"]
   workflow_dispatch:
 
 jobs:
