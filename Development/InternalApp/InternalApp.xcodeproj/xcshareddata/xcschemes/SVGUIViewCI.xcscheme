@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "32CD1ACA2F651CA900A86A26"
-               BuildableName = "InternalApp.app"
-               BlueprintName = "InternalApp"
+               BuildableName = "SVGUIViewCI.app"
+               BlueprintName = "SVGUIViewCI"
                ReferencedContainer = "container:InternalApp.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -41,8 +41,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "32CD1AD72F651CA900A86A26"
-               BuildableName = "InternalAppTests.xctest"
-               BlueprintName = "InternalAppTests"
+               BuildableName = "SVGUIViewCITests.xctest"
+               BlueprintName = "SVGUIViewCITests"
                ReferencedContainer = "container:InternalApp.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -52,8 +52,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "32CD1AE12F651CA900A86A26"
-               BuildableName = "InternalAppUITests.xctest"
-               BlueprintName = "InternalAppUITests"
+               BuildableName = "SVGUIViewCIUITests.xctest"
+               BlueprintName = "SVGUIViewCIUITests"
                ReferencedContainer = "container:InternalApp.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -74,8 +74,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "32CD1ACA2F651CA900A86A26"
-            BuildableName = "InternalApp.app"
-            BlueprintName = "InternalApp"
+            BuildableName = "SVGUIViewCI.app"
+            BlueprintName = "SVGUIViewCI"
             ReferencedContainer = "container:InternalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -91,8 +91,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "32CD1ACA2F651CA900A86A26"
-            BuildableName = "InternalApp.app"
-            BlueprintName = "InternalApp"
+            BuildableName = "SVGUIViewCI.app"
+            BlueprintName = "SVGUIViewCI"
             ReferencedContainer = "container:InternalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
