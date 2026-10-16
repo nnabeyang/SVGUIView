@@ -1,12 +1,23 @@
 public import UIKit
 import os
 
+/// A view that displays a single SVG image.
+///
+/// The view parses SVG data and renders it in a background task. Assign new data
+/// to ``data`` to change the displayed image.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext
   private let taskManager = TaskManager()
+  /// The settings that control background rendering.
   public var configuration: SVGUIViewConfiguration = .init()
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
 
+  /// Creates a view that displays the SVG file at the given URL.
+  ///
+  /// The view's frame is sized to the SVG document's `width` and `height`.
+  ///
+  /// - Parameter url: The URL of an SVG file. The file is read synchronously.
+  /// - Returns: `nil` if the file cannot be read.
   public convenience init?(contentsOf url: URL) {
     guard let data = try? Data(contentsOf: url) else { return nil }
     self.init(data: data)
@@ -19,18 +30,32 @@ public class SVGUIView: UIView {
     backgroundColor = .clear
   }
 
+  /// Creates a view with the given frame that displays the given SVG data.
+  ///
+  /// - Parameters:
+  ///   - frame: The frame rectangle for the view.
+  ///   - data: The SVG data to display. Pass `nil` to create an empty view.
   public convenience init(frame: CGRect, data: Data? = nil) {
     let data = data ?? Data()
     let baseContext = SVGParser.parse(data: data)
     self.init(frame: frame, baseContext: baseContext, data: data)
   }
 
+  /// Creates a view that displays the given SVG data.
+  ///
+  /// The view's frame is sized to the SVG document's `width` and `height`.
+  ///
+  /// - Parameter data: The SVG data to display.
   public convenience init(data: Data = Data()) {
     let baseContext = SVGParser.parse(data: data)
     let size = baseContext.root?.size ?? .zero
     self.init(frame: .init(origin: .zero, size: size), baseContext: baseContext, data: data)
   }
 
+  /// The SVG data that the view displays.
+  ///
+  /// Setting this property parses the new data and redraws the view
+  /// asynchronously.
   public var data: Data {
     didSet {
       Task {
@@ -139,6 +164,15 @@ public class SVGUIView: UIView {
     }
   }
 
+  /// Renders the current SVG document into an image.
+  ///
+  /// The image is rendered at the main screen's scale with the view's current
+  /// `contentMode`. The view's displayed contents do not change.
+  ///
+  /// - Parameter rect: The rectangle to render into. Pass `nil` to use the
+  ///   view's frame.
+  /// - Returns: The rendered image, or `nil` if the document has no root `svg`
+  ///   element or rendering exceeds ``SVGUIViewConfiguration/timeoutDuration``.
   public func takeSnapshot(rect: CGRect? = nil) async -> UIImage? {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
