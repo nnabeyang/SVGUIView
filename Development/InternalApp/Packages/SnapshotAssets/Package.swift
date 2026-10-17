@@ -20,7 +20,7 @@ let package = Package(
       checksum: "2473594258a96960626457408dbbde02d25606aadac5bc79beee123b42afddde"),
     .binaryTarget(
       name: "SVGSnapshotReferences",
-      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/643703955.zip",
-      checksum: "8f0193a0620d16bd4fe4066030b71908a59586c2cbbf2583d626f7f7a775308c"),
+      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/649626826.zip",
+      checksum: "57491ebcd732257ebfec042c1456953c663894579b345261c429a44b1b92e6a5"),
   ]
 )

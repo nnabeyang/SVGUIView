@@ -1,12 +1,17 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewMaskingTests: SVGUIViewBasicSnapshotsTests {
-  func testClipPath() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "masking", "clipPath"))
-  }
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewMaskingTests {
+    @Test(arguments: SVGFile.all(in: "basic", "masking", "clipPath"))
+    func clipPath(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testMask() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "masking", "mask"))
+    @Test(arguments: SVGFile.all(in: "basic", "masking", "mask"))
+    func mask(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

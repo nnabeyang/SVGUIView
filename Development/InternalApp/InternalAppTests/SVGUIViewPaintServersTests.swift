@@ -1,17 +1,22 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewPaintServersTests: SVGUIViewBasicSnapshotsTests {
-  func testLinearGradient() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "linearGradient"))
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewPaintServersTests {
+    @Test(arguments: SVGFile.all(in: "basic", "paint-servers", "linearGradient"))
+    func linearGradient(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "paint-servers", "pattern"))
+    func pattern(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "paint-servers", "radialGradient"))
+    func radialGradient(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
-
-  func testPattern() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "pattern"))
-  }
-
-  func testRadialGradient() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "paint-servers", "radialGradient"))
-  }
-
 }

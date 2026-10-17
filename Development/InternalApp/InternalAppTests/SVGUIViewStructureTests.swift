@@ -1,36 +1,47 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewStructureTests: SVGUIViewBasicSnapshotsTests {
-  func testDefs() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "defs"))
-  }
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewStructureTests {
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "defs"))
+    func defs(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testG() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "g"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "g"))
+    func g(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testImage() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "image"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "image"))
+    func image(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testStyle() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "style"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "style"))
+    func style(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testStyleAttribute() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "style-attribute"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "style-attribute"))
+    func styleAttribute(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testSvg() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "svg"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "svg"))
+    func svg(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testTransform() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "transform"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "transform"))
+    func transform(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testUse() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "structure", "use"))
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "use"))
+    func use(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

@@ -1,28 +1,37 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewFiltersTests: SVGUIViewBasicSnapshotsTests {
-  func testFeBlend() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "filters", "feBlend"))
-  }
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewFiltersTests {
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feBlend"))
+    func feBlend(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFeFlood() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "filters", "feFlood"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feFlood"))
+    func feFlood(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFeGaussianBlur() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "filters", "feGaussianBlur"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feGaussianBlur"))
+    func feGaussianBlur(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFeMerge() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "filters", "feMerge"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feMerge"))
+    func feMerge(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFeOffset() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "filters", "feOffset"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feOffset"))
+    func feOffset(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFilter() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "filters", "filter"))
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "filter"))
+    func filter(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

@@ -1,67 +1,86 @@
-import SVGUIView
-import SnapshotTesting
-import XCTest
+import Foundation
+import SVGTestSuite
+import Testing
+import UIKit
 
-extension Snapshotting
-where Value == SVGUIView, Format == UIImage {
-  static func image(precision: Float = 1) -> Snapshotting {
-    .init(
-      pathExtension: "png",
-      diffing: .image(precision: precision),
-      asyncSnapshot: { view in
-        Async<UIImage> { callback in
-          Task { @MainActor in
-            view.layoutIfNeeded()
-            try? await Task.sleep(for: .milliseconds(10))
-            let size = view.bounds.size
+/// The parent of all snapshot test suites.
+///
+/// `.serialized` applies to every suite nested in it, so that one SVG file is rendered at a time, as with XCTest.
+/// Rendering reads `UIScreen.main.scale` on the main actor for clip paths, masks, patterns, filters and text.
+/// While other tests compare images on the main actor, those renderings run into their timeout.
+@Suite(.serialized)
+struct SnapshotTests {}
 
-            let image = await view.takeSnapshot() ?? UIGraphicsImageRenderer(size: size).image { _ in }
-            callback(image)
-          }
-        }
+/// An SVG file of the test suite, passed to a parameterized test.
+struct SVGFile: Sendable, CustomTestStringConvertible {
+  let url: URL
+
+  /// The file name without its extension, used as the name of the reference image.
+  var name: String { url.deletingPathExtension().lastPathComponent }
+
+  var testDescription: String { name }
+
+  /// The SVG files under `Resources/w3c/<components>` of the test suite, sorted by path.
+  static func all(in components: String...) -> [SVGFile] {
+    let root = TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c").appending(path: components.joined(separator: "/"), directoryHint: .isDirectory)
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants])
+    else { return [] }
+    return enumerator.compactMap { $0 as? URL }
+      .filter { url in
+        url.pathExtension == "svg" && (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
       }
-    )
+      .sorted { $0.path < $1.path }
+      .map(SVGFile.init(url:))
   }
 }
 
-class SVGUIViewBasicSnapshotsTests: XCTestCase {
-  @inline(__always)
-  func testBase(root: URL, testName: String = #function, fileName: StaticString = #file) throws {
-    if let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
-      for case let fileUrl as URL in enumerator {
-        do {
-          let fileAttributes = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
-          if fileAttributes.isRegularFile!, fileUrl.pathExtension == "svg" {
-            let name = generateSnapshotName(fileUrl: fileUrl)
-            print(name)
-            let view = SVGUIView(contentsOf: fileUrl)!
-            view.contentMode = .scaleAspectFit
-            view.frame = UIScreen.main.bounds
-            assertSnapshot(of: view, as: .image(precision: 0.92), named: name, file: fileName, testName: testName)
-          }
-        } catch { print(error, fileUrl) }
-      }
-    }
+/// The device, OS and language that the reference images are recorded with.
+///
+/// The language matters because it decides the fallback fonts for text, such as the font for Han characters.
+/// `InternalApp.xctestplan` sets it.
+struct SnapshotEnvironment: Equatable, CustomStringConvertible {
+  let device: String
+  let osVersion: String
+  let language: String
+
+  /// The only environment that the snapshot tests run in.
+  static let expected = SnapshotEnvironment(device: "iPhone 17e", osVersion: "27.0", language: "en")
+
+  @MainActor
+  static var current: SnapshotEnvironment {
+    let version = ProcessInfo.processInfo.operatingSystemVersion
+    return SnapshotEnvironment(
+      device: UIDevice.current.deviceName,
+      osVersion: "\(version.majorVersion).\(version.minorVersion)",
+      language: Locale.preferredLanguages.first ?? "unknown")
   }
 
-  private func generateSnapshotName(fileUrl: URL) -> String {
-    let deviceName = UIDevice.current.machineIdentifier
-      .lowercased()
-      .replacingOccurrences(of: ",", with: "_")
-    let version = ProcessInfo.processInfo.operatingSystemVersion
-    let osVersion = "\(version.majorVersion).\(version.minorVersion)"
-    let baseName = fileUrl.deletingPathExtension().lastPathComponent
-    return "\(baseName)_\(deviceName)_\(osVersion)"
+  /// The name of the directory that holds the reference images, such as `iphone17e_ios27.0`.
+  var directoryName: String {
+    let device = device.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+    return "\(device)_ios\(osVersion)"
+  }
+
+  var description: String { "\(device) (iOS \(osVersion), \(language))" }
+
+  /// Fails the current test unless it runs in the ``expected`` environment.
+  @MainActor
+  static func requireExpected(sourceLocation: SourceLocation = #_sourceLocation) throws {
+    let current = current
+    try #require(
+      current == expected,
+      "Snapshot tests must run on \(expected), because the reference images are recorded there, but this is \(current).",
+      sourceLocation: sourceLocation)
   }
 }
 
 extension UIDevice {
-  var machineIdentifier: String {
+  /// The simulated device's name, such as `iPhone 17e`, or the machine identifier of a real device.
+  fileprivate var deviceName: String {
     #if targetEnvironment(simulator)
-      return (ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] ?? "unknown_simulator")
-        .lowercased()
-        .components(separatedBy: CharacterSet.alphanumerics.inverted)
-        .joined()
+      return ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] ?? "unknown simulator"
     #else
       var systemInfo = utsname()
       uname(&systemInfo)

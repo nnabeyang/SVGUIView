@@ -1,20 +1,27 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewTextTests: SVGUIViewBasicSnapshotsTests {
-  func testText() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "text"))
-  }
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewTextTests {
+    @Test(arguments: SVGFile.all(in: "basic", "text", "text"))
+    func text(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFontWeight() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-weight"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "text", "font-weight"))
+    func fontWeight(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFontFamily() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-family"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "text", "font-family"))
+    func fontFamily(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFontSize() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "text", "font-size"))
+    @Test(arguments: SVGFile.all(in: "basic", "text", "font-size"))
+    func fontSize(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }
