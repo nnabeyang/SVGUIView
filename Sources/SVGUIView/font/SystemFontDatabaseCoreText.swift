@@ -2,7 +2,7 @@ import UIKit
 import _SPI
 
 class SystemFontDatabaseCoreText {
-  var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
+  private var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
   let textStyles: [CFString]
 
   init() {
@@ -60,6 +60,10 @@ class SystemFontDatabaseCoreText {
   }
 
   func cascadeList(parameters: CascadeListParameters, systemFontKind: SystemFontKind) -> [CTFontDescriptor] {
+    if let result = systemFonts(for: parameters) {
+      return result
+    }
+    // Compute outside the lock. Another task may compute the same list at the same time, which is harmless.
     let locale = parameters.locale as CFString?
     let systemFont: CTFont?
     switch systemFontKind {
@@ -71,7 +75,7 @@ class SystemFontDatabaseCoreText {
       systemFont = Self.createTextStyleFont(parameters: parameters)
     }
     let result = computeCascadeList(font: systemFont!, locale: locale)
-    systemFontCache[parameters] = result
+    systemFonts(result, for: parameters)
     return result
   }
 
