@@ -171,7 +171,7 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   }
 
   func popTagIdStack() {
-    clipIdStack.pop()
+    tagIdStack.pop()
   }
 
   func pushPatternIdStack() {
