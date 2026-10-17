@@ -213,7 +213,8 @@ public class SVGUIView: UIView {
     let context = SVGContext(
       base: base,
       graphics: graphics,
-      viewPort: rect
+      viewPort: rect,
+      scale: scale
     )
     context.saveGState()
     context.push(viewBox: viewBox)
