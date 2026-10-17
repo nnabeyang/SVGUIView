@@ -1,32 +1,42 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewShapesTests: SVGUIViewBasicSnapshotsTests {
-  func testCircle() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "shapes", "circle"))
-  }
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewShapesTests {
+    @Test(arguments: SVGFile.all(in: "basic", "shapes", "circle"))
+    func circle(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testEllipse() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "shapes", "ellipse"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "shapes", "ellipse"))
+    func ellipse(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testLine() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "shapes", "line"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "shapes", "line"))
+    func line(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testPath() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "shapes", "path"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "shapes", "path"))
+    func path(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testPolygon() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "shapes", "polygon"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "shapes", "polygon"))
+    func polygon(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testPolyline() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "shapes", "polyline"))
-  }
+    @Test(arguments: SVGFile.all(in: "basic", "shapes", "polyline"))
+    func polyline(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testRect() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "shapes", "rect"))
+    @Test(arguments: SVGFile.all(in: "basic", "shapes", "rect"))
+    func rect(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

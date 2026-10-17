@@ -10,3 +10,6 @@ DerivedData/
 .netrc
 /.bundle
 /vendor
+
+# Reference images recorded locally. The committed ones come from the SVGSnapshotReferences xcframework.
+Development/InternalApp/InternalAppTests/__Snapshots__/

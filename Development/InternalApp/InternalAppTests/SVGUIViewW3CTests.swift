@@ -1,8 +1,12 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewW3CTests: SVGUIViewBasicSnapshotsTests {
-  func testSVG_1_1F2() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "1.1F2"))
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewW3CTests {
+    @Test(arguments: SVGFile.all(in: "1.1F2"))
+    func svg1_1F2(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }
