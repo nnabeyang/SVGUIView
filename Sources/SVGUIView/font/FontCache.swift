@@ -4,7 +4,6 @@ import _SPI
 class FontCache {
   let fontFamilySpecificationCoreTextCache = FontFamilySpecificationCoreTextCache()
   let systemFontDatabaseCoreText = SystemFontDatabaseCoreText()
-  var seenFamiliesForPrewarming = [String]()
 
   class FontDataCaches {
     private var platformData = [FontPlatformDataCacheKey: FontPlatformData]()
@@ -52,9 +51,6 @@ class FontCache {
         fontDescription: fontDescription, fontCreationContext: fontCreationContext, size: size)
     else {
       return nil
-    }
-    if fontDescription.shouldAllowUserInstalledFonts == .no {
-      seenFamiliesForPrewarming.append(FontCascadeDescription.foldedFamilyName(familyName))
     }
     let (syntheticBold, syntheticOblique) = FontFamilySpecificationCoreText.computeNecessarySynthesis(
       font: font,
