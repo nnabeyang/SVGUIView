@@ -6,13 +6,21 @@ import Testing
 
 @Suite("SVGContext")
 struct SVGContextTests {
-  private func makeContext() throws -> SVGContext {
+  private func makeContext(viewPort: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1), scale: CGFloat = 1) throws -> SVGContext {
     let base = SVGParser.parse(data: Data(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#.utf8))
     let graphics = try #require(
       CGContext(
         data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 0,
         space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-    return SVGContext(base: base, graphics: graphics, viewPort: CGRect(x: 0, y: 0, width: 1, height: 1))
+    return SVGContext(base: base, graphics: graphics, viewPort: viewPort, scale: scale)
+  }
+
+  @Test("the text scale comes from the scale that rendering starts with")
+  func textScaleUsesScale() throws {
+    let viewPort = CGRect(x: 0, y: 0, width: 100, height: 50)
+    let context = try makeContext(viewPort: viewPort, scale: 3)
+    context.push(viewBox: viewPort)
+    #expect(abs(context.textScale - 3) < 1e-9)
   }
 
   @Test("popping the tag ID stack leaves the clip ID stack alone")

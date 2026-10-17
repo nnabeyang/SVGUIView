@@ -140,7 +140,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
     filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst: Bool
   ) async -> CGImage? {
-    let scale = await UIScreen.main.scale
+    let scale = context.scale
     let colorSpace: CGColorSpace
     switch input {
     case .none:

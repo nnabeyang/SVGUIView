@@ -93,7 +93,7 @@ final class SVGTextElement: SVGDrawableElement {
       return font
     }()
     guard let modifiedFont = modifiedFont else { return nil }
-    attributes[kCTFontAttributeName] = await modifiedFont.ctFont(context: context, textScale: context.textScale)
+    attributes[kCTFontAttributeName] = modifiedFont.ctFont(context: context, textScale: context.textScale)
 
     guard
       let attributedText = CFAttributedStringCreate(
@@ -108,7 +108,7 @@ final class SVGTextElement: SVGDrawableElement {
     guard let line = await getLine(context: context) else { return .zero }
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
-    let textScale = await context.textScale
+    let textScale = context.textScale
     var transform = CGAffineTransform(translationX: x, y: y)
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
     let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
@@ -144,7 +144,7 @@ final class SVGTextElement: SVGDrawableElement {
     let path = UIBezierPath(cgPath: letters)
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
-    let textScale = await context.textScale
+    let textScale = context.textScale
     var transform = CGAffineTransform(translationX: x, y: y)
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
 
