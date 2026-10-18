@@ -119,6 +119,7 @@ final class SVGMaskElement: SVGDrawableElement {
     maskContext.push(viewBox: context.viewBox)
     graphics.concatenate(transform)
     for child in children {
+      if Task.isCancelled { break }
       guard let content = child as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement {
         continue
