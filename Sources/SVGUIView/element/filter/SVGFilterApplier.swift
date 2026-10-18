@@ -30,10 +30,17 @@ extension SVGFilterApplier {
     .identity
   }
 
+  /// Points `destBuffer` at the input of the primitive.
+  ///
+  /// `destBuffer` shares its memory with `srcBuffer` or `inputBuffer`, except for the result of another
+  /// primitive, for which the method allocates the memory.
+  ///
+  /// - Returns: The memory that the method allocates, if any. The caller frees it after it no longer uses
+  ///   `destBuffer`, or an image that it makes from `destBuffer` without copying the pixels.
   func inputImageBuffer(
     input: SVGFilterInput?, format: inout vImage_CGImageFormat, results: [String: CGImage],
     srcBuffer: inout vImage_Buffer, inputBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer
-  ) {
+  ) -> UnsafeMutableRawPointer? {
     switch input {
     case .none:
       destBuffer = inputBuffer
@@ -47,10 +54,12 @@ extension SVGFilterApplier {
         let tbuffer = try? vImage_Buffer(cgImage: image, format: format)
       {
         destBuffer = tbuffer
+        return tbuffer.data
       } else {
         destBuffer = inputBuffer
       }
     }
+    return nil
   }
 
   private func dropRGBColor(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer) {
