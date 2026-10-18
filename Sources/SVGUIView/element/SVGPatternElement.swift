@@ -208,7 +208,7 @@ final class SVGPatternElement: SVGDrawableElement {
   }
 
   private func tileImage(frame: CGRect, context: SVGContext, size: CGSize, transform: CGAffineTransform, isRoot: Bool) async -> CGImage? {
-    let scale = await UIScreen.main.scale
+    let scale = context.scale
     let frameWidth = Int((size.width * scale).rounded(.up))
     let frameHeight = Int((size.height * scale).rounded(.up))
     if frameWidth == 0 || frameHeight == 0 { return nil }

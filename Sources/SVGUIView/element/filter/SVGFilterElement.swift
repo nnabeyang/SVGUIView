@@ -76,11 +76,11 @@ final class SVGFilterElement: SVGDrawableElement {
     let bezierPath = await content.toBezierPath(context: context)
     let frame = await content.frame(context: context, path: bezierPath)
     let effectRect = effectRect(frame: frame, context: context)
-    guard let imageCgContext = await createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolation ?? .sRGB),
+    guard let imageCgContext = createImageCGContext(rect: effectRect, scale: context.scale, colorInterpolation: colorInterpolation ?? .sRGB),
       let srcImage = await srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),
-      let filterCgContext = await createImageCGContext(rect: effectRect, colorInterpolation: colorInterpolationFilters ?? .linearRGB)
+      let filterCgContext = createImageCGContext(rect: effectRect, scale: context.scale, colorInterpolation: colorInterpolationFilters ?? .linearRGB)
     else { return }
-    let scale = await UIScreen.main.scale
+    let scale = context.scale
     let transform = CGAffineTransform(scaleX: scale, y: scale)
       .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
     filterCgContext.concatenate(transform)
@@ -119,8 +119,7 @@ final class SVGFilterElement: SVGDrawableElement {
     return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
   }
 
-  private func createImageCGContext(rect: CGRect, colorInterpolation: SVGColorInterpolation) async -> CGContext? {
-    let scale = await UIScreen.main.scale
+  private func createImageCGContext(rect: CGRect, scale: CGFloat, colorInterpolation: SVGColorInterpolation) -> CGContext? {
     let frameWidth = Int((rect.width * scale).rounded(.up))
     let frameHeight = Int((rect.height * scale).rounded(.up))
     let bytesPerRow = 4 * frameWidth
@@ -136,8 +135,8 @@ final class SVGFilterElement: SVGDrawableElement {
   }
 
   private func srcImage(content: any SVGDrawableElement, graphics: CGContext, rect: CGRect, context: SVGContext) async -> CGImage? {
-    let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
-    let scale = await UIScreen.main.scale
+    let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, scale: context.scale)
+    let scale = context.scale
     let transform = CGAffineTransform(scaleX: scale, y: scale)
       .translatedBy(x: -rect.minX, y: -rect.minY)
     graphics.concatenate(transform)

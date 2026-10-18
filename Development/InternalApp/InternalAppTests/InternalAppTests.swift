@@ -4,11 +4,7 @@ import Testing
 import UIKit
 
 /// The parent of all snapshot test suites.
-///
-/// `.serialized` applies to every suite nested in it, so that one SVG file is rendered at a time, as with XCTest.
-/// Rendering reads `UIScreen.main.scale` on the main actor for clip paths, masks, patterns, filters and text.
-/// While other tests compare images on the main actor, those renderings run into their timeout.
-@Suite(.serialized)
+@Suite
 struct SnapshotTests {}
 
 /// An SVG file of the test suite, passed to a parameterized test.
