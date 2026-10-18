@@ -39,6 +39,9 @@ func assertSVGSnapshot(
     Issue.record(
       "Rendering \(file.name) took longer than \(view.configuration.timeoutDuration)", sourceLocation: sourceLocation)
     return
+  } catch .cancelled {
+    Issue.record("Rendering \(file.name) was cancelled", sourceLocation: sourceLocation)
+    return
   } catch .zeroSizedRect {
     Issue.record("The view has no size to render \(file.name) into: \(view.frame)", sourceLocation: sourceLocation)
     return

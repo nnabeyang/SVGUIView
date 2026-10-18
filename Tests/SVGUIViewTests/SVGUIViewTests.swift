@@ -137,12 +137,38 @@ struct SVGUIViewTests {
     #expect(cancelled < full / 2, "Rendering took \(cancelled) after a timeout of \(full / 10), and \(full) in full")
   }
 
-  @Test("a rendering that timed out keeps the image that the view shows")
-  func showKeepsImageWhenTimedOut() throws {
+  @Test("cancelling the task that waits for a snapshot stops the rendering in the middle")
+  func cancellingSnapshotStopsRendering() async throws {
+    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
+    let view = makeView(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <filter id="blur">\#(blurs)</filter>
+        <rect width="20" height="20" filter="url(#blur)"/>
+      </svg>
+      """#)
+    view.frame.size = CGSize(width: 600, height: 600)
+    let clock = ContinuousClock()
+    let full = try await clock.measure { _ = try await view.takeSnapshot() }
+    // Cancel a tenth of the way through, and compare with the full time, which depends on the machine.
+    let start = clock.now
+    let task = Task { _ = try await view.takeSnapshot() }
+    try await Task.sleep(for: full / 10)
+    task.cancel()
+    let result = await task.result
+    let cancelled = clock.now - start
+    #expect(throws: SVGRenderingError.cancelled) { try result.get() }
+    #expect(cancelled < full / 2, "Rendering took \(cancelled) with a cancellation after \(full / 10), and \(full) in full")
+  }
+
+  @Test(
+    "a rendering that timed out or was cancelled keeps the image that the view shows",
+    arguments: [SVGRenderingError.timedOut, .cancelled])
+  func showKeepsImage(error: SVGRenderingError) throws {
     let view = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
     let image = try makeImage()
     view.show(.success(image))
-    view.show(.failure(.timedOut))
+    view.show(.failure(error))
     let contents = try #require(view.layer.contents)
     #expect(contents as AnyObject === image)
   }
@@ -198,6 +224,19 @@ struct SVGUIViewTests {
     // The rendering for the new size has started but not finished, so that the view does not blink.
     let contents = try #require(view.layer.contents)
     #expect(contents as AnyObject === image as AnyObject)
+    try await waitForImage(in: view, width: 40)
+  }
+
+  @Test("a new rendering cancels the one in progress")
+  func newRenderingCancelsOlderOne() async throws {
+    let view = makeView(Self.square)
+    render(view)
+    let older = try #require(view.renderingTask)
+    view.frame.size = CGSize(width: 40, height: 20)
+    render(view)
+    let newer = try #require(view.renderingTask)
+    #expect(older.isCancelled)
+    #expect(!newer.isCancelled)
     try await waitForImage(in: view, width: 40)
   }
 

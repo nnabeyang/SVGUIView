@@ -6,4 +6,6 @@ public enum SVGRenderingError: Error, Sendable, Equatable {
   case timedOut
   /// The rectangle to render into, which is the view's frame unless one is given, has no width or no height.
   case zeroSizedRect
+  /// The task that waited for the rendering was cancelled, and rendering stopped before it finished.
+  case cancelled
 }
