@@ -297,19 +297,28 @@ public class SVGUIView: UIView {
       return graphics.makeImage()
     }
 
-    let timeoutTask = Task {
-      try? await Task.sleep(for: timeoutDuration)
-      drawTask.cancel()
-    }
+    // Time out on a dispatch queue rather than in a task, so that the timeout fires even while renderings
+    // occupy every thread of the cooperative thread pool.
+    let timeout = DispatchWorkItem { drawTask.cancel() }
+    DispatchQueue.global().asyncAfter(deadline: .now() + timeoutDuration.dispatchTimeInterval, execute: timeout)
     let value = await withTaskCancellationHandler {
       await drawTask.value
     } onCancel: {
       drawTask.cancel()
     }
-    timeoutTask.cancel()
-    // Only the timeout task and the cancellation of the caller cancel `drawTask`, and `makeImage()` of a
-    // bitmap context returns an image otherwise, so `nil` means that rendering was cancelled or timed out.
+    timeout.cancel()
+    // Only the timeout and the cancellation of the caller cancel `drawTask`, and `makeImage()` of a bitmap
+    // context returns an image otherwise, so `nil` means that rendering was cancelled or timed out.
     guard let value else { return .failure(Task.isCancelled ? .cancelled : .timedOut) }
     return .success(value)
+  }
+}
+
+extension Duration {
+  /// The duration as a dispatch time interval, which counts whole nanoseconds.
+  var dispatchTimeInterval: DispatchTimeInterval {
+    let (seconds, attoseconds) = components
+    let (nanoseconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
+    return overflow ? .never : .nanoseconds(Int(nanoseconds + attoseconds / 1_000_000_000))
   }
 }

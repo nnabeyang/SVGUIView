@@ -5,8 +5,10 @@ import UIKit
 
 @testable import SVGUIView
 
+// Several tests compare how long a rendering takes, and renderings occupy the threads of the cooperative
+// thread pool, which CI machines have few of, so run them one at a time.
 @MainActor
-@Suite("SVGUIView")
+@Suite("SVGUIView", .serialized)
 struct SVGUIViewTests {
   private func makeView(_ svg: String, timeoutDuration: Duration = .seconds(10)) -> SVGUIView {
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
