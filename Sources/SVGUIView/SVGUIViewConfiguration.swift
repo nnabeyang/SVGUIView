@@ -4,7 +4,9 @@ public struct SVGUIViewConfiguration: Sendable {
   public let taskPriority: TaskPriority
   /// The longest time a single rendering may take.
   ///
-  /// When rendering takes longer, it is cancelled and nothing is drawn.
+  /// When rendering takes longer, it is cancelled. The view keeps the image
+  /// that it shows, and ``SVGUIView/takeSnapshot(rect:)`` throws
+  /// ``SVGRenderingError/timedOut``.
   public let timeoutDuration: Duration
 
   /// Creates a configuration.
