@@ -75,12 +75,12 @@ public class SVGUIView: UIView {
     taskManager.startTask(
       priority: configuration.taskPriority,
       operation: { [weak self] in
-        let image = await SVGUIView.makeImage(
+        let result = await SVGUIView.makeImage(
           rect: rect, scale: scale, base: capturedBase,
           contentMode: capturedMode, timeoutDuration: timeoutDuration
         )
         await MainActor.run {
-          self?.layer.contents = image
+          self?.show(result)
           self?.startRendering()
         }
       })
@@ -152,15 +152,30 @@ public class SVGUIView: UIView {
         let capturedMode = contentMode
         let capturedFrame = frame
         let timeoutDuration = configuration.timeoutDuration
-        let image = await SVGUIView.makeImage(
+        let result = await SVGUIView.makeImage(
           rect: capturedFrame, scale: scale, base: newBase,
           contentMode: capturedMode, timeoutDuration: timeoutDuration
         )
-        layer.contents = image
+        show(result)
       } else {
         displayLink.invalidate()
         await taskManager.finishTask()
       }
+    }
+  }
+
+  /// Shows the result of a rendering.
+  ///
+  /// A rendering that timed out keeps the image that the view shows, so that a slow rendering does not
+  /// blank the view.
+  func show(_ result: Result<CGImage, SVGRenderingError>) {
+    switch result {
+    case .success(let image):
+      layer.contents = image
+    case .failure(.missingRootElement):
+      layer.contents = nil
+    case .failure(.timedOut):
+      Self.logger.warning("Rendering took longer than the timeout and was cancelled. The view keeps its current image.")
     }
   }
 
@@ -171,18 +186,21 @@ public class SVGUIView: UIView {
   ///
   /// - Parameter rect: The rectangle to render into. Pass `nil` to use the
   ///   view's frame.
-  /// - Returns: The rendered image, or `nil` if the document has no root `svg`
-  ///   element or rendering exceeds ``SVGUIViewConfiguration/timeoutDuration``.
-  public func takeSnapshot(rect: CGRect? = nil) async -> UIImage? {
+  /// - Returns: The rendered image.
+  /// - Throws: ``SVGRenderingError/missingRootElement`` if the document has no
+  ///   root `svg` element, or ``SVGRenderingError/timedOut`` if rendering takes
+  ///   longer than ``SVGUIViewConfiguration/timeoutDuration``.
+  public func takeSnapshot(rect: CGRect? = nil) async throws(SVGRenderingError) -> UIImage {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
     let capturedBase = baseContext
     let capturedMode = contentMode
     let timeoutDuration = configuration.timeoutDuration
-    return await SVGUIView.makeImage(
+    let image = try await SVGUIView.makeImage(
       rect: rect, scale: scale, base: capturedBase,
       contentMode: capturedMode, timeoutDuration: timeoutDuration
-    ).flatMap { UIImage(cgImage: $0) }
+    ).get()
+    return UIImage(cgImage: image)
   }
 
   @concurrent
@@ -192,8 +210,8 @@ public class SVGUIView: UIView {
     base: SVGBaseContext,
     contentMode: UIView.ContentMode,
     timeoutDuration: Duration
-  ) async -> CGImage? {
-    guard let svg = base.root else { return nil }
+  ) async -> Result<CGImage, SVGRenderingError> {
+    guard let svg = base.root else { return .failure(.missingRootElement) }
     let viewBox = svg.getViewBox(size: rect.size)
 
     let frameWidth = Int((rect.width * scale).rounded(.up))
@@ -254,7 +272,10 @@ public class SVGUIView: UIView {
     }
     let value = await drawTask.value
     timeoutTask.cancel()
-    return value
+    // Only the timeout task cancels `drawTask`, and `makeImage()` of a bitmap context returns an image
+    // otherwise, so `nil` means that rendering timed out.
+    guard let value else { return .failure(.timedOut) }
+    return .success(value)
   }
 }
 

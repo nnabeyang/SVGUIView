@@ -39,13 +39,24 @@ svgView.configuration = SVGUIViewConfiguration(
 )
 ```
 
+When a rendering takes longer than the timeout, the view keeps the image that it
+shows.
+
 ### Taking a snapshot
 
 ``SVGUIView/SVGUIView/takeSnapshot(rect:)`` renders the current document into a
-`UIImage` without changing what the view displays.
+`UIImage` without changing what the view displays. It throws an
+``SVGRenderingError`` when the document has no root `svg` element or rendering
+times out.
 
 ```swift
-let image = await svgView.takeSnapshot()
+do {
+  let image = try await svgView.takeSnapshot()
+} catch .timedOut {
+  // Rendering took longer than the configuration's timeout.
+} catch {
+  // The document has no root `svg` element.
+}
 ```
 
 ## Topics
@@ -57,3 +68,4 @@ let image = await svgView.takeSnapshot()
 ### Configuring rendering
 
 - ``SVGUIViewConfiguration``
+- ``SVGRenderingError``

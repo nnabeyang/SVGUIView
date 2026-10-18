@@ -28,9 +28,18 @@ func assertSVGSnapshot(
   view.contentMode = .scaleAspectFit
   view.frame = UIScreen.main.bounds
   view.layoutIfNeeded()
-  // A document without a root `svg` element, such as one in another namespace, draws nothing, and its
-  // reference image is empty. A rendering that times out is also compared as an empty image.
-  let image = await view.takeSnapshot() ?? UIGraphicsImageRenderer(size: view.bounds.size).image { _ in }
+  let image: UIImage
+  do {
+    image = try await view.takeSnapshot()
+  } catch .missingRootElement {
+    // A document without a root `svg` element, such as one in another namespace, draws nothing, and its
+    // reference image is empty.
+    image = UIGraphicsImageRenderer(size: view.bounds.size).image { _ in }
+  } catch .timedOut {
+    Issue.record(
+      "Rendering \(file.name) took longer than \(view.configuration.timeoutDuration)", sourceLocation: sourceLocation)
+    return
+  }
 
   // `circle(_:)` becomes `circle`, so that reference images are named `circle.<file name>.png`.
   let testName = String(testName.prefix { $0 != "(" })
