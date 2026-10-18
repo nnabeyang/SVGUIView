@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		3268737F2F6598A90081D72C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 3268737E2F6598A90081D72C /* AppIcon.icon */; };
+		32A1B2C32F70000100A0B0C0 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 32A1B2C42F70000100A0B0C0 /* SVGView */; };
+		32A1B2C52F70000100A0B0C0 /* SVGSnapshotAssets in Frameworks */ = {isa = PBXBuildFile; productRef = 32A1B2C62F70000100A0B0C0 /* SVGSnapshotAssets */; };
 		32B3DDD82F651F8A00D0FB9B /* SVGSnapshotAssets in Frameworks */ = {isa = PBXBuildFile; productRef = 32B3DDD72F651F8A00D0FB9B /* SVGSnapshotAssets */; };
 		32B3DDDB2F651FE700D0FB9B /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 32B3DDDA2F651FE700D0FB9B /* SnapshotTesting */; };
 		32FECAA32F655CE700A56608 /* SVGUIView in Frameworks */ = {isa = PBXBuildFile; productRef = 32FECAA22F655CE700A56608 /* SVGUIView */; };
@@ -62,6 +64,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				32FECAA32F655CE700A56608 /* SVGUIView in Frameworks */,
+				32A1B2C32F70000100A0B0C0 /* SVGView in Frameworks */,
+				32A1B2C52F70000100A0B0C0 /* SVGSnapshotAssets in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -69,7 +74,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				32FECAA32F655CE700A56608 /* SVGUIView in Frameworks */,
 				32B3DDDB2F651FE700D0FB9B /* SnapshotTesting in Frameworks */,
 				32B3DDD82F651F8A00D0FB9B /* SVGSnapshotAssets in Frameworks */,
 			);
@@ -136,6 +140,9 @@
 			);
 			name = SVGUIViewCI;
 			packageProductDependencies = (
+				32FECAA22F655CE700A56608 /* SVGUIView */,
+				32A1B2C42F70000100A0B0C0 /* SVGView */,
+				32A1B2C62F70000100A0B0C0 /* SVGSnapshotAssets */,
 			);
 			productName = SVGUIViewCI;
 			productReference = 32CD1ACB2F651CA900A86A26 /* SVGUIViewCI.app */;
@@ -161,7 +168,6 @@
 			packageProductDependencies = (
 				32B3DDD72F651F8A00D0FB9B /* SVGSnapshotAssets */,
 				32B3DDDA2F651FE700D0FB9B /* SnapshotTesting */,
-				32FECAA22F655CE700A56608 /* SVGUIView */,
 			);
 			productName = SVGUIViewCITests;
 			productReference = 32CD1AD82F651CA900A86A26 /* SVGUIViewCITests.xctest */;
@@ -661,6 +667,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		32A1B2C42F70000100A0B0C0 /* SVGView */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SVGView;
+		};
+		32A1B2C62F70000100A0B0C0 /* SVGSnapshotAssets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SVGSnapshotAssets;
+		};
 		32B3DDD72F651F8A00D0FB9B /* SVGSnapshotAssets */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SVGSnapshotAssets;

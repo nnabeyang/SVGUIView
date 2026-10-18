@@ -60,7 +60,7 @@ private func snapshotDirectory(filePath: StaticString) -> String {
   let environment = SnapshotEnvironment.expected.directoryName
   let suite = fileURL.deletingPathExtension().lastPathComponent
   let local = fileURL.deletingLastPathComponent().appending(components: "__Snapshots__", environment, suite)
-  let bundled = SnapshotReferences.bundle.bundleURL.appending(components: "Resources", "__Snapshots__", environment, suite)
+  let bundled = SnapshotReferences.bundle.bundleURL.appending(components: "__Snapshots__", environment, suite)
   let fileManager = FileManager.default
   // Recording must never write into the bundle.
   if recordMode != .all, !fileManager.fileExists(atPath: local.path(percentEncoded: false)),
