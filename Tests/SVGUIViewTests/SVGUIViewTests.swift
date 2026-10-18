@@ -109,6 +109,34 @@ struct SVGUIViewTests {
     }
   }
 
+  @Test("a rendering that times out stops in the middle of a filter")
+  func timeoutStopsFilter() async throws {
+    // A long chain of blurs is the slowest part of the rendering, and it is a single element.
+    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
+    let view = makeView(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <filter id="blur">\#(blurs)</filter>
+        <rect width="20" height="20" filter="url(#blur)"/>
+      </svg>
+      """#)
+    view.frame.size = CGSize(width: 600, height: 600)
+    let clock = ContinuousClock()
+    let full = try await clock.measure { _ = try await view.takeSnapshot() }
+    // Time out a tenth of the way through, and compare with the full time, which depends on the machine.
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: full / 10)
+    var error: SVGRenderingError?
+    let cancelled = await clock.measure {
+      do throws(SVGRenderingError) {
+        _ = try await view.takeSnapshot()
+      } catch let e {
+        error = e
+      }
+    }
+    #expect(error == .timedOut)
+    #expect(cancelled < full / 2, "Rendering took \(cancelled) after a timeout of \(full / 10), and \(full) in full")
+  }
+
   @Test("a rendering that timed out keeps the image that the view shows")
   func showKeepsImageWhenTimedOut() throws {
     let view = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
