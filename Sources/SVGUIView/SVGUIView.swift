@@ -5,10 +5,12 @@ import os
 ///
 /// The view parses SVG data and renders it in a background task. Assign new data
 /// to ``data`` to change the displayed image. The view renders again when its
-/// size or its `contentMode` changes.
+/// size or its `contentMode` changes, and a new rendering stops the one in
+/// progress.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext
-  private let taskManager = TaskManager()
+  /// The rendering in progress, which a new rendering cancels.
+  private(set) var renderingTask: Task<Void, Never>?
   /// The settings that control background rendering.
   public var configuration: SVGUIViewConfiguration = .init()
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
@@ -61,18 +63,15 @@ public class SVGUIView: UIView {
   /// The SVG data that the view displays.
   ///
   /// Setting this property parses the new data and redraws the view
-  /// asynchronously. Setting the data that the view already displays does
-  /// nothing.
+  /// asynchronously. A rendering in progress stops, so that the view renders
+  /// only the latest data. Setting the data that the view already displays
+  /// does nothing.
   public var data: Data {
     didSet {
       // SVGView sets its data on every update of the SwiftUI view.
       guard data != oldValue else { return }
-      Task {
-        if await !taskManager.add(data: data) {
-          baseContext = SVGParser.parse(data: data)
-          setNeedsDisplay()
-        }
-      }
+      baseContext = SVGParser.parse(data: data)
+      setNeedsDisplay()
     }
   }
 
@@ -104,12 +103,13 @@ public class SVGUIView: UIView {
     layer.setNeedsDisplay()
   }
 
-  /// Starts rendering the document for the layer's display.
+  /// Starts rendering the document for the layer's display, and stops the rendering in progress.
   ///
   /// The view renders in the background and keeps showing its current image until the new one is ready,
   /// so that it does not blink. Implementing `draw(_:)` instead would make UIKit replace the image with an
   /// empty one before drawing.
   override public func display(_: CALayer) {
+    renderingTask?.cancel()
     let rect = bounds
     renderedSize = rect.size
     let generation = nextRenderingGeneration()
@@ -117,18 +117,13 @@ public class SVGUIView: UIView {
     let capturedBase = baseContext
     let capturedMode = contentMode
     let timeoutDuration = configuration.timeoutDuration
-    taskManager.startTask(
-      priority: configuration.taskPriority,
-      operation: { [weak self] in
-        let result = await SVGUIView.makeImage(
-          rect: rect, scale: scale, base: capturedBase,
-          contentMode: capturedMode, timeoutDuration: timeoutDuration
-        )
-        await MainActor.run {
-          self?.show(result, ofRendering: generation)
-          self?.startRendering()
-        }
-      })
+    renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
+      let result = await SVGUIView.makeImage(
+        rect: rect, scale: scale, base: capturedBase,
+        contentMode: capturedMode, timeoutDuration: timeoutDuration
+      )
+      self?.show(result, ofRendering: generation)
+    }
   }
 
   @available(*, unavailable)
@@ -179,38 +174,6 @@ public class SVGUIView: UIView {
     return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
   }
 
-  private func startRendering() {
-    let displayLink = CADisplayLink(
-      target: self,
-      selector: #selector(updateContents)
-    )
-    displayLink.add(to: .main, forMode: .common)
-  }
-
-  @objc
-  private func updateContents(_ displayLink: CADisplayLink) {
-    Task {
-      if let data = await taskManager.takeData() {
-        let newBase = SVGParser.parse(data: data)
-        baseContext = newBase
-        let scale = UIScreen.main.scale
-        let capturedMode = contentMode
-        let capturedFrame = frame
-        let timeoutDuration = configuration.timeoutDuration
-        renderedSize = capturedFrame.size
-        let generation = nextRenderingGeneration()
-        let result = await SVGUIView.makeImage(
-          rect: capturedFrame, scale: scale, base: newBase,
-          contentMode: capturedMode, timeoutDuration: timeoutDuration
-        )
-        show(result, ofRendering: generation)
-      } else {
-        displayLink.invalidate()
-        await taskManager.finishTask()
-      }
-    }
-  }
-
   /// Counts a rendering that starts, and returns the number to pass to `show(_:ofRendering:)`.
   private func nextRenderingGeneration() -> Int {
     renderingGeneration += 1
@@ -218,7 +181,7 @@ public class SVGUIView: UIView {
   }
 
   /// Shows the result of a rendering, unless a newer rendering has started since, so that a rendering
-  /// for an old size or old data does not replace a newer image.
+  /// for an old size or old data that finished before it was cancelled does not replace a newer image.
   private func show(_ result: Result<CGImage, SVGRenderingError>, ofRendering generation: Int) {
     guard generation == renderingGeneration else { return }
     show(result)
@@ -234,6 +197,9 @@ public class SVGUIView: UIView {
       layer.contents = image
     case .failure(.missingRootElement), .failure(.zeroSizedRect):
       layer.contents = nil
+    case .failure(.cancelled):
+      // A newer rendering cancels the one before it, so this is not worth a warning.
+      break
     case .failure(.timedOut):
       Self.logger.warning("Rendering took longer than the timeout and was cancelled. The view keeps its current image.")
     }
@@ -249,8 +215,10 @@ public class SVGUIView: UIView {
   /// - Returns: The rendered image.
   /// - Throws: ``SVGRenderingError/missingRootElement`` if the document has no
   ///   root `svg` element, ``SVGRenderingError/zeroSizedRect`` if the rectangle
-  ///   has no width or no height, or ``SVGRenderingError/timedOut`` if rendering
-  ///   takes longer than ``SVGUIViewConfiguration/timeoutDuration``.
+  ///   has no width or no height, ``SVGRenderingError/timedOut`` if rendering
+  ///   takes longer than ``SVGUIViewConfiguration/timeoutDuration``, or
+  ///   ``SVGRenderingError/cancelled`` if the task that calls this method is
+  ///   cancelled before rendering finishes.
   public func takeSnapshot(rect: CGRect? = nil) async throws(SVGRenderingError) -> UIImage {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
@@ -329,58 +297,28 @@ public class SVGUIView: UIView {
       return graphics.makeImage()
     }
 
-    let timeoutTask = Task {
-      try? await Task.sleep(for: timeoutDuration)
+    // Time out on a dispatch queue rather than in a task, so that the timeout fires even while renderings
+    // occupy every thread of the cooperative thread pool.
+    let timeout = DispatchWorkItem { drawTask.cancel() }
+    DispatchQueue.global().asyncAfter(deadline: .now() + timeoutDuration.dispatchTimeInterval, execute: timeout)
+    let value = await withTaskCancellationHandler {
+      await drawTask.value
+    } onCancel: {
       drawTask.cancel()
     }
-    let value = await drawTask.value
-    timeoutTask.cancel()
-    // Only the timeout task cancels `drawTask`, and `makeImage()` of a bitmap context returns an image
-    // otherwise, so `nil` means that rendering timed out.
-    guard let value else { return .failure(.timedOut) }
+    timeout.cancel()
+    // Only the timeout and the cancellation of the caller cancel `drawTask`, and `makeImage()` of a bitmap
+    // context returns an image otherwise, so `nil` means that rendering was cancelled or timed out.
+    guard let value else { return .failure(Task.isCancelled ? .cancelled : .timedOut) }
     return .success(value)
   }
 }
 
-private actor TaskManager {
-  enum Status {
-    case busy
-    case available
-  }
-
-  private(set) var status: Status = .available
-  private var dataQueue: [Data]
-  init() {
-    dataQueue = []
-  }
-
-  nonisolated func startTask(priority: TaskPriority, operation: @escaping @Sendable () async -> Void) {
-    Task.detached(priority: priority) { [weak self] in
-      await self?.setBusy()
-      await operation()
-    }
-  }
-
-  private func setBusy() {
-    status = .busy
-  }
-
-  func finishTask() {
-    status = .available
-  }
-
-  func add(data: Data) -> Bool {
-    switch status {
-    case .busy:
-      dataQueue.append(data)
-      return true
-    case .available:
-      return false
-    }
-  }
-
-  func takeData() -> Data? {
-    guard !dataQueue.isEmpty else { return nil }
-    return dataQueue.removeFirst()
+extension Duration {
+  /// The duration as a dispatch time interval, which counts whole nanoseconds.
+  var dispatchTimeInterval: DispatchTimeInterval {
+    let (seconds, attoseconds) = components
+    let (nanoseconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
+    return overflow ? .never : .nanoseconds(Int(nanoseconds + attoseconds / 1_000_000_000))
   }
 }

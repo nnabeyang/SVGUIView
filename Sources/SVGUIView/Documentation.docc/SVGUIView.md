@@ -47,13 +47,16 @@ shows.
 ``SVGUIView/SVGUIView/takeSnapshot(rect:)`` renders the current document into a
 `UIImage` without changing what the view displays. It throws an
 ``SVGRenderingError`` when the document has no root `svg` element, the rectangle
-to render into has no width or no height, or rendering times out.
+to render into has no width or no height, rendering times out, or the task that
+waits for the snapshot is cancelled.
 
 ```swift
 do {
   let image = try await svgView.takeSnapshot()
 } catch .timedOut {
   // Rendering took longer than the configuration's timeout.
+} catch .cancelled {
+  // The task that waited for the snapshot was cancelled.
 } catch {
   // There is nothing to render: the document has no root `svg` element, or the
   // rectangle has no width or no height.
