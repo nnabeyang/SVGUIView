@@ -243,4 +243,46 @@ struct SVGUIViewTests {
     try await Task.sleep(for: .seconds(2))
     #expect(shownWidth(view) == Int((10 * UIScreen.main.scale).rounded(.up)))
   }
+
+  /// The bytes that malloc has handed out and that are not freed yet.
+  private func mallocBytesInUse() -> Int {
+    var statistics = malloc_statistics_t()
+    malloc_zone_statistics(nil, &statistics)
+    return statistics.size_in_use
+  }
+
+  @Test(
+    "rendering a filter again and again does not keep using more memory",
+    arguments: [
+      #"<feGaussianBlur stdDeviation="5"/>"#,
+      #"<feFlood flood-color="red" result="flood"/><feGaussianBlur in="flood" stdDeviation="5"/>"#,
+      #"<feFlood flood-color="red"/>"#,
+      #"<feOffset dx="5" dy="5"/>"#,
+      #"<feBlend in="SourceGraphic" in2="SourceGraphic" mode="multiply"/>"#,
+      #"<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode/></feMerge>"#,
+    ])
+  func filterDoesNotLeak(primitives: String) async throws {
+    let view = makeView(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <filter id="filter">\#(primitives)</filter>
+        <rect width="100" height="100" fill="green" filter="url(#filter)"/>
+      </svg>
+      """#)
+    view.contentMode = .scaleAspectFit
+    view.frame.size = CGSize(width: 400, height: 400)
+    for _ in 0..<2 { _ = try await view.takeSnapshot() }
+    // The footprint of the process does not show the leak in the simulator, so count what malloc hands out.
+    let before = mallocBytesInUse()
+    let renderings = 100
+    for _ in 0..<renderings { _ = try await view.takeSnapshot() }
+    let growth = mallocBytesInUse() - before
+    // A leak keeps at least one bitmap of the view, which is smaller than the filter region, per rendering.
+    // Other tests that run at the same time allocate memory too, so allow for some of them.
+    let pixels = (400 * UIScreen.main.scale).rounded(.up)
+    let bitmap = Int(pixels * pixels) * 4
+    #expect(
+      growth < bitmap * renderings / 4,
+      "Memory grew by \(growth / 1_048_576) MB over \(renderings) renderings; a bitmap is \(bitmap / 1_048_576) MB")
+  }
 }

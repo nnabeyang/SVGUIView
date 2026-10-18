@@ -165,8 +165,13 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
         colorSpace: colorSpace,
         bitmapInfo: srcImage.bitmapInfo)
     else { return nil }
+    // The buffers below share memory, so free each allocation once, through the pointer that it returns.
     guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage.copy(colorSpace: colorSpace)!, format: format) else { return nil }
+    let srcData = srcBuffer.data
+    defer { free(srcData) }
     guard var inputBuffer = try? vImage_Buffer(cgImage: inImage.copy(colorSpace: colorSpace)!, format: format) else { return nil }
+    let inputData = inputBuffer.data
+    defer { free(inputData) }
 
     let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height))
     var destBuffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
@@ -176,7 +181,8 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     let stdDeviation = stdDeviation ?? .zero
     let unitType = filter.primitiveUnits ?? .userSpaceOnUse
     var buffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
-    inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &buffer)
+    let resultData = inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &buffer)
+    defer { free(resultData) }
     switch stdDeviation {
     case .hetero(let x, let y):
       let x = x.calculatedLength(frame: frame, context: context, mode: .width, unitType: unitType)
@@ -204,6 +210,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
       let kernelSize = Self.clampedToKernelSize(value: x * scale, scale: scale) | 1
       applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
     }
+    // The image uses the memory of the buffer, which is freed after the image is drawn below.
     guard
       let image = vImageCreateCGImageFromBuffer(
         &destBuffer,
