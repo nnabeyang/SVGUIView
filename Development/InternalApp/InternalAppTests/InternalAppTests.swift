@@ -16,9 +16,9 @@ struct SVGFile: Sendable, CustomTestStringConvertible {
 
   var testDescription: String { name }
 
-  /// The SVG files under `Resources/w3c/<components>` of the test suite, sorted by path.
+  /// The SVG files under `w3c/<components>` of the test suite, sorted by path.
   static func all(in components: String...) -> [SVGFile] {
-    let root = TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c").appending(path: components.joined(separator: "/"), directoryHint: .isDirectory)
+    let root = TestSuite.bundle.bundleURL.appending(component: "w3c").appending(path: components.joined(separator: "/"), directoryHint: .isDirectory)
     guard
       let enumerator = FileManager.default.enumerator(
         at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants])
