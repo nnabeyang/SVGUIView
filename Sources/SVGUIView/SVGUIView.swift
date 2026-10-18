@@ -55,9 +55,12 @@ public class SVGUIView: UIView {
   /// The SVG data that the view displays.
   ///
   /// Setting this property parses the new data and redraws the view
-  /// asynchronously.
+  /// asynchronously. Setting the data that the view already displays does
+  /// nothing.
   public var data: Data {
     didSet {
+      // SVGView sets its data on every update of the SwiftUI view.
+      guard data != oldValue else { return }
       Task {
         if await !taskManager.add(data: data) {
           baseContext = SVGParser.parse(data: data)
