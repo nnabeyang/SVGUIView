@@ -4,13 +4,18 @@ import os
 /// A view that displays a single SVG image.
 ///
 /// The view parses SVG data and renders it in a background task. Assign new data
-/// to ``data`` to change the displayed image.
+/// to ``data`` to change the displayed image. The view renders again when its
+/// size or its `contentMode` changes.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext
   private let taskManager = TaskManager()
   /// The settings that control background rendering.
   public var configuration: SVGUIViewConfiguration = .init()
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
+  /// The size that the view last rendered at, so that it renders again when its size changes.
+  private var renderedSize: CGSize?
+  /// Counts the renderings that the view starts, so that one that finishes after a newer one is not shown.
+  private var renderingGeneration = 0
 
   /// Creates a view that displays the SVG file at the given URL.
   ///
@@ -28,6 +33,7 @@ public class SVGUIView: UIView {
     self.baseContext = baseContext
     super.init(frame: frame)
     backgroundColor = .clear
+    setNeedsDisplay()
   }
 
   /// Creates a view with the given frame that displays the given SVG data.
@@ -55,9 +61,12 @@ public class SVGUIView: UIView {
   /// The SVG data that the view displays.
   ///
   /// Setting this property parses the new data and redraws the view
-  /// asynchronously.
+  /// asynchronously. Setting the data that the view already displays does
+  /// nothing.
   public var data: Data {
     didSet {
+      // SVGView sets its data on every update of the SwiftUI view.
+      guard data != oldValue else { return }
       Task {
         if await !taskManager.add(data: data) {
           baseContext = SVGParser.parse(data: data)
@@ -67,7 +76,43 @@ public class SVGUIView: UIView {
     }
   }
 
-  override public func draw(_ rect: CGRect) {
+  override public var contentMode: UIView.ContentMode {
+    didSet {
+      if contentMode != oldValue {
+        setNeedsDisplay()
+      }
+    }
+  }
+
+  override public func layoutSubviews() {
+    super.layoutSubviews()
+    // Otherwise UIKit only scales the image rendered for the old size, margins and all.
+    if bounds.size != renderedSize {
+      setNeedsDisplay()
+    }
+  }
+
+  // UIKit marks the layer for display only for a view that implements `draw(_:)`. This view renders in
+  // `display(_:)` instead, so it marks the layer itself.
+  override public func setNeedsDisplay() {
+    super.setNeedsDisplay()
+    layer.setNeedsDisplay()
+  }
+
+  override public func setNeedsDisplay(_ rect: CGRect) {
+    super.setNeedsDisplay(rect)
+    layer.setNeedsDisplay()
+  }
+
+  /// Starts rendering the document for the layer's display.
+  ///
+  /// The view renders in the background and keeps showing its current image until the new one is ready,
+  /// so that it does not blink. Implementing `draw(_:)` instead would make UIKit replace the image with an
+  /// empty one before drawing.
+  override public func display(_: CALayer) {
+    let rect = bounds
+    renderedSize = rect.size
+    let generation = nextRenderingGeneration()
     let scale = UIScreen.main.scale
     let capturedBase = baseContext
     let capturedMode = contentMode
@@ -80,7 +125,7 @@ public class SVGUIView: UIView {
           contentMode: capturedMode, timeoutDuration: timeoutDuration
         )
         await MainActor.run {
-          self?.show(result)
+          self?.show(result, ofRendering: generation)
           self?.startRendering()
         }
       })
@@ -152,16 +197,31 @@ public class SVGUIView: UIView {
         let capturedMode = contentMode
         let capturedFrame = frame
         let timeoutDuration = configuration.timeoutDuration
+        renderedSize = capturedFrame.size
+        let generation = nextRenderingGeneration()
         let result = await SVGUIView.makeImage(
           rect: capturedFrame, scale: scale, base: newBase,
           contentMode: capturedMode, timeoutDuration: timeoutDuration
         )
-        show(result)
+        show(result, ofRendering: generation)
       } else {
         displayLink.invalidate()
         await taskManager.finishTask()
       }
     }
+  }
+
+  /// Counts a rendering that starts, and returns the number to pass to `show(_:ofRendering:)`.
+  private func nextRenderingGeneration() -> Int {
+    renderingGeneration += 1
+    return renderingGeneration
+  }
+
+  /// Shows the result of a rendering, unless a newer rendering has started since, so that a rendering
+  /// for an old size or old data does not replace a newer image.
+  private func show(_ result: Result<CGImage, SVGRenderingError>, ofRendering generation: Int) {
+    guard generation == renderingGeneration else { return }
+    show(result)
   }
 
   /// Shows the result of a rendering.

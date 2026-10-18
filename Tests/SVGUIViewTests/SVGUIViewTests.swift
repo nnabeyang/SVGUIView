@@ -22,6 +22,39 @@ struct SVGUIViewTests {
     return try #require(context.makeImage())
   }
 
+  private static let square =
+    #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20"/></svg>"#
+
+  /// The width in pixels of the image that the view shows.
+  private func shownWidth(_ view: SVGUIView) -> Int? {
+    guard let contents = view.layer.contents, CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else { return nil }
+    return (contents as! CGImage).width
+  }
+
+  /// Waits until the view shows an image of the given width in points, which a rendering in the background
+  /// shows when it finishes.
+  private func waitForImage(
+    in view: SVGUIView, width: CGFloat, sourceLocation: SourceLocation = #_sourceLocation
+  ) async throws {
+    let pixels = Int((width * UIScreen.main.scale).rounded(.up))
+    let deadline = ContinuousClock.now + .seconds(10)
+    while shownWidth(view) != pixels {
+      guard ContinuousClock.now < deadline else {
+        Issue.record(
+          "The view shows an image \(shownWidth(view).map(String.init) ?? "nil") pixels wide, not \(pixels)",
+          sourceLocation: sourceLocation)
+        return
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+  }
+
+  /// Renders the view as UIKit does when it displays the view.
+  private func render(_ view: SVGUIView) {
+    view.layoutIfNeeded()
+    view.layer.displayIfNeeded()
+  }
+
   @Test("a snapshot is the rendered document")
   func takeSnapshot() async throws {
     let view = makeView(
@@ -94,5 +127,92 @@ struct SVGUIViewTests {
     view.show(.success(try makeImage()))
     view.show(.failure(error))
     #expect(view.layer.contents == nil)
+  }
+
+  @Test("setting the data that a view displays does not render it again")
+  func settingSameDataDoesNotRenderAgain() async throws {
+    let view = makeView(Self.square)
+    render(view)
+    try await waitForImage(in: view, width: 20)
+    // Let the view finish the rendering, so that it handles new data at once instead of queueing it.
+    try await Task.sleep(for: .milliseconds(100))
+    view.data = Data(Self.square.utf8)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(!view.layer.needsDisplay())
+    view.data = Data(Self.square.replacingOccurrences(of: "<rect", with: "<circle").utf8)
+    let deadline = ContinuousClock.now + .seconds(10)
+    while !view.layer.needsDisplay() && ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(view.layer.needsDisplay(), "New data renders the view again")
+  }
+
+  @Test("a view renders again at its new size when its size changes")
+  func rendersAgainWhenResized() async throws {
+    let view = makeView(Self.square)
+    render(view)
+    try await waitForImage(in: view, width: 20)
+    view.frame.size = CGSize(width: 40, height: 20)
+    view.layoutIfNeeded()
+    #expect(view.layer.needsDisplay())
+    render(view)
+    try await waitForImage(in: view, width: 40)
+  }
+
+  @Test("a view keeps showing its image until it renders again at its new size")
+  func keepsImageWhileRenderingAgain() async throws {
+    let view = makeView(Self.square)
+    render(view)
+    try await waitForImage(in: view, width: 20)
+    let image = try #require(view.layer.contents)
+    view.frame.size = CGSize(width: 40, height: 20)
+    render(view)
+    // The rendering for the new size has started but not finished, so that the view does not blink.
+    let contents = try #require(view.layer.contents)
+    #expect(contents as AnyObject === image as AnyObject)
+    try await waitForImage(in: view, width: 40)
+  }
+
+  @Test("a view does not render again when only its position changes")
+  func doesNotRenderAgainWhenMoved() async throws {
+    let view = makeView(Self.square)
+    render(view)
+    try await waitForImage(in: view, width: 20)
+    view.frame.origin = CGPoint(x: 10, y: 10)
+    view.layoutIfNeeded()
+    #expect(!view.layer.needsDisplay())
+  }
+
+  @Test("a view renders again when its content mode changes to another one")
+  func rendersAgainWhenContentModeChanges() async throws {
+    let view = makeView(Self.square)
+    view.contentMode = .scaleAspectFit
+    render(view)
+    try await waitForImage(in: view, width: 20)
+    view.contentMode = .scaleAspectFit
+    #expect(!view.layer.needsDisplay())
+    view.contentMode = .scaleAspectFill
+    #expect(view.layer.needsDisplay())
+  }
+
+  @Test("a rendering that finishes after a newer one does not replace its image")
+  func olderRenderingDoesNotReplaceNewerOne() async throws {
+    // Blurring a large bitmap takes much longer than blurring a small one.
+    let view = makeView(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <filter id="blur"><feGaussianBlur stdDeviation="5"/></filter>
+        <rect width="20" height="20" filter="url(#blur)"/>
+      </svg>
+      """#)
+    view.frame.size = CGSize(width: 1000, height: 1000)
+    render(view)
+    view.frame.size = CGSize(width: 10, height: 10)
+    view.setNeedsDisplay()
+    render(view)
+    try await waitForImage(in: view, width: 10)
+    // Give the older rendering time to finish.
+    try await Task.sleep(for: .seconds(2))
+    #expect(shownWidth(view) == Int((10 * UIScreen.main.scale).rounded(.up)))
   }
 }
