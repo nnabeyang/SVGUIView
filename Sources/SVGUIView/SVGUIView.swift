@@ -172,7 +172,7 @@ public class SVGUIView: UIView {
     switch result {
     case .success(let image):
       layer.contents = image
-    case .failure(.missingRootElement):
+    case .failure(.missingRootElement), .failure(.zeroSizedRect):
       layer.contents = nil
     case .failure(.timedOut):
       Self.logger.warning("Rendering took longer than the timeout and was cancelled. The view keeps its current image.")
@@ -188,8 +188,9 @@ public class SVGUIView: UIView {
   ///   view's frame.
   /// - Returns: The rendered image.
   /// - Throws: ``SVGRenderingError/missingRootElement`` if the document has no
-  ///   root `svg` element, or ``SVGRenderingError/timedOut`` if rendering takes
-  ///   longer than ``SVGUIViewConfiguration/timeoutDuration``.
+  ///   root `svg` element, ``SVGRenderingError/zeroSizedRect`` if the rectangle
+  ///   has no width or no height, or ``SVGRenderingError/timedOut`` if rendering
+  ///   takes longer than ``SVGUIViewConfiguration/timeoutDuration``.
   public func takeSnapshot(rect: CGRect? = nil) async throws(SVGRenderingError) -> UIImage {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
@@ -216,6 +217,8 @@ public class SVGUIView: UIView {
 
     let frameWidth = Int((rect.width * scale).rounded(.up))
     let frameHeight = Int((rect.height * scale).rounded(.up))
+    // `CGContext` cannot make a bitmap without a pixel.
+    guard frameWidth > 0, frameHeight > 0 else { return .failure(.zeroSizedRect) }
     let bytesPerRow = 4 * frameWidth
 
     let graphics = CGContext(

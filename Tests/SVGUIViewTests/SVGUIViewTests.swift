@@ -41,6 +41,30 @@ struct SVGUIViewTests {
     }
   }
 
+  @Test(
+    "a snapshot of a rectangle without a width or a height throws zeroSizedRect",
+    arguments: [
+      CGRect(x: 0, y: 0, width: 0, height: 20),
+      CGRect(x: 0, y: 0, width: 20, height: 0),
+    ])
+  func takeSnapshotOfZeroSizedRect(rect: CGRect) async {
+    let view = makeView(
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20"/></svg>"#)
+    await #expect(throws: SVGRenderingError.zeroSizedRect) {
+      try await view.takeSnapshot(rect: rect)
+    }
+  }
+
+  @Test("a snapshot of a view without a size throws zeroSizedRect")
+  func takeSnapshotOfZeroSizedView() async {
+    let view = makeView(
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20"/></svg>"#)
+    view.frame = .zero
+    await #expect(throws: SVGRenderingError.zeroSizedRect) {
+      try await view.takeSnapshot()
+    }
+  }
+
   @Test("a snapshot that takes longer than the timeout throws timedOut")
   func takeSnapshotTimesOut() async {
     // Rendering checks for cancellation between elements, so many groups make it stop soon after the timeout.
@@ -62,11 +86,13 @@ struct SVGUIViewTests {
     #expect(contents as AnyObject === image)
   }
 
-  @Test("a document without a root svg element clears the image that the view shows")
-  func showClearsImageWithoutRootElement() throws {
+  @Test(
+    "a rendering that has nothing to show clears the image that the view shows",
+    arguments: [SVGRenderingError.missingRootElement, .zeroSizedRect])
+  func showClearsImage(error: SVGRenderingError) throws {
     let view = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
     view.show(.success(try makeImage()))
-    view.show(.failure(.missingRootElement))
+    view.show(.failure(error))
     #expect(view.layer.contents == nil)
   }
 }

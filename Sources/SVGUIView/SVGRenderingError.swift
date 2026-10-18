@@ -4,4 +4,6 @@ public enum SVGRenderingError: Error, Sendable, Equatable {
   case missingRootElement
   /// Rendering took longer than ``SVGUIViewConfiguration/timeoutDuration`` and was cancelled.
   case timedOut
+  /// The rectangle to render into, which is the view's frame unless one is given, has no width or no height.
+  case zeroSizedRect
 }
