@@ -29,7 +29,7 @@ let package = Package(
     // name, platforms, products, etc.
     dependencies: [
         // other dependencies
-        .package(url: "https://github.com/nnabeyang/SVGUIView", from: "0.22.2"),
+        .package(url: "https://github.com/nnabeyang/SVGUIView", from: "0.23.0"),
     ],
     targets: [
         .executableTarget(name: "<executable-target-name>", dependencies: [

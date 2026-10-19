@@ -3,7 +3,7 @@ import UIKit
 protocol SVGLengthContext {
   var viewBoxSize: CGSize { get }
   var font: SVGUIFont? { get }
-  var textScale: Double { get async }
+  var textScale: Double { get }
   var rootFont: SVGUIFont? { get }
   var viewPort: CGRect { get }
   var writingMode: WritingMode? { get }
@@ -13,6 +13,8 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   let base: SVGBaseContext
   let graphics: CGContext
   let viewPort: CGRect
+  /// The scale of the image being rendered, read from the screen before rendering starts.
+  let scale: CGFloat
 
   private let viewBoxStack: Stack<CGRect> = Stack()
   private let patternContentUnitStack = Stack<SVGUnitType>()
@@ -29,11 +31,12 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   private let tagIdStack = ElementIdStack<ObjectIdentifier>()
   private let initCtm: CGAffineTransform
 
-  init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect) {
+  init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, scale: CGFloat) {
     self.base = base
     self.graphics = graphics
     initCtm = graphics.ctm
     self.viewPort = viewPort
+    self.scale = scale
     patternIdStack = ElementIdStack<String>()
   }
 
@@ -42,16 +45,14 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
     self.graphics = graphics
     initCtm = graphics.ctm
     self.viewPort = viewPort
+    scale = other.scale
     patternIdStack = other.patternIdStack
   }
 
   var textScale: Double {
-    get async {
-      let scale = await UIScreen.main.scale
-      let x = viewPort.width * scale / viewBox.width
-      let y = viewPort.height * scale / viewBox.height
-      return hypot(x, y) / sqrt(2)
-    }
+    let x = viewPort.width * scale / viewBox.width
+    let y = viewPort.height * scale / viewBox.height
+    return hypot(x, y) / sqrt(2)
   }
 
   var pservers: [String: any SVGGradientServer] {
@@ -171,7 +172,7 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   }
 
   func popTagIdStack() {
-    clipIdStack.pop()
+    tagIdStack.pop()
   }
 
   func pushPatternIdStack() {

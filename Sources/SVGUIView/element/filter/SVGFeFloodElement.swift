@@ -52,6 +52,7 @@ final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
         bitmapInfo: srcImage.bitmapInfo),
       var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
     else { return nil }
+    defer { inputBuffer.free() }
     let floodColor = floodColor ?? .named(SVGColorName(name: "black"))
     let floodOpacity = floodOpacity ?? 1.0
     let (red:r, green:g, blue:b, alpha:a) = floodColor.rgba
@@ -70,6 +71,7 @@ final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
       &color,
       vImage_Flags(kvImageNoFlags))
 
+    // The image uses the memory of the buffer, which is freed after the image is drawn below.
     guard
       let image = vImageCreateCGImageFromBuffer(
         &inputBuffer,

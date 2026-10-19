@@ -57,7 +57,7 @@ final class SVGClipPathElement: SVGElement {
 
   private func maskImage(frame: CGRect, context: SVGContext) async -> CGImage? {
     let size = frame.size
-    let scale = await UIScreen.main.scale
+    let scale = context.scale
     let frameWidth = Int((size.width * scale).rounded(.up))
     let frameHeight = Int((size.height * scale).rounded(.up))
     let bytesPerRow = 4 * frameWidth
@@ -91,6 +91,7 @@ final class SVGClipPathElement: SVGElement {
 
     graphics.concatenate(transform)
     for content in children {
+      if Task.isCancelled { break }
       guard let content = content as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement || content is SVGImageElement {
         continue

@@ -49,7 +49,11 @@ final class SVGFeOffsetElement: SVGElement, SVGFilterApplier {
         bitsPerPixel: srcImage.bitsPerPixel,
         colorSpace: srcImage.colorSpace!,
         bitmapInfo: srcImage.bitmapInfo),
-      var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format),
+      var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
+    else { return nil }
+    defer { inputBuffer.free() }
+    // The image uses the memory of the buffer, which is freed after the image is drawn below.
+    guard
       let image = vImageCreateCGImageFromBuffer(
         &inputBuffer,
         &format,

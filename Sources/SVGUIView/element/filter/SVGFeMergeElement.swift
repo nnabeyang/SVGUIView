@@ -55,9 +55,14 @@ final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
         bitsPerPixel: srcImage.bitsPerPixel,
         colorSpace: colorSpace,
         bitmapInfo: srcImage.bitmapInfo),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format),
-      var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
+      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
     else { return nil }
+    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
+    let srcData = srcBuffer.data
+    defer { free(srcData) }
+    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
+    let inputData = inputBuffer.data
+    defer { free(inputData) }
     let rect = self.frame(filter: filter, frame: frame, context: context)
     let transform = transform(filter: filter, frame: frame)
     cgContext.concatenate(transform)
@@ -86,14 +91,16 @@ final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
       free(data)
     }
     var destBuffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
-    inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &destBuffer)
+    let resultData = inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &destBuffer)
+    defer { free(resultData) }
 
+    // Copy the pixels, because the caller draws the image after the buffers are freed.
     return vImageCreateCGImageFromBuffer(
       &destBuffer,
       &format,
-      { _, _ in },
       nil,
-      vImage_Flags(kvImageNoAllocate),
+      nil,
+      vImage_Flags(kvImageNoFlags),
       nil)?.takeRetainedValue()
   }
 }

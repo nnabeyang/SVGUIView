@@ -83,7 +83,7 @@ final class SVGMaskElement: SVGDrawableElement {
 
   private func maskImage(frame: CGRect, context: SVGContext) async -> CGImage? {
     let size = frame.size
-    let scale = await UIScreen.main.scale
+    let scale = context.scale
     let frameWidth = Int((size.width * scale).rounded(.up))
     let frameHeight = Int((size.height * scale).rounded(.up))
     let bytesPerRow = 4 * frameWidth
@@ -115,10 +115,11 @@ final class SVGMaskElement: SVGDrawableElement {
         .scaledBy(x: size.width, y: size.height)
     }
 
-    let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort)
+    let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, scale: context.scale)
     maskContext.push(viewBox: context.viewBox)
     graphics.concatenate(transform)
     for child in children {
+      if Task.isCancelled { break }
       guard let content = child as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement {
         continue

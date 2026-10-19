@@ -1,12 +1,17 @@
-import Foundation
-import SVGTestSuite
+import Testing
 
-final class SVGUIViewPaintingTests: SVGUIViewBasicSnapshotsTests {
-  func testFill() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "painting", "fill"))
-  }
+extension SnapshotTests {
+  @MainActor
+  @Suite
+  struct SVGUIViewPaintingTests {
+    @Test(arguments: SVGFile.all(in: "basic", "painting", "fill"))
+    func fill(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
 
-  func testFillOpacity() throws {
-    try testBase(root: TestSuite.bundle.bundleURL.appending(components: "Resources", "w3c", "basic", "painting", "fill-opacity"))
+    @Test(arguments: SVGFile.all(in: "basic", "painting", "fill-opacity"))
+    func fillOpacity(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }
