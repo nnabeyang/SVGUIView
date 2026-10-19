@@ -134,6 +134,7 @@ final class SVGGroupElement: SVGDrawableElement {
 
   func draw(_ context: SVGContext, mode: DrawMode) async {
     guard !Task.isCancelled else { return }
+    await Task.yield()
     let filter = filter ?? SVGFilter.none
     if case .url(let id) = filter,
       let server = context.filters[id]

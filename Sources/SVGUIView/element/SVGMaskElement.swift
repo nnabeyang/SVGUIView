@@ -120,6 +120,7 @@ final class SVGMaskElement: SVGDrawableElement {
     graphics.concatenate(transform)
     for child in children {
       if Task.isCancelled { break }
+      await Task.yield()
       guard let content = child as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement {
         continue

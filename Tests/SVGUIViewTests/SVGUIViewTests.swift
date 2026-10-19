@@ -139,6 +139,44 @@ struct SVGUIViewTests {
     #expect(cancelled < full / 2, "Rendering took \(cancelled) after a timeout of \(full / 10), and \(full) in full")
   }
 
+  @Test("renderings that occupy every thread of the cooperative thread pool still time out on time")
+  func timeoutWhileRenderingsOccupyEveryThread() async {
+    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <filter id="blur">\#(blurs)</filter>
+        <rect width="20" height="20" filter="url(#blur)"/>
+      </svg>
+      """#
+    let timeout = Duration.milliseconds(500)
+    // Twice as many renderings as cores fill every thread of the pool, and the threads of dispatch queues of the
+    // same quality of service.
+    let views = (0..<ProcessInfo.processInfo.activeProcessorCount * 2).map { _ in
+      let view = makeView(svg, timeoutDuration: timeout)
+      view.frame.size = CGSize(width: 300, height: 300)
+      return view
+    }
+    let clock = ContinuousClock()
+    let start = clock.now
+    await withTaskGroup(of: SVGRenderingError?.self) { group in
+      for view in views {
+        group.addTask { @MainActor in
+          do throws(SVGRenderingError) {
+            _ = try await view.takeSnapshot()
+            return nil
+          } catch {
+            return error
+          }
+        }
+      }
+      for await error in group {
+        #expect(error == .timedOut)
+      }
+    }
+    let elapsed = clock.now - start
+    #expect(elapsed < timeout * 2, "The renderings returned after \(elapsed) with a timeout of \(timeout)")
+  }
+
   @Test("cancelling the task that waits for a snapshot stops the rendering in the middle")
   func cancellingSnapshotStopsRendering() async throws {
     let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)

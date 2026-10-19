@@ -298,9 +298,11 @@ public class SVGUIView: UIView {
     }
 
     // Time out on a dispatch queue rather than in a task, so that the timeout fires even while renderings
-    // occupy every thread of the cooperative thread pool.
+    // occupy every thread of the cooperative thread pool. Those threads also count against dispatch queues of
+    // the same quality of service, so the queue is above the highest task priority that renderings can have.
     let timeout = DispatchWorkItem { drawTask.cancel() }
-    DispatchQueue.global().asyncAfter(deadline: .now() + timeoutDuration.dispatchTimeInterval, execute: timeout)
+    DispatchQueue.global(qos: .userInteractive).asyncAfter(
+      deadline: .now() + timeoutDuration.dispatchTimeInterval, execute: timeout)
     let value = await withTaskCancellationHandler {
       await drawTask.value
     } onCancel: {

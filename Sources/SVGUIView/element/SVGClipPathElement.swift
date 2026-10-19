@@ -92,6 +92,7 @@ final class SVGClipPathElement: SVGElement {
     graphics.concatenate(transform)
     for content in children {
       if Task.isCancelled { break }
+      await Task.yield()
       guard let content = content as? (any SVGDrawableElement) else { continue }
       if content is SVGGroupElement || content is SVGLineElement || content is SVGImageElement {
         continue
