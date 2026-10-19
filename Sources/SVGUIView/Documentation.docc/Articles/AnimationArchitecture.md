@@ -338,7 +338,7 @@ The existing API stays source compatible. New API is added next to it:
 svgView.configuration = SVGUIViewConfiguration(animation: .play)
 svgView.pause()
 svgView.seek(to: .seconds(1.5))
-let frame = await svgView.takeSnapshot(at: .seconds(2))
+let frame = try await svgView.takeSnapshot(at: .seconds(2))
 ```
 
 - **Animation mode:** ``SVGUIViewConfiguration`` gains an `animation` value
