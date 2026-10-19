@@ -92,6 +92,7 @@ final class SVGFilterElement: SVGDrawableElement {
       // Leave the loop rather than return, so that the graphics states stay balanced. A cancelled rendering
       // throws its image away.
       if Task.isCancelled { break }
+      await Task.yield()
       guard let applier = applier as? (any SVGFilterApplier) else { continue }
       filterCgContext.clear(effectRect)
       filterCgContext.restoreGState()
