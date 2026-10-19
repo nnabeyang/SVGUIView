@@ -26,6 +26,9 @@ func assertSVGSnapshot(
 
   let view = try #require(SVGUIView(contentsOf: file.url), "Couldn't read \(file.url.lastPathComponent)", sourceLocation: sourceLocation)
   view.contentMode = .scaleAspectFit
+  // The tests check what a rendering draws, not how fast. On CI, many renderings in parallel can take
+  // longer than the default timeout of one second, so the timeout only catches a rendering that never ends.
+  view.configuration = SVGUIViewConfiguration(timeoutDuration: .seconds(60))
   view.frame = UIScreen.main.bounds
   view.layoutIfNeeded()
   let image: UIImage
