@@ -545,6 +545,15 @@ before it is merged.
   the `SVGUIView` module.
 - Whether still images should use the Metal filters once they produce the same
   results as the vImage implementation.
+- Whether filters should move to Metal before phase 3. Until then, playback runs
+  filters with vImage. A filtered element that only moves by `transform` or
+  `opacity` isn't filtered again, but a filter whose parameters or input content
+  change is run again on the CPU in every frame, and a slow one skips frames in
+  that layer. Phase 2 measures this with the benchmark documents that contain
+  filters. If such animations don't fit the frame budget on devices and are
+  common in the documents to support, phase 3 moves ahead of phase 2.5. The
+  cache of filter results is keyed by layer, so it can be used with vImage in
+  phase 2 as well.
 - Whether `.play` should become the default animation mode once animation
   support is stable.
 - Whether the timeline should keep running while playback is stopped for being
