@@ -29,14 +29,19 @@ jobs:
           DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=27.0"
 
           echo "Using destination: $DESTINATION"
+          mkdir -p "$RUNNER_TEMP/test-results"
+          # xcpretty hides the output of Swift Testing, so keep the whole output and the result bundle as well.
           xcodebuild clean test \
             -scheme SVGUIView-Package \
             -destination "$DESTINATION" \
+            -resultBundlePath "$RUNNER_TEMP/test-results/tests.xcresult" \
+            | tee "$RUNNER_TEMP/test-results/tests.log" \
             | xcpretty
 
       # With one thread in the cooperative thread pool, a rendering that never lets other tasks run keeps the
       # tests from cancelling it on time.
       - name: Run xcodebuild tests with one thread in the cooperative pool (iOS)
+        if: ${{ !cancelled() }}
         env:
           TEST_RUNNER_LIBDISPATCH_COOPERATIVE_POOL_STRICT: "1"
         run: |
@@ -44,7 +49,27 @@ jobs:
           xcodebuild test \
             -scheme SVGUIView-Package \
             -destination "platform=iOS Simulator,name=iPhone 17e,OS=27.0" \
+            -resultBundlePath "$RUNNER_TEMP/test-results/tests-one-thread.xcresult" \
+            | tee "$RUNNER_TEMP/test-results/tests-one-thread.log" \
             | xcpretty
+
+      - name: Report failed tests
+        if: ${{ failure() }}
+        run: |
+          for result in "$RUNNER_TEMP"/test-results/*.xcresult; do
+            [ -d "$result" ] || continue
+            echo "== $(basename "$result")"
+            # GitHub reads %0A in an annotation as a line break.
+            xcrun xcresulttool get test-results summary --path "$result" \
+              | jq -r '.testFailures[] | "::error title=\(.testIdentifierString)::\(.failureText | gsub("\n"; "%0A"))"'
+          done
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ runner.temp }}/test-results
 
   # Builds the DocC catalogs the Swift Package Index publishes, so a broken
   # catalog or an unresolvable documentation link fails here rather than
