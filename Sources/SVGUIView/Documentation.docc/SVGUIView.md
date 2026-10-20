@@ -30,7 +30,8 @@ svgView.data = try Data(contentsOf: anotherURL)
 ### Controlling rendering
 
 ``SVGUIViewConfiguration`` sets the priority of the background rendering task
-and how long a single rendering may take before it is cancelled.
+and how long a single rendering may take before it is cancelled, which is 10
+seconds by default.
 
 ```swift
 svgView.configuration = SVGUIViewConfiguration(
