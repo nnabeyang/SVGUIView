@@ -142,7 +142,7 @@ final class SVGFeBlendElement: SVGElement, SVGFilterApplier {
     input: SVGFilterInput?, format: inout vImage_CGImageFormat, results: [String: CGImage],
     srcBuffer: inout vImage_Buffer, inputBuffer: inout vImage_Buffer
   ) -> CGImage? {
-    let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height))
+    guard let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height)) else { return nil }
     defer {
       free(data)
     }

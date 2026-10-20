@@ -100,6 +100,56 @@ struct SVGUIViewTests {
     }
   }
 
+  @Test(
+    "a snapshot of a rectangle too large to allocate throws allocationFailed",
+    arguments: [
+      // Core Graphics can't allocate the bitmap.
+      CGRect(x: 0, y: 0, width: 1e15, height: 1e15),
+      // The bytes of a row don't fit in `Int`.
+      CGRect(x: 0, y: 0, width: 1e18, height: 20),
+      // The number of pixels doesn't fit in `Int`.
+      CGRect(x: 0, y: 0, width: 1e30, height: 20),
+    ])
+  func takeSnapshotOfHugeRect(rect: CGRect) async {
+    let view = makeView(Self.square)
+    await #expect(throws: SVGRenderingError.allocationFailed) {
+      try await view.takeSnapshot(rect: rect)
+    }
+  }
+
+  /// The red, green, blue and alpha components of a pixel of an image, from the top left.
+  private func pixel(of image: UIImage, x: Int, y: Int) throws -> [UInt8] {
+    let cgImage = try #require(image.cgImage)
+    var components = [UInt8](repeating: 0, count: 4)
+    let context = try #require(
+      CGContext(
+        data: &components, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    context.draw(cgImage, in: CGRect(x: -x, y: y - cgImage.height + 1, width: cgImage.width, height: cgImage.height))
+    return components
+  }
+
+  @Test("an element whose filter is too large to allocate is not drawn, and the other elements are")
+  func filterTooLargeToAllocate() async throws {
+    let view = makeView(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <!-- A filter region in user space is limited to the viewport, but one relative to the element is not. -->
+        <filter id="huge" x="0" y="0" width="1000000000000000000000" height="1000000000000000000000">
+          <feOffset dx="0" dy="0"/>
+        </filter>
+        <rect width="10" height="20" fill="red" filter="url(#huge)"/>
+        <rect x="10" width="10" height="20" fill="lime"/>
+      </svg>
+      """#)
+    let image = try await view.takeSnapshot()
+    let scale = Int(UIScreen.main.scale)
+    let filtered = try pixel(of: image, x: 5 * scale, y: 10 * scale)
+    let other = try pixel(of: image, x: 15 * scale, y: 10 * scale)
+    #expect(filtered == [0, 0, 0, 0])
+    #expect(other == [0, 255, 0, 255])
+  }
+
   @Test("a snapshot that takes longer than the timeout throws timedOut")
   func takeSnapshotTimesOut() async {
     // Rendering checks for cancellation between elements, so many groups make it stop soon after the timeout.
@@ -139,6 +189,44 @@ struct SVGUIViewTests {
     #expect(cancelled < full / 2, "Rendering took \(cancelled) after a timeout of \(full / 10), and \(full) in full")
   }
 
+  @Test("renderings that occupy every thread of the cooperative thread pool still time out on time")
+  func timeoutWhileRenderingsOccupyEveryThread() async {
+    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <filter id="blur">\#(blurs)</filter>
+        <rect width="20" height="20" filter="url(#blur)"/>
+      </svg>
+      """#
+    let timeout = Duration.milliseconds(500)
+    // Twice as many renderings as cores fill every thread of the pool, and the threads of dispatch queues of the
+    // same quality of service.
+    let views = (0..<ProcessInfo.processInfo.activeProcessorCount * 2).map { _ in
+      let view = makeView(svg, timeoutDuration: timeout)
+      view.frame.size = CGSize(width: 300, height: 300)
+      return view
+    }
+    let clock = ContinuousClock()
+    let start = clock.now
+    await withTaskGroup(of: SVGRenderingError?.self) { group in
+      for view in views {
+        group.addTask { @MainActor in
+          do throws(SVGRenderingError) {
+            _ = try await view.takeSnapshot()
+            return nil
+          } catch {
+            return error
+          }
+        }
+      }
+      for await error in group {
+        #expect(error == .timedOut)
+      }
+    }
+    let elapsed = clock.now - start
+    #expect(elapsed < timeout * 2, "The renderings returned after \(elapsed) with a timeout of \(timeout)")
+  }
+
   @Test("cancelling the task that waits for a snapshot stops the rendering in the middle")
   func cancellingSnapshotStopsRendering() async throws {
     let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
@@ -163,9 +251,43 @@ struct SVGUIViewTests {
     #expect(cancelled < full / 2, "Rendering took \(cancelled) with a cancellation after \(full / 10), and \(full) in full")
   }
 
+  @Test("releasing a view stops its rendering in the middle")
+  func releasingViewStopsRendering() async throws {
+    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <filter id="blur">\#(blurs)</filter>
+        <rect width="20" height="20" filter="url(#blur)"/>
+      </svg>
+      """#
+    let measured = makeView(svg, timeoutDuration: .seconds(60))
+    measured.frame.size = CGSize(width: 600, height: 600)
+    let clock = ContinuousClock()
+    let full = try await clock.measure { _ = try await measured.takeSnapshot() }
+    // Release the view a tenth of the way through, and compare with the full time, which depends on the machine.
+    var view: SVGUIView? = makeView(svg, timeoutDuration: .seconds(60))
+    view?.frame.size = CGSize(width: 600, height: 600)
+    render(try #require(view))
+    let task = try #require(view?.renderingTask)
+    try await Task.sleep(for: full / 10)
+    let start = clock.now
+    weak let released = view
+    view = nil
+    #expect(released == nil)
+    #expect(task.isCancelled)
+    await task.value
+    let stopped = clock.now - start
+    #expect(stopped < full / 2, "Rendering took \(stopped) after the view was released, and \(full) in full")
+  }
+
+  @Test("a rendering may take ten seconds by default")
+  func defaultTimeout() {
+    #expect(SVGUIViewConfiguration().timeoutDuration == .seconds(10))
+  }
+
   @Test(
-    "a rendering that timed out or was cancelled keeps the image that the view shows",
-    arguments: [SVGRenderingError.timedOut, .cancelled])
+    "a rendering that timed out, was cancelled or couldn't allocate its image keeps the image that the view shows",
+    arguments: [SVGRenderingError.timedOut, .cancelled, .allocationFailed])
   func showKeepsImage(error: SVGRenderingError) throws {
     let view = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
     let image = try makeImage()
@@ -325,5 +447,37 @@ struct SVGUIViewTests {
     #expect(
       growth < bitmap * renderings / 4,
       "Memory grew by \(growth / 1_048_576) MB over \(renderings) renderings; a bitmap is \(bitmap / 1_048_576) MB")
+  }
+
+  /// The bytes of virtual memory that the process has.
+  private func virtualBytes() -> Int {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+    _ = withUnsafeMutablePointer(to: &info) {
+      $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+        task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+      }
+    }
+    return Int(info.virtual_size)
+  }
+
+  @Test("a snapshot does not keep its bitmap until the timeout")
+  func snapshotReleasesBitmapBeforeTimeout() async throws {
+    let view = makeView(Self.square, timeoutDuration: .seconds(60))
+    view.frame.size = CGSize(width: 400, height: 400)
+    for _ in 0..<2 { _ = try await view.takeSnapshot() }
+    // The bitmaps that Core Graphics renders into are not allocated by malloc, so count the virtual memory,
+    // which runs out on a device before the physical memory does.
+    let before = virtualBytes()
+    let renderings = 100
+    for _ in 0..<renderings { _ = try await view.takeSnapshot() }
+    let growth = virtualBytes() - before
+    // Keeping the bitmap of each rendering until the timeout keeps all of them. Other tests that run at the
+    // same time allocate memory too, so allow for some of them.
+    let pixels = (400 * UIScreen.main.scale).rounded(.up)
+    let bitmap = Int(pixels * pixels) * 4
+    #expect(
+      growth < bitmap * renderings / 4,
+      "Virtual memory grew by \(growth / 1_048_576) MB over \(renderings) renderings; a bitmap is \(bitmap / 1_048_576) MB")
   }
 }

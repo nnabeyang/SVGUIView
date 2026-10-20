@@ -6,10 +6,10 @@ import os
 /// The view parses SVG data and renders it in a background task. Assign new data
 /// to ``data`` to change the displayed image. The view renders again when its
 /// size or its `contentMode` changes, and a new rendering stops the one in
-/// progress.
+/// progress. Releasing the view stops its rendering too.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext
-  /// The rendering in progress, which a new rendering cancels.
+  /// The rendering in progress, which a new rendering and the release of the view cancel.
   private(set) var renderingTask: Task<Void, Never>?
   /// The settings that control background rendering.
   public var configuration: SVGUIViewConfiguration = .init()
@@ -126,6 +126,11 @@ public class SVGUIView: UIView {
     }
   }
 
+  deinit {
+    // The rendering holds the view weakly, so without this it would go on until the timeout.
+    renderingTask?.cancel()
+  }
+
   @available(*, unavailable)
   required init?(coder _: NSCoder) {
     fatalError("init(coder:) has not been implemented")
@@ -189,8 +194,8 @@ public class SVGUIView: UIView {
 
   /// Shows the result of a rendering.
   ///
-  /// A rendering that timed out keeps the image that the view shows, so that a slow rendering does not
-  /// blank the view.
+  /// A rendering that timed out or couldn't allocate its image keeps the image that the view shows, so that a
+  /// slow rendering or a temporary shortage of memory does not blank the view.
   func show(_ result: Result<CGImage, SVGRenderingError>) {
     switch result {
     case .success(let image):
@@ -202,6 +207,8 @@ public class SVGUIView: UIView {
       break
     case .failure(.timedOut):
       Self.logger.warning("Rendering took longer than the timeout and was cancelled. The view keeps its current image.")
+    case .failure(.allocationFailed):
+      Self.logger.warning("The memory for the image to render into couldn't be allocated. The view keeps its current image.")
     }
   }
 
@@ -218,7 +225,9 @@ public class SVGUIView: UIView {
   ///   has no width or no height, ``SVGRenderingError/timedOut`` if rendering
   ///   takes longer than ``SVGUIViewConfiguration/timeoutDuration``, or
   ///   ``SVGRenderingError/cancelled`` if the task that calls this method is
-  ///   cancelled before rendering finishes.
+  ///   cancelled before rendering finishes, or
+  ///   ``SVGRenderingError/allocationFailed`` if the memory for the image
+  ///   couldn't be allocated.
   public func takeSnapshot(rect: CGRect? = nil) async throws(SVGRenderingError) -> UIImage {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
@@ -243,21 +252,14 @@ public class SVGUIView: UIView {
     guard let svg = base.root else { return .failure(.missingRootElement) }
     let viewBox = svg.getViewBox(size: rect.size)
 
-    let frameWidth = Int((rect.width * scale).rounded(.up))
-    let frameHeight = Int((rect.height * scale).rounded(.up))
     // `CGContext` cannot make a bitmap without a pixel.
-    guard frameWidth > 0, frameHeight > 0 else { return .failure(.zeroSizedRect) }
-    let bytesPerRow = 4 * frameWidth
-
-    let graphics = CGContext(
-      data: nil,
-      width: frameWidth,
-      height: frameHeight,
-      bitsPerComponent: 8,
-      bytesPerRow: bytesPerRow,
-      space: CGColorSpaceCreateDeviceRGB(),
-      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)!
-    graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(frameHeight)))
+    guard (rect.width * scale).rounded(.up) > 0, (rect.height * scale).rounded(.up) > 0 else {
+      return .failure(.zeroSizedRect)
+    }
+    guard let graphics = CGContext.bitmap(size: rect.size, scale: scale, space: CGColorSpaceCreateDeviceRGB()) else {
+      return .failure(.allocationFailed)
+    }
+    graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
 
     let context = SVGContext(
       base: base,
@@ -298,9 +300,14 @@ public class SVGUIView: UIView {
     }
 
     // Time out on a dispatch queue rather than in a task, so that the timeout fires even while renderings
-    // occupy every thread of the cooperative thread pool.
-    let timeout = DispatchWorkItem { drawTask.cancel() }
-    DispatchQueue.global().asyncAfter(deadline: .now() + timeoutDuration.dispatchTimeInterval, execute: timeout)
+    // occupy every thread of the cooperative thread pool. Those threads also count against dispatch queues of
+    // the same quality of service, so the queue is above the highest task priority that renderings can have.
+    // A timer source releases its handler, and with it `drawTask` and the image, as soon as it is cancelled,
+    // whereas a cancelled work item stays on the queue until its deadline.
+    let timeout = DispatchSource.makeTimerSource(queue: .global(qos: .userInteractive))
+    timeout.setEventHandler { drawTask.cancel() }
+    timeout.schedule(deadline: .now() + timeoutDuration.dispatchTimeInterval)
+    timeout.activate()
     let value = await withTaskCancellationHandler {
       await drawTask.value
     } onCancel: {

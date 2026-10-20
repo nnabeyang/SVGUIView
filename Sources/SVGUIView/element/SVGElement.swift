@@ -432,6 +432,9 @@ extension SVGDrawableElement {
 
   func draw(_ context: SVGContext, mode: DrawMode) async {
     guard !Task.isCancelled else { return }
+    // A rendering hardly ever suspends otherwise, so let other tasks run on this thread of the cooperative
+    // thread pool between elements.
+    await Task.yield()
     if let display = display, case .none = display {
       return
     }

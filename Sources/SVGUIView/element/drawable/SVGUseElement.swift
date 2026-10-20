@@ -96,6 +96,7 @@ final class SVGUseElement: SVGDrawableElement {
 
   func draw(_ context: SVGContext, mode: DrawMode) async {
     guard !Task.isCancelled else { return }
+    await Task.yield()
     let gContext = context.graphics
     gContext.saveGState()
     defer {
