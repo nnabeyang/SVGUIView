@@ -58,21 +58,7 @@ final class SVGClipPathElement: SVGElement {
   private func maskImage(frame: CGRect, context: SVGContext) async -> CGImage? {
     let size = frame.size
     let scale = context.scale
-    let frameWidth = Int((size.width * scale).rounded(.up))
-    let frameHeight = Int((size.height * scale).rounded(.up))
-    let bytesPerRow = 4 * frameWidth
-    guard
-      let graphics = CGContext(
-        data: nil,
-        width: frameWidth,
-        height: frameHeight,
-        bitsPerComponent: 8,
-        bytesPerRow: bytesPerRow,
-        space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-    else {
-      return nil
-    }
+    guard let graphics = CGContext.bitmap(size: size, scale: scale, space: CGColorSpaceCreateDeviceRGB()) else { return nil }
 
     let transform: CGAffineTransform
     let clipPathUnits = clipPathUnits ?? .userSpaceOnUse

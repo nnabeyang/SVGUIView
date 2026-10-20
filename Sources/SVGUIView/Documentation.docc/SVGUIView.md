@@ -39,16 +39,17 @@ svgView.configuration = SVGUIViewConfiguration(
 )
 ```
 
-When a rendering takes longer than the timeout, the view keeps the image that it
-shows.
+When a rendering takes longer than the timeout, or the memory for its image
+couldn't be allocated, the view keeps the image that it shows.
 
 ### Taking a snapshot
 
 ``SVGUIView/SVGUIView/takeSnapshot(rect:)`` renders the current document into a
 `UIImage` without changing what the view displays. It throws an
 ``SVGRenderingError`` when the document has no root `svg` element, the rectangle
-to render into has no width or no height, rendering times out, or the task that
-waits for the snapshot is cancelled.
+to render into has no width or no height, rendering times out, the task that
+waits for the snapshot is cancelled, or the memory for the image couldn't be
+allocated.
 
 ```swift
 do {
@@ -57,6 +58,9 @@ do {
   // Rendering took longer than the configuration's timeout.
 } catch .cancelled {
   // The task that waited for the snapshot was cancelled.
+} catch .allocationFailed {
+  // The memory for the image couldn't be allocated, such as for a rectangle
+  // that is too large.
 } catch {
   // There is nothing to render: the document has no root `svg` element, or the
   // rectangle has no width or no height.
