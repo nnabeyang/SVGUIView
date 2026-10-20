@@ -139,10 +139,9 @@ class SystemFontDatabaseCoreText {
   }
 
   static func createTextStyleFont(parameters: CascadeListParameters) -> CTFont? {
-    let textStyle = UIFont.TextStyle(rawValue: parameters.fontName)
-    var descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: textStyle) as CTFontDescriptor
+    var descriptor = preferredFontDescriptor(textStyle: parameters.fontName)
     let traits: CTFontSymbolicTraits = [
-      parameters.weight >= UIFont.Weight.semibold.rawValue ? .boldTrait : .zero,
+      parameters.weight >= FontWeight.semibold ? .boldTrait : .zero,
       parameters.width >= kCTFontWidthSemiExpanded ? .expandedTrait : .zero,
       parameters.width <= kCTFontWidthSemiCondensed ? .condensedTrait : .zero,
       parameters.italic ? .italicTrait : .zero,
@@ -232,21 +231,21 @@ class SystemFontDatabaseCoreText {
   }
 
   func matchSystemFontUse(string: String) -> SystemFontKind? {
-    if SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "-webkit-system-font")
-      || SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "-apple-system")
-      || SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "-apple-system-font")
-      || SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "system-ui")
-      || SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "ui-sans-serif")
+    if FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "-webkit-system-font")
+      || FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "-apple-system")
+      || FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "-apple-system-font")
+      || FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "system-ui")
+      || FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "ui-sans-serif")
     {
       return .systemUI
     }
-    if SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "ui-serif") {
+    if FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "ui-serif") {
       return .uiSerif
     }
-    if SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "ui-monospace") {
+    if FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "ui-monospace") {
       return .uiMonospace
     }
-    if SVGUIView.equalLettersIgnoringASCIICase(string: string, literal: "ui-rounded") {
+    if FontCacheCoreText.equalLettersIgnoringASCIICase(string: string, literal: "ui-rounded") {
       return .uiRounded
     }
     let index = textStyles.partitioningIndex(where: { $0 == (string as CFString) })
@@ -257,15 +256,15 @@ class SystemFontDatabaseCoreText {
   }
 
   static func mapWeight(weight: FontSelectionValue) -> CGFloat {
-    if weight < FontSelectionValue(150) { return UIFont.Weight.ultraLight.rawValue }
-    if weight < FontSelectionValue(250) { return UIFont.Weight.thin.rawValue }
-    if weight < FontSelectionValue(350) { return UIFont.Weight.light.rawValue }
-    if weight < FontSelectionValue(450) { return UIFont.Weight.regular.rawValue }
-    if weight < FontSelectionValue(550) { return UIFont.Weight.medium.rawValue }
-    if weight < FontSelectionValue(650) { return UIFont.Weight.semibold.rawValue }
-    if weight < FontSelectionValue(750) { return UIFont.Weight.bold.rawValue }
-    if weight < FontSelectionValue(850) { return UIFont.Weight.heavy.rawValue }
-    return UIFont.Weight.black.rawValue
+    if weight < FontSelectionValue(150) { return FontWeight.ultraLight }
+    if weight < FontSelectionValue(250) { return FontWeight.thin }
+    if weight < FontSelectionValue(350) { return FontWeight.light }
+    if weight < FontSelectionValue(450) { return FontWeight.regular }
+    if weight < FontSelectionValue(550) { return FontWeight.medium }
+    if weight < FontSelectionValue(650) { return FontWeight.semibold }
+    if weight < FontSelectionValue(750) { return FontWeight.bold }
+    if weight < FontSelectionValue(850) { return FontWeight.heavy }
+    return FontWeight.black
   }
 
   static let piecewisePoints: [(input: FontSelectionValue, output: CGFloat)] = [
@@ -313,4 +312,18 @@ extension Collection {
     }
     return l
   }
+}
+
+/// The weights of `UIFont.Weight`, which Core Text uses for `kCTFontWeightTrait` but doesn't declare on iOS.
+/// They're single-precision values, as in UIKit.
+enum FontWeight {
+  static let ultraLight = CGFloat(Float(-0.8))
+  static let thin = CGFloat(Float(-0.6))
+  static let light = CGFloat(Float(-0.4))
+  static let regular = CGFloat(Float(0.0))
+  static let medium = CGFloat(Float(0.23))
+  static let semibold = CGFloat(Float(0.3))
+  static let bold = CGFloat(Float(0.4))
+  static let heavy = CGFloat(Float(0.56))
+  static let black = CGFloat(Float(0.62))
 }

@@ -81,7 +81,7 @@ class FontCascadeFonts {
       if fontRanges.isNull, let fontSelector = fontSelector {
         fontRanges = fontSelector.fontRangesForFamily(
           fontDescription: description,
-          familyName: SVGUIView.familyNamesData[.standard])
+          familyName: FontCacheCoreText.familyNamesData[.standard])
       }
       if fontRanges.isNull {
         fontRanges = FontRanges(font: FontCache.shared.lastResortFallbackFont(fontDescription: description))

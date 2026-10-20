@@ -13,7 +13,7 @@ struct SVGUIFont {
     self.name = name
     self.size = size.flatMap { Size(rawValue: $0) }
     self.weight = Weight(rawValue: weight ?? "")
-    var name = name ?? SVGUIView.familyNamesData[.standard]
+    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
     let families = name.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
       var scanner = SVGAttributeScanner(bytes: bytes)
@@ -28,7 +28,7 @@ struct SVGUIFont {
     self.name = name
     size = nil
     self.weight = weight
-    var name = name ?? SVGUIView.familyNamesData[.standard]
+    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
     let families = name.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
       var scanner = SVGAttributeScanner(bytes: bytes)
@@ -46,7 +46,7 @@ struct SVGUIFont {
     name = lhs.name ?? rhs.name
     size = lhs.size ?? rhs.size
     weight = lhs.weight ?? rhs.weight
-    var name = name ?? SVGUIView.familyNamesData[.standard]
+    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
     let families = name.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
       var scanner = SVGAttributeScanner(bytes: bytes)
@@ -64,7 +64,7 @@ struct SVGUIFont {
     name = child.name ?? parent.name
     size = Size(child: child.size, context: context)
     weight = Weight(child: child.weight, parent: parent.weight)
-    var name = name ?? SVGUIView.familyNamesData[.standard]
+    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
     let families = name.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
       var scanner = SVGAttributeScanner(bytes: bytes)
@@ -321,7 +321,7 @@ extension SVGUIFont {
 
 extension CTFont {
   static func standard(context: any SVGLengthContext) -> CTFont {
-    let name = SVGUIView.familyNamesData[.standard]
+    let name = FontCacheCoreText.familyNamesData[.standard]
     let size: SVGUIFont.Size = .length(.pixel(SVGUIFont.Size.defaultFontSize))
     let fontDescription = FontCascadeDescription()
     fontDescription.setFamilies(familyNames: [name])

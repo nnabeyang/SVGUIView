@@ -30,8 +30,9 @@ enum AllowUserInstalledFonts {
   case yes
 }
 
-extension SVGUIView {
-  nonisolated static let familyNamesData: FamilyNames = [
+/// Font lookups with Core Text, ported from WebKit's FontCacheCoreText.
+enum FontCacheCoreText {
+  static let familyNamesData: FamilyNames = [
     "-webkit-cursive",
     "-webkit-fantasy",
     "-webkit-monospace",
@@ -42,7 +43,7 @@ extension SVGUIView {
     "-webkit-system-ui",
   ]
 
-  nonisolated static func systemFontCascadeList(
+  static func systemFontCascadeList(
     description: FontDescription, cssFamily: String,
     systemFontKind: SystemFontKind, allowUserInstalledFonts: AllowUserInstalledFonts
   ) -> [CTFontDescriptor] {
@@ -51,7 +52,7 @@ extension SVGUIView {
       systemFontKind: systemFontKind, allowUserInstalledFonts: allowUserInstalledFonts)
   }
 
-  nonisolated static func fontDescriptorWithFamilySpecialCase(
+  static func fontDescriptorWithFamilySpecialCase(
     familyName: String, fontDescription: FontDescription,
     size _: Double, allowUserInstalledFonts: AllowUserInstalledFonts
   ) -> SpecialCaseFontLookupResult? {
@@ -85,14 +86,14 @@ extension SVGUIView {
     return nil
   }
 
-  nonisolated static func findClosestFont(familyFonts: FontDatabase.InstalledFontFamily, fontSelectionRequest: FontSelectionRequest) -> FontDatabase.InstalledFont? {
+  static func findClosestFont(familyFonts: FontDatabase.InstalledFontFamily, fontSelectionRequest: FontSelectionRequest) -> FontDatabase.InstalledFont? {
     let capabilities = familyFonts.installedFonts.map(\.capabilities)
     let algorithm = FontSelectionAlgorithm(request: fontSelectionRequest, capabilities: capabilities, capabilitiesBounds: familyFonts.capabilities)
     guard let index = algorithm.indexOfBestCapabilities(), index < familyFonts.installedFonts.count else { return nil }
     return familyFonts.installedFonts[index]
   }
 
-  nonisolated static func platformFontLookupWithFamily(fontDatabase: FontDatabase, familyName: String, request: FontSelectionRequest) -> CTFontDescriptor? {
+  static func platformFontLookupWithFamily(fontDatabase: FontDatabase, familyName: String, request: FontSelectionRequest) -> CTFontDescriptor? {
     let familyFonts = fontDatabase.collectionForFamily(familyName: familyName)
     guard !familyFonts.isEmpty else {
       guard let postScriptFont = fontDatabase.fontForPostScriptName(postScriptName: familyName) else {
@@ -104,7 +105,7 @@ extension SVGUIView {
     return installedFonts.fontDescriptor
   }
 
-  nonisolated static func fontWithFamily(fontDatabase: FontDatabase, familyName: String, fontDescription: FontDescription, fontCreationContext: FontCreationContext, size: Double) -> CTFont? {
+  static func fontWithFamily(fontDatabase: FontDatabase, familyName: String, fontDescription: FontDescription, fontCreationContext: FontCreationContext, size: Double) -> CTFont? {
     guard !familyName.isEmpty else { return nil }
 
     if let lookupResult = fontDescriptorWithFamilySpecialCase(
@@ -131,11 +132,11 @@ extension SVGUIView {
       fontCreationContext: fontCreationContext, fontTypeForPreparation: .nonSystemFont)
   }
 
-  nonisolated static func equalLettersIgnoringASCIICase(string: String, literal: String) -> Bool {
+  static func equalLettersIgnoringASCIICase(string: String, literal: String) -> Bool {
     string.caseInsensitiveCompare(literal) == .orderedSame
   }
 
-  nonisolated static func preparePlatformFont(
+  static func preparePlatformFont(
     originalFont: UnrealizedCoreTextFont, fontDescription: FontDescription,
     fontCreationContext: FontCreationContext,
     fontTypeForPreparation _: FontTypeForPreparation, applyTraitsVariations: ApplyTraitsVariations = .yes

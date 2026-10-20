@@ -5,14 +5,14 @@ class FontCascadeDescription: FontDescription {
   }
 
   var useFixedDefaultSize: Bool {
-    familyNames.count == 1 && familyNames[0] == SVGUIView.familyNamesData[.monospace]
+    familyNames.count == 1 && familyNames[0] == FontCacheCoreText.familyNamesData[.monospace]
   }
 
   var effectiveFamilyCount: Int {
     var result = 0
     for familyName in familyNames {
       if let use = SystemFontDatabaseCoreText.shared.matchSystemFontUse(string: familyName) {
-        let cascadeList = SVGUIView.systemFontCascadeList(
+        let cascadeList = FontCacheCoreText.systemFontCascadeList(
           description: self, cssFamily: familyName,
           systemFontKind: use, allowUserInstalledFonts: shouldAllowUserInstalledFonts)
 
@@ -28,7 +28,7 @@ class FontCascadeDescription: FontDescription {
     var index = index
     for familyName in familyNames {
       if let use = SystemFontDatabaseCoreText.shared.matchSystemFontUse(string: familyName) {
-        let cascadeList = SVGUIView.systemFontCascadeList(
+        let cascadeList = FontCacheCoreText.systemFontCascadeList(
           description: self, cssFamily: familyName,
           systemFontKind: use, allowUserInstalledFonts: shouldAllowUserInstalledFonts)
         if index < cascadeList.count {
