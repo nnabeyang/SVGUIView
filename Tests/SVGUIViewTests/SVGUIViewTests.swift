@@ -251,6 +251,40 @@ struct SVGUIViewTests {
     #expect(cancelled < full / 2, "Rendering took \(cancelled) with a cancellation after \(full / 10), and \(full) in full")
   }
 
+  @Test("releasing a view stops its rendering in the middle")
+  func releasingViewStopsRendering() async throws {
+    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <filter id="blur">\#(blurs)</filter>
+        <rect width="20" height="20" filter="url(#blur)"/>
+      </svg>
+      """#
+    let measured = makeView(svg, timeoutDuration: .seconds(60))
+    measured.frame.size = CGSize(width: 600, height: 600)
+    let clock = ContinuousClock()
+    let full = try await clock.measure { _ = try await measured.takeSnapshot() }
+    // Release the view a tenth of the way through, and compare with the full time, which depends on the machine.
+    var view: SVGUIView? = makeView(svg, timeoutDuration: .seconds(60))
+    view?.frame.size = CGSize(width: 600, height: 600)
+    render(try #require(view))
+    let task = try #require(view?.renderingTask)
+    try await Task.sleep(for: full / 10)
+    let start = clock.now
+    weak let released = view
+    view = nil
+    #expect(released == nil)
+    #expect(task.isCancelled)
+    await task.value
+    let stopped = clock.now - start
+    #expect(stopped < full / 2, "Rendering took \(stopped) after the view was released, and \(full) in full")
+  }
+
+  @Test("a rendering may take ten seconds by default")
+  func defaultTimeout() {
+    #expect(SVGUIViewConfiguration().timeoutDuration == .seconds(10))
+  }
+
   @Test(
     "a rendering that timed out, was cancelled or couldn't allocate its image keeps the image that the view shows",
     arguments: [SVGRenderingError.timedOut, .cancelled, .allocationFailed])

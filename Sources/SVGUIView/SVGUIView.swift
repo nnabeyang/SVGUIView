@@ -6,10 +6,10 @@ import os
 /// The view parses SVG data and renders it in a background task. Assign new data
 /// to ``data`` to change the displayed image. The view renders again when its
 /// size or its `contentMode` changes, and a new rendering stops the one in
-/// progress.
+/// progress. Releasing the view stops its rendering too.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext
-  /// The rendering in progress, which a new rendering cancels.
+  /// The rendering in progress, which a new rendering and the release of the view cancel.
   private(set) var renderingTask: Task<Void, Never>?
   /// The settings that control background rendering.
   public var configuration: SVGUIViewConfiguration = .init()
@@ -124,6 +124,11 @@ public class SVGUIView: UIView {
       )
       self?.show(result, ofRendering: generation)
     }
+  }
+
+  deinit {
+    // The rendering holds the view weakly, so without this it would go on until the timeout.
+    renderingTask?.cancel()
   }
 
   @available(*, unavailable)
