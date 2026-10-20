@@ -23,35 +23,18 @@ jobs:
           xcode-version: '27.0'
 
       - name: Run xcodebuild tests (iOS)
-        run: |
-          # Without pipefail, the exit status of xcpretty hides a failing xcodebuild.
-          set -o pipefail
-          DESTINATION="platform=iOS Simulator,name=iPhone 17e,OS=27.0"
-
-          echo "Using destination: $DESTINATION"
-          mkdir -p "$RUNNER_TEMP/test-results"
-          # xcpretty hides the output of Swift Testing, so keep the whole output and the result bundle as well.
-          xcodebuild clean test \
-            -scheme SVGUIView-Package \
-            -destination "$DESTINATION" \
-            -resultBundlePath "$RUNNER_TEMP/test-results/tests.xcresult" \
-            | tee "$RUNNER_TEMP/test-results/tests.log" \
-            | xcpretty
+        env:
+          TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
+        run: scripts/test-in-simulator.sh tests clean
 
       # With one thread in the cooperative thread pool, a rendering that never lets other tasks run keeps the
       # tests from cancelling it on time.
       - name: Run xcodebuild tests with one thread in the cooperative pool (iOS)
         if: ${{ !cancelled() }}
         env:
+          TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
           TEST_RUNNER_LIBDISPATCH_COOPERATIVE_POOL_STRICT: "1"
-        run: |
-          set -o pipefail
-          xcodebuild test \
-            -scheme SVGUIView-Package \
-            -destination "platform=iOS Simulator,name=iPhone 17e,OS=27.0" \
-            -resultBundlePath "$RUNNER_TEMP/test-results/tests-one-thread.xcresult" \
-            | tee "$RUNNER_TEMP/test-results/tests-one-thread.log" \
-            | xcpretty
+        run: scripts/test-in-simulator.sh tests-one-thread
 
       - name: Report failed tests
         if: ${{ failure() }}

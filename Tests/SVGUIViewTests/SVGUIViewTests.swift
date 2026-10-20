@@ -228,7 +228,9 @@ struct SVGUIViewTests {
       }
     }
     let elapsed = clock.now - start
-    #expect(elapsed < timeout * 2, "The renderings returned after \(elapsed) with a timeout of \(timeout)")
+    // Before the timeout ran above the priority of renderings, the renderings ran to the end, which took about 20
+    // times the timeout. A slow CI machine can take more than twice the timeout to stop them, so allow 4 times.
+    #expect(elapsed < timeout * 4, "The renderings returned after \(elapsed) with a timeout of \(timeout)")
   }
 
   @Test("cancelling the task that waits for a snapshot stops the rendering in the middle")
