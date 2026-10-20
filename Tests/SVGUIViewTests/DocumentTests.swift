@@ -41,4 +41,43 @@ struct DocumentTests {
     #expect(root.children[0].children[1].attributes.isEmpty)
   }
 
+  @Test("the document keeps elements that aren't rendered, with their descendants")
+  func documentKeepsUnrenderedElements() throws {
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://example.com/x" viewBox="0 0 20 20">
+        <style>rect { fill: red; }</style>
+        <symbol id="s"><rect width="10" height="10"/></symbol>
+        <x:foo/>
+        <rect width="20" height="20"/>
+      </svg>
+      """#
+    let context = SVGParser.parse(data: Data(svg.utf8))
+    let root = try #require(context.document.root)
+    #expect(root.children.map(\.localName) == ["style", "symbol", "foo", "rect"])
+    #expect(root.children.map(\.name) == [.style, .unknown, .unknown, .rect])
+    #expect(root.children[1].children.map(\.localName) == ["rect"])
+    #expect(root.children[0].text == "rect { fill: red; }")
+    // Only the last rectangle is rendered.
+    #expect(context.root?.children.map(\.type) == [.rect])
+  }
+
+  @Test("every element of a document has its own identifier")
+  func identifiersAreUnique() throws {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg"><g><rect/><foo/></g><circle/></svg>"#
+    let root = try #require(SVGParser.parse(data: Data(svg.utf8)).document.root)
+    func identifiers(_ element: DocumentElement) -> [ElementID] {
+      [element.id] + element.children.flatMap(identifiers)
+    }
+    let ids = identifiers(root)
+    #expect(ids.count == 5)
+    #expect(Set(ids).count == ids.count)
+  }
+
+  @Test("a document whose root isn't an svg element in the SVG namespace has nothing to render")
+  func rootMustBeSVG() {
+    let svg = #"<foo xmlns="http://www.w3.org/2000/svg"><svg><rect width="10" height="10"/></svg></foo>"#
+    let context = SVGParser.parse(data: Data(svg.utf8))
+    #expect(context.document.root?.localName == "foo")
+    #expect(context.root == nil)
+  }
 }

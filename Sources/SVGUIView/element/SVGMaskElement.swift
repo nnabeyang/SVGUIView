@@ -179,7 +179,7 @@ final class SVGMaskElement: SVGDrawableElement {
 
   func draw(_: SVGContext, mode _: DrawMode) async {}
 
-  func style(with _: Stylesheet) -> any SVGElement {
+  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
     Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 

@@ -10,7 +10,7 @@ protocol SVGElement: AnyObject, Encodable, Sendable {
   var index: ObjectIdentifier { get }
   func draw(_ context: SVGContext, mode: DrawMode) async
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async
-  func style(with style: Stylesheet) -> any SVGElement
+  func style(with style: Stylesheet, element: ElementCursor) -> any SVGElement
   func contains(index: ObjectIdentifier, context: SVGContext) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
@@ -71,15 +71,10 @@ enum DrawMode: Equatable {
   case filter(isRoot: Bool)
 }
 
-final class SVGBaseElement: Element, @unchecked Sendable {
-  typealias Impl = SVGSelectorImpl
-
+/// The presentation attributes of an element, parsed, with the values of the cascade applied.
+final class SVGBaseElement: Sendable {
   let name: SVGElementName
   let text: String
-  weak var parent: SVGBaseElement?
-  weak var prevSibling: SVGBaseElement?
-  weak var nextSibling: SVGBaseElement?
-  let children: [SVGBaseElement]
   let id: String?
   var index: ObjectIdentifier { ObjectIdentifier(self) }
   let opacity: Double
@@ -100,10 +95,9 @@ final class SVGBaseElement: Element, @unchecked Sendable {
   let style: SVGUIInlineStyle
   let attributes: [String: String]
 
-  init(name: SVGElementName, text: String, attributes: [String: String], children: [SVGBaseElement]) {
+  init(name: SVGElementName, text: String, attributes: [String: String]) {
     self.name = name
     self.text = text
-    self.children = children
     self.attributes = attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
@@ -124,28 +118,9 @@ final class SVGBaseElement: Element, @unchecked Sendable {
     visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
   }
 
-  static func create(name: SVGElementName, text: String, attributes: [String: String], children: [SVGBaseElement]) -> SVGBaseElement {
-    let element = SVGBaseElement(name: name, text: text, attributes: attributes, children: children)
-    let n = element.children.count
-    var i = 0
-    while i < n {
-      let child = element.children[i]
-      child.parent = element
-      if i > 0 {
-        child.prevSibling = element.children[i - 1]
-      }
-      if i < n - 1 {
-        child.nextSibling = element.children[i + 1]
-      }
-      i += 1
-    }
-    return element
-  }
-
   init(other: SVGBaseElement, attributes: [String: String]) {
     self.name = other.name
     self.text = other.text
-    self.children = other.children
     self.attributes = attributes
     id = other.id
     className = other.className
@@ -175,7 +150,6 @@ final class SVGBaseElement: Element, @unchecked Sendable {
   init(other: SVGBaseElement, css: SVGUIStyle) {
     self.name = other.name
     self.text = other.text
-    self.children = other.children
     self.attributes = other.attributes
     id = other.id
     style = other.style
@@ -196,71 +170,6 @@ final class SVGBaseElement: Element, @unchecked Sendable {
     visibility = other.visibility
   }
 
-  func createElement(with css: Stylesheet) -> any SVGElement {
-    var contents = [any SVGElement]()
-    for child in children {
-      contents.append(child.createElement(with: css))
-    }
-    let element: any SVGElement =
-      switch name {
-      case .svg:
-        SVGSVGElement(base: self, contents: contents)
-      case .g:
-        SVGGroupElement(base: self, contents: contents)
-      case .clipPath:
-        SVGClipPathElement(base: self, contents: contents)
-      case .mask:
-        SVGMaskElement(base: self, contents: contents)
-      case .pattern:
-        SVGPatternElement(base: self, contents: contents)
-      case .filter:
-        SVGFilterElement(base: self, contents: contents)
-      case .feMerge:
-        SVGFeMergeElement(base: self, contents: contents)
-      case .feGaussianBlur:
-        SVGFeGaussianBlurElement(base: self, contents: contents)
-      case .feFlood:
-        SVGFeFloodElement(base: self, contents: contents)
-      case .feBlend:
-        SVGFeBlendElement(base: self, contents: contents)
-      case .feOffset:
-        SVGFeOffsetElement(base: self, contents: contents)
-      case .feMergeNode:
-        SVGFeMergeNodeElement(base: self, contents: contents)
-      case .text:
-        SVGTextElement(base: self, contents: contents)
-      case .image:
-        SVGImageElement(base: self, contents: contents)
-      case .line:
-        SVGLineElement(base: self, contents: contents)
-      case .circle:
-        SVGCircleElement(base: self, contents: contents)
-      case .ellipse:
-        SVGEllipseElement(base: self, contents: contents)
-      case .rect:
-        SVGRectElement(base: self, contents: contents)
-      case .path:
-        SVGPathElement(base: self, contents: contents)
-      case .polyline:
-        SVGPolylineElement(base: self, contents: contents)
-      case .polygon:
-        SVGPolygonElement(base: self, contents: contents)
-      case .stop:
-        SVGStopElement(base: self, contents: contents)
-      case .use:
-        SVGUseElement(base: self, contents: contents)
-      case .linearGradient:
-        SVGLinearGradientServer(base: self, contents: contents)
-      case .radialGradient:
-        SVGRadialGradientServer(base: self, contents: contents)
-      case .defs:
-        SVGDefsElement(base: self, contents: contents)
-      case .style, .unknown:
-        fatalError("unknown element: \(name.rawValue)")
-      }
-    return element.style(with: css)
-  }
-
   private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
     let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
     let size = attributes["font-size"]?.trimmingCharacters(in: .whitespaces)
@@ -272,18 +181,6 @@ final class SVGBaseElement: Element, @unchecked Sendable {
       return nil
     }
     return SVGUIFont(name: name, size: size, weight: weight)
-  }
-
-  func hasLocalName(_ localName: Impl.LocalName) -> Bool {
-    Impl.LocalName.from(name.rawValue) == localName
-  }
-
-  func hasId(id: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
-    self.id == id.rawValue
-  }
-
-  func hasClass(name: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
-    self.className == name.rawValue
   }
 }
 
@@ -341,7 +238,7 @@ extension SVGDrawableElement {
   }
 
   init(text: String, attributes: [String: String]) {
-    let base = SVGBaseElement(name: Self.type, text: text, attributes: attributes, children: [])
+    let base = SVGBaseElement(name: Self.type, text: text, attributes: attributes)
     self.init(base: base, text: text, attributes: attributes)
   }
 
@@ -354,8 +251,8 @@ extension SVGDrawableElement {
     Self(other: self, attributes: attributes)
   }
 
-  func style(with style: Stylesheet) -> any SVGElement {
-    let css = cascadeElement(element: base, stylesheets: [style], inlineStyle: self.style.declarations)
+  func style(with style: Stylesheet, element: ElementCursor) -> any SVGElement {
+    let css = cascadeElement(element: element, stylesheets: [style], inlineStyle: self.style.declarations)
     return Self(other: self, css: css)
   }
 
@@ -595,5 +492,74 @@ extension SVGDrawableElement {
     if width == 0 { return sy }
     if height == 0 { return sx }
     return width > height ? sy : sx
+  }
+}
+
+extension ElementCursor {
+  /// Makes the element to render, with the values of the cascade applied, or `nil` for an element that isn't
+  /// rendered, such as `<style>` or an unknown element, whose descendants aren't rendered either.
+  func makeElement(with css: Stylesheet) -> (any SVGElement)? {
+    let name = element.name
+    if name == .style || name == .unknown { return nil }
+    let contents = element.children.indices.compactMap { child(at: $0).makeElement(with: css) }
+    let base = SVGBaseElement(name: name, text: element.text, attributes: element.attributes)
+    let rendered: any SVGElement =
+      switch name {
+      case .svg:
+        SVGSVGElement(base: base, contents: contents)
+      case .g:
+        SVGGroupElement(base: base, contents: contents)
+      case .clipPath:
+        SVGClipPathElement(base: base, contents: contents)
+      case .mask:
+        SVGMaskElement(base: base, contents: contents)
+      case .pattern:
+        SVGPatternElement(base: base, contents: contents)
+      case .filter:
+        SVGFilterElement(base: base, contents: contents)
+      case .feMerge:
+        SVGFeMergeElement(base: base, contents: contents)
+      case .feGaussianBlur:
+        SVGFeGaussianBlurElement(base: base, contents: contents)
+      case .feFlood:
+        SVGFeFloodElement(base: base, contents: contents)
+      case .feBlend:
+        SVGFeBlendElement(base: base, contents: contents)
+      case .feOffset:
+        SVGFeOffsetElement(base: base, contents: contents)
+      case .feMergeNode:
+        SVGFeMergeNodeElement(base: base, contents: contents)
+      case .text:
+        SVGTextElement(base: base, contents: contents)
+      case .image:
+        SVGImageElement(base: base, contents: contents)
+      case .line:
+        SVGLineElement(base: base, contents: contents)
+      case .circle:
+        SVGCircleElement(base: base, contents: contents)
+      case .ellipse:
+        SVGEllipseElement(base: base, contents: contents)
+      case .rect:
+        SVGRectElement(base: base, contents: contents)
+      case .path:
+        SVGPathElement(base: base, contents: contents)
+      case .polyline:
+        SVGPolylineElement(base: base, contents: contents)
+      case .polygon:
+        SVGPolygonElement(base: base, contents: contents)
+      case .stop:
+        SVGStopElement(base: base, contents: contents)
+      case .use:
+        SVGUseElement(base: base, contents: contents)
+      case .linearGradient:
+        SVGLinearGradientServer(base: base, contents: contents)
+      case .radialGradient:
+        SVGRadialGradientServer(base: base, contents: contents)
+      case .defs:
+        SVGDefsElement(base: base, contents: contents)
+      case .style, .unknown:
+        preconditionFailure("\(name.rawValue) isn't rendered")
+      }
+    return rendered.style(with: css, element: self)
   }
 }

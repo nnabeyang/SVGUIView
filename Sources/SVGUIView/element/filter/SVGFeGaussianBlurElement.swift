@@ -81,7 +81,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
 
   let colorInterpolationFilters: SVGColorInterpolation?
 
-  func style(with _: Stylesheet) -> any SVGElement {
+  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
     self
   }
 

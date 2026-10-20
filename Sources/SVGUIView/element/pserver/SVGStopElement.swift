@@ -35,7 +35,7 @@ final class SVGStopElement: SVGElement {
     .stop
   }
 
-  func style(with _: Stylesheet) -> any SVGElement {
+  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
     self
   }
 

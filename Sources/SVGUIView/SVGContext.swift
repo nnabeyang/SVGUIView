@@ -284,6 +284,8 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
 }
 
 struct SVGBaseContext {
+  /// The parsed document, which the elements to render are made from.
+  let document: SVGDocument
   let root: SVGSVGElement?
   let pservers: [String: any SVGGradientServer]
   let contentIdMap: [String: ObjectIdentifier]
