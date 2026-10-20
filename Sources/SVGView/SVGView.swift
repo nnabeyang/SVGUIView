@@ -40,6 +40,17 @@ public struct SVGView: UIViewRepresentable {
     uiView.contentMode = contentMode.asUIView()
     uiView.configuration = context.environment.svgViewConfiguration
   }
+
+  /// Takes the size that SwiftUI proposes, and the size of the document in a dimension without a proposal.
+  ///
+  /// Otherwise SwiftUI keeps the view at least as large as the document, whose size is the view's intrinsic
+  /// content size, and the view doesn't fit in a smaller frame.
+  public func sizeThatFits(_ proposal: ProposedViewSize, uiView: SVGUIView, context _: Context) -> CGSize? {
+    let documentSize = uiView.intrinsicContentSize
+    return CGSize(
+      width: proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? documentSize.width,
+      height: proposal.height.flatMap { $0.isFinite ? $0 : nil } ?? documentSize.height)
+  }
 }
 
 extension SwiftUI.ContentMode {
