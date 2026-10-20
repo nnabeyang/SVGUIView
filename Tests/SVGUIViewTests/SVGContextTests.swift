@@ -44,4 +44,17 @@ struct SVGContextTests {
     // The outer level already holds the ID, so it is reported as a recursive reference.
     #expect(!context.check(tagId: tagId))
   }
+
+  @Test("making a font cascade doesn't change the ones made before from the same font")
+  func fontCascadesDontShareDescription() throws {
+    let context = try makeContext(viewPort: CGRect(x: 0, y: 0, width: 100, height: 100))
+    context.push(viewBox: CGRect(x: 0, y: 0, width: 100, height: 100))
+    // A document holds its fonts, and renderings at different sizes make cascades from the same one at once.
+    let font = SVGUIFont(name: "Helvetica", size: "10", weight: nil)
+    let small = font.fontCascade(textScale: 1, context: context)
+    let large = font.fontCascade(textScale: 3, context: context)
+    #expect(small.fontDescription !== large.fontDescription)
+    #expect(small.fontDescription.computedSize == 10)
+    #expect(large.fontDescription.computedSize == 30)
+  }
 }
