@@ -115,12 +115,12 @@ public class SVGUIView: UIView {
     let generation = nextRenderingGeneration()
     let scale = UIScreen.main.scale
     let capturedBase = baseContext
-    let capturedMode = contentMode
+    let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       let result = await SVGUIView.makeImage(
         rect: rect, scale: scale, base: capturedBase,
-        contentMode: capturedMode, timeoutDuration: timeoutDuration
+        fit: fit, timeoutDuration: timeoutDuration
       )
       self?.show(result, ofRendering: generation)
     }
@@ -142,41 +142,6 @@ public class SVGUIView: UIView {
 
   override public var intrinsicContentSize: CGSize {
     svg?.size ?? .zero
-  }
-
-  private nonisolated static func getTransform(
-    viewBox: CGRect, size: CGSize, contentMode: UIView.ContentMode
-  ) -> CGAffineTransform {
-    let preserveAspectRatio: PreserveAspectRatio
-    switch contentMode {
-    case .scaleToFill, .redraw:
-      preserveAspectRatio = .none
-    case .scaleAspectFit:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet)
-    case .scaleAspectFill:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .slice)
-    case .center:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .mid)
-    case .top:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .min)
-    case .bottom:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .mid, yAlign: .max)
-    case .left:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .min, yAlign: .mid)
-    case .right:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .max, yAlign: .mid)
-    case .topLeft:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .min, yAlign: .min)
-    case .topRight:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .max, yAlign: .min)
-    case .bottomLeft:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .min, yAlign: .max)
-    case .bottomRight:
-      preserveAspectRatio = PreserveAspectRatio(xAlign: .max, yAlign: .max)
-    @unknown default:
-      preserveAspectRatio = .none
-    }
-    return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
   }
 
   /// Counts a rendering that starts, and returns the number to pass to `show(_:ofRendering:)`.
@@ -232,11 +197,11 @@ public class SVGUIView: UIView {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
     let capturedBase = baseContext
-    let capturedMode = contentMode
+    let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
     let image = try await SVGUIView.makeImage(
       rect: rect, scale: scale, base: capturedBase,
-      contentMode: capturedMode, timeoutDuration: timeoutDuration
+      fit: fit, timeoutDuration: timeoutDuration
     ).get()
     return UIImage(cgImage: image)
   }
@@ -246,7 +211,7 @@ public class SVGUIView: UIView {
     rect: CGRect,
     scale: CGFloat,
     base: SVGBaseContext,
-    contentMode: UIView.ContentMode,
+    fit: ContentFit,
     timeoutDuration: Duration
   ) async -> Result<CGImage, SVGRenderingError> {
     guard let svg = base.root else { return .failure(.missingRootElement) }
@@ -271,23 +236,16 @@ public class SVGUIView: UIView {
     context.push(viewBox: viewBox)
     let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
     let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
-    switch contentMode {
-    case .scaleToFill:
+    if fit.stretches {
       let scaleX = viewBox.width / width
       let scaleY = viewBox.height / height
       context.concatenate(CGAffineTransform(scaleX: scaleX, y: scaleY))
-    default:
-      break
     }
 
-    let transform = getTransform(viewBox: viewBox, size: rect.size, contentMode: contentMode)
-    context.concatenate(transform)
-    switch contentMode {
-    case .scaleAspectFill, .scaleAspectFit, .scaleToFill:
+    context.concatenate(fit.transform(viewBox: viewBox, size: rect.size))
+    if fit.scales {
       let scale = viewBox.width / width
       context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
-    default:
-      break
     }
     let drawTask = Task<CGImage?, Never> {
       await svg.draw(context, mode: .root)
@@ -327,5 +285,45 @@ extension Duration {
     let (seconds, attoseconds) = components
     let (nanoseconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
     return overflow ? .never : .nanoseconds(Int(nanoseconds + attoseconds / 1_000_000_000))
+  }
+}
+
+extension ContentFit {
+  /// How the view fits its document in its bounds with a content mode.
+  init(_ contentMode: UIView.ContentMode) {
+    switch contentMode {
+    case .scaleToFill:
+      self.init(preserveAspectRatio: .none, stretches: true, scales: true)
+    case .scaleAspectFit:
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    case .scaleAspectFill:
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .slice), stretches: false, scales: true)
+    case .redraw:
+      self.init(preserveAspectRatio: .none, stretches: false, scales: false)
+    case .center:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .mid, yAlign: .mid))
+    case .top:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .mid, yAlign: .min))
+    case .bottom:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .mid, yAlign: .max))
+    case .left:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .min, yAlign: .mid))
+    case .right:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .max, yAlign: .mid))
+    case .topLeft:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .min, yAlign: .min))
+    case .topRight:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .max, yAlign: .min))
+    case .bottomLeft:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .min, yAlign: .max))
+    case .bottomRight:
+      self.init(alignedTo: PreserveAspectRatio(xAlign: .max, yAlign: .max))
+    @unknown default:
+      self.init(preserveAspectRatio: .none, stretches: false, scales: false)
+    }
+  }
+
+  private init(alignedTo preserveAspectRatio: PreserveAspectRatio) {
+    self.init(preserveAspectRatio: preserveAspectRatio, stretches: false, scales: false)
   }
 }
