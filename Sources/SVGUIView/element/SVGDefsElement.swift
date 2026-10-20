@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGDefsElement: SVGDrawableElement {
   static var type: SVGElementName {
@@ -32,7 +33,7 @@ final class SVGDefsElement: SVGDrawableElement {
     children = other.children
   }
 
-  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+  func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
 

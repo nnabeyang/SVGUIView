@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 enum SVGFillType: String {
   case rgb
@@ -19,7 +20,7 @@ enum SVGColorType: String {
 }
 
 protocol SVGUIColor: CustomStringConvertible, Codable {
-  func toUIColor(opacity: Double) -> UIColor?
+  func toCGColor(opacity: Double) -> CGColor?
   var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) { get }
 }
 
@@ -30,16 +31,16 @@ enum SVGColor: SVGUIColor {
   case rgba(SVGRGBAColor)
   case url(String)
 
-  func toUIColor(opacity: Double) -> UIColor? {
+  func toCGColor(opacity: Double) -> CGColor? {
     switch self {
     case .named(let value):
-      value.toUIColor(opacity: opacity)
+      value.toCGColor(opacity: opacity)
     case .hex(let value):
-      value.toUIColor(opacity: opacity)
+      value.toCGColor(opacity: opacity)
     case .rgb(let value):
-      value.toUIColor(opacity: opacity)
+      value.toCGColor(opacity: opacity)
     case .rgba(let value):
-      value.toUIColor(opacity: opacity)
+      value.toCGColor(opacity: opacity)
     case .url:
       nil
     }
@@ -78,14 +79,14 @@ enum SVGColor: SVGUIColor {
 
 struct SVGColorName: SVGUIColor {
   let name: String
-  func toUIColor(opacity: Double) -> UIColor? {
+  func toCGColor(opacity: Double) -> CGColor? {
     guard let value = Self.colors[name.lowercased()] else { return nil }
     let t = value & 0xFF
     let b = (value >> 8) & 0xFF
     let g = (value >> 16) & 0xFF
     let r = (value >> 24) & 0xFF
 
-    return UIColor(
+    return CGColor.extendedSRGB(
       red: CGFloat(r) / 255.0,
       green: CGFloat(g) / 255.0,
       blue: CGFloat(b) / 255.0,
@@ -296,10 +297,10 @@ struct SVGHexColor: SVGUIColor {
     hasAlpha = count == 4 || count == 8
   }
 
-  func toUIColor(opacity: Double) -> UIColor? {
+  func toCGColor(opacity: Double) -> CGColor? {
     let base = CGFloat(isShort ? 0xF : 0xFF)
     let (r, g, b, a) = rgba
-    return UIColor(
+    return CGColor.extendedSRGB(
       red: CGFloat(r) / base,
       green: CGFloat(g) / base,
       blue: CGFloat(b) / base,
@@ -407,8 +408,8 @@ struct SVGRGBColor: SVGUIColor {
   let r: ColorDimension
   let g: ColorDimension
   let b: ColorDimension
-  func toUIColor(opacity: Double) -> UIColor? {
-    UIColor(
+  func toCGColor(opacity: Double) -> CGColor? {
+    CGColor.extendedSRGB(
       red: r.value / 255.0,
       green: g.value / 255.0,
       blue: b.value / 255.0,
@@ -453,8 +454,8 @@ struct SVGRGBAColor: SVGUIColor {
   let g: ColorDimension
   let b: ColorDimension
   let a: Double
-  func toUIColor(opacity: Double) -> UIColor? {
-    UIColor(
+  func toCGColor(opacity: Double) -> CGColor? {
+    CGColor.extendedSRGB(
       red: r.value / 255.0,
       green: g.value / 255.0,
       blue: b.value / 255.0,

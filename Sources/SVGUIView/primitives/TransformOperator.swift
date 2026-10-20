@@ -1,5 +1,5 @@
+import CoreGraphics
 import Foundation
-import UIKit
 
 enum TransformType: String {
   case translate

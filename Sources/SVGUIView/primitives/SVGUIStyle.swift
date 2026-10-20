@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 import _CSSParser
 
 struct SVGUIStyle {

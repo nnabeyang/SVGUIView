@@ -1,5 +1,5 @@
 import CoreGraphics
-import UIKit
+import Foundation
 
 enum SpreadMethod: String {
   case pad
@@ -14,7 +14,7 @@ protocol SVGGradientServer: SVGElement {
   var display: CSSDisplay? { get }
   var children: [any SVGElement] { get }
   func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
-  func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
+  func draw(path: CGPath, context: SVGContext, opacity: Double)
   func stops(context: SVGContext) -> [SVGStopElement]
   init?(lhs: Self, rhs: SVGLinearGradientServer)
   init?(lhs: Self, rhs: SVGRadialGradientServer)
@@ -148,7 +148,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
   }
 
-  func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
+  func draw(path: CGPath, context: SVGContext, opacity: Double) {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let x1 = (x1 ?? .percent(0)).value(context: context, mode: .width, unitType: gradientUnits)
@@ -160,10 +160,10 @@ final class SVGLinearGradientServer: SVGGradientServer {
     let colors = stops.compactMap {
       switch $0.color {
       case .current:
-        return color?.toUIColor(opacity: $0.opacity * opacity)?.cgColor
+        return color?.toCGColor(opacity: $0.opacity * opacity)
       case .color(let color, let colorOpacity):
         let colorOpacity = colorOpacity?.value ?? 1.0
-        return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
+        return color?.toCGColor(opacity: $0.opacity * opacity * colorOpacity)
       case .inherit, .none:
         // TODO: implement inherit, url(...), auto case
         return nil
@@ -179,9 +179,9 @@ final class SVGLinearGradientServer: SVGGradientServer {
     }
     let gContext = context.graphics
     gContext.saveGState()
-    gContext.addPath(path.cgPath)
+    gContext.addPath(path)
     gContext.clip()
-    let frame = path.cgPath.boundingBoxOfPath
+    let frame = path.boundingBoxOfPath
     let (sx, sy): (CGFloat, CGFloat) = {
       switch gradientUnits {
       case .userSpaceOnUse:
@@ -370,7 +370,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
   }
 
-  func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
+  func draw(path: CGPath, context: SVGContext, opacity: Double) {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
@@ -379,10 +379,10 @@ final class SVGRadialGradientServer: SVGGradientServer {
     let colors = stops.compactMap {
       switch $0.color {
       case .current:
-        return color?.toUIColor(opacity: opacity)?.cgColor
+        return color?.toCGColor(opacity: opacity)
       case .color(let color, let colorOpacity):
         let colorOpacity = colorOpacity?.value ?? 1.0
-        return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
+        return color?.toCGColor(opacity: $0.opacity * opacity * colorOpacity)
       case .inherit, .none:
         // TODO: implement inherit, url(...), auto case
         return nil
@@ -398,9 +398,9 @@ final class SVGRadialGradientServer: SVGGradientServer {
 
     let gContext = context.graphics
     gContext.saveGState()
-    gContext.addPath(path.cgPath)
+    gContext.addPath(path)
     gContext.clip()
-    let frame = path.cgPath.boundingBoxOfPath
+    let frame = path.boundingBoxOfPath
     let pp = CGPoint(x: cx, y: cy)
 
     let s: CGFloat

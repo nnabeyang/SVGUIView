@@ -1,5 +1,6 @@
+import CoreGraphics
 import CoreText
-import UIKit
+import Foundation
 import _SPI
 
 struct FontFamilySpecificationCoreText {
@@ -9,7 +10,7 @@ struct FontFamilySpecificationCoreText {
 
     let unrealizedFont = UnrealizedCoreTextFont(font: CTFontCreateWithFontDescriptor(fontDescriptor, size, nil))
     unrealizedFont.size = size
-    let font = SVGUIView.preparePlatformFont(
+    let font = FontCacheCoreText.preparePlatformFont(
       originalFont: unrealizedFont,
       fontDescription: fontDescription, fontCreationContext: FontCreationContext(), fontTypeForPreparation: .systemFont)!
     let (syntheticBold, syntheticOblique) = Self.computeNecessarySynthesis(font: font, fontDescription: fontDescription)

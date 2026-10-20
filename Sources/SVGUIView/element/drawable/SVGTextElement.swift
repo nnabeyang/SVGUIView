@@ -1,4 +1,6 @@
-import UIKit
+import CoreGraphics
+import CoreText
+import Foundation
 
 enum TextAnchor: String {
   case start
@@ -45,10 +47,10 @@ final class SVGTextElement: SVGDrawableElement {
     y = other.y
   }
 
-  func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) {
+  func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) {
     let cgContext = context.graphics
     guard let fill = fill else {
-      cgContext.addPath(path.cgPath)
+      cgContext.addPath(path)
       cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       return
     }
@@ -58,16 +60,16 @@ final class SVGTextElement: SVGDrawableElement {
         applySVGFill(fill: fill, path: path, context: context, mode: mode)
       }
     case .current:
-      if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-        cgContext.setFillColor(uiColor.cgColor)
-        cgContext.addPath(path.cgPath)
+      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
+        cgContext.setFillColor(cgColor)
+        cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
     case .color(let color, let opacity):
       let opacity = opacity?.value ?? 1.0
-      if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
-        cgContext.setFillColor(uiColor.cgColor)
-        cgContext.addPath(path.cgPath)
+      if let cgColor = color?.toCGColor(opacity: self.opacity * opacity) {
+        cgContext.setFillColor(cgColor)
+        cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
     case .image:
@@ -104,7 +106,7 @@ final class SVGTextElement: SVGDrawableElement {
     return CTLineCreateWithAttributedString(attributedText)
   }
 
-  func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
+  func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
     guard let line = await getLine(context: context) else { return .zero }
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
@@ -118,7 +120,7 @@ final class SVGTextElement: SVGDrawableElement {
     return rect.applying(transform)
   }
 
-  func toBezierPath(context: SVGContext) async -> UIBezierPath? {
+  func toPath(context: SVGContext) async -> CGPath? {
     guard let line = await getLine(context: context) else { return nil }
     let letters = CGMutablePath()
     let runs = CTLineGetGlyphRuns(line)
@@ -141,7 +143,6 @@ final class SVGTextElement: SVGDrawableElement {
       }
     }
 
-    let path = UIBezierPath(cgPath: letters)
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
     let textScale = context.textScale
@@ -152,8 +153,7 @@ final class SVGTextElement: SVGDrawableElement {
     if case .middle = textAnchor ?? context.textAnchor ?? .start {
       transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
     }
-    path.apply(transform)
-    return path
+    return letters.applying(transform)
   }
 
   static func withUnsafeMutablePointer<T>(array: inout [T], from: Int) -> UnsafeMutablePointer<T> {

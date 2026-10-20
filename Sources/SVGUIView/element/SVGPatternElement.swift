@@ -1,5 +1,6 @@
 import Accelerate
-import UIKit
+import CoreGraphics
+import Foundation
 
 enum SVGUnitType: String {
   case userSpaceOnUse
@@ -102,7 +103,7 @@ final class SVGPatternElement: SVGDrawableElement {
     }
   }
 
-  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+  func toPath(context _: SVGContext) -> CGPath? {
     fatalError()
   }
 
@@ -141,7 +142,7 @@ final class SVGPatternElement: SVGDrawableElement {
     }
   }
 
-  func pattern(path: UIBezierPath, frame: CGRect, context: SVGContext, cgContext: CGContext, mode: DrawMode) async -> Bool {
+  func pattern(path: CGPath, frame: CGRect, context: SVGContext, cgContext: CGContext, mode: DrawMode) async -> Bool {
     if let parentId = parentId,
       let parent = context.patterns[parentId],
       context.check(patternId: parentId)
@@ -200,7 +201,7 @@ final class SVGPatternElement: SVGDrawableElement {
     var alpha: CGFloat = 1
     guard let patternSpace = CGColorSpace(patternBaseSpace: nil) else { return false }
 
-    cgContext.addPath(path.cgPath)
+    cgContext.addPath(path)
     cgContext.setFillColorSpace(patternSpace)
     cgContext.setFillPattern(pattern, colorComponents: &alpha)
     cgContext.drawPath(using: .fill)

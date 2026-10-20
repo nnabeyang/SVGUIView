@@ -3,7 +3,7 @@ class CSSFontSelector: FontSelector {
   var familyNames = FamilyNames()
 
   init() {
-    familyNames = SVGUIView.familyNamesData
+    familyNames = FontCacheCoreText.familyNamesData
   }
 
   func resolveGenericFamily(fontDescription: FontDescription, familyName: String) -> String? {

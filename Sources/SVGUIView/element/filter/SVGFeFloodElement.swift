@@ -1,5 +1,6 @@
 import Accelerate
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
   private static let maxKernelSize: UInt32 = 100

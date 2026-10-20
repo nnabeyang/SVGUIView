@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGFilterElement: SVGDrawableElement {
   let base: SVGBaseElement
@@ -66,14 +67,14 @@ final class SVGFilterElement: SVGDrawableElement {
     }
   }
 
-  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+  func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
 
   func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) async {
     guard !children.isEmpty else { return }
-    let bezierPath = await content.toBezierPath(context: context)
-    let frame = await content.frame(context: context, path: bezierPath)
+    let path = await content.toPath(context: context)
+    let frame = await content.frame(context: context, path: path)
     let effectRect = effectRect(frame: frame, context: context)
     guard let imageCgContext = createImageCGContext(rect: effectRect, scale: context.scale, colorInterpolation: colorInterpolation ?? .sRGB),
       let srcImage = await srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),

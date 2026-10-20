@@ -1,5 +1,6 @@
 import Accelerate
-import UIKit
+import CoreGraphics
+import Foundation
 
 enum SVGBlendMode: String {
   case normal

@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGImageElement: SVGDrawableElement {
   static var type: SVGElementName {
@@ -35,7 +36,7 @@ final class SVGImageElement: SVGDrawableElement {
     height = other.height
   }
 
-  func toBezierPath(context: SVGContext) -> UIBezierPath? {
+  func toPath(context: SVGContext) -> CGPath? {
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .width) ?? 0
     let width = width?.value(context: context, mode: .width) ?? 0
@@ -44,9 +45,8 @@ final class SVGImageElement: SVGDrawableElement {
     guard width > 0, height > 0 else {
       return nil
     }
-    let path = UIBezierPath(rect: .init(x: x, y: y, width: width, height: height))
-    path.apply(scale(context: context))
-    return path
+    let path = CGPath(rect: .init(x: x, y: y, width: width, height: height), transform: nil)
+    return path.applying(scale(context: context))
   }
 
   var fill: SVGFill? {

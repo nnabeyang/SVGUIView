@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGGroupElement: SVGDrawableElement {
   static var type: SVGElementName {
@@ -36,7 +37,7 @@ final class SVGGroupElement: SVGDrawableElement {
     textAnchor = other.textAnchor
   }
 
-  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+  func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
 
@@ -53,7 +54,7 @@ final class SVGGroupElement: SVGDrawableElement {
     return SVGUIFont(name: name, size: size, weight: weight)
   }
 
-  func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
+  func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
     var rect: CGRect? = nil
     for content in children {
       guard let content = content as? (any SVGDrawableElement) else { continue }
@@ -61,9 +62,9 @@ final class SVGGroupElement: SVGDrawableElement {
         continue
       }
       if rect != nil {
-        rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity))
+        rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity))
       } else {
-        rect = await content.frame(context: context, path: content.toBezierPath(context: context)).applying(content.transform ?? .identity)
+        rect = await content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity)
       }
     }
     return rect ?? .zero

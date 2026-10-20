@@ -46,7 +46,7 @@ class FontCache {
     let size = fontDescription.adjustedSizeForFontFace(fontFaceSizeAdjust: fontCreationContext.sizeAdjust)
     let fontDatabase = FontDatabase(allowUserInstalledFonts: fontDescription.shouldAllowUserInstalledFonts)
     guard
-      let font = SVGUIView.fontWithFamily(
+      let font = FontCacheCoreText.fontWithFamily(
         fontDatabase: fontDatabase, familyName: familyName,
         fontDescription: fontDescription, fontCreationContext: fontCreationContext, size: size)
     else {
@@ -101,26 +101,26 @@ class FontCache {
     }
     switch familyName.utf16.count {
     case 5:
-      if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "arial") {
+      if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "arial") {
         return "Helvetica"
       }
-      if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "times") {
+      if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "times") {
         return "Times New Roman"
       }
     case 7:
-      if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "courier") {
+      if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "courier") {
         return "Courier New"
       }
     case 9:
-      if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "helvetica") {
+      if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "helvetica") {
         return "Arial"
       }
     case 11:
-      if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "courier new") {
+      if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "courier new") {
         return "Courier"
       }
     case 15:
-      if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "times new roman") {
+      if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "times new roman") {
         return "Times"
       }
     default:
@@ -166,14 +166,14 @@ class FontCache {
 
   func similarFont(description: FontDescription, familyName: String) -> Font? {
     guard familyName.isEmpty else { return nil }
-    if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "monaco") || SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "menlo") {
+    if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "monaco") || FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "menlo") {
       return fontForFamily(fontDescription: description, familyName: "courier")
     }
-    if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: "lucida grande") {
+    if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: "lucida grande") {
       return fontForFamily(fontDescription: description, familyName: "verdana")
     }
     for matchWord in Self.matchWords {
-      if SVGUIView.equalLettersIgnoringASCIICase(string: familyName, literal: matchWord) {
+      if FontCacheCoreText.equalLettersIgnoringASCIICase(string: familyName, literal: matchWord) {
         let name = FontSelectionValue.isFontWeightBold(fontWeight: description.weight) ? "GeezaPro-Bold" : "GeezaPro"
         return fontForFamily(fontDescription: description, familyName: name)
       }

@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGRectElement: SVGDrawableElement {
   static var type: SVGElementName {
@@ -47,7 +48,7 @@ final class SVGRectElement: SVGDrawableElement {
     height = other.height
   }
 
-  func toBezierPath(context: SVGContext) -> UIBezierPath? {
+  func toPath(context: SVGContext) -> CGPath? {
     color.map {
       context.push(color: $0)
     }
@@ -63,9 +64,9 @@ final class SVGRectElement: SVGDrawableElement {
       return nil
     }
     let cornerSize = CGSize(width: min(width / 2.0, rx), height: min(height / 2.0, ry))
-    let path = UIBezierPath(roundedRect: .init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
-    path.apply(scale(context: context))
-    return path
+    let path = CGMutablePath()
+    path.addRoundedRect(.init(x: x, y: y, width: width, height: height), cornerSize: cornerSize)
+    return path.applying(scale(context: context))
   }
 }
 

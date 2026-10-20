@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGLineElement: SVGDrawableElement {
   static var type: SVGElementName {
@@ -31,7 +32,7 @@ final class SVGLineElement: SVGDrawableElement {
     y2 = other.y2
   }
 
-  func toBezierPath(context: SVGContext) -> UIBezierPath? {
+  func toPath(context: SVGContext) -> CGPath? {
     let x1 = x1?.value(context: context, mode: .width) ?? 0
     let y1 = y1?.value(context: context, mode: .height) ?? 0
     let x2 = x2?.value(context: context, mode: .width) ?? 0
@@ -39,15 +40,15 @@ final class SVGLineElement: SVGDrawableElement {
     let start = CGPoint(x: x1, y: y1)
     let end = CGPoint(x: x2, y: y2)
     guard start != end else { return nil }
-    let path = UIBezierPath()
+    let path = CGMutablePath()
     path.move(to: start)
     path.addLine(to: end)
     return path
   }
 
-  func frame(context: SVGContext, path: UIBezierPath?) -> CGRect {
+  func frame(context: SVGContext, path: CGPath?) -> CGRect {
     guard let path = path else { return .zero }
-    let r = path.cgPath.boundingBoxOfPath
+    let r = path.boundingBoxOfPath
     if r.width > 0, r.height > 0 {
       return r
     }

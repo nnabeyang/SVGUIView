@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGUseElement: SVGDrawableElement {
   static var type: SVGElementName {
@@ -86,12 +87,12 @@ final class SVGUseElement: SVGDrawableElement {
     return parentElement
   }
 
-  func toBezierPath(context: SVGContext) async -> UIBezierPath? {
+  func toPath(context: SVGContext) async -> CGPath? {
     guard let element = getParent(context: context, index: index)
     else {
       return nil
     }
-    return await element.toBezierPath(context: context)
+    return await element.toPath(context: context)
   }
 
   func draw(_ context: SVGContext, mode: DrawMode) async {
