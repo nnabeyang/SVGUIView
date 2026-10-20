@@ -42,6 +42,10 @@ let package = Package(
       dependencies: ["SVGUIView"],
     ),
     .testTarget(
+      name: "SVGViewTests",
+      dependencies: ["SVGView"],
+    ),
+    .testTarget(
       name: "_CSSParserTests",
       dependencies: ["_CSSParser"],
       resources: [.process("assets")],
