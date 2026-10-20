@@ -55,7 +55,7 @@ The current design assumes that a document never changes after it's parsed.
 - **Every update redraws the whole document.** Drawing renders the entire
   tree into one bitmap, which becomes the contents of the view's layer. Nothing
   is cached between renderings, and a rendering that takes longer than
-  ``SVGUIViewConfiguration/timeoutDuration`` (one second by default) is
+  ``SVGUIViewConfiguration/timeoutDuration`` (10 seconds by default) is
   cancelled. A frame of an animation has to be ready in about 16 milliseconds,
   or 8 milliseconds at 120 Hz.
 - **Drawing state is shared through an unchecked type.** `SVGContext` is
