@@ -302,16 +302,16 @@ protocol SVGDrawableElement: SVGElement {
   var style: SVGUIInlineStyle { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
-  func frame(context: SVGContext, path: UIBezierPath?) async -> CGRect
+  func frame(context: SVGContext, path: CGPath?) async -> CGRect
   func scale(context: SVGContext) -> CGAffineTransform
   init(text: String, attributes: [String: String])
   init(base: SVGBaseElement, text: String, attributes: [String: String])
   init(other: Self, css: SVGUIStyle)
   init(other: Self, attributes: [String: String])
   func use(attributes: [String: String]) -> Self
-  func toBezierPath(context: SVGContext) async -> UIBezierPath?
-  func applySVGStroke(stroke: SVGUIStroke, path: UIBezierPath, context: SVGContext)
-  func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) async
+  func toPath(context: SVGContext) async -> CGPath?
+  func applySVGStroke(stroke: SVGUIStroke, path: CGPath, context: SVGContext)
+  func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) async
 }
 
 extension SVGDrawableElement {
@@ -357,8 +357,8 @@ extension SVGDrawableElement {
     return Self(other: self, css: css)
   }
 
-  func frame(context _: SVGContext, path: UIBezierPath?) -> CGRect {
-    path?.cgPath.boundingBoxOfPath ?? .zero
+  func frame(context _: SVGContext, path: CGPath?) -> CGRect {
+    path?.boundingBoxOfPath ?? .zero
   }
 
   func scale(context: SVGContext) -> CGAffineTransform {
@@ -392,7 +392,7 @@ extension SVGDrawableElement {
     default:
       break
     }
-    let path = await toBezierPath(context: context)
+    let path = await toPath(context: context)
     if let path = path {
       let frame = await frame(context: context, path: path)
       await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
@@ -448,7 +448,7 @@ extension SVGDrawableElement {
     await drawWithoutFilter(context, mode: mode)
   }
 
-  private func applyStrokeFill(fill: SVGFill, opacity: Double, path: UIBezierPath, context: SVGContext) {
+  private func applyStrokeFill(fill: SVGFill, opacity: Double, path: CGPath, context: SVGContext) {
     let cgContext = context.graphics
     switch fill {
     case .inherit:
@@ -472,7 +472,7 @@ extension SVGDrawableElement {
     }
   }
 
-  func applySVGStroke(stroke elementStroke: SVGUIStroke, path: UIBezierPath, context: SVGContext) {
+  func applySVGStroke(stroke elementStroke: SVGUIStroke, path: CGPath, context: SVGContext) {
     let stroke = SVGUIStroke(lhs: elementStroke, rhs: context.stroke)
     guard let fill = stroke.fill else { return }
     let dashes = stroke.dashes ?? []
@@ -483,7 +483,7 @@ extension SVGDrawableElement {
       cgContext.setLineDash(phase: offset, lengths: dashes)
     }
     let lineWidth = stroke.width?.value(context: context, mode: .other) ?? 1.0
-    cgContext.addPath(path.cgPath)
+    cgContext.addPath(path)
     cgContext.setLineWidth(lineWidth)
     cgContext.setLineCap(stroke.cap ?? .butt)
     cgContext.setLineJoin(stroke.join ?? .miter)
@@ -491,7 +491,7 @@ extension SVGDrawableElement {
     cgContext.drawPath(using: .stroke)
   }
 
-  func applyPServerFill(server: any SVGGradientServer, path: UIBezierPath, context: SVGContext, opacity: CGFloat) {
+  func applyPServerFill(server: any SVGGradientServer, path: CGPath, context: SVGContext, opacity: CGFloat) {
     if let id = server.parentId,
       let parent = context.pservers[id],
       let merged = server.merged(other: parent)
@@ -502,12 +502,11 @@ extension SVGDrawableElement {
     server.draw(path: path, context: context, opacity: opacity)
   }
 
-  func applySVGFill(fill: SVGFill?, path: UIBezierPath, context: SVGContext, mode: DrawMode) async {
-    path.usesEvenOddFillRule = eoFill
+  func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) async {
     let cgContext = context.graphics
     guard let fill = fill ?? context.fill else {
       cgContext.setFillColor(UIColor.black.cgColor)
-      cgContext.addPath(path.cgPath)
+      cgContext.addPath(path)
       cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       return
     }
@@ -527,7 +526,7 @@ extension SVGDrawableElement {
         }
       } else {
         cgContext.setFillColor(UIColor.black.cgColor)
-        cgContext.addPath(path.cgPath)
+        cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
     case .current:
@@ -536,7 +535,7 @@ extension SVGDrawableElement {
       } else {
         cgContext.setFillColor(UIColor.black.cgColor)
       }
-      cgContext.addPath(path.cgPath)
+      cgContext.addPath(path)
       cgContext.drawPath(using: eoFill ? .eoFill : .fill)
     case .color(let color, let opacity):
       let opacity = opacity?.value ?? 1.0
@@ -564,11 +563,11 @@ extension SVGDrawableElement {
           return
         }
         cgContext.setFillColor(UIColor.black.cgColor)
-        cgContext.addPath(path.cgPath)
+        cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       } else if let uiColor = color?.toUIColor(opacity: opacity) {
         cgContext.setFillColor(uiColor.cgColor)
-        cgContext.addPath(path.cgPath)
+        cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
     case .image(let data):
@@ -576,7 +575,7 @@ extension SVGDrawableElement {
         let image = UIImage(data: data),
         let cgImage = image.cgImage
       {
-        let bounds = path.bounds
+        let bounds = path.boundingBoxOfPath
         let imageWidth = CGFloat(cgImage.width)
         let imageHeight = CGFloat(cgImage.height)
         let scale = scale(width: bounds.width, height: bounds.height, imageSize: .init(width: imageWidth, height: imageHeight))

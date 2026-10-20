@@ -32,7 +32,7 @@ final class SVGDefsElement: SVGDrawableElement {
     children = other.children
   }
 
-  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+  func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
 

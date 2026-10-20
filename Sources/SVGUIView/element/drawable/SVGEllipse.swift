@@ -31,7 +31,7 @@ final class SVGEllipseElement: SVGDrawableElement {
     ry = other.ry
   }
 
-  func toBezierPath(context: SVGContext) -> UIBezierPath? {
+  func toPath(context: SVGContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
     let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }
@@ -39,9 +39,8 @@ final class SVGEllipseElement: SVGDrawableElement {
     let rx: CGFloat = _rx ?? _ry ?? 0
     let ry: CGFloat = _ry ?? _rx ?? 0
     guard rx > 0, ry > 0 else { return nil }
-    let path = UIBezierPath(ovalIn: CGRect(origin: CGPoint(x: cx - rx, y: cy - ry), size: CGSize(width: 2 * rx, height: 2 * ry)))
-    path.apply(scale(context: context))
-    return path
+    let path = CGPath(ellipseIn: CGRect(origin: CGPoint(x: cx - rx, y: cy - ry), size: CGSize(width: 2 * rx, height: 2 * ry)), transform: nil)
+    return path.applying(scale(context: context))
   }
 }
 

@@ -117,11 +117,11 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
   var rootFont: SVGUIFont? { font }
 
-  func frame(context: SVGContext, path _: UIBezierPath?) async -> CGRect {
+  func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
     var rect: CGRect = .zero
     for child in children {
       guard let content = child as? (any SVGDrawableElement) else { continue }
-      rect = await CGRectUnion(rect, content.frame(context: context, path: content.toBezierPath(context: context)))
+      rect = await CGRectUnion(rect, content.frame(context: context, path: content.toPath(context: context)))
     }
     return rect
   }
@@ -155,7 +155,9 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       break
     default:
       if self.width != nil, self.height != nil {
-        gContext.addPath(UIBezierPath(roundedRect: rect, cornerSize: .zero).cgPath)
+        let clip = CGMutablePath()
+        clip.addRoundedRect(rect, cornerSize: .zero)
+        gContext.addPath(clip)
         gContext.clip()
       }
     }
@@ -258,7 +260,7 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       height: height.value(context: self, mode: .height))
   }
 
-  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+  func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
 }

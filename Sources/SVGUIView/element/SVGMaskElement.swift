@@ -66,7 +66,7 @@ final class SVGMaskElement: SVGDrawableElement {
     }
   }
 
-  func toBezierPath(context _: SVGContext) -> UIBezierPath? {
+  func toPath(context _: SVGContext) -> CGPath? {
     fatalError()
   }
 
@@ -120,7 +120,7 @@ final class SVGMaskElement: SVGDrawableElement {
       content.font.map {
         context.push(font: $0)
       }
-      guard let bezierPath = await content.toBezierPath(context: context) else { continue }
+      guard let path = await content.toPath(context: context) else { continue }
       content.font.map { _ in
         _ = context.popFont()
       }
@@ -128,7 +128,7 @@ final class SVGMaskElement: SVGDrawableElement {
       graphics.concatenate(content.transform ?? .identity)
       await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
       await content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-      await content.applySVGFill(fill: content.fill, path: bezierPath, context: maskContext, mode: .root)
+      await content.applySVGFill(fill: content.fill, path: path, context: maskContext, mode: .root)
       graphics.restoreGState()
     }
     await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)

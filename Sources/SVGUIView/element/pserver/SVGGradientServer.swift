@@ -14,7 +14,7 @@ protocol SVGGradientServer: SVGElement {
   var display: CSSDisplay? { get }
   var children: [any SVGElement] { get }
   func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
-  func draw(path: UIBezierPath, context: SVGContext, opacity: Double)
+  func draw(path: CGPath, context: SVGContext, opacity: Double)
   func stops(context: SVGContext) -> [SVGStopElement]
   init?(lhs: Self, rhs: SVGLinearGradientServer)
   init?(lhs: Self, rhs: SVGRadialGradientServer)
@@ -148,7 +148,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
   }
 
-  func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
+  func draw(path: CGPath, context: SVGContext, opacity: Double) {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let x1 = (x1 ?? .percent(0)).value(context: context, mode: .width, unitType: gradientUnits)
@@ -179,9 +179,9 @@ final class SVGLinearGradientServer: SVGGradientServer {
     }
     let gContext = context.graphics
     gContext.saveGState()
-    gContext.addPath(path.cgPath)
+    gContext.addPath(path)
     gContext.clip()
-    let frame = path.cgPath.boundingBoxOfPath
+    let frame = path.boundingBoxOfPath
     let (sx, sy): (CGFloat, CGFloat) = {
       switch gradientUnits {
       case .userSpaceOnUse:
@@ -370,7 +370,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
   }
 
-  func draw(path: UIBezierPath, context: SVGContext, opacity: Double) {
+  func draw(path: CGPath, context: SVGContext, opacity: Double) {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
@@ -398,9 +398,9 @@ final class SVGRadialGradientServer: SVGGradientServer {
 
     let gContext = context.graphics
     gContext.saveGState()
-    gContext.addPath(path.cgPath)
+    gContext.addPath(path)
     gContext.clip()
-    let frame = path.cgPath.boundingBoxOfPath
+    let frame = path.boundingBoxOfPath
     let pp = CGPoint(x: cx, y: cy)
 
     let s: CGFloat

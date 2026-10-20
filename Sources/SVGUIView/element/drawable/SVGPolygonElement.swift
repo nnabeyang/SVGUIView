@@ -22,11 +22,8 @@ final class SVGPolygonElement: SVGDrawableElement {
     points = other.points
   }
 
-  func toBezierPath(context: SVGContext) -> UIBezierPath? {
-    points.polygon.map {
-      $0.apply(scale(context: context))
-      return $0
-    }
+  func toPath(context: SVGContext) -> CGPath? {
+    points.polygon?.applying(scale(context: context))
   }
 }
 

@@ -35,15 +35,12 @@ final class SVGPathElement: SVGDrawableElement {
     segments = other.segments
   }
 
-  func toBezierPath(context: SVGContext) -> UIBezierPath? {
+  func toPath(context: SVGContext) -> CGPath? {
     let pathContext = SVGPathContext()
     for segment in segments {
       segment.apply(context: pathContext)
     }
-    return pathContext.path.map {
-      $0.apply(scale(context: context))
-      return $0
-    }
+    return pathContext.path?.applying(scale(context: context))
   }
 }
 
@@ -64,14 +61,14 @@ extension SVGPathElement: Encodable {
 }
 
 final class SVGPathContext {
-  var path: UIBezierPath?
+  var path: CGMutablePath?
   var cubicPoint: CGPoint?
   var quadrPoint: CGPoint?
   init() {}
 
-  private func createPathIfNeeded() -> UIBezierPath {
+  private func createPathIfNeeded() -> CGMutablePath {
     guard let path = path else {
-      let newPath = UIBezierPath()
+      let newPath = CGMutablePath()
       self.path = newPath
       return newPath
     }
@@ -83,57 +80,57 @@ final class SVGPathContext {
     return CGPoint(x: (2 * p1.x) - p2.x, y: (2 * p1.y) - p2.y)
   }
 
-  func apply(path: UIBezierPath?, arg: MPathArgument, isAbsolute: Bool) {
+  func apply(path: CGMutablePath?, arg: MPathArgument, isAbsolute: Bool) {
     M(path: path, isMoved: arg.isMoved, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg _: ZPathArgument, isAbsolute _: Bool) {
+  func apply(path: CGMutablePath, arg _: ZPathArgument, isAbsolute _: Bool) {
     Z(path: path)
   }
 
-  func apply(path: UIBezierPath, arg: LPathArgument, isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: LPathArgument, isAbsolute: Bool) {
     L(path: path, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg: CPathArgument, isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: CPathArgument, isAbsolute: Bool) {
     C(path: path, x1: arg.x1, y1: arg.y1, x2: arg.x2, y2: arg.y2, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg: QPathArgument, isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: QPathArgument, isAbsolute: Bool) {
     Q(path: path, x1: arg.x1, y1: arg.y1, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg: APathArgument, isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: APathArgument, isAbsolute: Bool) {
     A(path: path, rx: arg.rx, ry: arg.ry, angle: arg.angle, largeArc: arg.largeArc, sweep: arg.sweep, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path _: UIBezierPath, arg: (isMoved: Bool, x: Double, y: Double), isAbsolute: Bool) {
+  func apply(path _: CGMutablePath, arg: (isMoved: Bool, x: Double, y: Double), isAbsolute: Bool) {
     M(path: path, isMoved: arg.isMoved, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg _: Void, isAbsolute _: Bool) {
+  func apply(path: CGMutablePath, arg _: Void, isAbsolute _: Bool) {
     Z(path: path)
   }
 
-  func apply(path: UIBezierPath, arg: (x: Double?, y: Double?), isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: (x: Double?, y: Double?), isAbsolute: Bool) {
     L(path: path, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg: (x1: Double?, y1: Double?, x2: Double, y2: Double, x: Double, y: Double), isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: (x1: Double?, y1: Double?, x2: Double, y2: Double, x: Double, y: Double), isAbsolute: Bool) {
     C(path: path, x1: arg.x1, y1: arg.y1, x2: arg.x2, y2: arg.y2, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg: (x1: Double?, y1: Double?, x: Double, y: Double), isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: (x1: Double?, y1: Double?, x: Double, y: Double), isAbsolute: Bool) {
     Q(path: path, x1: arg.x1, y1: arg.y1, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
-  func apply(path: UIBezierPath, arg: (rx: Double, ry: Double, angle: Double, largeArc: Bool, sweep: Bool, x: Double, y: Double), isAbsolute: Bool) {
+  func apply(path: CGMutablePath, arg: (rx: Double, ry: Double, angle: Double, largeArc: Bool, sweep: Bool, x: Double, y: Double), isAbsolute: Bool) {
     A(path: path, rx: arg.rx, ry: arg.ry, angle: arg.angle, largeArc: arg.largeArc, sweep: arg.sweep, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
   }
 
   // moveto
   @inline(__always)
-  private func M(path: UIBezierPath?, isMoved: Bool, x: Double, y: Double, isAbsolute: Bool) {
+  private func M(path: CGMutablePath?, isMoved: Bool, x: Double, y: Double, isAbsolute: Bool) {
     guard isMoved else {
       let cur = isAbsolute ? .zero : (path?.currentPoint ?? .zero)
       let path = createPathIfNeeded()
@@ -146,15 +143,15 @@ final class SVGPathContext {
 
   // closepath
   @inline(__always)
-  private func Z(path: UIBezierPath) {
-    path.close()
+  private func Z(path: CGMutablePath) {
+    path.closeSubpath()
     let cur = path.currentPoint
     M(path: path, isMoved: false, x: cur.x, y: cur.y, isAbsolute: true)
   }
 
   // lineto
   @inline(__always)
-  private func L(path: UIBezierPath, x: Double?, y: Double?, isAbsolute: Bool) {
+  private func L(path: CGMutablePath, x: Double?, y: Double?, isAbsolute: Bool) {
     let dp = isAbsolute ? path.currentPoint : .zero
     let cur = isAbsolute ? .zero : path.currentPoint
     let x = x ?? dp.x
@@ -165,7 +162,7 @@ final class SVGPathContext {
 
   // cubic Bézier curve
   @inline(__always)
-  private func C(path: UIBezierPath, x1: Double?, y1: Double?, x2: Double, y2: Double, x: Double, y: Double, isAbsolute: Bool) {
+  private func C(path: CGMutablePath, x1: Double?, y1: Double?, x2: Double, y2: Double, x: Double, y: Double, isAbsolute: Bool) {
     let cur = isAbsolute ? .zero : path.currentPoint
     let endPoint = CGPoint(x: cur.x + x, y: cur.y + y)
     let controlPoint1: CGPoint
@@ -175,13 +172,13 @@ final class SVGPathContext {
       controlPoint1 = SVGPathContext.takeMirrorIfNeeded(p1: path.currentPoint, p2: cubicPoint)
     }
     let controlPoint2 = CGPoint(x: cur.x + x2, y: cur.y + y2)
-    path.addCurve(to: endPoint, controlPoint1: controlPoint1, controlPoint2: controlPoint2)
+    path.addCurve(to: endPoint, control1: controlPoint1, control2: controlPoint2)
     cubicPoint = controlPoint2
   }
 
   // quadratic Bézier curve
   @inline(__always)
-  private func Q(path: UIBezierPath, x1: Double?, y1: Double?, x: Double, y: Double, isAbsolute: Bool) {
+  private func Q(path: CGMutablePath, x1: Double?, y1: Double?, x: Double, y: Double, isAbsolute: Bool) {
     let cur = isAbsolute ? .zero : path.currentPoint
     let endPoint = CGPoint(x: cur.x + x, y: cur.y + y)
     let controlPoint: CGPoint
@@ -190,13 +187,13 @@ final class SVGPathContext {
     } else {
       controlPoint = SVGPathContext.takeMirrorIfNeeded(p1: path.currentPoint, p2: quadrPoint)
     }
-    path.addQuadCurve(to: endPoint, controlPoint: controlPoint)
+    path.addQuadCurve(to: endPoint, control: controlPoint)
     quadrPoint = controlPoint
   }
 
   // elliptical arc curve
   @inline(__always)
-  private func A(path: UIBezierPath, rx _rx: Double, ry _ry: Double, angle: Double, largeArc: Bool, sweep: Bool, x: Double, y: Double, isAbsolute: Bool) {
+  private func A(path: CGMutablePath, rx _rx: Double, ry _ry: Double, angle: Double, largeArc: Bool, sweep: Bool, x: Double, y: Double, isAbsolute: Bool) {
     if _rx == 0 || _ry == 0 {
       L(path: path, x: x, y: y, isAbsolute: isAbsolute)
       return
@@ -238,7 +235,7 @@ final class SVGPathContext {
     let dt = calcAngle(ux: (x1_ - cx_) / rx, uy: (y1_ - cy_) / ry, vx: (-x1_ - cx_) / rx, vy: (-y1_ - cy_) / ry, sweep: sweep)
 
     path.addEllipticalArc(
-      withCenter: CGPoint(x: cx, y: cy), radii: .init(width: 2 * rx, height: 2 * ry),
+      center: CGPoint(x: cx, y: cy), radii: .init(width: 2 * rx, height: 2 * ry),
       startAngle: t1, endAngle: t1 + dt, rotation: angle)
   }
 
@@ -313,7 +310,7 @@ extension PathSegmentType: Encodable {
 }
 
 protocol PathSegmentArgument: Equatable, Encodable {
-  func apply(path: UIBezierPath?, isAbsolute: Bool, context: SVGPathContext)
+  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext)
 }
 
 struct MPathArgument: PathSegmentArgument {
@@ -321,7 +318,7 @@ struct MPathArgument: PathSegmentArgument {
   let x: Double
   let y: Double
 
-  func apply(path: UIBezierPath?, isAbsolute: Bool, context: SVGPathContext) {
+  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
     context.apply(path: path, arg: self, isAbsolute: isAbsolute)
   }
 }
@@ -340,7 +337,7 @@ extension MPathArgument: Encodable {
 }
 
 struct ZPathArgument: PathSegmentArgument {
-  func apply(path: UIBezierPath?, isAbsolute: Bool, context: SVGPathContext) {
+  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
     context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
   }
 }
@@ -348,7 +345,7 @@ struct ZPathArgument: PathSegmentArgument {
 struct LPathArgument: PathSegmentArgument {
   let x: Double?
   let y: Double?
-  func apply(path: UIBezierPath?, isAbsolute: Bool, context: SVGPathContext) {
+  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
     context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
   }
 }
@@ -360,7 +357,7 @@ struct CPathArgument: PathSegmentArgument {
   let y2: Double
   let x: Double
   let y: Double
-  func apply(path: UIBezierPath?, isAbsolute: Bool, context: SVGPathContext) {
+  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
     context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
   }
 }
@@ -370,7 +367,7 @@ struct QPathArgument: PathSegmentArgument {
   let y1: Double?
   let x: Double
   let y: Double
-  func apply(path: UIBezierPath?, isAbsolute: Bool, context: SVGPathContext) {
+  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
     context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
   }
 }
@@ -383,7 +380,7 @@ struct APathArgument: PathSegmentArgument {
   let sweep: Bool
   let x: Double
   let y: Double
-  func apply(path: UIBezierPath?, isAbsolute: Bool, context: SVGPathContext) {
+  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
     context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
   }
 }

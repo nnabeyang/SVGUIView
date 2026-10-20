@@ -92,7 +92,7 @@ final class SVGClipPathElement: SVGElement {
       content.font.map {
         context.push(font: $0)
       }
-      guard let bezierPath = await content.toBezierPath(context: context) else { continue }
+      guard let path = await content.toPath(context: context) else { continue }
       content.font.map { _ in
         _ = context.popFont()
       }
@@ -103,7 +103,7 @@ final class SVGClipPathElement: SVGElement {
 
       await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
       let clipRule = content.clipRule ?? clipRule ?? false
-      graphics.addPath(bezierPath.cgPath)
+      graphics.addPath(path)
       graphics.drawPath(using: clipRule ? .eoFill : .fill)
       graphics.restoreGState()
     }
@@ -113,7 +113,7 @@ final class SVGClipPathElement: SVGElement {
     return image
   }
 
-  func toBezierPath(context _: SVGContext, frame _: CGRect) -> UIBezierPath {
+  func toPath(context _: SVGContext, frame _: CGRect) -> CGPath {
     fatalError()
   }
 

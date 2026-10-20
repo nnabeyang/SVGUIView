@@ -35,14 +35,16 @@ final class SVGCircleElement: SVGDrawableElement {
     r = other.r
   }
 
-  func toBezierPath(context: SVGContext) -> UIBezierPath? {
+  func toPath(context: SVGContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
     let r = r?.value(context: context, mode: .other) ?? 0
     guard r > 0 else { return nil }
-    let path = UIBezierPath(arcCenter: CGPoint(x: cx, y: cy), radius: r, startAngle: 0, endAngle: CGFloat(Double.pi) * 2, clockwise: true)
-    path.apply(scale(context: context))
-    return path
+    let path = CGMutablePath()
+    // Core Graphics names directions in a coordinate space whose y-axis points up, so this is the clockwise
+    // circle of UIKit.
+    path.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: 0, endAngle: CGFloat(Double.pi) * 2, clockwise: false)
+    return path.applying(scale(context: context))
   }
 }
 
