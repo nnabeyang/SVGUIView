@@ -100,6 +100,56 @@ struct SVGUIViewTests {
     }
   }
 
+  @Test(
+    "a snapshot of a rectangle too large to allocate throws allocationFailed",
+    arguments: [
+      // Core Graphics can't allocate the bitmap.
+      CGRect(x: 0, y: 0, width: 1e15, height: 1e15),
+      // The bytes of a row don't fit in `Int`.
+      CGRect(x: 0, y: 0, width: 1e18, height: 20),
+      // The number of pixels doesn't fit in `Int`.
+      CGRect(x: 0, y: 0, width: 1e30, height: 20),
+    ])
+  func takeSnapshotOfHugeRect(rect: CGRect) async {
+    let view = makeView(Self.square)
+    await #expect(throws: SVGRenderingError.allocationFailed) {
+      try await view.takeSnapshot(rect: rect)
+    }
+  }
+
+  /// The red, green, blue and alpha components of a pixel of an image, from the top left.
+  private func pixel(of image: UIImage, x: Int, y: Int) throws -> [UInt8] {
+    let cgImage = try #require(image.cgImage)
+    var components = [UInt8](repeating: 0, count: 4)
+    let context = try #require(
+      CGContext(
+        data: &components, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    context.draw(cgImage, in: CGRect(x: -x, y: y - cgImage.height + 1, width: cgImage.width, height: cgImage.height))
+    return components
+  }
+
+  @Test("an element whose filter is too large to allocate is not drawn, and the other elements are")
+  func filterTooLargeToAllocate() async throws {
+    let view = makeView(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <!-- A filter region in user space is limited to the viewport, but one relative to the element is not. -->
+        <filter id="huge" x="0" y="0" width="1000000000000000000000" height="1000000000000000000000">
+          <feOffset dx="0" dy="0"/>
+        </filter>
+        <rect width="10" height="20" fill="red" filter="url(#huge)"/>
+        <rect x="10" width="10" height="20" fill="lime"/>
+      </svg>
+      """#)
+    let image = try await view.takeSnapshot()
+    let scale = Int(UIScreen.main.scale)
+    let filtered = try pixel(of: image, x: 5 * scale, y: 10 * scale)
+    let other = try pixel(of: image, x: 15 * scale, y: 10 * scale)
+    #expect(filtered == [0, 0, 0, 0])
+    #expect(other == [0, 255, 0, 255])
+  }
+
   @Test("a snapshot that takes longer than the timeout throws timedOut")
   func takeSnapshotTimesOut() async {
     // Rendering checks for cancellation between elements, so many groups make it stop soon after the timeout.
@@ -202,8 +252,8 @@ struct SVGUIViewTests {
   }
 
   @Test(
-    "a rendering that timed out or was cancelled keeps the image that the view shows",
-    arguments: [SVGRenderingError.timedOut, .cancelled])
+    "a rendering that timed out, was cancelled or couldn't allocate its image keeps the image that the view shows",
+    arguments: [SVGRenderingError.timedOut, .cancelled, .allocationFailed])
   func showKeepsImage(error: SVGRenderingError) throws {
     let view = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
     let image = try makeImage()

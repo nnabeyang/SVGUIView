@@ -45,6 +45,9 @@ func assertSVGSnapshot(
   } catch .cancelled {
     Issue.record("Rendering \(file.name) was cancelled", sourceLocation: sourceLocation)
     return
+  } catch .allocationFailed {
+    Issue.record("The memory to render \(file.name) into couldn't be allocated", sourceLocation: sourceLocation)
+    return
   } catch .zeroSizedRect {
     Issue.record("The view has no size to render \(file.name) into: \(view.frame)", sourceLocation: sourceLocation)
     return

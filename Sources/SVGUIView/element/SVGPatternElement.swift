@@ -209,22 +209,7 @@ final class SVGPatternElement: SVGDrawableElement {
 
   private func tileImage(frame: CGRect, context: SVGContext, size: CGSize, transform: CGAffineTransform, isRoot: Bool) async -> CGImage? {
     let scale = context.scale
-    let frameWidth = Int((size.width * scale).rounded(.up))
-    let frameHeight = Int((size.height * scale).rounded(.up))
-    if frameWidth == 0 || frameHeight == 0 { return nil }
-    let bytesPerRow = 4 * frameWidth
-    guard
-      let graphics = CGContext(
-        data: nil,
-        width: frameWidth,
-        height: frameHeight,
-        bitsPerComponent: 8,
-        bytesPerRow: bytesPerRow,
-        space: colorSpace,
-        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-    else {
-      return nil
-    }
+    guard let graphics = CGContext.bitmap(size: size, scale: scale, space: colorSpace) else { return nil }
 
     let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, other: context)
     let patternContentUnits: SVGUnitType

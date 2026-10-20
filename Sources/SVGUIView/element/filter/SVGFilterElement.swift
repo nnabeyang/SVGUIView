@@ -1,4 +1,3 @@
-import Accelerate
 import UIKit
 
 final class SVGFilterElement: SVGDrawableElement {
@@ -124,18 +123,7 @@ final class SVGFilterElement: SVGDrawableElement {
   }
 
   private func createImageCGContext(rect: CGRect, scale: CGFloat, colorInterpolation: SVGColorInterpolation) -> CGContext? {
-    let frameWidth = Int((rect.width * scale).rounded(.up))
-    let frameHeight = Int((rect.height * scale).rounded(.up))
-    let bytesPerRow = 4 * frameWidth
-    let cgContext = CGContext(
-      data: nil,
-      width: frameWidth,
-      height: frameHeight,
-      bitsPerComponent: 8,
-      bytesPerRow: bytesPerRow,
-      space: colorSpace(colorInterpolation: colorInterpolation),
-      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | kCGBitmapByteOrder32Host.rawValue)
-    return cgContext
+    CGContext.bitmap(size: rect.size, scale: scale, space: colorSpace(colorInterpolation: colorInterpolation))
   }
 
   private func srcImage(content: any SVGDrawableElement, graphics: CGContext, rect: CGRect, context: SVGContext) async -> CGImage? {
@@ -173,25 +161,5 @@ extension SVGFilterElement: Encodable {
 
   func encode(to _: any Encoder) throws {
     fatalError()
-  }
-}
-
-extension CGImage {
-  fileprivate static func fromvImageOutBuffer(_ outBuffer: vImage_Buffer) -> CGImage? {
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-
-    var bitmapInfo: UInt32 = CGBitmapInfo.byteOrder32Big.rawValue
-    bitmapInfo |= CGImageAlphaInfo.premultipliedLast.rawValue & CGBitmapInfo.alphaInfoMask.rawValue
-
-    let context = CGContext(
-      data: outBuffer.data,
-      width: Int(outBuffer.width),
-      height: Int(outBuffer.height),
-      bitsPerComponent: 8,
-      bytesPerRow: outBuffer.rowBytes,
-      space: colorSpace,
-      bitmapInfo: bitmapInfo)!
-
-    return context.makeImage()
   }
 }

@@ -166,14 +166,18 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
         bitmapInfo: srcImage.bitmapInfo)
     else { return nil }
     // The buffers below share memory, so free each allocation once, through the pointer that it returns.
-    guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage.copy(colorSpace: colorSpace)!, format: format) else { return nil }
+    guard let srcCopy = srcImage.copy(colorSpace: colorSpace),
+      var srcBuffer = try? vImage_Buffer(cgImage: srcCopy, format: format)
+    else { return nil }
     let srcData = srcBuffer.data
     defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage.copy(colorSpace: colorSpace)!, format: format) else { return nil }
+    guard let inputCopy = inImage.copy(colorSpace: colorSpace),
+      var inputBuffer = try? vImage_Buffer(cgImage: inputCopy, format: format)
+    else { return nil }
     let inputData = inputBuffer.data
     defer { free(inputData) }
 
-    let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height))
+    guard let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height)) else { return nil }
     var destBuffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
     defer {
       free(data)
@@ -199,7 +203,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
           kernelSizeX: kernelSizeX, kernelSizeY: kernelSizeY, context: context)
       } else {
         let kernelSize = Self.clampedToKernelSize(value: x * scale, scale: scale) | 1
-        applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
+        guard applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize) else { return nil }
       }
     case .iso(let x):
       let x = x.calculatedLength(frame: frame, context: context, mode: .other, unitType: unitType)
@@ -208,7 +212,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
         break
       }
       let kernelSize = Self.clampedToKernelSize(value: x * scale, scale: scale) | 1
-      applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize)
+      guard applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize) else { return nil }
     }
     // The image uses the memory of the buffer, which is freed after the image is drawn below.
     guard
@@ -232,7 +236,8 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     return cgContext.makeImage()
   }
 
-  func applyAccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSize: UInt32) {
+  /// Blurs `srcBuffer` into `destBuffer`, and returns `false` if the temporary buffer couldn't be allocated.
+  func applyAccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSize: UInt32) -> Bool {
     let tmpBufferSize = vImageBoxConvolve_ARGB8888(
       &srcBuffer,
       &destBuffer,
@@ -243,7 +248,8 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
       kernelSize,
       nil,
       vImage_Flags(kvImageEdgeExtend | kvImageGetTempBufferSize))
-    let tmpBuffer = malloc(tmpBufferSize)
+    // A negative size is an error code.
+    guard tmpBufferSize >= 0, let tmpBuffer = malloc(tmpBufferSize) else { return false }
     vImageBoxConvolve_ARGB8888(
       &srcBuffer,
       &destBuffer,
@@ -275,6 +281,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
       nil,
       vImage_Flags(kvImageEdgeExtend))
     free(tmpBuffer)
+    return true
   }
 
   func applyUnaccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSizeX: UInt32, kernelSizeY: UInt32, context _: SVGContext) {

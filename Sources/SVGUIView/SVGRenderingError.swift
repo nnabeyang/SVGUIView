@@ -8,4 +8,7 @@ public enum SVGRenderingError: Error, Sendable, Equatable {
   case zeroSizedRect
   /// The task that waited for the rendering was cancelled, and rendering stopped before it finished.
   case cancelled
+  /// The memory for the image to render into couldn't be allocated, such as when the rectangle to render into
+  /// is too large.
+  case allocationFailed
 }
