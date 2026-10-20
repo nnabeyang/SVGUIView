@@ -45,6 +45,19 @@ struct MatchingTests {
     #expect(!matchesSelector(element: rect, css: ".bar"))
   }
 
+  @Test("match each class of an element with several classes", arguments: [".foo", ".bar", ".foo.bar", "rect.bar"])
+  func matchClassInList(css: String) {
+    let rect = ElementCursor(root: documentElement(0, "rect", ["class": " foo\tbar\n"]))
+    #expect(matchesSelector(element: rect, css: css))
+  }
+
+  @Test("match class selector - no match for part of a class name")
+  func matchClassSelectorNoMatchForPart() {
+    let rect = ElementCursor(root: documentElement(0, "rect", ["class": "foo bar"]))
+    #expect(!matchesSelector(element: rect, css: ".fo"))
+    #expect(!matchesSelector(element: rect, css: ".foo\\ bar"))
+  }
+
   @Test("match id selector")
   func matchIdSelector() {
     let rect = ElementCursor(root: documentElement(0, "rect", ["id": "main"]))

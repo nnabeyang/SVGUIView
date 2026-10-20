@@ -71,6 +71,8 @@ extension ElementCursor: Element {
   }
 
   func hasClass(name: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
-    element.attributes["class"]?.trimmingCharacters(in: .whitespaces) == name.rawValue
+    // The class attribute is a list of names separated by ASCII whitespace.
+    guard let classes = element.attributes["class"] else { return false }
+    return classes.split(whereSeparator: { " \t\n\r\u{0C}".contains($0) }).contains { $0 == name.rawValue }
   }
 }
