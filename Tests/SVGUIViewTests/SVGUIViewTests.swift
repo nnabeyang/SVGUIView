@@ -10,7 +10,11 @@ import UIKit
 @MainActor
 @Suite("SVGUIView", .serialized)
 struct SVGUIViewTests {
-  private func makeView(_ svg: String, timeoutDuration: Duration = .seconds(10)) -> SVGUIView {
+  /// How long a test waits for a rendering that it doesn't time. The tests check what a rendering does, not how
+  /// fast, and a CI machine sometimes stalls for many seconds, so this only catches a rendering that never ends.
+  private static let patience: Duration = .seconds(60)
+
+  private func makeView(_ svg: String, timeoutDuration: Duration = patience) -> SVGUIView {
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
     view.configuration = SVGUIViewConfiguration(timeoutDuration: timeoutDuration)
     return view
@@ -39,7 +43,7 @@ struct SVGUIViewTests {
     in view: SVGUIView, width: CGFloat, sourceLocation: SourceLocation = #_sourceLocation
   ) async throws {
     let pixels = Int((width * UIScreen.main.scale).rounded(.up))
-    let deadline = ContinuousClock.now + .seconds(10)
+    let deadline = ContinuousClock.now + Self.patience
     while shownWidth(view) != pixels {
       guard ContinuousClock.now < deadline else {
         Issue.record(
@@ -318,7 +322,7 @@ struct SVGUIViewTests {
     try await Task.sleep(for: .milliseconds(100))
     #expect(!view.layer.needsDisplay())
     view.data = Data(Self.square.replacingOccurrences(of: "<rect", with: "<circle").utf8)
-    let deadline = ContinuousClock.now + .seconds(10)
+    let deadline = ContinuousClock.now + Self.patience
     while !view.layer.needsDisplay() && ContinuousClock.now < deadline {
       try await Task.sleep(for: .milliseconds(10))
     }
