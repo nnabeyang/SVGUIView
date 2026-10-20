@@ -456,16 +456,16 @@ extension SVGDrawableElement {
         applyStrokeFill(fill: fill, opacity: opacity, path: path, context: context)
       }
     case .current:
-      if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-        cgContext.setStrokeColor(uiColor.cgColor)
+      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
+        cgContext.setStrokeColor(cgColor)
       }
     case .color(let color, let colorOpacity):
       if case .url = color { return }
       let colorOpacity = colorOpacity?.value ?? 1.0
-      if let uiColor = color?.toUIColor(opacity: opacity * colorOpacity) {
-        cgContext.setStrokeColor(uiColor.cgColor)
+      if let cgColor = color?.toCGColor(opacity: opacity * colorOpacity) {
+        cgContext.setStrokeColor(cgColor)
       } else {
-        cgContext.setStrokeColor(UIColor.clear.cgColor)
+        cgContext.setStrokeColor(CGColor.transparent)
       }
     case .image:
       fatalError("Images not supported in stroke fill")
@@ -505,7 +505,7 @@ extension SVGDrawableElement {
   func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) async {
     let cgContext = context.graphics
     guard let fill = fill ?? context.fill else {
-      cgContext.setFillColor(UIColor.black.cgColor)
+      cgContext.setFillColor(CGColor.opaqueBlack)
       cgContext.addPath(path)
       cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       return
@@ -525,15 +525,15 @@ extension SVGDrawableElement {
           await applySVGFill(fill: fill, path: path, context: context, mode: mode)
         }
       } else {
-        cgContext.setFillColor(UIColor.black.cgColor)
+        cgContext.setFillColor(CGColor.opaqueBlack)
         cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
     case .current:
-      if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-        cgContext.setFillColor(uiColor.cgColor)
+      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
+        cgContext.setFillColor(cgColor)
       } else {
-        cgContext.setFillColor(UIColor.black.cgColor)
+        cgContext.setFillColor(CGColor.opaqueBlack)
       }
       cgContext.addPath(path)
       cgContext.drawPath(using: eoFill ? .eoFill : .fill)
@@ -562,11 +562,11 @@ extension SVGDrawableElement {
           context.remove(patternId: id)
           return
         }
-        cgContext.setFillColor(UIColor.black.cgColor)
+        cgContext.setFillColor(CGColor.opaqueBlack)
         cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      } else if let uiColor = color?.toUIColor(opacity: opacity) {
-        cgContext.setFillColor(uiColor.cgColor)
+      } else if let cgColor = color?.toCGColor(opacity: opacity) {
+        cgContext.setFillColor(cgColor)
         cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }

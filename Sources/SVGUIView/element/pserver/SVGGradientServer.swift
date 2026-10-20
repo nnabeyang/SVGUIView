@@ -160,10 +160,10 @@ final class SVGLinearGradientServer: SVGGradientServer {
     let colors = stops.compactMap {
       switch $0.color {
       case .current:
-        return color?.toUIColor(opacity: $0.opacity * opacity)?.cgColor
+        return color?.toCGColor(opacity: $0.opacity * opacity)
       case .color(let color, let colorOpacity):
         let colorOpacity = colorOpacity?.value ?? 1.0
-        return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
+        return color?.toCGColor(opacity: $0.opacity * opacity * colorOpacity)
       case .inherit, .none:
         // TODO: implement inherit, url(...), auto case
         return nil
@@ -379,10 +379,10 @@ final class SVGRadialGradientServer: SVGGradientServer {
     let colors = stops.compactMap {
       switch $0.color {
       case .current:
-        return color?.toUIColor(opacity: opacity)?.cgColor
+        return color?.toCGColor(opacity: opacity)
       case .color(let color, let colorOpacity):
         let colorOpacity = colorOpacity?.value ?? 1.0
-        return color?.toUIColor(opacity: $0.opacity * opacity * colorOpacity)?.cgColor
+        return color?.toCGColor(opacity: $0.opacity * opacity * colorOpacity)
       case .inherit, .none:
         // TODO: implement inherit, url(...), auto case
         return nil

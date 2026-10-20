@@ -58,15 +58,15 @@ final class SVGTextElement: SVGDrawableElement {
         applySVGFill(fill: fill, path: path, context: context, mode: mode)
       }
     case .current:
-      if let color = context.color, let uiColor = color.toUIColor(opacity: opacity) {
-        cgContext.setFillColor(uiColor.cgColor)
+      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
+        cgContext.setFillColor(cgColor)
         cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
     case .color(let color, let opacity):
       let opacity = opacity?.value ?? 1.0
-      if let uiColor = color?.toUIColor(opacity: self.opacity * opacity) {
-        cgContext.setFillColor(uiColor.cgColor)
+      if let cgColor = color?.toCGColor(opacity: self.opacity * opacity) {
+        cgContext.setFillColor(cgColor)
         cgContext.addPath(path)
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
