@@ -364,4 +364,36 @@ struct SVGUIViewTests {
       growth < bitmap * renderings / 4,
       "Memory grew by \(growth / 1_048_576) MB over \(renderings) renderings; a bitmap is \(bitmap / 1_048_576) MB")
   }
+
+  /// The bytes of virtual memory that the process has.
+  private func virtualBytes() -> Int {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+    _ = withUnsafeMutablePointer(to: &info) {
+      $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+        task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+      }
+    }
+    return Int(info.virtual_size)
+  }
+
+  @Test("a snapshot does not keep its bitmap until the timeout")
+  func snapshotReleasesBitmapBeforeTimeout() async throws {
+    let view = makeView(Self.square, timeoutDuration: .seconds(60))
+    view.frame.size = CGSize(width: 400, height: 400)
+    for _ in 0..<2 { _ = try await view.takeSnapshot() }
+    // The bitmaps that Core Graphics renders into are not allocated by malloc, so count the virtual memory,
+    // which runs out on a device before the physical memory does.
+    let before = virtualBytes()
+    let renderings = 100
+    for _ in 0..<renderings { _ = try await view.takeSnapshot() }
+    let growth = virtualBytes() - before
+    // Keeping the bitmap of each rendering until the timeout keeps all of them. Other tests that run at the
+    // same time allocate memory too, so allow for some of them.
+    let pixels = (400 * UIScreen.main.scale).rounded(.up)
+    let bitmap = Int(pixels * pixels) * 4
+    #expect(
+      growth < bitmap * renderings / 4,
+      "Virtual memory grew by \(growth / 1_048_576) MB over \(renderings) renderings; a bitmap is \(bitmap / 1_048_576) MB")
+  }
 }
