@@ -1,3 +1,4 @@
+import ImageIO
 import UIKit
 import _SelectorParser
 
@@ -571,9 +572,10 @@ extension SVGDrawableElement {
         cgContext.drawPath(using: eoFill ? .eoFill : .fill)
       }
     case .image(let data):
+      // The pixels as stored, without the orientation in the image's metadata, as `UIImage.cgImage` gives them.
       if let data = data,
-        let image = UIImage(data: data),
-        let cgImage = image.cgImage
+        let source = CGImageSourceCreateWithData(data as CFData, nil),
+        let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
       {
         let bounds = path.boundingBoxOfPath
         let imageWidth = CGFloat(cgImage.width)
