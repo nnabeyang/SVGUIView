@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 enum SVGOverflow: String {
   case visible

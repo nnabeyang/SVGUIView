@@ -1,5 +1,6 @@
+import CoreGraphics
+import Foundation
 import ImageIO
-import UIKit
 import _SelectorParser
 
 protocol SVGElement: AnyObject, Encodable, Sendable {

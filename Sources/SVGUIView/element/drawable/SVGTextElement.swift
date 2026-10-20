@@ -1,4 +1,6 @@
-import UIKit
+import CoreGraphics
+import CoreText
+import Foundation
 
 enum TextAnchor: String {
   case start

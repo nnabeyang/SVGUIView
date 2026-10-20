@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGClipPathElement: SVGElement {
   static var type: SVGElementName {

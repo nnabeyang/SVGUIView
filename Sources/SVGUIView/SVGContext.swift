@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 protocol SVGLengthContext {
   var viewBoxSize: CGSize { get }

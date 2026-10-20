@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 struct SVGUIPoints: Encodable {
   let points: [CGPoint]

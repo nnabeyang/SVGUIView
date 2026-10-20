@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGPolygonElement: SVGDrawableElement {
   static var type: SVGElementName {

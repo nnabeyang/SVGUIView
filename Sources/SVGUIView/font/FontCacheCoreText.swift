@@ -1,5 +1,5 @@
 import CoreText
-import UIKit
+import Foundation
 import _SPI
 
 enum FontTypeForPreparation {

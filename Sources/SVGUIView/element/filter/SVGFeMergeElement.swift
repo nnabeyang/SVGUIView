@@ -1,5 +1,6 @@
 import Accelerate
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
   let base: SVGBaseElement

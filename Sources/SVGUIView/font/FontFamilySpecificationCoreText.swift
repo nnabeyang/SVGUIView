@@ -1,5 +1,6 @@
+import CoreGraphics
 import CoreText
-import UIKit
+import Foundation
 import _SPI
 
 struct FontFamilySpecificationCoreText {

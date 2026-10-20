@@ -1,4 +1,5 @@
-import UIKit
+import CoreText
+import Foundation
 import _SPI
 
 class SystemFontDatabaseCoreText {

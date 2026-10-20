@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGLineElement: SVGDrawableElement {
   static var type: SVGElementName {

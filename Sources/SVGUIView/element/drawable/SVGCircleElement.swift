@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGCircleElement: SVGDrawableElement {
   static var type: SVGElementName {

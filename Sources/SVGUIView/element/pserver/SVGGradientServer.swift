@@ -1,5 +1,5 @@
 import CoreGraphics
-import UIKit
+import Foundation
 
 enum SpreadMethod: String {
   case pad

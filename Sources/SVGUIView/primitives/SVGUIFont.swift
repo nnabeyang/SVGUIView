@@ -1,7 +1,6 @@
 import CoreGraphics
 import CoreText
 import Foundation
-import UIKit
 
 struct SVGUIFont {
   let name: String?

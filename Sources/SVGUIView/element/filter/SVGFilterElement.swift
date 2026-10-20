@@ -1,4 +1,5 @@
-import UIKit
+import CoreGraphics
+import Foundation
 
 final class SVGFilterElement: SVGDrawableElement {
   let base: SVGBaseElement
