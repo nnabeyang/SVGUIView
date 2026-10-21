@@ -61,7 +61,7 @@ final class SVGUseElement: SVGDrawableElement {
     defer {
       context.remove(tagId: element.index)
     }
-    guard !element.contains(index: index, context: context) else { return nil }
+    guard !element.contains(index: index) else { return nil }
     let restyled = element.restyled(parent: style, root: context.base.root?.style ?? style)
     if let svg = restyled as? SVGSVGElement {
       return await body(svg.sized(width: width, height: height))
@@ -157,7 +157,7 @@ final class SVGUseElement: SVGDrawableElement {
     }
   }
 
-  func contains(index: ObjectIdentifier, context _: SVGContext) -> Bool {
+  func contains(index: ObjectIdentifier) -> Bool {
     self.index == index || children.contains(where: { $0.index == index })
   }
 }

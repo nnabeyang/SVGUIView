@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-final class SVGPolygonElement: SVGDrawableElement {
+final class SVGPolygonElement: ShapeGeometry {
   static var type: SVGElementName {
     .polygon
   }
@@ -19,6 +19,10 @@ final class SVGPolygonElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) -> CGPath? {
+    path(in: context)
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
     points.polygon?.applying(scale(context: context))
   }
 }

@@ -9,7 +9,7 @@ protocol SVGElement: AnyObject, Encodable, Sendable {
   var index: ObjectIdentifier { get }
   func draw(_ context: SVGContext, mode: DrawMode) async
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async
-  func contains(index: ObjectIdentifier, context: SVGContext) -> Bool
+  func contains(index: ObjectIdentifier) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
   func pattern(context: inout SVGBaseContext)
@@ -39,7 +39,7 @@ extension SVGElement {
     return elements
   }
 
-  func contains(index _: ObjectIdentifier, context _: SVGContext) -> Bool {
+  func contains(index _: ObjectIdentifier) -> Bool {
     false
   }
 
@@ -129,11 +129,24 @@ protocol SVGDrawableElement: SVGElement {
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
   func frame(context: SVGContext, path: CGPath?) async -> CGRect
-  func scale(context: SVGContext) -> CGAffineTransform
   init(base: SVGBaseElement, text: String, attributes: [String: String])
   func toPath(context: SVGContext) async -> CGPath?
   func applyStroke(path: CGPath, context: SVGContext)
   func applyFill(path: CGPath, context: SVGContext, mode: DrawMode) async
+}
+
+/// An element whose shape doesn't depend on other elements: a shape, text or an image.
+protocol ShapeGeometry: SVGDrawableElement {
+  /// The shape, or `nil` for an element without one.
+  func path(in context: any GeometryContext) -> CGPath?
+  /// The bounds that units relative to the element use.
+  func frame(in context: any GeometryContext, path: CGPath?) -> CGRect
+}
+
+extension ShapeGeometry {
+  func frame(in _: any GeometryContext, path: CGPath?) -> CGRect {
+    path?.boundingBoxOfPath ?? .zero
+  }
 }
 
 extension SVGDrawableElement {
@@ -162,7 +175,8 @@ extension SVGDrawableElement {
     path?.boundingBoxOfPath ?? .zero
   }
 
-  func scale(context: SVGContext) -> CGAffineTransform {
+  /// The transform that `patternContentUnits` of `objectBoundingBox` scales the element's shape by.
+  func scale(context: any GeometryContext) -> CGAffineTransform {
     let contentUnit = context.patternContentUnit ?? .userSpaceOnUse
     switch contentUnit {
     case .userSpaceOnUse:

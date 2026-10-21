@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-final class SVGPathElement: SVGDrawableElement {
+final class SVGPathElement: ShapeGeometry {
   static var type: SVGElementName {
     .path
   }
@@ -27,6 +27,10 @@ final class SVGPathElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) -> CGPath? {
+    path(in: context)
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
     let pathContext = SVGPathContext()
     for segment in segments {
       segment.apply(context: pathContext)

@@ -51,7 +51,7 @@ final class SVGDefsElement: SVGDrawableElement {
     }
   }
 
-  func contains(index: ObjectIdentifier, context _: SVGContext) -> Bool {
+  func contains(index: ObjectIdentifier) -> Bool {
     children.contains(where: { $0.index == index })
   }
 }

@@ -10,7 +10,14 @@ protocol SVGLengthContext {
   var writingMode: WritingMode? { get }
 }
 
-struct SVGContext: SVGLengthContext, @unchecked Sendable {
+/// What the geometry of an element depends on: lengths, and the box that `patternContentUnits` of
+/// `objectBoundingBox` scales shapes by.
+protocol GeometryContext: SVGLengthContext {
+  var viewBox: CGRect { get }
+  var patternContentUnit: SVGUnitType? { get }
+}
+
+struct SVGContext: GeometryContext, @unchecked Sendable {
   let base: SVGBaseContext
   let graphics: CGContext
   let viewPort: CGRect

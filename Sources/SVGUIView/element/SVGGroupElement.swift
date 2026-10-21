@@ -113,7 +113,7 @@ final class SVGGroupElement: SVGDrawableElement {
     }
   }
 
-  func contains(index: ObjectIdentifier, context _: SVGContext) -> Bool {
+  func contains(index: ObjectIdentifier) -> Bool {
     children.contains(where: { $0.index == index })
   }
 }

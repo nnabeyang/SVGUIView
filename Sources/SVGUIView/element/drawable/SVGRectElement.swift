@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-final class SVGRectElement: SVGDrawableElement {
+final class SVGRectElement: ShapeGeometry {
   static var type: SVGElementName {
     .rect
   }
@@ -29,6 +29,10 @@ final class SVGRectElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) -> CGPath? {
+    path(in: context)
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
     let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }

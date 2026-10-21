@@ -15,7 +15,8 @@ protocol SVGGradientServer: SVGElement {
   var children: [any SVGElement] { get }
   func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
   func draw(path: CGPath, context: SVGContext, opacity: Double)
-  func stops(context: SVGContext) -> [SVGStopElement]
+  func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint?
+  func stops(context: any SVGLengthContext) -> [SVGStopElement]
   init?(lhs: Self, rhs: SVGLinearGradientServer)
   init?(lhs: Self, rhs: SVGRadialGradientServer)
 }
@@ -32,7 +33,7 @@ extension SVGGradientServer {
     }
   }
 
-  func stops(context: SVGContext) -> [SVGStopElement] {
+  func stops(context _: any SVGLengthContext) -> [SVGStopElement] {
     children.compactMap { $0 as? SVGStopElement }
   }
 
@@ -142,99 +143,23 @@ final class SVGLinearGradientServer: SVGGradientServer {
   }
 
   func draw(path: CGPath, context: SVGContext, opacity: Double) {
+    paint(context: context, opacity: opacity)?.paint(path, in: context.graphics)
+  }
+
+  /// The gradient with its lengths resolved, or `nil` if it has no stop with a color.
+  func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint? {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let x1 = (x1 ?? .percent(0)).value(context: context, mode: .width, unitType: gradientUnits)
     let y1 = (y1 ?? .percent(0)).value(context: context, mode: .height, unitType: gradientUnits)
     let x2 = (x2 ?? .percent(100)).value(context: context, mode: .width, unitType: gradientUnits)
     let y2 = (y2 ?? .percent(0)).value(context: context, mode: .height, unitType: gradientUnits)
-    let spreadMethod = spreadMethod ?? .pad
-
     let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
-    guard !colors.isEmpty else { return }
-    let space = CGColorSpaceCreateDeviceRGB()
-    let locations: [CGFloat] = stops.map(\.offset.value)
-    guard let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else {
-      return
-    }
-    let gContext = context.graphics
-    gContext.saveGState()
-    gContext.addPath(path)
-    gContext.clip()
-    let frame = path.boundingBoxOfPath
-    let (sx, sy): (CGFloat, CGFloat) = {
-      switch gradientUnits {
-      case .userSpaceOnUse:
-        return (1.0, 1.0)
-      case .objectBoundingBox:
-        if x1 == x2 || y1 == y2 {
-          return (frame.width, frame.height)
-        }
-        let s = min(frame.width, frame.height)
-        return (s, s)
-      }
-    }()
-    let rect = CGRect(x: x1 * sx, y: y1 * sy, width: (x2 - x1) * sx, height: (y2 - y1) * sy)
-    let rx: CGFloat
-    let ry: CGFloat
-    let x: CGFloat
-    let y: CGFloat
-    switch gradientUnits {
-    case .userSpaceOnUse:
-      rx = 1.0
-      ry = 1.0
-      x = 0
-      y = 0
-    case .objectBoundingBox:
-      rx = sx / frame.width
-      ry = sy / frame.height
-      x = frame.minX * rx
-      y = frame.minY * ry
-    }
-    let _x1 = rect.minX
-    let _y1 = rect.minY
-    let _x2 = rect.maxX
-    let _y2 = rect.maxY
-
-    if sx == sy {
-      gContext.scaleBy(x: 1.0 / rx, y: 1.0 / ry)
-    }
-
-    switch spreadMethod {
-    case .pad:
-      let start = CGPoint(x: x + _x1, y: y + _y1)
-      let end = CGPoint(x: x + _x2, y: y + _y2)
-      let options: CGGradientDrawingOptions = [.drawsBeforeStartLocation, .drawsAfterEndLocation]
-      gContext.drawLinearGradient(gradient, start: start, end: end, options: options)
-    case .repeat:
-      let dx = _x2 - _x1
-      let dy = _y2 - _y1
-      let n = min(ceil((x + _x1 - frame.minX) / dx), ceil((y + _y1 - frame.minY) / dy))
-      let base = CGPoint(x: x + _x1 - dx * n, y: y + _y1 - dy * n)
-      let m = min(ceil((frame.maxX - base.x) / dx), ceil((frame.maxY - base.y) / dy))
-      for i in stride(from: 0, to: m, by: 1) {
-        let start = CGPoint(x: base.x + i * dx, y: base.y + i * dy)
-        let end = CGPoint(x: base.x + (i + 1) * dx, y: base.y + (i + 1) * dy)
-        gContext.drawLinearGradient(gradient, start: start, end: end, options: [])
-      }
-    case .reflect:
-      let reflected = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations.reversed())!
-      let dx = _x2 - _x1
-      let dy = _y2 - _y1
-      let n = min(ceil((x + _x1 - frame.minX) / dx), ceil((y + _y1 - frame.minY) / dy))
-      let base = CGPoint(x: x + _x1 - dx * n, y: y + _y1 - dy * n)
-      let m = min(ceil((frame.maxX - base.x) / dx), ceil((frame.maxY - base.y) / dy))
-      for i in stride(from: 0, to: m, by: 1) {
-        let start = CGPoint(x: base.x + i * dx, y: base.y + i * dy)
-        let end = CGPoint(x: base.x + (i + 1) * dx, y: base.y + (i + 1) * dy)
-        if Int(i - n) % 2 == 0 {
-          gContext.drawLinearGradient(gradient, start: start, end: end, options: [])
-        } else {
-          gContext.drawLinearGradient(reflected, start: start, end: end, options: [])
-        }
-      }
-    }
-    gContext.restoreGState()
+    guard !colors.isEmpty else { return nil }
+    return .linear(
+      LinearGradientPaint(
+        units: gradientUnits, x1: x1, y1: y1, x2: x2, y2: y2, spreadMethod: spreadMethod ?? .pad, colors: colors,
+        locations: stops.map(\.offset.value)))
   }
 }
 
@@ -347,57 +272,21 @@ final class SVGRadialGradientServer: SVGGradientServer {
   }
 
   func draw(path: CGPath, context: SVGContext, opacity: Double) {
+    paint(context: context, opacity: opacity)?.paint(path, in: context.graphics)
+  }
+
+  /// The gradient with its lengths resolved, or `nil` if it has no stop with a color.
+  func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint? {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
     let cy = (cy ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
     let r = (r ?? .percent(50)).value(context: context, mode: .height, unitType: gradientUnits)
     let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
-    guard !colors.isEmpty else { return }
-    let space = CGColorSpaceCreateDeviceRGB()
-    let locations: [CGFloat] = stops.map(\.offset.value)
-
-    let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations)!
-
-    let gContext = context.graphics
-    gContext.saveGState()
-    gContext.addPath(path)
-    gContext.clip()
-    let frame = path.boundingBoxOfPath
-    let pp = CGPoint(x: cx, y: cy)
-
-    let s: CGFloat
-    let rx: CGFloat
-    let ry: CGFloat
-    let _cx: CGFloat
-    let _cy: CGFloat
-    switch gradientUnits {
-    case .userSpaceOnUse:
-      s = 1.0
-      rx = 1.0
-      ry = 1.0
-      _cx = pp.x * s
-      _cy = pp.y * s
-    case .objectBoundingBox:
-      s = min(frame.width, frame.height)
-      rx = s / frame.width
-      ry = s / frame.height
-      _cx = pp.x * s + frame.minX * rx
-      _cy = pp.y * s + frame.minY * ry
-    }
-    let _r = r * s
-
-    if case .objectBoundingBox = gradientUnits, frame.width != frame.height {
-      gContext.scaleBy(x: 1.0 / rx, y: 1.0 / ry)
-    }
-    gContext.drawRadialGradient(
-      gradient,
-      startCenter: .init(x: _cx, y: _cy),
-      startRadius: 0,
-      endCenter: .init(x: _cx, y: _cy),
-      endRadius: _r,
-      options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-    context.restoreGState()
+    guard !colors.isEmpty else { return nil }
+    return .radial(
+      RadialGradientPaint(
+        units: gradientUnits, cx: cx, cy: cy, r: r, colors: colors, locations: stops.map(\.offset.value)))
   }
 }
 

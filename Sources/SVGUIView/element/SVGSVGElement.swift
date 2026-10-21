@@ -188,7 +188,7 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     await drawWithoutFilter(context, mode: mode)
   }
 
-  func contains(index: ObjectIdentifier, context _: SVGContext) -> Bool {
+  func contains(index: ObjectIdentifier) -> Bool {
     children.contains(where: { $0.index == index })
   }
 
