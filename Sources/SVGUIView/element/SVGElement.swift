@@ -71,6 +71,8 @@ enum DrawMode: Equatable {
 
 /// The attributes of an element, with the values that the cascade gives its properties.
 final class SVGBaseElement: Sendable {
+  /// The identifier of the element in its document, which the nodes of the render tree that it makes keep.
+  let elementID: ElementID
   let name: SVGElementName
   let text: String
   let id: String?
@@ -82,7 +84,11 @@ final class SVGBaseElement: Sendable {
   /// The computed values of the element's properties.
   let style: ComputedStyle
 
-  init(name: SVGElementName, text: String, attributes: [String: String], cascaded: CascadedValues, style: ComputedStyle) {
+  init(
+    elementID: ElementID, name: SVGElementName, text: String, attributes: [String: String], cascaded: CascadedValues,
+    style: ComputedStyle
+  ) {
+    self.elementID = elementID
     self.name = name
     self.text = text
     self.attributes = attributes
@@ -95,7 +101,7 @@ final class SVGBaseElement: Sendable {
   /// The element with its computed values computed again for another parent.
   func restyled(parent: ComputedStyle, root: ComputedStyle) -> SVGBaseElement {
     SVGBaseElement(
-      name: name, text: text, attributes: attributes, cascaded: cascaded,
+      elementID: elementID, name: name, text: text, attributes: attributes, cascaded: cascaded,
       style: ComputedStyle(cascaded: cascaded, parent: parent, root: root))
   }
 }
@@ -325,7 +331,7 @@ extension ElementCursor {
       child(at: $0).makeElement(with: css, parent: style, root: root ?? style)
     }
     let base = SVGBaseElement(
-      name: name, text: element.text, attributes: element.attributes, cascaded: cascaded, style: style)
+      elementID: element.id, name: name, text: element.text, attributes: element.attributes, cascaded: cascaded, style: style)
     let rendered: any SVGElement =
       switch name {
       case .svg:
