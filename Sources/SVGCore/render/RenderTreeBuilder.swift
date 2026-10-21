@@ -53,11 +53,13 @@ package struct RenderTreeBuilder {
     await Task.yield()
     switch element {
     case let svg as SVGSVGElement:
+      if svg.display == CSSDisplay.none { return nil }
       if case .filtered(let node) = await filtering(of: svg, context: context, guard: references, instance: instance) {
         return node
       }
       return await viewportNode(of: svg, context: context, mode: mode, guard: references, instance: instance)
     case let group as SVGGroupElement:
+      if group.display == CSSDisplay.none { return nil }
       if case .filtered(let node) = await filtering(of: group, context: context, guard: references, instance: instance) {
         return node
       }
@@ -319,7 +321,7 @@ package struct RenderTreeBuilder {
     case let svg as SVGSVGElement:
       var rect = CGRect.zero
       for child in svg.children {
-        guard let child = child as? (any SVGDrawableElement) else { continue }
+        guard let child = child as? (any SVGDrawableElement), child.display != CSSDisplay.none else { continue }
         let context = context.styled(by: child)
         let childPath = await self.path(of: child, context: context, guard: references)
         rect = CGRectUnion(rect, await frame(of: child, context: context, path: childPath, guard: references))
