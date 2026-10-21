@@ -1,8 +1,7 @@
-import Accelerate
 import CoreGraphics
 import Foundation
 
-final class SVGFeOffsetElement: SVGElement, SVGFilterApplier {
+final class SVGFeOffsetElement: SVGElement, SVGFilterPrimitiveElement {
   static var type: SVGElementName {
     .feOffset
   }
@@ -36,55 +35,6 @@ final class SVGFeOffsetElement: SVGElement, SVGFilterApplier {
     dy = Double(attributes["dy", default: ""])
   }
 
-  func apply(
-    srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
-    filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results _: [String: CGImage], isFirst _: Bool
-  ) -> CGImage? {
-    guard
-      var format = vImage_CGImageFormat(
-        bitsPerComponent: srcImage.bitsPerComponent,
-        bitsPerPixel: srcImage.bitsPerPixel,
-        colorSpace: srcImage.colorSpace!,
-        bitmapInfo: srcImage.bitmapInfo),
-      var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
-    else { return nil }
-    defer { inputBuffer.free() }
-    // The image uses the memory of the buffer, which is freed after the image is drawn below.
-    guard
-      let image = vImageCreateCGImageFromBuffer(
-        &inputBuffer,
-        &format,
-        { _, _ in },
-        nil,
-        vImage_Flags(kvImageNoAllocate),
-        nil)?.takeRetainedValue()
-    else { return nil }
-    let rect = self.frame(filter: filter, frame: frame, context: context)
-    clipRect = CGRectIntersection(clipRect, rect)
-    cgContext.clip(to: clipRect)
-    let transform = transform(filter: filter, frame: frame)
-    cgContext.concatenate(transform)
-    cgContext.setAlpha(opacity)
-    cgContext.draw(image, in: effectRect)
-    return cgContext.makeImage()
-  }
-
-  func transform(filter: SVGFilterElement, frame: CGRect) -> CGAffineTransform {
-    let primitiveUnits = filter.primitiveUnits ?? .userSpaceOnUse
-    let dx = dx ?? 0
-    let dy = dy ?? 0
-    let x: CGFloat
-    let y: CGFloat
-    switch primitiveUnits {
-    case .userSpaceOnUse:
-      x = dx
-      y = dy
-    case .objectBoundingBox:
-      x = dx * frame.width
-      y = dy * frame.height
-    }
-    return CGAffineTransform(translationX: x, y: y)
-  }
 }
 
 extension SVGFeOffsetElement: Encodable {

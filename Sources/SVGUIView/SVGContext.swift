@@ -37,20 +37,6 @@ struct SVGContext: GeometryContext, @unchecked Sendable {
     self.scale = scale
   }
 
-  /// A context in the state that the drawing code of elements had where a filter is applied, while the rest of the
-  /// document is painted from a render tree. The `<use>` elements of the guard become a level of the stack of them.
-  init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, scale: CGFloat, legacy: LegacyState) {
-    self.init(base: base, graphics: graphics, viewPort: viewPort, scale: scale)
-    viewBoxStack.push(legacy.viewBox)
-    legacy.patternContentUnit.map { patternContentUnitStack.push($0) }
-    style = legacy.style
-    let references = legacy.guard
-    if let uses = references.uses {
-      tagIdStack.push()
-      uses.forEach { _ = tagIdStack.check(elementId: $0) }
-    }
-  }
-
   var textScale: Double {
     let x = viewPort.width * scale / viewBox.width
     let y = viewPort.height * scale / viewBox.height

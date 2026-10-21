@@ -47,11 +47,6 @@ struct ResolveContext: GeometryContext {
     context.viewBox = viewBox
     return context
   }
-
-  /// The state that the filter elements read, until filters move into the render tree.
-  func legacy(_ guard: ReferenceGuard) -> LegacyState {
-    LegacyState(viewBox: viewBox, patternContentUnit: patternContentUnit, style: style, guard: `guard`)
-  }
 }
 
 /// The references that are being followed, which stop a cycle of references.
@@ -108,12 +103,4 @@ struct ReferenceGuard: Sendable {
     guard set != nil, set!.insert(member).inserted else { return false }
     return true
   }
-}
-
-/// The state that a filter element reads, from which `SVGContext` is made again.
-struct LegacyState: Sendable {
-  let viewBox: CGRect
-  let patternContentUnit: SVGUnitType?
-  let style: ComputedStyle
-  let `guard`: ReferenceGuard
 }

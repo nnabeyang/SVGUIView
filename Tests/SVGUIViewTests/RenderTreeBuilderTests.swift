@@ -199,13 +199,17 @@ struct RenderTreeBuilderTests {
 
   @Test("an element with a filter keeps itself without the filter, which is the source image")
   func filterSource() async throws {
-    let tree = try await renderTree(
+    let filtered = try await filteredNode(
       ##"<filter id="f"><feOffset dx="1"/></filter><rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .legacyFiltered(let filtered) = try children(of: tree).last else {
-      Issue.record("The rectangle isn't filtered")
-      return
-    }
     let source = try shape(filtered.source)
     #expect(source.geometry?.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
+  }
+
+  private func filteredNode(_ content: String) async throws -> FilteredNode {
+    let tree = try await renderTree(content)
+    guard case .filtered(let filtered) = try children(of: tree).last else {
+      throw NodeError.unexpected(try children(of: tree).last)
+    }
+    return filtered
   }
 }

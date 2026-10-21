@@ -36,8 +36,8 @@ indirect enum RenderNode: Sendable {
   /// An `<svg>` element.
   case viewport(ViewportNode)
   case use(UseNode)
-  /// An element with a filter, which the filter element applies until filters move into the render tree.
-  case legacyFiltered(LegacyFilteredNode)
+  /// An element with a filter.
+  case filtered(FilteredNode)
 }
 
 struct ShapeNode: Sendable {
@@ -130,13 +130,4 @@ struct UseInstance: Sendable {
   let translation: CGAffineTransform
   let opacity: CGFloat
   let content: RenderNode?
-}
-
-struct LegacyFilteredNode: Sendable {
-  let element: any SVGDrawableElement
-  let filter: SVGFilterElement
-  /// The state that the filter element resolves lengths and finds the bounds of the element with.
-  let legacy: LegacyState
-  /// The element without its filter, which is the source image of the filter.
-  let source: RenderNode?
 }

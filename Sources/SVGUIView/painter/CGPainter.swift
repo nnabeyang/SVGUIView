@@ -2,13 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// Paints a render tree into a `CGContext`.
-///
-/// Filters are applied by their elements for now, in an `SVGContext` made again from the state that the render tree
-/// records for them.
 struct CGPainter {
-  let base: SVGBaseContext
-  /// The rectangle that the document is rendered into.
-  let viewPort: CGRect
   /// The scale of the image being rendered.
   let scale: CGFloat
 
@@ -23,7 +17,7 @@ struct CGPainter {
     graphics.restoreGState()
   }
 
-  private func paint(_ node: RenderNode, into graphics: CGContext) async {
+  func paint(_ node: RenderNode, into graphics: CGContext) async {
     guard !Task.isCancelled else { return }
     // Painting hardly ever suspends otherwise, so let other tasks run on this thread of the cooperative thread
     // pool between nodes.
@@ -37,13 +31,8 @@ struct CGPainter {
       await paint(viewport, into: graphics)
     case .use(let use):
       await paint(use, into: graphics)
-    case .legacyFiltered(let filtered):
-      let context = SVGContext(base: base, graphics: graphics, viewPort: viewPort, scale: scale, legacy: filtered.legacy)
-      await filtered.filter.filter(content: filtered.element, context: context, cgContext: graphics) { graphics in
-        if let source = filtered.source {
-          await paint(source, into: graphics)
-        }
-      }
+    case .filtered(let filtered):
+      await paint(filtered, into: graphics)
     }
   }
 
