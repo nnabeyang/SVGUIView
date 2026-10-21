@@ -157,9 +157,11 @@ package struct RenderTreeBuilder {
     let transform = mode != .filter(isRoot: true) ? (group.transform ?? .identity) : .identity
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
     var clip: ClipPathEffect?
-    if let clipPath = group.clipPath {
+    var mask: MaskEffect?
+    if group.clipPath != nil || group.mask != nil {
       let frame = await frame(of: group, context: context, path: nil, guard: references)
-      clip = await clipEffect(clipPath, frame: frame, context: context, guard: references)
+      clip = await clipEffect(group.clipPath, frame: frame, context: context, guard: references)
+      mask = await maskEffect(group.mask, frame: frame, context: context, guard: references)
     }
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
@@ -172,7 +174,7 @@ package struct RenderTreeBuilder {
     return .group(
       GroupNode(
         id: renderID(of: group, instance: instance), transform: transform, opacity: group.opacity, clip: clip,
-        children: children))
+        mask: mask, children: children))
   }
 
   private func viewportNode(
@@ -204,6 +206,7 @@ package struct RenderTreeBuilder {
     }
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
     let clip = await clipEffect(svg.clipPath, frame: inner.viewBox, context: inner, guard: references)
+    let mask = await maskEffect(svg.mask, frame: inner.viewBox, context: inner, guard: references)
     var children = [RenderNode]()
     for child in svg.children {
       guard let child = child as? (any SVGDrawableElement) else { continue }
@@ -215,7 +218,7 @@ package struct RenderTreeBuilder {
       ViewportNode(
         id: id, translation: translation,
         content: ViewportContent(
-          viewBoxTransform: transform, overflowClip: overflowClip, clip: clip, children: children)))
+          viewBoxTransform: transform, overflowClip: overflowClip, clip: clip, mask: mask, children: children)))
   }
 
   private func useNode(
@@ -227,9 +230,11 @@ package struct RenderTreeBuilder {
     let transform = isFilterRoot ? .identity : (use.transform ?? .identity)
     let references = isFilterRoot ? references.beginning(.all) : references
     var clip: ClipPathEffect?
-    if let clipPath = use.clipPath {
+    var mask: MaskEffect?
+    if use.clipPath != nil || use.mask != nil {
       let frame = await frame(of: use, context: context, path: nil, guard: references)
-      clip = await clipEffect(clipPath, frame: frame, context: context, guard: references)
+      clip = await clipEffect(use.clipPath, frame: frame, context: context, guard: references)
+      mask = await maskEffect(use.mask, frame: frame, context: context, guard: references)
     }
     let content = await withReferencedElement(of: use, context: context, guard: references) { element, references in
       UseInstance(
@@ -240,7 +245,7 @@ package struct RenderTreeBuilder {
     }
     return .use(
       UseNode(
-        id: renderID(of: use, instance: instance), transform: transform, clip: clip, instance: content))
+        id: renderID(of: use, instance: instance), transform: transform, clip: clip, mask: mask, instance: content))
   }
 
   // MARK: - `<use>`
