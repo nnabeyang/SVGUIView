@@ -45,7 +45,7 @@ public class SVGUIView: UIView {
   ///   - data: The SVG data to display. Pass `nil` to create an empty view.
   public convenience init(frame: CGRect, data: Data? = nil) {
     let data = data ?? Data()
-    let baseContext = SVGParser.parse(data: data)
+    let baseContext = Self.parse(data)
     self.init(frame: frame, baseContext: baseContext, data: data)
   }
 
@@ -55,9 +55,15 @@ public class SVGUIView: UIView {
   ///
   /// - Parameter data: The SVG data to display.
   public convenience init(data: Data = Data()) {
-    let baseContext = SVGParser.parse(data: data)
+    let baseContext = Self.parse(data)
     let size = baseContext.root?.size ?? .zero
     self.init(frame: .init(origin: .zero, size: size), baseContext: baseContext, data: data)
+  }
+
+  /// Parses SVG data, with the fonts of text styles that only UIKit provides.
+  private static func parse(_ data: Data) -> SVGBaseContext {
+    _ = installTextStyleFonts
+    return SVGParser.parse(data: data)
   }
 
   /// The SVG data that the view displays.
@@ -70,7 +76,7 @@ public class SVGUIView: UIView {
     didSet {
       // SVGView sets its data on every update of the SwiftUI view.
       guard data != oldValue else { return }
-      baseContext = SVGParser.parse(data: data)
+      baseContext = Self.parse(data)
       setNeedsDisplay()
     }
   }

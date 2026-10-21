@@ -1,8 +1,20 @@
 import CoreText
 import Foundation
 import _SPI
+import os
 
 class SystemFontDatabaseCoreText {
+  /// Makes the font descriptor of a text style, such as `UICTFontTextStyleBody`, at the user's preferred size.
+  ///
+  /// Only UIKit provides these descriptors, so the view sets it before it parses a document. Without it, text styles
+  /// use the system UI font.
+  static var textStyleDescriptor: (@Sendable (String) -> CTFontDescriptor)? {
+    get { textStyleDescriptorLock.withLock { $0 } }
+    set { textStyleDescriptorLock.withLock { $0 = newValue } }
+  }
+  private static let textStyleDescriptorLock = OSAllocatedUnfairLock<(@Sendable (String) -> CTFontDescriptor)?>(
+    initialState: nil)
+
   private var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
   let textStyles: [CFString]
 
@@ -140,7 +152,8 @@ class SystemFontDatabaseCoreText {
   }
 
   static func createTextStyleFont(parameters: CascadeListParameters) -> CTFont? {
-    var descriptor = preferredFontDescriptor(textStyle: parameters.fontName)
+    guard let textStyleDescriptor else { return createSystemUIFont(parameters: parameters, locale: nil) }
+    var descriptor = textStyleDescriptor(parameters.fontName)
     let traits: CTFontSymbolicTraits = [
       parameters.weight >= FontWeight.semibold ? .boldTrait : .zero,
       parameters.width >= kCTFontWidthSemiExpanded ? .expandedTrait : .zero,

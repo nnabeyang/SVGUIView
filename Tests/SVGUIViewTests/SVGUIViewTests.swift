@@ -304,6 +304,12 @@ struct SVGUIViewTests {
     #expect(stopped < full / 2, "Rendering took \(stopped) after the view was released, and \(full) in full")
   }
 
+  @Test("a view gives the fonts of text styles to the documents that it parses")
+  func textStyleFonts() {
+    _ = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
+    #expect(SystemFontDatabaseCoreText.textStyleDescriptor != nil)
+  }
+
   @Test("a rendering may take ten seconds by default")
   func defaultTimeout() {
     #expect(SVGUIViewConfiguration().timeoutDuration == .seconds(10))
