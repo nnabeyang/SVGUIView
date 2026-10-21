@@ -102,9 +102,13 @@ computing what to draw is separate from the two ways of drawing it.
 
 Decisions:
 
-- The new targets aren't products. `SVGUIView` re-exports the public API of
-  `SVGCore`, such as the document API, so `import SVGUIView` stays enough. A
-  separate `SVGCore` product can be added if someone needs it without UIKit.
+- The new targets aren't products, and `SVGUIView` doesn't re-export
+  `SVGCore`. The targets use each other's declarations with `package` access,
+  and the types that apps use, such as the document API, are declared in
+  `SVGUIView`, so `import SVGUIView` stays enough. A separate `SVGCore` product
+  can be added if someone needs it without UIKit.
+- The fonts of text styles, such as `UICTFontTextStyleBody`, come from UIKit,
+  so `SVGUIView` passes them to `SVGCore` before it parses a document.
 - The private interfaces in `_SPI`, `_ICU` and `_CShims` move with the code that
   uses them, which is mostly text layout in `SVGCore`.
 - The existing branch that adds separate Metal-backed views isn't continued.
@@ -545,9 +549,6 @@ before it is merged.
   <doc:#Combining-animations>. SVG 1.1 applied SMIL animations of properties as
   an override style sheet, and browsers differ in details. The order above is a
   starting point, to be checked against WebKit with test documents.
-- Whether `SVGUIView` should re-export `SVGCore` with `@_exported import`, which
-  isn't an official language feature, or whether the document API should live in
-  the `SVGUIView` module.
 - Whether still images should use the Metal filters once they produce the same
   results as the vImage implementation.
 - Whether filters should move to Metal before phase 3. Until then, playback runs
