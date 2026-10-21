@@ -5,6 +5,16 @@ import Foundation
 enum SVGColorInterpolation: String, CaseIterable {
   case sRGB
   case linearRGB
+
+  /// The color space that colors are interpolated in.
+  var colorSpace: CGColorSpace {
+    switch self {
+    case .sRGB:
+      CGColorSpace(name: CGColorSpace.sRGB)!
+    case .linearRGB:
+      CGColorSpace(name: CGColorSpace.linearSRGB)!
+    }
+  }
 }
 
 final class SVGMaskElement: SVGDrawableElement {

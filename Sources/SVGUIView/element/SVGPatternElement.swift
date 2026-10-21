@@ -114,7 +114,7 @@ final class SVGPatternElement: SVGDrawableElement {
     return nil
   }
 
-  func size(frame: CGRect, context: SVGContext) -> CGSize {
+  func size(frame: CGRect, context: any SVGLengthContext) -> CGSize {
     let patternUnits = patternUnits ?? .objectBoundingBox
     let width = width?.value(context: context, mode: .width, unitType: patternUnits) ?? 0
     let height = height?.value(context: context, mode: .height, unitType: patternUnits) ?? 0

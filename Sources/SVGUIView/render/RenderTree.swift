@@ -36,8 +36,7 @@ indirect enum RenderNode: Sendable {
   /// An `<svg>` element.
   case viewport(ViewportNode)
   case use(UseNode)
-  /// An element with a filter, which the drawing code of the element paints until filters move into the render
-  /// tree.
+  /// An element with a filter, which the filter element applies until filters move into the render tree.
   case legacyFiltered(LegacyFilteredNode)
 }
 
@@ -46,13 +45,11 @@ struct ShapeNode: Sendable {
   let transform: CGAffineTransform
   /// The shape and its bounds, or `nil` for an element without a shape.
   let geometry: Geometry?
-  let clip: ClipReference?
+  let clip: ClipPathEffect?
   let mask: MaskApplication
   let opacity: CGFloat
   /// What the shape paints, or `nil` if it's hidden or has no shape.
   let content: ShapeContent?
-  /// The state that clip paths, masks and patterns are drawn with, until they move into the render tree.
-  let legacy: LegacyState
 }
 
 struct Geometry: Sendable {
@@ -72,9 +69,9 @@ enum FillPaint: Sendable {
   case color(CGColor)
   /// A gradient, or `nil` for one without a stop with a color, which paints nothing.
   case gradient(GradientPaint?)
-  /// A pattern, which its element draws until patterns move into the render tree. It's drawn with the opacity of
-  /// the fill, and paints black if a cycle of patterns stops it.
-  case pattern(SVGPatternElement, id: String, frame: CGRect, opacity: CGFloat, mode: DrawMode)
+  /// A pattern, or `nil` for one whose tile can't be made, which paints nothing. A cycle of patterns paints black
+  /// instead.
+  case pattern(PatternPaint?)
 }
 
 struct StrokeStyle: Sendable {
@@ -90,25 +87,18 @@ struct StrokeStyle: Sendable {
   let miterLimit: CGFloat
 }
 
-/// A clip path and the bounds of the element that it clips.
-struct ClipReference: Sendable {
-  let clipPath: SVGClipPath
-  let frame: CGRect
-}
-
 enum MaskApplication: Sendable {
   case none
   /// A line that has a mask and no area clips everything.
   case clipToZero
-  case mask(SVGMask, frame: CGRect)
+  case mask(MaskEffect)
 }
 
 struct GroupNode: Sendable {
   let id: RenderID
   let transform: CGAffineTransform
   let opacity: CGFloat
-  let clip: ClipReference?
-  let legacy: LegacyState
+  let clip: ClipPathEffect?
   let children: [RenderNode]
 }
 
@@ -123,16 +113,14 @@ struct ViewportNode: Sendable {
 struct ViewportContent: Sendable {
   let viewBoxTransform: CGAffineTransform
   let overflowClip: CGRect?
-  let clip: ClipReference?
-  let legacy: LegacyState
+  let clip: ClipPathEffect?
   let children: [RenderNode]
 }
 
 struct UseNode: Sendable {
   let id: RenderID
   let transform: CGAffineTransform
-  let clip: ClipReference?
-  let legacy: LegacyState
+  let clip: ClipPathEffect?
   /// The referenced content, or `nil` if there is none or showing it would make a cycle.
   let instance: UseInstance?
 }
@@ -147,5 +135,8 @@ struct UseInstance: Sendable {
 struct LegacyFilteredNode: Sendable {
   let element: any SVGDrawableElement
   let filter: SVGFilterElement
+  /// The state that the filter element resolves lengths and finds the bounds of the element with.
   let legacy: LegacyState
+  /// The element without its filter, which is the source image of the filter.
+  let source: RenderNode?
 }

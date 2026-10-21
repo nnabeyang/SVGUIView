@@ -59,13 +59,31 @@ final class SVGFilterElement: SVGDrawableElement {
   }
 
   func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) async {
+    await filter(content: content, context: context, cgContext: cgContext) { graphics in
+      let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, scale: context.scale)
+      nestContext.push(viewBox: context.viewBox)
+      await content.drawWithoutFilter(nestContext, mode: .filter(isRoot: true))
+    }
+  }
+
+  /// Applies the filter to an element.
+  ///
+  /// - Parameters:
+  ///   - content: The element, whose bounds the filter region is relative to.
+  ///   - context: The context of the parent of the element.
+  ///   - cgContext: The context to draw the filtered element into.
+  ///   - paintSource: Paints the element without its filter into a context, which is the source image.
+  func filter(
+    content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext,
+    paintSource: (CGContext) async -> Void
+  ) async {
     guard !children.isEmpty else { return }
     let contentContext = context.styled(by: content)
     let path = await content.toPath(context: contentContext)
     let frame = await content.frame(context: contentContext, path: path)
     let effectRect = effectRect(frame: frame, context: context)
     guard let imageCgContext = createImageCGContext(rect: effectRect, scale: context.scale, colorInterpolation: colorInterpolation ?? .sRGB),
-      let srcImage = await srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),
+      let srcImage = await srcImage(graphics: imageCgContext, rect: effectRect, context: context, paint: paintSource),
       let filterCgContext = createImageCGContext(rect: effectRect, scale: context.scale, colorInterpolation: colorInterpolationFilters ?? .linearRGB)
     else { return }
     let scale = context.scale
@@ -115,17 +133,17 @@ final class SVGFilterElement: SVGDrawableElement {
     CGContext.bitmap(size: rect.size, scale: scale, space: colorSpace(colorInterpolation: colorInterpolation))
   }
 
-  private func srcImage(content: any SVGDrawableElement, graphics: CGContext, rect: CGRect, context: SVGContext) async -> CGImage? {
-    let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, scale: context.scale)
+  private func srcImage(
+    graphics: CGContext, rect: CGRect, context: SVGContext, paint: (CGContext) async -> Void
+  ) async -> CGImage? {
     let scale = context.scale
     let transform = CGAffineTransform(scaleX: scale, y: scale)
       .translatedBy(x: -rect.minX, y: -rect.minY)
     graphics.concatenate(transform)
 
-    nestContext.push(viewBox: context.viewBox)
     graphics.saveGState()
     guard !Task.isCancelled else { return nil }
-    await content.drawWithoutFilter(nestContext, mode: .filter(isRoot: true))
+    await paint(graphics)
     guard let image = graphics.makeImage() else { return nil }
     graphics.restoreGState()
     return image
