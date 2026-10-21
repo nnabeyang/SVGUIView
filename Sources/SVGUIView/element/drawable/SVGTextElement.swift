@@ -2,7 +2,7 @@ import CoreGraphics
 import CoreText
 import Foundation
 
-enum TextAnchor: String {
+enum TextAnchor: String, CaseIterable {
   case start
   case middle
   case end

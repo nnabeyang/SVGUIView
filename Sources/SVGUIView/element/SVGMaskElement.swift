@@ -2,7 +2,7 @@ import Accelerate
 import CoreGraphics
 import Foundation
 
-enum SVGColorInterpolation: String {
+enum SVGColorInterpolation: String, CaseIterable {
   case sRGB
   case linearRGB
 }

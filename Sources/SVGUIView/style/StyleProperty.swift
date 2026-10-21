@@ -1,0 +1,116 @@
+import Foundation
+import _CSSParser
+
+/// A value of a property as a declaration gives it: a value, or one of the keywords that every property takes.
+enum Declared<Value: Sendable>: Sendable {
+  case value(Value)
+  /// The value of the parent element.
+  case inherit
+  /// The initial value of the property.
+  case initial
+  /// `inherit` for a property that's inherited, and `initial` for one that isn't.
+  case unset
+}
+
+/// Where a declaration comes from, which decides the keywords that it takes.
+enum DeclarationOrigin {
+  /// A presentation attribute, which takes `inherit` but no other keyword that every property takes.
+  case attribute
+  /// A style sheet or the `style` attribute.
+  case css
+}
+
+/// A property that styles set, described once: how it's parsed, its initial value, whether it's inherited, and
+/// how its computed value is found.
+protocol StyleProperty {
+  /// The value that a declaration gives.
+  associatedtype Specified: Sendable
+  /// The value that drawing reads, with relative values resolved as far as they can be without layout.
+  associatedtype Computed: Sendable
+
+  static var id: PropertyID { get }
+  static var isInherited: Bool { get }
+  static var initial: Computed { get }
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { get }
+
+  /// Whether elements of the given name take the property as a presentation attribute.
+  static func accepts(attributeOn name: SVGElementName) -> Bool
+  /// The value of a presentation attribute, or of a declaration with its comments removed, or `nil` if it's
+  /// invalid.
+  static func parse(_ text: String, origin: DeclarationOrigin) -> Specified?
+  /// The value of a declaration in a style sheet, read from its tokens.
+  static func parse(css input: inout _CSSParser.Parser) -> Specified?
+  static func compute(_ value: Specified, in resolver: StyleResolver) -> Computed
+}
+
+extension StyleProperty {
+  static func accepts(attributeOn _: SVGElementName) -> Bool {
+    true
+  }
+
+  static func parse(css input: inout _CSSParser.Parser) -> Specified? {
+    let start = input.position
+    while case .success = input.next() {}
+    return parse(removingComments(from: input.slice(from: start)), origin: .css)
+  }
+}
+
+extension StyleProperty where Specified == Computed {
+  static func compute(_ value: Specified, in _: StyleResolver) -> Computed {
+    value
+  }
+}
+
+extension StyleProperty {
+  /// The declared value of a presentation attribute, or `nil` if the attribute is invalid.
+  static func declared(attribute text: String) -> Declared<Specified>? {
+    if keyword(text) == "inherit" { return .inherit }
+    return parse(text, origin: .attribute).map { .value($0) }
+  }
+
+  /// The declared value of a declaration in a style sheet, or `nil` if the declaration is invalid.
+  static func declared(css input: inout _CSSParser.Parser) -> Declared<Specified>? {
+    let start = input.state
+    while case .success = input.next() {}
+    switch keyword(removingComments(from: input.slice(from: start.sourcePosition))) {
+    case "inherit":
+      return .inherit
+    case "initial":
+      return .initial
+    case "unset", "revert", "revert-layer":
+      return .unset
+    default:
+      input.reset(state: start)
+      return parse(css: &input).map { .value($0) }
+    }
+  }
+}
+
+/// The text of a value without whitespace around it, in lowercase, to compare with keywords.
+func keyword(_ text: String) -> String {
+  text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+}
+
+/// The text of a declaration's value, with its comments replaced by spaces.
+func removingComments(from text: String) -> String {
+  guard text.contains("/*") else { return text }
+  var result = ""
+  var rest = text[...]
+  while let start = rest.range(of: "/*") {
+    result += rest[..<start.lowerBound]
+    result += " "
+    guard let end = rest[start.upperBound...].range(of: "*/") else { return result }
+    rest = rest[end.upperBound...]
+  }
+  return result + rest
+}
+
+/// What the computed value of a property depends on: the element's other computed values, which are computed in the
+/// order of ``PropertyID``, and the computed values of its parent and of the root element.
+struct StyleResolver {
+  /// The computed values of the element so far. The values of the properties that come before the one being
+  /// computed in ``PropertyID`` are final.
+  let style: ComputedStyle
+  let parent: ComputedStyle
+  let root: ComputedStyle
+}

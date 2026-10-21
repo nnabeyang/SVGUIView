@@ -3,7 +3,7 @@ import Foundation
 import _CSSParser
 import _SelectorParser
 
-enum CSSDisplay: String {
+enum CSSDisplay: String, CaseIterable {
   case inline
   case block
   case listItem = "list-item"
@@ -24,7 +24,7 @@ enum CSSDisplay: String {
   case inherit
 }
 
-enum CSSVisibility: String {
+enum CSSVisibility: String, CaseIterable {
   case visible
   case hidden
   case collapse

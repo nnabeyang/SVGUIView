@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-enum SVGOverflow: String {
+enum SVGOverflow: String, CaseIterable {
   case visible
   case hidden
   case scroll

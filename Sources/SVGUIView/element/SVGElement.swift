@@ -59,7 +59,7 @@ extension SVGElement {
   }
 }
 
-enum WritingMode: String {
+enum WritingMode: String, CaseIterable {
   case horizontalTB = "horizontal-tb"
   case verticalRL = "vertical-rl"
   case verticalLR = "vertical-lr"
