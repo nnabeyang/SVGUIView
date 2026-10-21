@@ -118,7 +118,7 @@ final class SVGMaskElement: SVGDrawableElement {
       graphics.concatenate(content.transform ?? .identity)
       await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
       await content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-      await content.applySVGFill(fill: content.fill, path: path, context: maskContext, mode: .root)
+      await content.applyFill(path: path, context: maskContext, mode: .root)
       graphics.restoreGState()
     }
     await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)

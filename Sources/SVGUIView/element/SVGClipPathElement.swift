@@ -14,7 +14,6 @@ final class SVGClipPathElement: SVGElement {
   let children: [any SVGElement]
   let transform: CGAffineTransform?
   let clipPathUnits: SVGUnitType?
-  let clipRule: Bool?
   let clipPath: SVGClipPath?
   let id: String?
 
@@ -25,19 +24,8 @@ final class SVGClipPathElement: SVGElement {
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     clipPathUnits = SVGUnitType(rawValue: attributes["clipPathUnits", default: ""])
-    clipRule = base.clipRule
-    clipPath = base.clipPath
-    transform = base.transform
-  }
-
-  init(other: SVGClipPathElement, clipRule: Bool?) {
-    id = other.id
-    base = other.base
-    clipPathUnits = other.clipPathUnits
-    self.clipRule = other.clipRule ?? clipRule
-    clipPath = other.clipPath
-    children = other.children
-    transform = other.transform
+    clipPath = base.style.clipPath
+    transform = base.style.transform
   }
 
   func clip(frame: CGRect, context: SVGContext, cgContext: CGContext) async -> Bool {
@@ -93,9 +81,8 @@ final class SVGClipPathElement: SVGElement {
       }
 
       await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-      let clipRule = content.clipRule ?? clipRule ?? false
       graphics.addPath(path)
-      graphics.drawPath(using: clipRule ? .eoFill : .fill)
+      graphics.drawPath(using: content.style.clipRule == .evenodd ? .eoFill : .fill)
       graphics.restoreGState()
     }
     await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
@@ -110,7 +97,7 @@ final class SVGClipPathElement: SVGElement {
 
   func clip(context: inout SVGBaseContext) {
     if let id = id, context.clipPaths[id] == nil {
-      context.setClipPath(id: id, value: .init(other: self, clipRule: context.clipRule))
+      context.setClipPath(id: id, value: self)
     }
   }
 }

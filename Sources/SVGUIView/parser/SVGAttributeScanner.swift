@@ -413,11 +413,12 @@ extension SVGAttributeScanner {
     }
   }
 
-  mutating func scanFill(opacity: SVGOpacity? = nil) -> SVGFill? {
+  /// A value of `fill` or `stroke`. A name that isn't a color paints black if anything follows it.
+  mutating func scanPaint() -> Paint? {
     guard let ascii = reader.consumeWhitespace() else { return nil }
     if ascii == UInt8(ascii: "#") {
-      guard let hex = scanHex() else { return nil }
-      return .color(color: SVGHexColor(hex: hex).flatMap({ .hex($0) }), opacity: opacity)
+      guard let hex = scanHex(), let color = SVGHexColor(hex: hex) else { return nil }
+      return .color(.hex(color))
     }
 
     guard let name = scanIdentity() else {
@@ -425,22 +426,22 @@ extension SVGAttributeScanner {
     }
     guard let type = SVGFillType(rawValue: name.lowercased()) else {
       _ = reader.consumeWhitespace()
-      return reader.isEOF ? .color(color: .named(SVGColorName(name: name)), opacity: opacity) : .color(color: .named(SVGColorName(name: "black")), opacity: opacity)
+      guard reader.isEOF else { return .color(.named(SVGColorName(name: "black"))) }
+      return name.lowercased() == "none" ? Paint.none : .color(.named(SVGColorName(name: name)))
     }
     switch type {
     case .current:
-      return .current
+      return .currentColor
     case .inherit:
-      return .inherit
+      return nil
     case .rgb, .rgba:
-      guard let color = scanColor(type: type) else { return nil }
-      return .color(color: color, opacity: opacity)
+      return scanColor(type: type).map { .color($0) }
     case .url:
       guard consume(ascii: UInt8(ascii: "(")) else { return nil }
       consumeWhitespaceIfNext(UInt8(ascii: "#"))
       guard let id = scanIdentity() else { return nil }
       guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return .color(color: .url(id), opacity: opacity)
+      return .url(id)
     }
   }
 

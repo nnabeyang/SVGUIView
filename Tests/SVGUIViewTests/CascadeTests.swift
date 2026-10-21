@@ -118,7 +118,11 @@ struct CascadeTests {
       """#
     let context = SVGParser.parse(data: Data(svg.utf8))
     let rect = try #require(context.root?.children.first as? SVGRectElement)
-    #expect(rect.fill == .color(color: .named(.init(name: "blue")), opacity: nil))
+    guard case .color(let color) = rect.style.fill else {
+      Issue.record("fill isn't a color")
+      return
+    }
+    #expect(color.description == "blue")
   }
 
   @Test("specificity - combined selectors")

@@ -21,11 +21,7 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   private let patternContentUnitStack = Stack<SVGUnitType>()
   private let fontStack: Stack<SVGUIFont> = Stack()
   private let writingModeStack = Stack<WritingMode>()
-  private let fillStack: Stack<SVGFill> = Stack()
-  private let colorStack: Stack<SVGColor> = Stack()
-  private let strokeStack: Stack<SVGUIStroke> = Stack()
   private let textAnchorStack: Stack<TextAnchor> = Stack()
-  private let clipRuleStack: Stack<Bool> = Stack()
   private let clipIdStack = ElementIdStack<String>()
   private let maskIdStack = ElementIdStack<String>()
   private let patternIdStack: ElementIdStack<String>
@@ -112,20 +108,23 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
     writingModeStack.last
   }
 
-  var fill: SVGFill? {
-    fillStack.last
-  }
-
-  var color: SVGColor? {
-    colorStack.last
-  }
-
-  var stroke: SVGUIStroke? {
-    strokeStack.last
-  }
-
   var textAnchor: TextAnchor? {
     textAnchorStack.last
+  }
+
+  /// Pushes a level of each of the stacks of IDs that find cycles of references.
+  func pushIdStacks() {
+    pushTagIdStack()
+    pushClipIdStack()
+    pushMaskIdStack()
+    pushPatternIdStack()
+  }
+
+  func popIdStacks() {
+    popTagIdStack()
+    popClipIdStack()
+    popMaskIdStack()
+    popPatternIdStack()
   }
 
   func pushClipIdStack() {
@@ -209,19 +208,6 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
     fontStack.push(font)
   }
 
-  func push(fill: SVGFill) {
-    fillStack.push(fill)
-  }
-
-  func push(color: SVGColor) {
-    colorStack.push(color)
-  }
-
-  func push(stroke: SVGUIStroke) {
-    let stroke = SVGUIStroke(lhs: stroke, rhs: self.stroke)
-    strokeStack.push(stroke)
-  }
-
   func push(textAnchor: TextAnchor) {
     textAnchorStack.push(textAnchor)
   }
@@ -244,21 +230,6 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   @discardableResult
   func popFont() -> SVGUIFont? {
     fontStack.pop()
-  }
-
-  @discardableResult
-  func popFill() -> SVGFill? {
-    fillStack.pop()
-  }
-
-  @discardableResult
-  func popColor() -> SVGColor? {
-    colorStack.pop()
-  }
-
-  @discardableResult
-  func popStroke() -> SVGUIStroke? {
-    strokeStack.pop()
   }
 
   @discardableResult
@@ -295,11 +266,6 @@ struct SVGBaseContext {
   var masks = [String: SVGMaskElement]()
   var patterns = [String: SVGPatternElement]()
   var filters = [String: SVGFilterElement]()
-  private let clipRuleStack: Stack<Bool> = Stack()
-
-  var clipRule: Bool? {
-    clipRuleStack.last
-  }
 
   mutating func setClipPath(id: String, value: SVGClipPathElement) {
     if clipPaths[id] == nil {
@@ -330,15 +296,6 @@ struct SVGBaseContext {
       let element = contents[idx] as? (any SVGDrawableElement)
     else { return nil }
     return element
-  }
-
-  func push(clipRule: Bool) {
-    clipRuleStack.push(clipRule)
-  }
-
-  @discardableResult
-  func popClipRule() -> Bool? {
-    clipRuleStack.pop()
   }
 }
 

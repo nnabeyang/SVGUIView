@@ -70,24 +70,6 @@ struct SVGUIFont {
     specifiedLocale = nil
   }
 
-  init(lhs: SVGUIFont, rhs: SVGUIFont?) {
-    guard let rhs = rhs else {
-      self = lhs
-      return
-    }
-    name = lhs.name ?? rhs.name
-    size = lhs.size ?? rhs.size
-    weight = lhs.weight ?? rhs.weight
-    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
-    let families = name.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanFontFamilies()
-    }
-    self.families = families
-    specifiedLocale = nil
-  }
-
   init(child: SVGUIFont, context: SVGContext) {
     guard let parent = context.font else {
       self = child

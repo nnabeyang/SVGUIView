@@ -25,12 +25,6 @@ final class SVGGroupElement: SVGDrawableElement {
     fatalError()
   }
 
-  init(other: SVGGroupElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    children = other.children
-    textAnchor = other.textAnchor
-  }
-
   func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
@@ -65,13 +59,6 @@ final class SVGGroupElement: SVGDrawableElement {
     writingMode.map {
       context.push(writingMode: $0)
     }
-    fill.map {
-      context.push(fill: $0)
-    }
-    color.map {
-      context.push(color: $0)
-    }
-    context.push(stroke: stroke)
     textAnchor.map {
       context.push(textAnchor: $0)
     }
@@ -100,13 +87,6 @@ final class SVGGroupElement: SVGDrawableElement {
     writingMode.map { _ in
       _ = context.popWritingMode()
     }
-    fill.map { _ in
-      _ = context.popFill()
-    }
-    color.map { _ in
-      _ = context.popColor()
-    }
-    _ = context.popStroke()
     textAnchor.map { _ in
       _ = context.popTextAnchor()
     }
@@ -128,14 +108,8 @@ final class SVGGroupElement: SVGDrawableElement {
   }
 
   func clip(context: inout SVGBaseContext) {
-    clipRule.map {
-      context.push(clipRule: $0)
-    }
     for child in children {
       child.clip(context: &context)
-    }
-    clipRule.map { _ in
-      _ = context.popClipRule()
     }
   }
 

@@ -66,18 +66,22 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     fatalError()
   }
 
-  init(other: SVGSVGElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-
+  private init(other: SVGSVGElement, width: SVGLength?, height: SVGLength?) {
+    base = other.base
     x = other.x
     y = other.y
-    width = .init(attributes["width"]) ?? other.width
-    height = .init(attributes["height"]) ?? other.height
+    self.width = width ?? other.width
+    self.height = height ?? other.height
     viewBox = other.viewBox
     textAnchor = other.textAnchor
     children = other.children
     preserveAspectRatio = other.preserveAspectRatio
     overflow = other.overflow
+  }
+
+  /// The element with the width and height of the `<use>` element that shows it, where that element has them.
+  func sized(width: SVGLength?, height: SVGLength?) -> SVGSVGElement {
+    SVGSVGElement(other: self, width: width, height: height)
   }
 
   var viewPort: CGRect {

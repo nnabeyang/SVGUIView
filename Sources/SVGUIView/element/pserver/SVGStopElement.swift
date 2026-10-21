@@ -37,7 +37,7 @@ final class SVGStopElement: SVGElement {
 
   let base: SVGBaseElement
   let offset: StopDimension
-  let color: SVGFill?
+  let color: SVGColor
   let opacity: Double
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
@@ -49,14 +49,8 @@ final class SVGStopElement: SVGElement {
     } else {
       offset = .absolute(Double(attribute) ?? 0)
     }
-    color =
-      switch base.cascaded[StopColorProperty.self] {
-      case .value(.color(let color)): .color(color: color, opacity: nil)
-      case .value(.currentColor): .current
-      case .inherit: .inherit
-      case .initial, .unset, nil: .color(color: .named(SVGColorName(name: "black")), opacity: nil)
-      }
-    opacity = base.cascaded.declared(StopOpacityProperty.self) ?? 1.0
+    color = base.style.resolved(base.style.stopColor)
+    opacity = base.style.stopOpacity
   }
 }
 

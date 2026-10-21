@@ -11,26 +11,15 @@ enum Paint: Sendable {
 
   init?(_ text: String) {
     var data = text
-    let fill = data.withUTF8 {
+    let paint = data.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
       var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanFill()
+      return scanner.scanPaint()
     }
-    switch fill {
-    case .current:
-      self = .currentColor
-    case .color(.url(let id), _):
-      self = .url(id)
-    case .color(.named(let name), _) where name.name.lowercased() == "none":
-      self = .none
     // A name that isn't a color, or a function that isn't supported, such as `hsla()`, is invalid.
-    case .color(.some(let color), _) where color.toCGColor(opacity: 1) == nil:
-      return nil
-    case .color(.some(let color), _):
-      self = .color(color)
-    case .color(.none, _), .inherit, .image, nil:
-      return nil
-    }
+    if case .color(let color) = paint, color.toCGColor(opacity: 1) == nil { return nil }
+    guard let paint else { return nil }
+    self = paint
   }
 }
 

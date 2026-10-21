@@ -26,12 +26,10 @@ final class SVGPolylineElement: SVGDrawableElement {
 extension SVGPolylineElement: Encodable {
   private enum CodingKeys: String, CodingKey {
     case points
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: Self.CodingKeys.self)
     try container.encode(points, forKey: .points)
-    try container.encode(fill, forKey: .fill)
   }
 }

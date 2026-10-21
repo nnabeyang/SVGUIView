@@ -43,7 +43,6 @@ extension SVGEllipseElement: Encodable {
     case cy
     case rx
     case ry
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -52,6 +51,5 @@ extension SVGEllipseElement: Encodable {
     try container.encode(cy, forKey: .cy)
     try container.encode(rx, forKey: .rx)
     try container.encode(ry, forKey: .ry)
-    try container.encode(fill, forKey: .fill)
   }
 }

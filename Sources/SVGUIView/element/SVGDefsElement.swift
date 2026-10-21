@@ -23,24 +23,13 @@ final class SVGDefsElement: SVGDrawableElement {
     fatalError()
   }
 
-  init(other: SVGDefsElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    children = other.children
-  }
-
   func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
 
   func clip(context: inout SVGBaseContext) {
-    clipRule.map {
-      context.push(clipRule: $0)
-    }
     for child in children {
       child.clip(context: &context)
-    }
-    clipRule.map { _ in
-      _ = context.popClipRule()
     }
   }
 

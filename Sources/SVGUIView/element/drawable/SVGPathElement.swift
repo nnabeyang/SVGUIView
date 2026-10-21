@@ -26,11 +26,6 @@ final class SVGPathElement: SVGDrawableElement {
     }
   }
 
-  init(other: SVGPathElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    segments = other.segments
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let pathContext = SVGPathContext()
     for segment in segments {
@@ -43,7 +38,6 @@ final class SVGPathElement: SVGDrawableElement {
 extension SVGPathElement: Encodable {
   private enum CodingKeys: String, CodingKey {
     case d
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -52,7 +46,6 @@ extension SVGPathElement: Encodable {
     for segment in segments {
       try dContainer.encode(segment)
     }
-    try container.encode(fill, forKey: .fill)
   }
 }
 

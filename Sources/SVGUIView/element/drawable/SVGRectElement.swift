@@ -28,20 +28,7 @@ final class SVGRectElement: SVGDrawableElement {
     height = base.cascaded.declared(HeightProperty.self)
   }
 
-  init(other: SVGRectElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    x = other.x
-    y = other.y
-    rx = other.rx
-    ry = other.ry
-    width = other.width
-    height = other.height
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
-    color.map {
-      context.push(color: $0)
-    }
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
     let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }
@@ -66,7 +53,6 @@ extension SVGRectElement: Encodable {
     case y
     case width
     case height
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -75,6 +61,5 @@ extension SVGRectElement: Encodable {
     try container.encode(y, forKey: .y)
     try container.encode(width, forKey: .width)
     try container.encode(height, forKey: .height)
-    try container.encode(fill, forKey: .fill)
   }
 }

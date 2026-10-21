@@ -31,44 +31,6 @@ final class SVGTextElement: SVGDrawableElement {
     y = SVGLength(attributes["y"])
   }
 
-  init(other: SVGTextElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    text = other.text
-    textAnchor = other.textAnchor ?? cascade(name: .text, attributes: attributes).declared(TextAnchorProperty.self)
-    x = other.x
-    y = other.y
-  }
-
-  func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) {
-    let cgContext = context.graphics
-    guard let fill = fill else {
-      cgContext.addPath(path)
-      cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      return
-    }
-    switch fill {
-    case .inherit:
-      if let fill = context.fill {
-        applySVGFill(fill: fill, path: path, context: context, mode: mode)
-      }
-    case .current:
-      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
-        cgContext.setFillColor(cgColor)
-        cgContext.addPath(path)
-        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      }
-    case .color(let color, let opacity):
-      let opacity = opacity?.value ?? 1.0
-      if let cgColor = color?.toCGColor(opacity: self.opacity * opacity) {
-        cgContext.setFillColor(cgColor)
-        cgContext.addPath(path)
-        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      }
-    case .image:
-      fatalError("Images not supported in text")
-    }
-  }
-
   private func getLine(context: SVGContext) async -> CTLine? {
     var attributes: [CFString: Any] = [:]
     let font = context.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
@@ -157,14 +119,10 @@ final class SVGTextElement: SVGDrawableElement {
 extension SVGTextElement: Encodable {
   private enum CodingKeys: String, CodingKey {
     case text
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: Self.CodingKeys.self)
     try container.encode(text, forKey: .text)
-    if let fill = fill {
-      try container.encode(fill, forKey: .fill)
-    }
   }
 }

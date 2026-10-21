@@ -22,13 +22,6 @@ final class SVGCircleElement: SVGDrawableElement {
     r = .init(attributes["r"])
   }
 
-  init(other: SVGCircleElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    cx = other.cx
-    cy = other.cy
-    r = other.r
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
@@ -47,7 +40,6 @@ extension SVGCircleElement: Encodable {
     case cx
     case cy
     case r
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -55,6 +47,5 @@ extension SVGCircleElement: Encodable {
     try container.encode(cx, forKey: .cx)
     try container.encode(cy, forKey: .cy)
     try container.encode(r, forKey: .r)
-    try container.encode(fill, forKey: .fill)
   }
 }
