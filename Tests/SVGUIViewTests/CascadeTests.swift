@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import _CSSParser
 import _SelectorParser
@@ -207,6 +208,20 @@ struct CascadeTests {
     let element = ElementCursor(root: documentElement(0, "rect", ["class": "container", "id": "main"]))
     let result = cascadeElement(element: element, stylesheets: [stylesheet], inlineStyle: [])
     #expect(result[.width] == .length(.init(value: 200, unit: .px)))
+  }
+
+  @Test("rules of a later style element win over equal rules of an earlier one")
+  func laterStyleElementWins() throws {
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <style>rect { fill: red; }</style>
+        <style>rect { fill: blue; }</style>
+        <rect width="10" height="10"/>
+      </svg>
+      """#
+    let context = SVGParser.parse(data: Data(svg.utf8))
+    let rect = try #require(context.root?.children.first as? SVGRectElement)
+    #expect(rect.fill == .color(color: .named(.init(name: "blue")), opacity: nil))
   }
 
   @Test("specificity - combined selectors")

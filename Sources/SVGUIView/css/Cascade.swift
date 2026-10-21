@@ -21,8 +21,9 @@ func cascade(_ declarations: [CSSDeclaration]) -> SVGUIStyle {
 func findWinningDeclaration(_ declarations: [CSSDeclaration]) -> CSSDeclaration? {
   guard !declarations.isEmpty else { return nil }
   var winner = declarations[0]
+  // Of equal declarations, the later one wins.
   for declaration in declarations {
-    if declaration > winner {
+    if declaration >= winner {
       winner = declaration
     }
   }
