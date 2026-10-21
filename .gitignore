@@ -13,3 +13,6 @@ DerivedData/
 
 # Reference images recorded locally. The committed ones come from the SVGSnapshotReferences xcframework.
 Development/InternalApp/InternalAppTests/__Snapshots__/
+
+# Caches that Python writes when it imports a script.
+__pycache__/

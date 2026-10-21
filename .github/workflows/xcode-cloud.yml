@@ -1,0 +1,74 @@
+name: Xcode Cloud
+
+# Commenting `/xcode-cloud` on a pull request starts a build of the snapshot tests on Xcode Cloud for it.
+#
+# A workflow that runs on a comment uses the file of the default branch, and the secrets of the repository, so
+# only the owner's comments start a build, and the job doesn't check out the pull request.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  start:
+    name: Start a build of Xcode Cloud
+    if: >-
+      github.event.issue.pull_request
+      && github.event.comment.author_association == 'OWNER'
+      && github.event.comment.body == '/xcode-cloud'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Acknowledge the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api --method POST
+          "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions"
+          -f content=eyes
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start a build
+        id: start
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          # The workflow of Xcode Cloud that runs the snapshot tests.
+          XCODE_CLOUD_WORKFLOW_ID: E2F6609E-85D2-4598-AA2A-09ABC5FBFE79
+          PULL_REQUEST: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          branch=$(gh pr view "$PULL_REQUEST" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
+          scripts/start-xcode-cloud-build.py "$branch" 2>&1 | tee "$RUNNER_TEMP/start.log"
+
+      - name: Report the build
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.start.outcome }}
+          PULL_REQUEST: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$OUTCOME" = success ]; then
+            title="Xcode Cloud started a build."
+          else
+            title="Xcode Cloud didn't start a build."
+          fi
+          {
+            echo "$title"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/start.log" 2>/dev/null
+            echo '```'
+            echo
+            echo "$RUN_URL"
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PULL_REQUEST" --repo "${{ github.repository }}" --body-file "$RUNNER_TEMP/comment.md"
