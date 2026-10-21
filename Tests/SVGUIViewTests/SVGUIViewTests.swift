@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SVGCore
 import Testing
 import UIKit
 
@@ -302,6 +303,12 @@ struct SVGUIViewTests {
     await task.value
     let stopped = clock.now - start
     #expect(stopped < full / 2, "Rendering took \(stopped) after the view was released, and \(full) in full")
+  }
+
+  @Test("a view gives the fonts of text styles to the documents that it parses")
+  func textStyleFonts() {
+    _ = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
+    #expect(SystemFontDatabaseCoreText.textStyleDescriptor != nil)
   }
 
   @Test("a rendering may take ten seconds by default")
