@@ -1,3 +1,5 @@
+import SVGCore
+import SVGRenderCG
 public import UIKit
 import os
 

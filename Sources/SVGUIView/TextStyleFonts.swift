@@ -1,4 +1,5 @@
 import CoreText
+import SVGCore
 import UIKit
 
 extension SVGUIView {

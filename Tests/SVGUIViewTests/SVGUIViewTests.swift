@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SVGCore
 import Testing
 import UIKit
 
