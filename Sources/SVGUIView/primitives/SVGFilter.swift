@@ -22,14 +22,4 @@ enum SVGFilter {
     self = filter
   }
 
-  func clipIfNeeded(frame: CGRect, context: SVGContext, cgContext: CGContext) async {
-    if case .url(let id) = self,
-      context.check(maskId: id),
-      let mask = context.masks[id]
-    {
-      if await mask.clip(frame: frame, context: context, cgContext: cgContext) {
-        context.remove(maskId: id)
-      }
-    }
-  }
 }

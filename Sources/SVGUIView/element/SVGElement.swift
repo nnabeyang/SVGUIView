@@ -7,8 +7,6 @@ protocol SVGElement: AnyObject, Encodable, Sendable {
   var type: SVGElementName { get }
   var base: SVGBaseElement { get }
   var index: ObjectIdentifier { get }
-  func draw(_ context: SVGContext, mode: DrawMode) async
-  func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async
   func contains(index: ObjectIdentifier) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
@@ -48,13 +46,6 @@ extension SVGElement {
   func pattern(context _: inout SVGBaseContext) {}
   func filter(context _: inout SVGBaseContext) {}
 
-  func draw(_: SVGContext, mode _: DrawMode) async {
-    fatalError("Not Implemented")
-  }
-
-  func drawWithoutFilter(_: SVGContext, mode _: DrawMode) async {
-    fatalError("Not Implemented")
-  }
 }
 
 enum WritingMode: String, CaseIterable {
@@ -131,8 +122,6 @@ protocol SVGDrawableElement: SVGElement {
   func frame(context: SVGContext, path: CGPath?) async -> CGRect
   init(base: SVGBaseElement, text: String, attributes: [String: String])
   func toPath(context: SVGContext) async -> CGPath?
-  func applyStroke(path: CGPath, context: SVGContext)
-  func applyFill(path: CGPath, context: SVGContext, mode: DrawMode) async
 }
 
 /// An element whose shape doesn't depend on other elements: a shape, text or an image.
@@ -155,7 +144,7 @@ extension SVGDrawableElement {
   var opacity: Double { style.opacity }
   var className: String? { base.className }
   var transform: CGAffineTransform? { style.transform }
-  // `nil` for `none`, so that `clipPath?.clipIfNeeded(frame:…)` doesn't find the frame of an element without one.
+  // `nil` for `none`, so that the frame of an element without a clip path isn't found for it.
   var clipPath: SVGClipPath? { if case .url = style.clipPath { style.clipPath } else { nil } }
   var mask: SVGMask? { if case .url = style.mask { style.mask } else { nil } }
   var filter: SVGFilter? { if case .url = style.filter { style.filter } else { nil } }
@@ -187,146 +176,6 @@ extension SVGDrawableElement {
     }
   }
 
-  func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
-    let context = context.styled(by: self)
-    context.saveGState()
-    if mode != .filter(isRoot: true) {
-      context.concatenate(transform ?? .identity)
-    }
-    switch mode {
-    case .root, .filter:
-      context.pushTagIdStack()
-      context.pushClipIdStack()
-      context.pushMaskIdStack()
-      context.pushPatternIdStack()
-    default:
-      break
-    }
-    let path = await toPath(context: context)
-    if let path = path {
-      let frame = await frame(context: context, path: path)
-      await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-      let lineWidth = style.strokeWidth.value(context: context, mode: .other)
-
-      if case .url = style.mask, type == .line, frame.width == lineWidth || frame.height == lineWidth {
-        context.graphics.clip(to: .zero)
-      } else {
-        await mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-      }
-    }
-    let gContext = context.graphics
-    gContext.setAlpha(opacity)
-    gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-    if let path = path, style.visibility == .visible {
-      await applyFill(path: path, context: context, mode: mode)
-      applyStroke(path: path, context: context)
-    }
-    switch mode {
-    case .root, .filter:
-      context.popTagIdStack()
-      context.popClipIdStack()
-      context.popMaskIdStack()
-      context.popPatternIdStack()
-    default:
-      break
-    }
-    gContext.endTransparencyLayer()
-    context.restoreGState()
-  }
-
-  func draw(_ context: SVGContext, mode: DrawMode) async {
-    guard !Task.isCancelled else { return }
-    // A rendering hardly ever suspends otherwise, so let other tasks run on this thread of the cooperative
-    // thread pool between elements.
-    await Task.yield()
-    if let display = display, case .none = display {
-      return
-    }
-    let filter = filter ?? SVGFilter.none
-    if case .url(let id) = filter,
-      let server = context.filters[id]
-    {
-      await server.filter(content: self, context: context, cgContext: context.graphics)
-      return
-    }
-    await drawWithoutFilter(context, mode: mode)
-  }
-
-  func applyStroke(path: CGPath, context: SVGContext) {
-    let cgContext = context.graphics
-    switch style.resolved(style.stroke) {
-    case .none:
-      return
-    case .url:
-      // Paint servers aren't supported on strokes yet, which keep the stroke color of the context.
-      break
-    case .color(let color):
-      cgContext.setStrokeColor(color.toCGColor(opacity: style.strokeOpacity) ?? CGColor.transparent)
-    case .currentColor:
-      preconditionFailure("currentColor is resolved")
-    }
-    if !style.strokeDasharray.filter({ $0 > 0 }).isEmpty {
-      cgContext.setLineDash(phase: style.strokeDashoffset, lengths: style.strokeDasharray)
-    }
-    cgContext.addPath(path)
-    cgContext.setLineWidth(style.strokeWidth.value(context: context, mode: .other))
-    cgContext.setLineCap(style.strokeLinecap)
-    cgContext.setLineJoin(style.strokeLinejoin)
-    cgContext.setMiterLimit(style.strokeMiterlimit)
-    cgContext.drawPath(using: .stroke)
-  }
-
-  func applyPServerFill(server: any SVGGradientServer, path: CGPath, context: SVGContext, opacity: CGFloat) {
-    if let id = server.parentId,
-      let parent = context.pservers[id],
-      let merged = server.merged(other: parent)
-    {
-      applyPServerFill(server: merged, path: path, context: context, opacity: opacity)
-      return
-    }
-    server.draw(path: path, context: context, opacity: opacity)
-  }
-
-  func applyFill(path: CGPath, context: SVGContext, mode: DrawMode) async {
-    let cgContext = context.graphics
-    let opacity = style.fillOpacity
-    switch style.resolved(style.fill) {
-    case .none:
-      return
-    case .color(let color):
-      // A color that isn't known, such as a misspelled name, paints nothing.
-      guard let cgColor = color.toCGColor(opacity: opacity) else { return }
-      cgContext.setFillColor(cgColor)
-    case .url(let id):
-      if let server = context.pservers[id] {
-        switch server.display ?? .inline {
-        case .none:
-          break
-        default:
-          applyPServerFill(server: server, path: path, context: context, opacity: opacity)
-          return
-        }
-      } else if let pattern = context.patterns[id],
-        context.check(patternId: id)
-      {
-        let frame = await frame(context: context, path: path)
-        let cgContext = context.graphics
-        cgContext.saveGState()
-        cgContext.setAlpha(opacity)
-        cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
-        _ = await pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
-        cgContext.endTransparencyLayer()
-        cgContext.restoreGState()
-        context.remove(patternId: id)
-        return
-      }
-      cgContext.setFillColor(CGColor.opaqueBlack)
-    case .currentColor:
-      preconditionFailure("currentColor is resolved")
-    }
-    cgContext.addPath(path)
-    cgContext.drawPath(using: pathFillRule)
-  }
 }
 
 extension ElementCursor {

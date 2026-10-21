@@ -53,7 +53,7 @@ final class SVGUseElement: SVGDrawableElement {
       if isUseAdded { context.remove(tagId: index) }
     }
     guard let parentId = parentId,
-      let element = context[parentId],
+      let element = context.base[parentId],
       context.check(tagId: element.index)
     else {
       return nil
@@ -92,69 +92,6 @@ final class SVGUseElement: SVGDrawableElement {
       return await element.frame(context: context, path: element.toPath(context: context))
     }
     return (frame ?? .zero).applying(translation(context: context))
-  }
-
-  func draw(_ context: SVGContext, mode: DrawMode) async {
-    guard !Task.isCancelled else { return }
-    await Task.yield()
-    if let display = display, case .none = display {
-      return
-    }
-    // Finding the referenced element checks for cycles, which needs a level of the stacks of IDs, also when a filter
-    // finds the bounds of the content.
-    switch mode {
-    case .root, .filter:
-      context.pushIdStacks()
-    default:
-      break
-    }
-    defer {
-      switch mode {
-      case .root, .filter:
-        context.popIdStacks()
-      default:
-        break
-      }
-    }
-    let filter = filter ?? SVGFilter.none
-    if case .url(let id) = filter,
-      let server = context.filters[id]
-    {
-      await server.filter(content: self, context: context, cgContext: context.graphics)
-      return
-    }
-    await drawWithoutFilter(context, mode: .normal)
-  }
-
-  func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
-    let context = context.styled(by: self)
-    context.saveGState()
-    defer {
-      context.restoreGState()
-    }
-    // A filter draws the content in a context of its own, without the transform.
-    let isFilterRoot = mode == .filter(isRoot: true)
-    if isFilterRoot {
-      context.pushIdStacks()
-    } else {
-      context.concatenate(transform ?? .identity)
-    }
-    defer {
-      if isFilterRoot {
-        context.popIdStacks()
-      }
-    }
-    if let clipPath {
-      await clipPath.clipIfNeeded(frame: frame(context: context, path: nil), context: context, cgContext: context.graphics)
-    }
-    await withReferencedElement(context: context) { element in
-      context.concatenate(translation(context: context))
-      context.setAlpha(opacity)
-      let gContext = context.graphics
-      gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-      await element.draw(context, mode: .normal)
-      gContext.endTransparencyLayer()
-    }
   }
 
   func contains(index: ObjectIdentifier) -> Bool {

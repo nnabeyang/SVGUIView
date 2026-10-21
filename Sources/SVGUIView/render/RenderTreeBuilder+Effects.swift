@@ -4,8 +4,8 @@ import Foundation
 extension RenderTreeBuilder {
   // MARK: - Clip paths
 
-  /// The clip path of an element, as `clipIfNeeded(frame:context:cgContext:)` of `SVGClipPath` drew it, or `nil` if
-  /// it clips nothing: for no clip path, a cycle of clip paths, or bounds that have no pixel.
+  /// The clip path of an element, or `nil` if it clips nothing: for no clip path, a cycle of clip paths, or bounds
+  /// that have no pixel.
   ///
   /// - Parameters:
   ///   - frame: The bounds of the clipped element.
@@ -41,8 +41,8 @@ extension RenderTreeBuilder {
 
   // MARK: - Masks
 
-  /// The mask of an element, as `clipIfNeeded(frame:context:cgContext:)` of `SVGMask` drew it, or `nil` if it
-  /// masks nothing: for no mask, a cycle of masks, or bounds that have no pixel.
+  /// The mask of an element, or `nil` if it masks nothing: for no mask, a cycle of masks, or bounds that have no
+  /// pixel.
   ///
   /// - Parameters:
   ///   - frame: The bounds of the masked element.
@@ -96,8 +96,7 @@ extension RenderTreeBuilder {
 
   // MARK: - Patterns
 
-  /// The pattern that fills an element, as `pattern(path:frame:context:cgContext:mode:)` of the pattern element
-  /// drew it, or `nil` if its tile has no pixel.
+  /// The pattern that fills an element, or `nil` if its tile has no pixel.
   ///
   /// - Parameters:
   ///   - frame: The bounds of the filled element.

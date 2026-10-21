@@ -14,7 +14,6 @@ protocol SVGGradientServer: SVGElement {
   var display: CSSDisplay? { get }
   var children: [any SVGElement] { get }
   func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
-  func draw(path: CGPath, context: SVGContext, opacity: Double)
   func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint?
   func stops(context: any SVGLengthContext) -> [SVGStopElement]
   init?(lhs: Self, rhs: SVGLinearGradientServer)
@@ -142,10 +141,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
     SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
   }
 
-  func draw(path: CGPath, context: SVGContext, opacity: Double) {
-    paint(context: context, opacity: opacity)?.paint(path, in: context.graphics)
-  }
-
   /// The gradient with its lengths resolved, or `nil` if it has no stop with a color.
   func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint? {
     let stops = stops(context: context)
@@ -269,10 +264,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
 
   private static func parseSpreadMethod(_ src: String) -> SpreadMethod? {
     SpreadMethod(rawValue: src.trimmingCharacters(in: .whitespaces))
-  }
-
-  func draw(path: CGPath, context: SVGContext, opacity: Double) {
-    paint(context: context, opacity: opacity)?.paint(path, in: context.graphics)
   }
 
   /// The gradient with its lengths resolved, or `nil` if it has no stop with a color.

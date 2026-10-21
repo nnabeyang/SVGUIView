@@ -3,9 +3,9 @@ import Foundation
 
 /// Builds the render tree of a document for a rendering.
 ///
-/// The builder follows the drawing code of the elements step by step, so that the render tree paints what that code
-/// drew: the same elements, with lengths resolved in the same contexts, and references followed or stopped at the
-/// same places.
+/// The builder follows the drawing code that the elements had step by step, so that the render tree paints what that
+/// code drew: the same elements, with lengths resolved in the same contexts, and references followed or stopped at
+/// the same places.
 struct RenderTreeBuilder {
   let base: SVGBaseContext
   /// The rectangle that the document is rendered into.
@@ -36,7 +36,7 @@ struct RenderTreeBuilder {
 
   // MARK: - Nodes
 
-  /// The node of an element, as `draw(_:mode:)` of the element drew it, or `nil` if it draws nothing.
+  /// The node of an element, or `nil` if it draws nothing.
   func node(
     of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
     instance: [ElementID]
@@ -99,7 +99,7 @@ struct RenderTreeBuilder {
       LegacyFilteredNode(element: element, filter: filter, legacy: context.legacy(references), source: source))
   }
 
-  /// The node of an element, as `drawWithoutFilter(_:mode:)` of the element drew it.
+  /// The node of an element without its filter.
   private func nodeWithoutFilter(
     of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
     instance: [ElementID]
@@ -349,8 +349,7 @@ struct RenderTreeBuilder {
 
   // MARK: - Paint
 
-  /// The paint of the fill of an element, as `applyFill(path:context:mode:)` of the element painted it, or `nil`
-  /// if it paints nothing.
+  /// The paint of the fill of an element, or `nil` if it paints nothing.
   func fillPaint(
     of element: any SVGDrawableElement, path: CGPath, context: ResolveContext, mode: DrawMode,
     guard references: ReferenceGuard, instance: [ElementID]
@@ -399,8 +398,7 @@ struct RenderTreeBuilder {
     return server.paint(context: context, opacity: opacity)
   }
 
-  /// The stroke of an element, as `applyStroke(path:context:)` of the element painted it, or `nil` if it paints
-  /// none.
+  /// The stroke of an element, or `nil` if it paints none.
   private func strokeStyle(of element: any SVGDrawableElement, context: ResolveContext) -> StrokeStyle? {
     let style = element.style
     let color: CGColor?

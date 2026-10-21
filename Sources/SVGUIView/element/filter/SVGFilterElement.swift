@@ -58,14 +58,6 @@ final class SVGFilterElement: SVGDrawableElement {
     nil
   }
 
-  func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) async {
-    await filter(content: content, context: context, cgContext: cgContext) { graphics in
-      let nestContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, scale: context.scale)
-      nestContext.push(viewBox: context.viewBox)
-      await content.drawWithoutFilter(nestContext, mode: .filter(isRoot: true))
-    }
-  }
-
   /// Applies the filter to an element.
   ///
   /// - Parameters:

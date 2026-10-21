@@ -28,24 +28,17 @@ struct SVGContext: GeometryContext, @unchecked Sendable {
   private let patternContentUnitStack = Stack<SVGUnitType>()
   /// The computed values of the element being drawn, which lengths relative to fonts are resolved with.
   private(set) var style = ComputedStyle.initial
-  private let clipIdStack = ElementIdStack<String>()
-  private let maskIdStack = ElementIdStack<String>()
-  private let patternIdStack: ElementIdStack<String>
   private let tagIdStack = ElementIdStack<ObjectIdentifier>()
-  private let initCtm: CGAffineTransform
 
   init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, scale: CGFloat) {
     self.base = base
     self.graphics = graphics
-    initCtm = graphics.ctm
     self.viewPort = viewPort
     self.scale = scale
-    patternIdStack = ElementIdStack<String>()
   }
 
-  /// A context in the state that the drawing code of elements had where it draws an effect, such as a clip path,
-  /// while the rest of the document is painted from a render tree. Each set of references of the guard becomes a
-  /// level of the stack of IDs of its kind.
+  /// A context in the state that the drawing code of elements had where a filter is applied, while the rest of the
+  /// document is painted from a render tree. The `<use>` elements of the guard become a level of the stack of them.
   init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, scale: CGFloat, legacy: LegacyState) {
     self.init(base: base, graphics: graphics, viewPort: viewPort, scale: scale)
     viewBoxStack.push(legacy.viewBox)
@@ -56,65 +49,12 @@ struct SVGContext: GeometryContext, @unchecked Sendable {
       tagIdStack.push()
       uses.forEach { _ = tagIdStack.check(elementId: $0) }
     }
-    if let clipPaths = references.clipPaths {
-      clipIdStack.push()
-      clipPaths.forEach { _ = clipIdStack.check(elementId: $0) }
-    }
-    if let masks = references.masks {
-      maskIdStack.push()
-      masks.forEach { _ = maskIdStack.check(elementId: $0) }
-    }
-    if let patterns = references.patterns {
-      patternIdStack.push()
-      patterns.forEach { _ = patternIdStack.check(elementId: $0) }
-    }
-  }
-
-  init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, other: Self) {
-    self.base = base
-    self.graphics = graphics
-    initCtm = graphics.ctm
-    self.viewPort = viewPort
-    scale = other.scale
-    patternIdStack = other.patternIdStack
   }
 
   var textScale: Double {
     let x = viewPort.width * scale / viewBox.width
     let y = viewPort.height * scale / viewBox.height
     return hypot(x, y) / sqrt(2)
-  }
-
-  var pservers: [String: any SVGGradientServer] {
-    base.pservers
-  }
-
-  var contents: [ObjectIdentifier: any SVGElement] {
-    base.contents
-  }
-
-  var clipPaths: [String: SVGClipPathElement] {
-    base.clipPaths
-  }
-
-  var masks: [String: SVGMaskElement] {
-    base.masks
-  }
-
-  var patterns: [String: SVGPatternElement] {
-    base.patterns
-  }
-
-  var filters: [String: SVGFilterElement] {
-    base.filters
-  }
-
-  var transform: CGAffineTransform {
-    graphics.ctm.concatenating(initCtm.inverted())
-  }
-
-  subscript(id: String) -> (any SVGDrawableElement)? {
-    base[id]
   }
 
   var viewBox: CGRect {
@@ -148,53 +88,6 @@ struct SVGContext: GeometryContext, @unchecked Sendable {
     return context
   }
 
-  /// Pushes a level of each of the stacks of IDs that find cycles of references.
-  func pushIdStacks() {
-    pushTagIdStack()
-    pushClipIdStack()
-    pushMaskIdStack()
-    pushPatternIdStack()
-  }
-
-  func popIdStacks() {
-    popTagIdStack()
-    popClipIdStack()
-    popMaskIdStack()
-    popPatternIdStack()
-  }
-
-  func pushClipIdStack() {
-    clipIdStack.push()
-  }
-
-  func check(clipId: String) -> Bool {
-    clipIdStack.check(elementId: clipId)
-  }
-
-  func remove(clipId: String) {
-    clipIdStack.remove(elementId: clipId)
-  }
-
-  func popClipIdStack() {
-    clipIdStack.pop()
-  }
-
-  func pushMaskIdStack() {
-    maskIdStack.push()
-  }
-
-  func check(maskId: String) -> Bool {
-    maskIdStack.check(elementId: maskId)
-  }
-
-  func remove(maskId: String) {
-    maskIdStack.remove(elementId: maskId)
-  }
-
-  func popMaskIdStack() {
-    maskIdStack.pop()
-  }
-
   func pushTagIdStack() {
     tagIdStack.push()
   }
@@ -211,54 +104,8 @@ struct SVGContext: GeometryContext, @unchecked Sendable {
     tagIdStack.pop()
   }
 
-  func pushPatternIdStack() {
-    patternIdStack.push()
-  }
-
-  func check(patternId: String) -> Bool {
-    patternIdStack.check(elementId: patternId)
-  }
-
-  func remove(patternId: String) {
-    patternIdStack.remove(elementId: patternId)
-  }
-
-  func popPatternIdStack() {
-    patternIdStack.pop()
-  }
-
   func push(viewBox: CGRect) {
     viewBoxStack.push(viewBox)
-  }
-
-  func push(patternContentUnit: SVGUnitType) {
-    patternContentUnitStack.push(patternContentUnit)
-  }
-
-  @discardableResult
-  func popViewBox() -> CGRect? {
-    viewBoxStack.pop()
-  }
-
-  @discardableResult
-  func popPatternContentUnit() -> SVGUnitType? {
-    patternContentUnitStack.pop()
-  }
-
-  func saveGState() {
-    graphics.saveGState()
-  }
-
-  func concatenate(_ transform: CGAffineTransform) {
-    graphics.concatenate(transform)
-  }
-
-  func restoreGState() {
-    graphics.restoreGState()
-  }
-
-  func setAlpha(_ rawAlpha: CGFloat) {
-    graphics.setAlpha(rawAlpha)
   }
 }
 

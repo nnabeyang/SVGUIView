@@ -23,16 +23,6 @@ struct SVGContextTests {
     #expect(abs(context.textScale - 3) < 1e-9)
   }
 
-  @Test("popping the tag ID stack leaves the clip ID stack alone")
-  func popTagIdStackKeepsClipIdStack() throws {
-    let context = try makeContext()
-    context.pushClipIdStack()
-    context.pushTagIdStack()
-    context.popTagIdStack()
-    // `check` returns false when there is no level to record the ID in.
-    #expect(context.check(clipId: "clip"))
-  }
-
   @Test("popping the tag ID stack returns to the outer level")
   func popTagIdStackReturnsToOuterLevel() throws {
     let context = try makeContext()
