@@ -39,12 +39,20 @@ enum SVGXmlNameSpace: String {
 }
 
 final class SVGParser: NSObject {
+  /// An element whose end tag the parser hasn't reached yet.
+  private struct OpenElement {
+    let id: ElementID
+    let name: SVGElementName
+    let localName: String
+    let attributes: [String: String]
+    var children: [DocumentElement] = []
+  }
+
   private var pservers: [String: any SVGGradientServer] = [:]
   private var rules: [CSSRule] = []
-  private var contents: [SVGBaseElement] = []
-  private var contentIds: [Int] = []
-  private var countList = [Int]()
-  private var stack = [(name: SVGElementName, attributes: [String: String])]()
+  private var stack = [OpenElement]()
+  private var root: DocumentElement?
+  private var elementCount = 0
   private var text: String = ""
   private var nameSpaces = [String: (ns: SVGXmlNameSpace, count: Int)]()
 
@@ -60,12 +68,13 @@ final class SVGParser: NSObject {
     parser.parse()
     var contentIdMap: [String: ObjectIdentifier] = [:]
     var contentsMap: [ObjectIdentifier: any SVGElement] = [:]
-    guard let rootNode = contents.last else {
-      return SVGBaseContext(root: nil, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
-    }
+    let document = SVGDocument(root: root)
     let css = Stylesheet(rules: rules)
-    guard let root = rootNode.createElement(with: css) as? SVGSVGElement else {
-      return SVGBaseContext(root: nil, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
+    guard let documentRoot = root,
+      let root = ElementCursor(root: documentRoot).makeElement(with: css) as? SVGSVGElement
+    else {
+      return SVGBaseContext(
+        document: document, root: nil, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
     }
 
     let contents = root.elements
@@ -88,7 +97,8 @@ final class SVGParser: NSObject {
       }
     }
 
-    var context = SVGBaseContext(root: root, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
+    var context = SVGBaseContext(
+      document: document, root: root, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
 
     root.clip(context: &context)
     root.mask(context: &context)
@@ -125,11 +135,8 @@ extension SVGParser: XMLParserDelegate {
 
   func parser(_: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
     let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
-    if !countList.isEmpty {
-      countList[countList.count - 1] += 1
-    }
-    stack.append((name: name, attributes: attributeDict))
-    countList.append(1)
+    stack.append(OpenElement(id: ElementID(rawValue: elementCount), name: name, localName: elementName, attributes: attributeDict))
+    elementCount += 1
   }
 
   func parser(_: XMLParser, didStartMappingPrefix prefix: String, toURI namespaceURI: String) {
@@ -151,40 +158,23 @@ extension SVGParser: XMLParserDelegate {
 
   func parser(_: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName _: String?) {
     let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
-    guard !stack.isEmpty,
-      let element = stack.popLast(),
-      let count = countList.popLast()
-    else { return }
-    precondition(name == element.name)
-    let attributes = filter(attributes: element.attributes)
-    let content: SVGBaseElement? = {
-      let contentIds = self.contentIds.shift(count: count)
-      var children = [SVGBaseElement]()
-      for id in contentIds {
-        children.append(contents[id])
-      }
-      switch element.name {
-      case .style:
-        let parseInput = ParserInput(input: text)
-        let input = Parser(input: parseInput)
-        var parser = CSSParser(input: input)
-        rules.append(contentsOf: parser.parseRules())
-        fallthrough
-      case .unknown:
-        if !countList.isEmpty {
-          countList[countList.count - 1] -= 1
-        }
-        return nil
-      default:
-        return SVGBaseElement.create(name: element.name, text: text, attributes: attributes, children: children)
-      }
-    }()
-    self.contentIds = Array(contentIds.dropLast(count - 1))
+    guard let open = stack.popLast() else { return }
+    precondition(name == open.name)
+    if open.name == .style {
+      let parseInput = ParserInput(input: text)
+      let input = Parser(input: parseInput)
+      var parser = CSSParser(input: input)
+      rules.append(contentsOf: parser.parseRules())
+    }
+    let element = DocumentElement(
+      id: open.id, name: open.name, localName: open.localName, attributes: filter(attributes: open.attributes),
+      text: text, children: open.children)
     text = ""
-    guard let content else { return }
-    let idx = contents.count
-    contents.append(content)
-    self.contentIds.append(idx)
+    if stack.isEmpty {
+      root = element
+    } else {
+      stack[stack.count - 1].children.append(element)
+    }
   }
 
   func parser(_: XMLParser, foundCharacters fragment: String) {
@@ -198,11 +188,5 @@ extension SVGParser: XMLParserDelegate {
 
   func parser(_: XMLParser, parseErrorOccurred parseError: any Error) {
     Self.logger.error("\(parseError.localizedDescription)")
-  }
-}
-
-extension Array {
-  fileprivate func shift(count: Int) -> [Element] {
-    Array(dropFirst(self.count - count + 1))
   }
 }

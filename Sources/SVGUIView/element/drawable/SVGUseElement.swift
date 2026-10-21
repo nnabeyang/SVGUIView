@@ -66,7 +66,7 @@ final class SVGUseElement: SVGDrawableElement {
     return nil
   }
 
-  func style(with _: Stylesheet) -> any SVGElement {
+  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
     Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 

@@ -22,7 +22,7 @@ final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
 
   let children: [any SVGElement]
 
-  func style(with _: Stylesheet) -> any SVGElement {
+  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
     self
   }
 

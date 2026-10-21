@@ -143,7 +143,7 @@ final class SVGFilterElement: SVGDrawableElement {
     return image
   }
 
-  func style(with _: Stylesheet) -> any SVGElement {
+  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
     Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 

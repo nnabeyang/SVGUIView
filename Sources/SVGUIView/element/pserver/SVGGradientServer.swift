@@ -36,7 +36,7 @@ extension SVGGradientServer {
     children.compactMap { $0 as? SVGStopElement }
   }
 
-  func style(with _: Stylesheet) -> any SVGElement {
+  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
     self
   }
 }

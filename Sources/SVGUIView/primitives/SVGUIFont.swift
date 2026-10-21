@@ -6,7 +6,10 @@ struct SVGUIFont {
   let name: String?
   let size: Size?
   let weight: Weight?
-  let fontDescription: FontCascadeDescription
+  /// The font families, in order of preference.
+  let families: [String]
+  /// The locale for choosing fonts, such as the fonts for Han characters, or `nil` for none.
+  let specifiedLocale: String?
 
   init(name: String?, size: String?, weight: String?) {
     self.name = name
@@ -18,9 +21,8 @@ struct SVGUIFont {
       var scanner = SVGAttributeScanner(bytes: bytes)
       return scanner.scanFontFamilies()
     }
-    fontDescription = FontCascadeDescription()
-    fontDescription.setFamilies(familyNames: families)
-    fontDescription.setSpecifiedLocale(locale: Locale.current.identifier)
+    self.families = families
+    specifiedLocale = Locale.current.identifier
   }
 
   init(name: String?, weight: Weight?) {
@@ -33,8 +35,8 @@ struct SVGUIFont {
       var scanner = SVGAttributeScanner(bytes: bytes)
       return scanner.scanFontFamilies()
     }
-    fontDescription = FontCascadeDescription()
-    fontDescription.setFamilies(familyNames: families)
+    self.families = families
+    specifiedLocale = nil
   }
 
   init(lhs: SVGUIFont, rhs: SVGUIFont?) {
@@ -51,8 +53,8 @@ struct SVGUIFont {
       var scanner = SVGAttributeScanner(bytes: bytes)
       return scanner.scanFontFamilies()
     }
-    fontDescription = FontCascadeDescription()
-    fontDescription.setFamilies(familyNames: families)
+    self.families = families
+    specifiedLocale = nil
   }
 
   init(child: SVGUIFont, context: SVGContext) {
@@ -69,17 +71,33 @@ struct SVGUIFont {
       var scanner = SVGAttributeScanner(bytes: bytes)
       return scanner.scanFontFamilies()
     }
-    fontDescription = FontCascadeDescription()
-    fontDescription.setFamilies(familyNames: families)
+    self.families = families
+    specifiedLocale = nil
   }
 
   func sizeValue(context: any SVGLengthContext, textScale: Double = 1.0) -> CGFloat {
     let size = size ?? .medium
-    return size.value(context: context, shouldUseFixedDefaultSize: fontDescription.useFixedDefaultSize) * textScale
+    return size.value(context: context, shouldUseFixedDefaultSize: useFixedDefaultSize) * textScale
+  }
+
+  /// Whether the font uses the fixed default size, as `monospace` does.
+  private var useFixedDefaultSize: Bool {
+    families.count == 1 && families[0] == FontCacheCoreText.familyNamesData[.monospace]
+  }
+
+  /// A new description of the font. Making a font cascade changes its description, so renderings that run at the
+  /// same time must not share one.
+  private func makeDescription() -> FontCascadeDescription {
+    let description = FontCascadeDescription()
+    description.setFamilies(familyNames: families)
+    if let specifiedLocale {
+      description.setSpecifiedLocale(locale: specifiedLocale)
+    }
+    return description
   }
 
   func fontCascade(textScale: Double, context: any SVGLengthContext) -> FontCascade {
-    Self.createFontCascade(size: size, weight: weight, fontDescription: fontDescription, textScale: textScale, context: context)
+    Self.createFontCascade(size: size, weight: weight, fontDescription: makeDescription(), textScale: textScale, context: context)
   }
 
   static func createFontCascade(
