@@ -43,6 +43,33 @@ struct SVGContext: GeometryContext, @unchecked Sendable {
     patternIdStack = ElementIdStack<String>()
   }
 
+  /// A context in the state that the drawing code of elements had where it draws an effect, such as a clip path,
+  /// while the rest of the document is painted from a render tree. Each set of references of the guard becomes a
+  /// level of the stack of IDs of its kind.
+  init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, scale: CGFloat, legacy: LegacyState) {
+    self.init(base: base, graphics: graphics, viewPort: viewPort, scale: scale)
+    viewBoxStack.push(legacy.viewBox)
+    legacy.patternContentUnit.map { patternContentUnitStack.push($0) }
+    style = legacy.style
+    let references = legacy.guard
+    if let uses = references.uses {
+      tagIdStack.push()
+      uses.forEach { _ = tagIdStack.check(elementId: $0) }
+    }
+    if let clipPaths = references.clipPaths {
+      clipIdStack.push()
+      clipPaths.forEach { _ = clipIdStack.check(elementId: $0) }
+    }
+    if let masks = references.masks {
+      maskIdStack.push()
+      masks.forEach { _ = maskIdStack.check(elementId: $0) }
+    }
+    if let patterns = references.patterns {
+      patternIdStack.push()
+      patterns.forEach { _ = patternIdStack.check(elementId: $0) }
+    }
+  }
+
   init(base: SVGBaseContext, graphics: CGContext, viewPort: CGRect, other: Self) {
     self.base = base
     self.graphics = graphics
