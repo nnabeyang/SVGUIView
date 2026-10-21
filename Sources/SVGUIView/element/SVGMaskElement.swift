@@ -38,23 +38,12 @@ final class SVGMaskElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
+    colorInterpolation = base.cascaded.declared(ColorInterpolationProperty.self) ?? nil
     x = .init(attributes["x"])
     y = .init(attributes["y"])
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
-  }
-
-  init(other: SVGMaskElement, css _: SVGUIStyle) {
-    base = other.base
-    colorInterpolation = other.colorInterpolation
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-    maskContentUnits = other.maskContentUnits
-    children = other.children
   }
 
   var colorSpace: CGColorSpace {
@@ -178,10 +167,6 @@ final class SVGMaskElement: SVGDrawableElement {
   }
 
   func draw(_: SVGContext, mode _: DrawMode) async {}
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
-  }
 
   func mask(context: inout SVGBaseContext) {
     if let id = id, context.masks[id] == nil {

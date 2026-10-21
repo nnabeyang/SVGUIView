@@ -25,6 +25,22 @@ struct SVGUIFont {
     specifiedLocale = Locale.current.identifier
   }
 
+  /// The font with the given values of `font-family`, `font-size` and `font-weight`, or `nil` if none is given.
+  init?(specifiedName name: String?, size: Size?, weight: Weight?) {
+    guard name != nil || size != nil || weight != nil else { return nil }
+    self.name = name
+    self.size = size
+    self.weight = weight
+    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
+    let families = name.withUTF8 {
+      let bytes = BufferView(unsafeBufferPointer: $0)!
+      var scanner = SVGAttributeScanner(bytes: bytes)
+      return scanner.scanFontFamilies()
+    }
+    self.families = families
+    specifiedLocale = Locale.current.identifier
+  }
+
   /// A font with computed values.
   init(name: String, size: Size, weight: Weight?) {
     self.name = name

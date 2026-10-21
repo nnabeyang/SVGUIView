@@ -35,27 +35,14 @@ final class SVGFilterElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
-    colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
+    colorInterpolation = base.cascaded.declared(ColorInterpolationProperty.self) ?? nil
+    colorInterpolationFilters = base.cascaded.declared(ColorInterpolationFiltersProperty.self) ?? nil
     x = .init(attributes["x"])
     y = .init(attributes["y"])
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     filterUnits = SVGUnitType(rawValue: attributes["filterUnits", default: ""])
     primitiveUnits = SVGUnitType(rawValue: attributes["primitiveUnits", default: ""])
-  }
-
-  init(other: SVGFilterElement, css _: SVGUIStyle) {
-    base = other.base
-    colorInterpolation = other.colorInterpolation
-    colorInterpolationFilters = other.colorInterpolationFilters
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-    filterUnits = other.filterUnits
-    primitiveUnits = other.primitiveUnits
-    children = other.children
   }
 
   private func colorSpace(colorInterpolation: SVGColorInterpolation) -> CGColorSpace {
@@ -141,10 +128,6 @@ final class SVGFilterElement: SVGDrawableElement {
     guard let image = graphics.makeImage() else { return nil }
     graphics.restoreGState()
     return image
-  }
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   func filter(context: inout SVGBaseContext) {

@@ -24,14 +24,6 @@ final class SVGEllipseElement: SVGDrawableElement {
     ry = SVGLength(attributes["ry"])
   }
 
-  init(other: SVGEllipseElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    cx = other.cx
-    cy = other.cy
-    rx = other.rx
-    ry = other.ry
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0

@@ -26,11 +26,6 @@ final class SVGPathElement: SVGDrawableElement {
     }
   }
 
-  init(other: SVGPathElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    segments = other.segments
-  }
-
   init(other: SVGPathElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     segments = other.segments

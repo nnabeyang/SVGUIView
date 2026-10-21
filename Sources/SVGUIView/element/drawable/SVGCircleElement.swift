@@ -22,13 +22,6 @@ final class SVGCircleElement: SVGDrawableElement {
     r = .init(attributes["r"])
   }
 
-  init(other: SVGCircleElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    cx = other.cx
-    cy = other.cy
-    r = other.r
-  }
-
   init(other: SVGCircleElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     cx = other.cx

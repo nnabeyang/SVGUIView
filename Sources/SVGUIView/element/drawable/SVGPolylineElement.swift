@@ -18,11 +18,6 @@ final class SVGPolylineElement: SVGDrawableElement {
     points = .init(description: attributes["points", default: ""])
   }
 
-  init(other: SVGPolylineElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    points = other.points
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     points.polyline?.applying(scale(context: context))
   }

@@ -36,9 +36,6 @@ extension SVGGradientServer {
     children.compactMap { $0 as? SVGStopElement }
   }
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
 }
 
 final class SVGLinearGradientServer: SVGGradientServer {
@@ -74,13 +71,13 @@ final class SVGLinearGradientServer: SVGGradientServer {
     self.children = children
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
-    display = CSSDisplay(rawValue: attributes["display", default: ""])
+    display = base.display
 
     x1 = SVGLength(attributes["x1"])
     y1 = SVGLength(attributes["y1"])
     x2 = SVGLength(attributes["x2"])
     y2 = SVGLength(attributes["y2"])
-    color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
+    color = base.color
 
     parentId = Self.parseLink(description: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
@@ -299,8 +296,8 @@ final class SVGRadialGradientServer: SVGGradientServer {
     self.children = children
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
-    display = CSSDisplay(rawValue: attributes["display", default: ""])
-    color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
+    display = base.display
+    color = base.color
     cx = SVGLength(attributes["cx"])
     cy = SVGLength(attributes["cy"])
     fx = SVGLength(attributes["fx"])

@@ -18,11 +18,6 @@ final class SVGPolygonElement: SVGDrawableElement {
     points = .init(description: attributes["points", default: ""])
   }
 
-  init(other: SVGPolygonElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    points = other.points
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     points.polygon?.applying(scale(context: context))
   }

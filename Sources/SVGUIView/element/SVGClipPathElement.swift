@@ -25,19 +25,9 @@ final class SVGClipPathElement: SVGElement {
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     clipPathUnits = SVGUnitType(rawValue: attributes["clipPathUnits", default: ""])
-    clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
-    clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
-    transform = CGAffineTransform(description: attributes["transform", default: ""])
-  }
-
-  init(other: SVGClipPathElement, css _: SVGUIStyle) {
-    id = other.id
-    base = other.base
-    clipPathUnits = other.clipPathUnits
-    clipRule = other.clipRule
-    clipPath = other.clipPath
-    transform = other.transform
-    children = other.children
+    clipRule = base.clipRule
+    clipPath = base.clipPath
+    transform = base.transform
   }
 
   init(other: SVGClipPathElement, clipRule: Bool?) {
@@ -116,10 +106,6 @@ final class SVGClipPathElement: SVGElement {
 
   func toPath(context _: SVGContext, frame _: CGRect) -> CGPath {
     fatalError()
-  }
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   func clip(context: inout SVGBaseContext) {

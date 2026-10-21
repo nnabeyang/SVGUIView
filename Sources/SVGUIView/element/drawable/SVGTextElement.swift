@@ -26,7 +26,7 @@ final class SVGTextElement: SVGDrawableElement {
   init(base: SVGBaseElement, text: String, attributes: [String: String]) {
     self.base = base
     self.text = text
-    textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
+    textAnchor = base.cascaded.declared(TextAnchorProperty.self)
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
   }
@@ -34,15 +34,7 @@ final class SVGTextElement: SVGDrawableElement {
   init(other: SVGTextElement, attributes: [String: String]) {
     base = SVGBaseElement(other: other.base, attributes: attributes)
     text = other.text
-    textAnchor = other.textAnchor ?? TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
-    x = other.x
-    y = other.y
-  }
-
-  init(other: SVGTextElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    text = other.text
-    textAnchor = other.textAnchor
+    textAnchor = other.textAnchor ?? cascade(name: .text, attributes: attributes).declared(TextAnchorProperty.self)
     x = other.x
     y = other.y
   }

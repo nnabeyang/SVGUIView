@@ -80,10 +80,6 @@ final class SVGFeBlendElement: SVGElement, SVGFilterApplier {
   let input: SVGFilterInput?
   let input2: SVGFilterInput?
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
-
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
     self.base = base
     let attributes = base.attributes

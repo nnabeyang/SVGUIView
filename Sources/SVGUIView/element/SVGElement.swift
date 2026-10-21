@@ -10,7 +10,6 @@ protocol SVGElement: AnyObject, Encodable, Sendable {
   var index: ObjectIdentifier { get }
   func draw(_ context: SVGContext, mode: DrawMode) async
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async
-  func style(with style: Stylesheet, element: ElementCursor) -> any SVGElement
   func contains(index: ObjectIdentifier, context: SVGContext) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
@@ -92,39 +91,49 @@ final class SVGBaseElement: Sendable {
   let display: CSSDisplay?
   let visibility: CSSVisibility?
   let writingMode: WritingMode?
-  let style: SVGUIInlineStyle
   let attributes: [String: String]
+  /// The values that the element's presentation attributes, the style sheets and its `style` attribute declare.
+  let cascaded: CascadedValues
 
-  init(name: SVGElementName, text: String, attributes: [String: String]) {
+  /// An element styled by its presentation attributes and its `style` attribute.
+  convenience init(name: SVGElementName, text: String, attributes: [String: String]) {
+    self.init(name: name, text: text, attributes: attributes, cascaded: cascade(name: name, attributes: attributes))
+  }
+
+  init(name: SVGElementName, text: String, attributes: [String: String], cascaded: CascadedValues) {
     self.name = name
     self.text = text
     self.attributes = attributes
+    self.cascaded = cascaded
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
-    style = SVGUIInlineStyle(description: attributes["style", default: ""])
-    color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
-    clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
-    mask = SVGMask(description: attributes["mask", default: ""])
-    filter = SVGFilter(description: attributes["filter", default: ""])
-    font = Self.parseFont(attributes: attributes)
-    fill = SVGFill(attributes: attributes)
-    stroke = SVGUIStroke(attributes: attributes)
-    opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
-    transform = CGAffineTransform(description: attributes["transform", default: ""])
-    writingMode = WritingMode(rawValue: attributes["writing-mode", default: ""])
-    eoFill = attributes["fill-rule", default: ""].trimmingCharacters(in: .whitespaces) == "evenodd"
-    clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
-    display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
-    visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
+    color = cascaded.declared(ColorProperty.self).flatMap {
+      if case .color(let color) = $0 { color } else { nil }
+    }
+    clipPath = cascaded.declared(ClipPathProperty.self)
+    mask = cascaded.declared(MaskProperty.self)
+    filter = cascaded.declared(FilterProperty.self)
+    font = SVGUIFont(
+      specifiedName: cascaded.declared(FontFamilyProperty.self), size: cascaded.declared(FontSizeProperty.self),
+      weight: cascaded.declared(FontWeightProperty.self))
+    fill = SVGFill(paint: cascaded[FillProperty.self], opacity: cascaded.declared(FillOpacityProperty.self))
+    stroke = SVGUIStroke(cascaded: cascaded)
+    opacity = cascaded.declared(OpacityProperty.self) ?? 1.0
+    transform = cascaded.declared(TransformProperty.self)
+    writingMode = cascaded.declared(WritingModeProperty.self)
+    eoFill = cascaded.declared(FillRuleProperty.self) == .evenodd
+    clipRule = cascaded.declared(ClipRuleProperty.self).map { $0 == .evenodd }
+    display = cascaded.declared(DisplayProperty.self)
+    visibility = cascaded.declared(VisibilityProperty.self)
   }
 
   init(other: SVGBaseElement, attributes: [String: String]) {
     self.name = other.name
     self.text = other.text
     self.attributes = attributes
+    cascaded = other.cascaded
     id = other.id
     className = other.className
-    style = other.style
     color = other.color ?? SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
     clipPath = other.clipPath
     mask = other.mask
@@ -145,29 +154,6 @@ final class SVGBaseElement: Sendable {
     self.display = display ?? other.display
     let visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
     self.visibility = visibility ?? other.visibility
-  }
-
-  init(other: SVGBaseElement, css: SVGUIStyle) {
-    self.name = other.name
-    self.text = other.text
-    self.attributes = other.attributes
-    id = other.id
-    style = other.style
-    className = other.className
-    font = other.font
-    fill = SVGFill(style: css) ?? other.fill
-    clipPath = SVGClipPath(style: css) ?? other.clipPath
-    mask = other.mask
-    filter = other.filter
-    color = other.color
-    stroke = SVGUIStroke(lhs: SVGUIStroke(style: css), rhs: other.stroke)
-    opacity = other.opacity
-    transform = CGAffineTransform(style: css[.transform]) ?? other.transform
-    writingMode = other.writingMode
-    eoFill = other.eoFill
-    clipRule = other.clipRule
-    display = other.display
-    visibility = other.visibility
   }
 
   private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
@@ -198,14 +184,12 @@ protocol SVGDrawableElement: SVGElement {
   var fill: SVGFill? { get }
   var stroke: SVGUIStroke { get }
   var color: SVGColor? { get }
-  var style: SVGUIInlineStyle { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
   func frame(context: SVGContext, path: CGPath?) async -> CGRect
   func scale(context: SVGContext) -> CGAffineTransform
   init(text: String, attributes: [String: String])
   init(base: SVGBaseElement, text: String, attributes: [String: String])
-  init(other: Self, css: SVGUIStyle)
   init(other: Self, attributes: [String: String])
   func use(attributes: [String: String]) -> Self
   func toPath(context: SVGContext) async -> CGPath?
@@ -229,7 +213,6 @@ extension SVGDrawableElement {
   var mask: SVGMask? { base.mask }
   var filter: SVGFilter? { base.filter }
   var color: SVGColor? { base.color }
-  var style: SVGUIInlineStyle { base.style }
   var display: CSSDisplay? { base.display }
   var visibility: CSSVisibility? { base.visibility }
 
@@ -249,11 +232,6 @@ extension SVGDrawableElement {
 
   func use(attributes: [String: String]) -> Self {
     Self(other: self, attributes: attributes)
-  }
-
-  func style(with style: Stylesheet, element: ElementCursor) -> any SVGElement {
-    let css = cascadeElement(element: element, stylesheets: [style], inlineStyle: self.style.declarations)
-    return Self(other: self, css: css)
   }
 
   func frame(context _: SVGContext, path: CGPath?) -> CGRect {
@@ -502,7 +480,8 @@ extension ElementCursor {
     let name = element.name
     if name == .style || name == .unknown { return nil }
     let contents = element.children.indices.compactMap { child(at: $0).makeElement(with: css) }
-    let base = SVGBaseElement(name: name, text: element.text, attributes: element.attributes)
+    let base = SVGBaseElement(
+      name: name, text: element.text, attributes: element.attributes, cascaded: cascade(element: self, stylesheet: css))
     let rendered: any SVGElement =
       switch name {
       case .svg:
@@ -560,6 +539,22 @@ extension ElementCursor {
       case .style, .unknown:
         preconditionFailure("\(name.rawValue) isn't rendered")
       }
-    return rendered.style(with: css, element: self)
+    return rendered
   }
+}
+
+extension CascadedValues {
+  /// The value that the element declares for the property, or `nil` if it declares none or a keyword, which
+  /// leaves the value to the inheritance while drawing.
+  func declared<P: StyleProperty>(_: P.Type) -> P.Specified? {
+    if case .value(let value) = self[P.self] { value } else { nil }
+  }
+}
+
+/// The cascaded values of an element that only its presentation attributes and its `style` attribute style.
+func cascade(name: SVGElementName, attributes: [String: String]) -> CascadedValues {
+  let inlineStyle = attributes["style"].map { SVGUIInlineStyle(description: $0).declarations } ?? []
+  return CascadedValues(
+    CascadedValues.presentationAttributes(of: name, attributes: attributes)
+      + sortedByPrecedence(collectDeclarations(matches: [], inlineStyle: inlineStyle)).map(\.declaration))
 }

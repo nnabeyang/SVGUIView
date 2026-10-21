@@ -46,17 +46,6 @@ final class SVGUseElement: SVGDrawableElement {
     children = other.children
   }
 
-  init(other: SVGUseElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-    parentId = other.parentId
-    attributes = other.attributes
-    children = other.children
-  }
-
   private static func parseLink(description: String?) -> String? {
     guard let description = description else { return nil }
     let hashId = description.trimmingCharacters(in: .whitespaces)
@@ -64,10 +53,6 @@ final class SVGUseElement: SVGDrawableElement {
       return String(hashId.dropFirst())
     }
     return nil
-  }
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   private func getParent(context: SVGContext, index: ObjectIdentifier) -> (any SVGDrawableElement)? {

@@ -24,14 +24,6 @@ final class SVGLineElement: SVGDrawableElement {
     y2 = .init(attributes["y2"])
   }
 
-  init(other: SVGLineElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    x1 = other.x1
-    y1 = other.y1
-    x2 = other.x2
-    y2 = other.y2
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let x1 = x1?.value(context: context, mode: .width) ?? 0
     let y1 = y1?.value(context: context, mode: .height) ?? 0

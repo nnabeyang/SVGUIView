@@ -23,10 +23,6 @@ final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
   let floodColor: SVGColor?
   let floodOpacity: Double?
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
-
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
     self.base = base
     let attributes = base.attributes
@@ -37,8 +33,10 @@ final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
 
     result = attributes["result"]
 
-    floodColor = SVGAttributeScanner.parseColor(description: attributes["flood-color", default: ""])
-    floodOpacity = Double(attributes["flood-opacity", default: ""])
+    floodColor = base.cascaded.declared(FloodColorProperty.self).flatMap {
+      if case .color(let color) = $0 { color } else { nil }
+    }
+    floodOpacity = base.cascaded.declared(FloodOpacityProperty.self)
   }
 
   func apply(

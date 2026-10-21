@@ -28,17 +28,8 @@ final class SVGDefsElement: SVGDrawableElement {
     children = other.children
   }
 
-  init(other: SVGDefsElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    children = other.children
-  }
-
   func toPath(context _: SVGContext) -> CGPath? {
     nil
-  }
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   func clip(context: inout SVGBaseContext) {

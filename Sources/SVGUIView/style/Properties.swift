@@ -392,7 +392,7 @@ enum TransformProperty: StyleProperty {
   static let computed = \ComputedStyle.transform
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> CGAffineTransform? {
-    CGAffineTransform(description: text)
+    keyword(text) == "none" ? .identity : CGAffineTransform(description: text)
   }
 }
 

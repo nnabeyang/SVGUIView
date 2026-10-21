@@ -22,11 +22,6 @@ enum SVGClipPath {
     self = clipPath
   }
 
-  init?(style: SVGUIStyle) {
-    guard case .clipPath(let value) = style[.clipPath] else { return nil }
-    self = value
-  }
-
   func clipIfNeeded(frame: CGRect, context: SVGContext, cgContext: CGContext) async {
     if case .url(let id) = self,
       context.check(clipId: id),

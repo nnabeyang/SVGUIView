@@ -1,23 +1,6 @@
 import CoreGraphics
 
 extension CGAffineTransform {
-  init?(style: CSSValue?, description: String) {
-    if case .transform(let value) = style {
-      self = value
-      return
-    }
-    guard let transform = CGAffineTransform(description: description) else { return nil }
-    self = transform
-  }
-
-  init?(style: CSSValue?) {
-    if case .transform(let value) = style {
-      self = value
-      return
-    }
-    return nil
-  }
-
   init?(description: String) {
     var data = description
     let ops = data.withUTF8 {

@@ -27,15 +27,6 @@ final class SVGImageElement: SVGDrawableElement {
     height = SVGLength(attributes["height"])
   }
 
-  init(other: SVGImageElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    data = other.data
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .width) ?? 0

@@ -57,9 +57,9 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     viewBox = Self.parseViewBox(attributes["viewBox"])
-    textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
+    textAnchor = base.cascaded.declared(TextAnchorProperty.self)
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
-    overflow = SVGOverflow(rawValue: attributes["overflow", default: ""].trimmingCharacters(in: .whitespaces))
+    overflow = base.cascaded.declared(OverflowProperty.self) ?? nil
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
@@ -80,25 +80,8 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     overflow = other.overflow
   }
 
-  init(other: SVGSVGElement, css _: SVGUIStyle) {
-    base = other.base
-    preserveAspectRatio = other.preserveAspectRatio
-    overflow = other.overflow
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-    viewBox = other.viewBox
-    children = other.children
-    textAnchor = other.textAnchor
-  }
-
   var viewPort: CGRect {
     fatalError("not implemented")
-  }
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {

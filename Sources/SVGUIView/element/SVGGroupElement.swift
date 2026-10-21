@@ -18,7 +18,7 @@ final class SVGGroupElement: SVGDrawableElement {
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
-    textAnchor = TextAnchor(rawValue: base.attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
+    textAnchor = base.cascaded.declared(TextAnchorProperty.self)
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
@@ -31,27 +31,8 @@ final class SVGGroupElement: SVGDrawableElement {
     textAnchor = other.textAnchor
   }
 
-  init(other: SVGGroupElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    children = other.children
-    textAnchor = other.textAnchor
-  }
-
   func toPath(context _: SVGContext) -> CGPath? {
     nil
-  }
-
-  private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
-    let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
-    let size = attributes["font-size"]
-    let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
-    if name == nil,
-      size == nil,
-      weight == nil
-    {
-      return nil
-    }
-    return SVGUIFont(name: name, size: size, weight: weight)
   }
 
   func frame(context: SVGContext, path _: CGPath?) async -> CGRect {

@@ -20,22 +20,12 @@ final class SVGRectElement: SVGDrawableElement {
 
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
-    x = SVGLength(attributes["x"])
-    y = SVGLength(attributes["y"])
+    x = base.cascaded.declared(XProperty.self)
+    y = base.cascaded.declared(YProperty.self)
     rx = .init(attributes["rx"])
     ry = .init(attributes["ry"])
-    width = SVGLength(attributes["width"])
-    height = SVGLength(attributes["height"])
-  }
-
-  init(other: SVGRectElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    x = SVGLength(style: css[.x], value: nil) ?? other.x
-    y = SVGLength(style: css[.y], value: nil) ?? other.y
-    rx = other.rx
-    ry = other.ry
-    width = SVGLength(style: css[.width], value: nil) ?? other.width
-    height = SVGLength(style: css[.height], value: nil) ?? other.height
+    width = base.cascaded.declared(WidthProperty.self)
+    height = base.cascaded.declared(HeightProperty.self)
   }
 
   init(other: SVGRectElement, attributes: [String: String]) {

@@ -11,7 +11,7 @@ extension Namespaces: Default {
   }
 }
 
-struct Stylesheet: Equatable {
+struct Stylesheet {
   let rules: [CSSRule]
 
   func matchElement(element: ElementCursor) -> [RuleMatch] {
@@ -23,8 +23,7 @@ struct Stylesheet: Equatable {
       for declaration in rule.declarations {
         declarations.append(
           CSSDeclaration(
-            type: declaration.type,
-            value: declaration.value,
+            declaration: declaration.declaration,
             importance: declaration.importance,
             specificity: .from(specificity),
             sourceOrder: rule.sourceOrder * 10000 + declaration.sourceOrder

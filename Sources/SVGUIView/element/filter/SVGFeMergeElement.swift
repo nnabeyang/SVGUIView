@@ -22,10 +22,6 @@ final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
 
   let children: [any SVGElement]
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
-
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
@@ -36,7 +32,7 @@ final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
     height = SVGLength(attributes["height"])
 
     result = attributes["result"]
-    colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
+    colorInterpolationFilters = base.cascaded.declared(ColorInterpolationFiltersProperty.self) ?? nil
   }
 
   private func colorSpace(colorInterpolation: SVGColorInterpolation) -> CGColorSpace {

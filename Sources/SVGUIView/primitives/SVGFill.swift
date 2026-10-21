@@ -7,67 +7,24 @@ enum SVGFill {
   case color(color: SVGColor?, opacity: SVGOpacity?)
   case image(data: Data?)
 
-  init?(style: SVGUIStyle) {
-    let opacity: SVGOpacity? = {
-      switch style[.fillOpacity] {
-      case .number(let value):
-        return .number(value)
-      default:
-        return nil
-      }
-    }()
-    if case .fill(let value) = style[.fill] {
-      switch value {
-      case .inherit:
-        self = .inherit
-      case .current:
-        self = .current
-      case .color(let color):
-        self = .color(color: color, opacity: opacity)
-      }
-      return
-    }
-    guard let opacity = opacity else {
-      return nil
-    }
-    self = .color(color: nil, opacity: opacity)
-  }
-
-  init?(style: SVGUIStyle, attributes: [String: String]) {
-    let opacity: SVGOpacity? = {
-      switch style[.fillOpacity] {
-      case .number(let value):
-        return .number(value)
-      default:
-        return SVGOpacity(attributes["fill-opacity"])
-      }
-    }()
-    if case .fill(let value) = style[.fill] {
-      switch value {
-      case .inherit:
-        self = .inherit
-      case .current:
-        self = .current
-      case .color(let color):
-        self = .color(color: color, opacity: opacity)
-      }
-      return
-    }
-
-    var data = attributes["fill", default: ""]
-    let fill = data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanFill(opacity: opacity)
-    }
-    guard let fill = fill else {
-      guard let opacity = opacity else {
-        return nil
-      }
+  /// The fill with the cascaded values of `fill` and `fill-opacity`.
+  init?(paint: Declared<Paint>?, opacity: Double?) {
+    let opacity = opacity.map { SVGOpacity.number($0) }
+    switch paint {
+    case .value(.none):
+      self = .color(color: .named(SVGColorName(name: "none")), opacity: opacity)
+    case .value(.color(let color)):
+      self = .color(color: color, opacity: opacity)
+    case .value(.currentColor):
+      self = .current
+    case .value(.url(let id)):
+      self = .color(color: .url(id), opacity: opacity)
+    case .inherit:
+      self = .inherit
+    case .initial, .unset, nil:
+      guard let opacity else { return nil }
       self = .color(color: nil, opacity: opacity)
-      return
     }
-    self = fill
   }
 
   init?(description: String) {
