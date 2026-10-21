@@ -45,12 +45,6 @@ final class SVGImageElement: ShapeGeometry {
     return path.applying(scale(context: context))
   }
 
-  /// Draws the image in the element's rectangle.
-  func applyFill(path: CGPath, context: SVGContext, mode _: DrawMode) async {
-    guard let image = decodedImage() else { return }
-    paintImage(image, in: path, graphics: context.graphics)
-  }
-
   /// The image of the data, or `nil` if the data isn't an image.
   func decodedImage() -> CGImage? {
     guard let data = data,

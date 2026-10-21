@@ -112,4 +112,100 @@ struct RenderTreeBuilderTests {
     }
     #expect(try #require(group.clip).frame == CGRect(x: 0, y: 0, width: 15, height: 15))
   }
+
+  @Test("a clip path that a shape in it references again clips nothing more")
+  func clipPathCycle() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <clipPath id="c"><rect width="10" height="10" clip-path="url(#c)"/></clipPath>
+      <rect width="20" height="20" clip-path="url(#c)"/>
+      """##)
+    let clip = try #require(try shape(try children(of: tree).last).clip)
+    #expect(clip.frame == CGRect(x: 0, y: 0, width: 20, height: 20))
+    #expect(clip.shapes.count == 1)
+    #expect(clip.shapes.first?.clip == nil)
+  }
+
+  @Test("a clip path of an element whose bounds have no pixel clips nothing")
+  func clipPathOfEmptyBounds() async throws {
+    let tree = try await renderTree(
+      ##"<clipPath id="c"><rect width="10" height="10"/></clipPath><g clip-path="url(#c)"/>"##)
+    guard case .group(let group) = try children(of: tree).last else {
+      Issue.record("The last child isn't a group")
+      return
+    }
+    #expect(group.clip == nil)
+  }
+
+  @Test("a mask covers its region, and a pattern in it paints black (svg_ui_view-81)")
+  func maskWithPattern() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <pattern id="p" width="1" height="1"><rect width="1" height="1" fill="lime"/></pattern>
+      <mask id="m"><rect width="20" height="20" fill="url(#p)"/></mask>
+      <rect width="10" height="10" mask="url(#m)"/>
+      """##)
+    guard case .mask(let mask) = try shape(try children(of: tree).last).mask else {
+      Issue.record("The rectangle isn't masked")
+      return
+    }
+    #expect(mask.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
+    #expect(mask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
+    guard case .vector(.color(let color), _, _) = try #require(mask.contents.first).fill else {
+      Issue.record("The content of the mask isn't filled with a color")
+      return
+    }
+    #expect(color == CGColor.opaqueBlack)
+  }
+
+  @Test("a pattern takes the attributes and the content of the pattern that it references")
+  func patternReference() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <pattern id="a" width="1" height="1"><rect width="5" height="5"/></pattern>
+      <pattern id="b" href="#a" patternUnits="userSpaceOnUse" x="2" width="10" height="10"/>
+      <rect width="20" height="20" fill="url(#b)"/>
+      """##)
+    let rect = try shape(try children(of: tree).last)
+    guard case .vector(.pattern(let paint), _, _) = rect.content else {
+      Issue.record("The rectangle isn't filled with a pattern")
+      return
+    }
+    let pattern = try #require(paint)
+    #expect(pattern.tileSize == CGSize(width: 10, height: 10))
+    #expect(pattern.origin == CGPoint(x: 2, y: 0))
+    let content = try shape(pattern.content.first)
+    #expect(content.id.instance == [rect.id.element])
+  }
+
+  @Test("a pattern that its content references again paints black there")
+  func patternCycle() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <pattern id="p" width="1" height="1"><rect width="1" height="1" fill="url(#p)"/></pattern>
+      <rect width="20" height="20" fill="url(#p)"/>
+      """##)
+    guard case .vector(.pattern(let paint), _, _) = try shape(try children(of: tree).last).content else {
+      Issue.record("The rectangle isn't filled with a pattern")
+      return
+    }
+    let content = try shape(try #require(paint).content.first)
+    guard case .vector(.color(let color), _, _) = content.content else {
+      Issue.record("The content of the pattern isn't filled with a color")
+      return
+    }
+    #expect(color == CGColor.opaqueBlack)
+  }
+
+  @Test("an element with a filter keeps itself without the filter, which is the source image")
+  func filterSource() async throws {
+    let tree = try await renderTree(
+      ##"<filter id="f"><feOffset dx="1"/></filter><rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .legacyFiltered(let filtered) = try children(of: tree).last else {
+      Issue.record("The rectangle isn't filtered")
+      return
+    }
+    let source = try shape(filtered.source)
+    #expect(source.geometry?.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
+  }
 }

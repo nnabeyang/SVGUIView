@@ -3,9 +3,9 @@ import Foundation
 
 /// Builds the render tree of a document for a rendering.
 ///
-/// The builder follows the drawing code of the elements step by step, so that the render tree paints what that code
-/// drew: the same elements, with lengths resolved in the same contexts, and references followed or stopped at the
-/// same places.
+/// The builder follows the drawing code that the elements had step by step, so that the render tree paints what that
+/// code drew: the same elements, with lengths resolved in the same contexts, and references followed or stopped at
+/// the same places.
 struct RenderTreeBuilder {
   let base: SVGBaseContext
   /// The rectangle that the document is rendered into.
@@ -36,8 +36,8 @@ struct RenderTreeBuilder {
 
   // MARK: - Nodes
 
-  /// The node of an element, as `draw(_:mode:)` of the element drew it, or `nil` if it draws nothing.
-  private func node(
+  /// The node of an element, or `nil` if it draws nothing.
+  func node(
     of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
     instance: [ElementID]
   ) async -> RenderNode? {
@@ -47,21 +47,29 @@ struct RenderTreeBuilder {
     await Task.yield()
     switch element {
     case let svg as SVGSVGElement:
-      if let filtered = filteredNode(of: svg, context: context, guard: references) { return filtered }
+      if let filtered = await filteredNode(of: svg, context: context, guard: references, instance: instance) {
+        return filtered
+      }
       return await viewportNode(of: svg, context: context, mode: mode, guard: references, instance: instance)
     case let group as SVGGroupElement:
-      if let filtered = filteredNode(of: group, context: context, guard: references) { return filtered }
+      if let filtered = await filteredNode(of: group, context: context, guard: references, instance: instance) {
+        return filtered
+      }
       return await groupNode(of: group, context: context, mode: mode, guard: references, instance: instance)
     case let use as SVGUseElement:
       if use.display == CSSDisplay.none { return nil }
       let references = beginsLevel(mode) ? references.beginning(.all) : references
-      if let filtered = filteredNode(of: use, context: context, guard: references) { return filtered }
+      if let filtered = await filteredNode(of: use, context: context, guard: references, instance: instance) {
+        return filtered
+      }
       return await useNode(of: use, context: context, mode: .normal, guard: references, instance: instance)
     case is SVGMaskElement, is SVGPatternElement:
       return nil
     default:
       if element.display == CSSDisplay.none { return nil }
-      if let filtered = filteredNode(of: element, context: context, guard: references) { return filtered }
+      if let filtered = await filteredNode(of: element, context: context, guard: references, instance: instance) {
+        return filtered
+      }
       return await shapeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
     }
   }
@@ -77,12 +85,35 @@ struct RenderTreeBuilder {
     RenderID(element: element.base.elementID, instance: instance)
   }
 
-  /// The node of an element with a filter, which the filter element draws.
+  /// The node of an element with a filter, which the filter element applies.
   private func filteredNode(
-    of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard
-  ) -> RenderNode? {
+    of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard,
+    instance: [ElementID]
+  ) async -> RenderNode? {
     guard case .url(let id) = element.filter ?? .none, let filter = base.filters[id] else { return nil }
-    return .legacyFiltered(LegacyFilteredNode(element: element, filter: filter, legacy: context.legacy(references)))
+    // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
+    let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
+    let source = await nodeWithoutFilter(
+      of: element, context: sourceContext, mode: .filter(isRoot: true), guard: ReferenceGuard(), instance: instance)
+    return .legacyFiltered(
+      LegacyFilteredNode(element: element, filter: filter, legacy: context.legacy(references), source: source))
+  }
+
+  /// The node of an element without its filter.
+  private func nodeWithoutFilter(
+    of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
+    instance: [ElementID]
+  ) async -> RenderNode? {
+    switch element {
+    case let svg as SVGSVGElement:
+      await viewportNode(of: svg, context: context, mode: mode, guard: references, instance: instance)
+    case let group as SVGGroupElement:
+      await groupNode(of: group, context: context, mode: mode, guard: references, instance: instance)
+    case let use as SVGUseElement:
+      await useNode(of: use, context: context, mode: mode, guard: references, instance: instance)
+    default:
+      await shapeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
+    }
   }
 
   private func shapeNode(
@@ -94,17 +125,17 @@ struct RenderTreeBuilder {
     let references = beginsLevel(mode) ? references.beginning(.all) : references
     let path = await path(of: element, context: context, guard: references)
     var geometry: Geometry?
-    var clip: ClipReference?
+    var clip: ClipPathEffect?
     var mask = MaskApplication.none
     if let path {
       let frame = await frame(of: element, context: context, path: path, guard: references)
       geometry = Geometry(path: RenderPath(path), frame: frame)
-      clip = element.clipPath.map { ClipReference(clipPath: $0, frame: frame) }
+      clip = await clipEffect(element.clipPath, frame: frame, context: context, guard: references)
       let lineWidth = element.style.strokeWidth.value(context: context, mode: .other)
       if case .url = element.style.mask, element.type == .line, frame.width == lineWidth || frame.height == lineWidth {
         mask = .clipToZero
-      } else if let elementMask = element.mask {
-        mask = .mask(elementMask, frame: frame)
+      } else if let effect = await maskEffect(element.mask, frame: frame, context: context, guard: references) {
+        mask = .mask(effect)
       }
     }
     var content: ShapeContent?
@@ -113,14 +144,15 @@ struct RenderTreeBuilder {
       if let image = element as? SVGImageElement {
         content = .image(image.decodedImage(), stroke: stroke)
       } else {
-        let fill = await fillPaint(of: element, path: path, context: context, mode: mode, guard: references)
+        let fill = await fillPaint(
+          of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
         content = .vector(fill: fill, stroke: stroke, fillRule: element.pathFillRule)
       }
     }
     return .shape(
       ShapeNode(
         id: renderID(of: element, instance: instance), transform: transform, geometry: geometry, clip: clip,
-        mask: mask, opacity: element.opacity, content: content, legacy: context.legacy(references)))
+        mask: mask, opacity: element.opacity, content: content))
   }
 
   private func groupNode(
@@ -130,10 +162,10 @@ struct RenderTreeBuilder {
     let context = context.styled(by: group)
     let transform = mode != .filter(isRoot: true) ? (group.transform ?? .identity) : .identity
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
-    var clip: ClipReference?
+    var clip: ClipPathEffect?
     if let clipPath = group.clipPath {
-      clip = ClipReference(
-        clipPath: clipPath, frame: await frame(of: group, context: context, path: nil, guard: references))
+      let frame = await frame(of: group, context: context, path: nil, guard: references)
+      clip = await clipEffect(clipPath, frame: frame, context: context, guard: references)
     }
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
@@ -146,7 +178,7 @@ struct RenderTreeBuilder {
     return .group(
       GroupNode(
         id: renderID(of: group, instance: instance), transform: transform, opacity: group.opacity, clip: clip,
-        legacy: context.legacy(references), children: children))
+        children: children))
   }
 
   private func viewportNode(
@@ -177,7 +209,7 @@ struct RenderTreeBuilder {
       }
     }
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
-    let clip = svg.clipPath.map { ClipReference(clipPath: $0, frame: inner.viewBox) }
+    let clip = await clipEffect(svg.clipPath, frame: inner.viewBox, context: inner, guard: references)
     var children = [RenderNode]()
     for child in svg.children {
       guard let child = child as? (any SVGDrawableElement) else { continue }
@@ -189,8 +221,7 @@ struct RenderTreeBuilder {
       ViewportNode(
         id: id, translation: translation,
         content: ViewportContent(
-          viewBoxTransform: transform, overflowClip: overflowClip, clip: clip, legacy: inner.legacy(references),
-          children: children)))
+          viewBoxTransform: transform, overflowClip: overflowClip, clip: clip, children: children)))
   }
 
   private func useNode(
@@ -201,9 +232,10 @@ struct RenderTreeBuilder {
     let isFilterRoot = mode == .filter(isRoot: true)
     let transform = isFilterRoot ? .identity : (use.transform ?? .identity)
     let references = isFilterRoot ? references.beginning(.all) : references
-    var clip: ClipReference?
+    var clip: ClipPathEffect?
     if let clipPath = use.clipPath {
-      clip = ClipReference(clipPath: clipPath, frame: await frame(of: use, context: context, path: nil, guard: references))
+      let frame = await frame(of: use, context: context, path: nil, guard: references)
+      clip = await clipEffect(clipPath, frame: frame, context: context, guard: references)
     }
     let content = await withReferencedElement(of: use, context: context, guard: references) { element, references in
       UseInstance(
@@ -214,8 +246,7 @@ struct RenderTreeBuilder {
     }
     return .use(
       UseNode(
-        id: renderID(of: use, instance: instance), transform: transform, clip: clip,
-        legacy: context.legacy(references), instance: content))
+        id: renderID(of: use, instance: instance), transform: transform, clip: clip, instance: content))
   }
 
   // MARK: - `<use>`
@@ -253,7 +284,7 @@ struct RenderTreeBuilder {
   // MARK: - Geometry
 
   /// The shape of an element, as `toPath(context:)` of the element made it, in a context styled by the element.
-  private func path(
+  func path(
     of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard
   ) async -> CGPath? {
     switch element {
@@ -274,7 +305,7 @@ struct RenderTreeBuilder {
 
   /// The bounds that units relative to an element use, as `frame(context:path:)` of the element found them, in a
   /// context styled by the element.
-  private func frame(
+  func frame(
     of element: any SVGDrawableElement, context: ResolveContext, path: CGPath?, guard references: ReferenceGuard
   ) async -> CGRect {
     switch element {
@@ -318,11 +349,10 @@ struct RenderTreeBuilder {
 
   // MARK: - Paint
 
-  /// The paint of the fill of an element, as `applyFill(path:context:mode:)` of the element painted it, or `nil`
-  /// if it paints nothing.
-  private func fillPaint(
+  /// The paint of the fill of an element, or `nil` if it paints nothing.
+  func fillPaint(
     of element: any SVGDrawableElement, path: CGPath, context: ResolveContext, mode: DrawMode,
-    guard references: ReferenceGuard
+    guard references: ReferenceGuard, instance: [ElementID]
   ) async -> FillPaint? {
     let style = element.style
     let opacity = style.fillOpacity
@@ -339,8 +369,15 @@ struct RenderTreeBuilder {
           return .gradient(gradientPaint(of: server, context: context, opacity: opacity))
         }
       } else if let pattern = base.patterns[id] {
-        let frame = await frame(of: element, context: context, path: path, guard: references)
-        return .pattern(pattern, id: id, frame: frame, opacity: opacity, mode: mode)
+        // A cycle of patterns stops the pattern, which paints black.
+        var references = references
+        if references.insert(pattern: id) {
+          let frame = await frame(of: element, context: context, path: path, guard: references)
+          return .pattern(
+            await patternPaint(
+              pattern, frame: frame, opacity: opacity, context: context, mode: mode, guard: references,
+              instance: instance + [element.base.elementID]))
+        }
       }
       return .color(CGColor.opaqueBlack)
     case .currentColor:
@@ -361,8 +398,7 @@ struct RenderTreeBuilder {
     return server.paint(context: context, opacity: opacity)
   }
 
-  /// The stroke of an element, as `applyStroke(path:context:)` of the element painted it, or `nil` if it paints
-  /// none.
+  /// The stroke of an element, or `nil` if it paints none.
   private func strokeStyle(of element: any SVGDrawableElement, context: ResolveContext) -> StrokeStyle? {
     let style = element.style
     let color: CGColor?

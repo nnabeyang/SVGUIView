@@ -1,10 +1,19 @@
-import Accelerate
 import CoreGraphics
 import Foundation
 
 enum SVGColorInterpolation: String, CaseIterable {
   case sRGB
   case linearRGB
+
+  /// The color space that colors are interpolated in.
+  var colorSpace: CGColorSpace {
+    switch self {
+    case .sRGB:
+      CGColorSpace(name: CGColorSpace.sRGB)!
+    case .linearRGB:
+      CGColorSpace(name: CGColorSpace.linearSRGB)!
+    }
+  }
 }
 
 final class SVGMaskElement: SVGDrawableElement {
@@ -46,121 +55,9 @@ final class SVGMaskElement: SVGDrawableElement {
     maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
   }
 
-  var colorSpace: CGColorSpace {
-    let colorIntepolation = colorInterpolation ?? .sRGB
-    switch colorIntepolation {
-    case .sRGB:
-      return CGColorSpace(name: CGColorSpace.sRGB)!
-    case .linearRGB:
-      return CGColorSpace(name: CGColorSpace.linearSRGB)!
-    }
-  }
-
   func toPath(context _: SVGContext) -> CGPath? {
     fatalError()
   }
-
-  func clip(frame: CGRect, context: SVGContext, cgContext: CGContext) async -> Bool {
-    guard let maskImage = await maskImage(frame: frame, context: context) else { return false }
-    let x = (x ?? .percent(-10)).value(context: context, mode: .width)
-    let y = (y ?? .percent(-10)).value(context: context, mode: .height)
-    let width = (width ?? .percent(120)).value(context: context, mode: .width)
-    let height = (height ?? .percent(120)).value(context: context, mode: .height)
-    cgContext.clip(to: CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height)))
-    cgContext.clip(to: frame, mask: maskImage)
-    return true
-  }
-
-  private func maskImage(frame: CGRect, context: SVGContext) async -> CGImage? {
-    let size = frame.size
-    let scale = context.scale
-    guard let graphics = CGContext.bitmap(size: size, scale: scale, space: colorSpace) else { return nil }
-
-    let transform: CGAffineTransform
-    let maskContentUnits = maskContentUnits ?? .userSpaceOnUse
-    let t = self.transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
-
-    switch maskContentUnits {
-    case .userSpaceOnUse:
-      transform =
-        t
-        .translatedBy(x: -frame.minX, y: -frame.minY)
-    case .objectBoundingBox:
-      transform =
-        t
-        .scaledBy(x: size.width, y: size.height)
-    }
-
-    let maskContext = SVGContext(base: context.base, graphics: graphics, viewPort: context.viewPort, scale: context.scale)
-    maskContext.push(viewBox: context.viewBox)
-    graphics.concatenate(transform)
-    for child in children {
-      if Task.isCancelled { break }
-      await Task.yield()
-      guard let content = child as? (any SVGDrawableElement) else { continue }
-      if content is SVGGroupElement || content is SVGLineElement {
-        continue
-      }
-      if case .hidden = content.visibility {
-        continue
-      }
-      if let display = content.display, case .none = display {
-        continue
-      }
-      guard let path = await content.toPath(context: context.styled(by: content)) else { continue }
-      graphics.saveGState()
-      graphics.concatenate(content.transform ?? .identity)
-      await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-      await content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-      await content.applyFill(path: path, context: maskContext, mode: .root)
-      graphics.restoreGState()
-    }
-    await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-    guard let image = graphics.makeImage() else { return nil }
-    graphics.restoreGState()
-    return convertToLuminance(cgImage: image)
-  }
-
-  func convertToLuminance(cgImage: CGImage) -> CGImage? {
-    guard let sourceBuffer = try? vImage_Buffer(cgImage: cgImage) else {
-      return nil
-    }
-    defer {
-      sourceBuffer.free()
-    }
-    guard
-      let format = vImage_CGImageFormat(
-        bitsPerComponent: cgImage.bitsPerComponent,
-        bitsPerPixel: cgImage.bitsPerPixel,
-        colorSpace: cgImage.colorSpace!,
-        bitmapInfo: cgImage.bitmapInfo)
-    else {
-      return nil
-    }
-
-    let srcPtr = sourceBuffer.data.assumingMemoryBound(to: Pixel_8.self)
-    let width = sourceBuffer.width
-    let height = sourceBuffer.height
-    let pixelSize = width * height * 4
-    var pixelOffset = 0
-    while pixelOffset < pixelSize {
-      let a = srcPtr[pixelOffset + 3]
-      if a == 0 {
-        pixelOffset += 4
-        continue
-      }
-      let b = srcPtr[pixelOffset]
-      let g = srcPtr[pixelOffset + 1]
-      let r = srcPtr[pixelOffset + 2]
-
-      let luma = (Double(r) * 0.2125 + Double(g) * 0.7154 + Double(b) * 0.0721)
-      srcPtr[pixelOffset + 3] = Pixel_8(luma)
-      pixelOffset += 4
-    }
-    return try? sourceBuffer.createCGImage(format: format)
-  }
-
-  func draw(_: SVGContext, mode _: DrawMode) async {}
 
   func mask(context: inout SVGBaseContext) {
     if let id = id, context.masks[id] == nil {

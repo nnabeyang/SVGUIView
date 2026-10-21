@@ -48,7 +48,7 @@ struct ResolveContext: GeometryContext {
     return context
   }
 
-  /// The state that the drawing code of elements reads, for the effects that it still draws.
+  /// The state that the filter elements read, until filters move into the render tree.
   func legacy(_ guard: ReferenceGuard) -> LegacyState {
     LegacyState(viewBox: viewBox, patternContentUnit: patternContentUnit, style: style, guard: `guard`)
   }
@@ -86,12 +86,31 @@ struct ReferenceGuard: Sendable {
 
   /// Adds the element, or returns `false` if it's already being followed or no level is begun.
   mutating func insert(use element: ObjectIdentifier) -> Bool {
-    guard uses != nil, uses!.insert(element).inserted else { return false }
+    Self.insert(element, into: &uses)
+  }
+
+  /// Adds the ID of a `<clipPath>` element, or returns `false` if it's already being followed or no level is begun.
+  mutating func insert(clipPath id: String) -> Bool {
+    Self.insert(id, into: &clipPaths)
+  }
+
+  /// Adds the ID of a `<mask>` element, or returns `false` if it's already being followed or no level is begun.
+  mutating func insert(mask id: String) -> Bool {
+    Self.insert(id, into: &masks)
+  }
+
+  /// Adds the ID of a `<pattern>` element, or returns `false` if it's already being followed or no level is begun.
+  mutating func insert(pattern id: String) -> Bool {
+    Self.insert(id, into: &patterns)
+  }
+
+  private static func insert<T>(_ member: T, into set: inout Set<T>?) -> Bool {
+    guard set != nil, set!.insert(member).inserted else { return false }
     return true
   }
 }
 
-/// The state of the drawing code of elements when it draws an effect, from which `SVGContext` is made again.
+/// The state that a filter element reads, from which `SVGContext` is made again.
 struct LegacyState: Sendable {
   let viewBox: CGRect
   let patternContentUnit: SVGUnitType?

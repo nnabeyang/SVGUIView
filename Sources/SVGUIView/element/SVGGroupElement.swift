@@ -44,51 +44,6 @@ final class SVGGroupElement: SVGDrawableElement {
     return rect ?? .zero
   }
 
-  func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
-    let context = context.styled(by: self)
-    context.saveGState()
-    if mode != .filter(isRoot: true) {
-      context.concatenate(transform ?? .identity)
-    }
-    context.setAlpha(opacity)
-    let gContext = context.graphics
-    gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-    switch mode {
-    case .root, .filter:
-      context.pushClipIdStack()
-      context.pushMaskIdStack()
-    default:
-      break
-    }
-    await clipPath?.clipIfNeeded(frame: frame(context: context, path: nil), context: context, cgContext: context.graphics)
-    for content in children {
-      guard let content = content as? (any SVGDrawableElement) else { continue }
-      await content.draw(context, mode: mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode)
-    }
-    switch mode {
-    case .root, .filter:
-      context.popClipIdStack()
-      context.popMaskIdStack()
-    default:
-      break
-    }
-    gContext.endTransparencyLayer()
-    context.restoreGState()
-  }
-
-  func draw(_ context: SVGContext, mode: DrawMode) async {
-    guard !Task.isCancelled else { return }
-    await Task.yield()
-    let filter = filter ?? SVGFilter.none
-    if case .url(let id) = filter,
-      let server = context.filters[id]
-    {
-      await server.filter(content: self, context: context, cgContext: context.graphics)
-      return
-    }
-    await drawWithoutFilter(context, mode: mode)
-  }
-
   func clip(context: inout SVGBaseContext) {
     for child in children {
       child.clip(context: &context)
