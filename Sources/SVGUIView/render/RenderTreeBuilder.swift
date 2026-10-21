@@ -47,28 +47,28 @@ struct RenderTreeBuilder {
     await Task.yield()
     switch element {
     case let svg as SVGSVGElement:
-      if let filtered = await filteredNode(of: svg, context: context, guard: references, instance: instance) {
-        return filtered
+      if case .filtered(let node) = await filtering(of: svg, context: context, guard: references, instance: instance) {
+        return node
       }
       return await viewportNode(of: svg, context: context, mode: mode, guard: references, instance: instance)
     case let group as SVGGroupElement:
-      if let filtered = await filteredNode(of: group, context: context, guard: references, instance: instance) {
-        return filtered
+      if case .filtered(let node) = await filtering(of: group, context: context, guard: references, instance: instance) {
+        return node
       }
       return await groupNode(of: group, context: context, mode: mode, guard: references, instance: instance)
     case let use as SVGUseElement:
       if use.display == CSSDisplay.none { return nil }
       let references = beginsLevel(mode) ? references.beginning(.all) : references
-      if let filtered = await filteredNode(of: use, context: context, guard: references, instance: instance) {
-        return filtered
+      if case .filtered(let node) = await filtering(of: use, context: context, guard: references, instance: instance) {
+        return node
       }
       return await useNode(of: use, context: context, mode: .normal, guard: references, instance: instance)
     case is SVGMaskElement, is SVGPatternElement:
       return nil
     default:
       if element.display == CSSDisplay.none { return nil }
-      if let filtered = await filteredNode(of: element, context: context, guard: references, instance: instance) {
-        return filtered
+      if case .filtered(let node) = await filtering(of: element, context: context, guard: references, instance: instance) {
+        return node
       }
       return await shapeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
     }
@@ -85,22 +85,8 @@ struct RenderTreeBuilder {
     RenderID(element: element.base.elementID, instance: instance)
   }
 
-  /// The node of an element with a filter, which the filter element applies.
-  private func filteredNode(
-    of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard,
-    instance: [ElementID]
-  ) async -> RenderNode? {
-    guard case .url(let id) = element.filter ?? .none, let filter = base.filters[id] else { return nil }
-    // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
-    let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
-    let source = await nodeWithoutFilter(
-      of: element, context: sourceContext, mode: .filter(isRoot: true), guard: ReferenceGuard(), instance: instance)
-    return .legacyFiltered(
-      LegacyFilteredNode(element: element, filter: filter, legacy: context.legacy(references), source: source))
-  }
-
   /// The node of an element without its filter.
-  private func nodeWithoutFilter(
+  func nodeWithoutFilter(
     of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
     instance: [ElementID]
   ) async -> RenderNode? {
@@ -283,7 +269,7 @@ struct RenderTreeBuilder {
 
   // MARK: - Geometry
 
-  /// The shape of an element, as `toPath(context:)` of the element made it, in a context styled by the element.
+  /// The shape of an element, in a context styled by the element.
   func path(
     of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard
   ) async -> CGPath? {
@@ -303,8 +289,7 @@ struct RenderTreeBuilder {
     }
   }
 
-  /// The bounds that units relative to an element use, as `frame(context:path:)` of the element found them, in a
-  /// context styled by the element.
+  /// The bounds that units relative to an element use, in a context styled by the element.
   func frame(
     of element: any SVGDrawableElement, context: ResolveContext, path: CGPath?, guard references: ReferenceGuard
   ) async -> CGRect {

@@ -1,6 +1,22 @@
 import CoreGraphics
 import Foundation
 
+protocol SVGLengthContext {
+  var viewBoxSize: CGSize { get }
+  var font: SVGUIFont? { get }
+  var textScale: Double { get }
+  var rootFont: SVGUIFont? { get }
+  var viewPort: CGRect { get }
+  var writingMode: WritingMode? { get }
+}
+
+/// What the geometry of an element depends on: lengths, and the box that `patternContentUnits` of
+/// `objectBoundingBox` scales shapes by.
+protocol GeometryContext: SVGLengthContext {
+  var viewBox: CGRect { get }
+  var patternContentUnit: SVGUnitType? { get }
+}
+
 /// What resolving lengths and building geometry reads while a render tree is built: the rendered rectangle and
 /// scale, the viewBox and the content units of a pattern of the element, and the computed values that lengths
 /// relative to fonts use.
@@ -47,17 +63,12 @@ struct ResolveContext: GeometryContext {
     context.viewBox = viewBox
     return context
   }
-
-  /// The state that the filter elements read, until filters move into the render tree.
-  func legacy(_ guard: ReferenceGuard) -> LegacyState {
-    LegacyState(viewBox: viewBox, patternContentUnit: patternContentUnit, style: style, guard: `guard`)
-  }
 }
 
 /// The references that are being followed, which stop a cycle of references.
 ///
-/// Each kind of reference has a set, which is `nil` until a level is begun, and then no reference of that kind is
-/// followed, as with the stacks of IDs of `SVGContext` with no level.
+/// Each kind of reference has a set, which is `nil` until a level is begun. Until then, no reference of that kind is
+/// followed, as the drawing code that the elements had did.
 struct ReferenceGuard: Sendable {
   /// The `<use>` elements, and the elements that they reference, by the identity of the element objects.
   var uses: Set<ObjectIdentifier>?
@@ -108,12 +119,4 @@ struct ReferenceGuard: Sendable {
     guard set != nil, set!.insert(member).inserted else { return false }
     return true
   }
-}
-
-/// The state that a filter element reads, from which `SVGContext` is made again.
-struct LegacyState: Sendable {
-  let viewBox: CGRect
-  let patternContentUnit: SVGUnitType?
-  let style: ComputedStyle
-  let `guard`: ReferenceGuard
 }

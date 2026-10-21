@@ -23,10 +23,6 @@ final class SVGDefsElement: SVGDrawableElement {
     fatalError()
   }
 
-  func toPath(context _: SVGContext) -> CGPath? {
-    nil
-  }
-
   func clip(context: inout SVGBaseContext) {
     for child in children {
       child.clip(context: &context)

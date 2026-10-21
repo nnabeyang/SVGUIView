@@ -18,10 +18,6 @@ final class SVGPolygonElement: ShapeGeometry {
     points = .init(description: attributes["points", default: ""])
   }
 
-  func toPath(context: SVGContext) -> CGPath? {
-    path(in: context)
-  }
-
   func path(in context: any GeometryContext) -> CGPath? {
     points.polygon?.applying(scale(context: context))
   }

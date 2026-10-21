@@ -199,13 +199,60 @@ struct RenderTreeBuilderTests {
 
   @Test("an element with a filter keeps itself without the filter, which is the source image")
   func filterSource() async throws {
-    let tree = try await renderTree(
+    let filtered = try await filteredNode(
       ##"<filter id="f"><feOffset dx="1"/></filter><rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .legacyFiltered(let filtered) = try children(of: tree).last else {
-      Issue.record("The rectangle isn't filtered")
-      return
-    }
     let source = try shape(filtered.source)
     #expect(source.geometry?.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
+  }
+
+  @Test("a filter resolves its region and the values of its primitives for the bounds of the element")
+  func filterValues() async throws {
+    let filtered = try await filteredNode(
+      ##"""
+      <filter id="f" primitiveUnits="objectBoundingBox">
+        <feOffset dx="0.5" result="a"/>
+        <feGaussianBlur stdDeviation="0.1 0.2" in="a" x="0" width="0.5"/>
+        <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <rect x="10" width="10" height="5" filter="url(#f)"/>
+      """##)
+    #expect(filtered.frame == CGRect(x: 10, y: 0, width: 10, height: 5))
+    #expect(filtered.effectRect == CGRect(x: 9, y: -0.5, width: 12, height: 6))
+    #expect(filtered.primitives.map(\.isFirst) == [true, false, false])
+    #expect(filtered.primitives.first?.result == "a")
+    guard case .offset(let translation) = filtered.primitives[0].primitive else {
+      Issue.record("The first primitive isn't an offset")
+      return
+    }
+    #expect(translation == CGAffineTransform(translationX: 5, y: 0))
+    #expect(filtered.primitives[1].subregion == CGRect(x: 10, y: -0.5, width: 5, height: 6))
+    guard case .gaussianBlur(let blur) = filtered.primitives[1].primitive,
+      case .hetero(let x, let y) = blur.standardDeviation
+    else {
+      Issue.record("The second primitive isn't a Gaussian blur with two standard deviations")
+      return
+    }
+    #expect(x == 1)
+    #expect(y == 1)
+    guard case .merge(let inputs, _) = filtered.primitives[2].primitive else {
+      Issue.record("The third primitive isn't a merge")
+      return
+    }
+    #expect(inputs.count == 2)
+    #expect(inputs.first.map { $0 == nil } == true)
+  }
+
+  @Test("a filter without children draws nothing")
+  func emptyFilter() async throws {
+    let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)
+    #expect(try children(of: tree).count == 1)
+  }
+
+  private func filteredNode(_ content: String) async throws -> FilteredNode {
+    let tree = try await renderTree(content)
+    guard case .filtered(let filtered) = try children(of: tree).last else {
+      throw NodeError.unexpected(try children(of: tree).last)
+    }
+    return filtered
   }
 }

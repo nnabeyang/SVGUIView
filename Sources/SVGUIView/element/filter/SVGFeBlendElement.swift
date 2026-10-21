@@ -1,4 +1,3 @@
-import Accelerate
 import CoreGraphics
 import Foundation
 
@@ -58,8 +57,7 @@ enum SVGBlendMode: String {
   }
 }
 
-final class SVGFeBlendElement: SVGElement, SVGFilterApplier {
-  private static let maxKernelSize: UInt32 = 100
+final class SVGFeBlendElement: SVGElement, SVGFilterPrimitiveElement {
   static var type: SVGElementName {
     .feBlend
   }
@@ -95,67 +93,6 @@ final class SVGFeBlendElement: SVGElement, SVGFilterApplier {
     input2 = SVGFilterInput(rawValue: attributes["in2", default: ""])
   }
 
-  func apply(
-    srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect,
-    filter: SVGFilterElement, frame: CGRect, effectRect: CGRect, opacity: CGFloat, cgContext: CGContext, context: SVGContext, results: [String: CGImage], isFirst _: Bool
-  ) -> CGImage? {
-    guard
-      var format = vImage_CGImageFormat(
-        bitsPerComponent: srcImage.bitsPerComponent,
-        bitsPerPixel: srcImage.bitsPerPixel,
-        colorSpace: srcImage.colorSpace!,
-        bitmapInfo: srcImage.bitmapInfo),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
-    else { return nil }
-    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    guard
-      let image1 = inputImage(
-        input: input, format: &format,
-        results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer),
-      let image2 = inputImage(
-        input: input2, format: &format,
-        results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
-    else { return nil }
-    let rect = self.frame(filter: filter, frame: frame, context: context)
-    let transform = transform(filter: filter, frame: frame)
-    cgContext.concatenate(transform)
-    cgContext.setAlpha(opacity)
-    cgContext.draw(image2, in: rect)
-    let mode = mode ?? .normal
-    cgContext.setBlendMode(mode.toCgBlendMode)
-    cgContext.draw(image1, in: effectRect)
-
-    clipRect = rect
-    cgContext.clip(to: rect)
-    return cgContext.makeImage()
-  }
-
-  private func inputImage(
-    input: SVGFilterInput?, format: inout vImage_CGImageFormat, results: [String: CGImage],
-    srcBuffer: inout vImage_Buffer, inputBuffer: inout vImage_Buffer
-  ) -> CGImage? {
-    guard let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height)) else { return nil }
-    defer {
-      free(data)
-    }
-    var destBuffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
-    let resultData = inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &destBuffer)
-    defer { free(resultData) }
-
-    // Copy the pixels, because the caller draws the image after the buffers are freed.
-    return vImageCreateCGImageFromBuffer(
-      &destBuffer,
-      &format,
-      nil,
-      nil,
-      vImage_Flags(kvImageNoFlags),
-      nil)?.takeRetainedValue()
-  }
 }
 
 extension SVGFeBlendElement: Encodable {

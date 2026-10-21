@@ -26,10 +26,6 @@ final class SVGPathElement: ShapeGeometry {
     }
   }
 
-  func toPath(context: SVGContext) -> CGPath? {
-    path(in: context)
-  }
-
   func path(in context: any GeometryContext) -> CGPath? {
     let pathContext = SVGPathContext()
     for segment in segments {

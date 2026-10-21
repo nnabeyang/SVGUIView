@@ -228,7 +228,7 @@ public class SVGUIView: UIView {
     let drawTask = Task<CGImage?, Never> {
       let builder = RenderTreeBuilder(base: base, viewPort: rect, scale: scale)
       guard let tree = await builder.build(fit: fit) else { return nil }
-      await CGPainter(base: base, viewPort: rect, scale: scale).paint(tree, into: graphics)
+      await CGPainter(scale: scale).paint(tree, into: graphics)
       guard !Task.isCancelled else {
         return nil
       }

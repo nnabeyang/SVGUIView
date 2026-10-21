@@ -58,10 +58,6 @@ final class SVGTextElement: ShapeGeometry {
     return CTLineCreateWithAttributedString(attributedText)
   }
 
-  func frame(context: SVGContext, path: CGPath?) async -> CGRect {
-    frame(in: context, path: path)
-  }
-
   /// The bounds of the line of text, which are larger than the bounds of its glyphs.
   func frame(in context: any GeometryContext, path _: CGPath?) -> CGRect {
     guard let line = getLine(context: context) else { return .zero }
@@ -75,10 +71,6 @@ final class SVGTextElement: ShapeGeometry {
       transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
     }
     return rect.applying(transform)
-  }
-
-  func toPath(context: SVGContext) async -> CGPath? {
-    path(in: context)
   }
 
   /// The outlines of the glyphs of the text.
