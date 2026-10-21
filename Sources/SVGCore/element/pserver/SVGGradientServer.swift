@@ -11,7 +11,6 @@ protocol SVGGradientServer: SVGElement {
   var parentId: String? { get }
   var parentIds: [String] { get }
   var id: String? { get }
-  var display: CSSDisplay? { get }
   var children: [any SVGElement] { get }
   func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
   func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint?
@@ -48,7 +47,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
   }
 
   let base: SVGBaseElement
-  let display: CSSDisplay?
   let children: [any SVGElement]
   let id: String?
   let parentId: String?
@@ -70,7 +68,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
     self.children = children
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
-    display = base.cascaded.declared(DisplayProperty.self)
 
     x1 = SVGLength(attributes["x1"])
     y1 = SVGLength(attributes["y1"])
@@ -97,7 +94,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
     }
     id = lhs.id
     self.base = lhs.base
-    display = lhs.display ?? rhs.display
     x1 = lhs.x1 ?? rhs.x1
     y1 = lhs.y1 ?? rhs.y1
     x2 = lhs.x2 ?? rhs.x2
@@ -117,7 +113,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
     }
     id = lhs.id
     base = lhs.base
-    display = lhs.display ?? rhs.display
     x1 = lhs.x1
     y1 = lhs.y1
     x2 = lhs.x2
@@ -174,7 +169,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
   }
 
   let base: SVGBaseElement
-  let display: CSSDisplay?
   let children: [any SVGElement]
   let spreadMethod: SpreadMethod?
   let gradientUnits: SVGUnitType?
@@ -198,7 +192,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
     self.children = children
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
-    display = base.cascaded.declared(DisplayProperty.self)
     cx = SVGLength(attributes["cx"])
     cy = SVGLength(attributes["cy"])
     fx = SVGLength(attributes["fx"])
@@ -220,7 +213,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
     }
     id = lhs.id
     base = lhs.base
-    display = lhs.display ?? rhs.display
     cx = lhs.cx ?? rhs.cx
     cy = lhs.cy ?? rhs.cy
     fx = lhs.fx ?? rhs.fx
@@ -241,7 +233,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
     }
     id = lhs.id
     base = lhs.base
-    display = lhs.display ?? rhs.display
     cx = lhs.cx
     cy = lhs.cy
     fx = lhs.fx
