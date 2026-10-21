@@ -117,6 +117,10 @@ package struct CGPainter {
   private func paint(_ group: GroupNode, into graphics: CGContext) async {
     graphics.saveGState()
     graphics.concatenate(group.transform)
+    // The mask applies to the children composited together, so it clips the context that the layer is drawn into.
+    if let mask = group.mask {
+      await apply(mask, to: graphics, level: graphics)
+    }
     graphics.setAlpha(group.opacity)
     graphics.beginTransparencyLayer(auxiliaryInfo: nil)
     if let clip = group.clip {
@@ -143,6 +147,9 @@ package struct CGPainter {
       graphics.addPath(clip)
       graphics.clip()
     }
+    if let mask = content.mask {
+      await apply(mask, to: graphics, level: graphics)
+    }
     graphics.beginTransparencyLayer(auxiliaryInfo: nil)
     if let clip = content.clip {
       await apply(clip, to: graphics, level: graphics)
@@ -162,6 +169,9 @@ package struct CGPainter {
     graphics.concatenate(use.transform)
     if let clip = use.clip {
       await apply(clip, to: graphics, level: graphics)
+    }
+    if let mask = use.mask {
+      await apply(mask, to: graphics, level: graphics)
     }
     guard let instance = use.instance else { return }
     graphics.concatenate(instance.translation)

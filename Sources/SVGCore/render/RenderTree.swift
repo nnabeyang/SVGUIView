@@ -99,6 +99,7 @@ package struct GroupNode: Sendable {
   package let transform: CGAffineTransform
   package let opacity: CGFloat
   package let clip: ClipPathEffect?
+  package let mask: MaskEffect?
   package let children: [RenderNode]
 }
 
@@ -114,6 +115,7 @@ package struct ViewportContent: Sendable {
   package let viewBoxTransform: CGAffineTransform
   package let overflowClip: CGRect?
   package let clip: ClipPathEffect?
+  package let mask: MaskEffect?
   package let children: [RenderNode]
 }
 
@@ -121,6 +123,7 @@ package struct UseNode: Sendable {
   package let id: RenderID
   package let transform: CGAffineTransform
   package let clip: ClipPathEffect?
+  package let mask: MaskEffect?
   /// The referenced content, or `nil` if there is none or showing it would make a cycle.
   package let instance: UseInstance?
 }

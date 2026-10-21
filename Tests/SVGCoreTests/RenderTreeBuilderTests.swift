@@ -251,6 +251,52 @@ struct RenderTreeBuilderTests {
     #expect(try children(of: tree).count == 1)
   }
 
+  @Test("a group or an svg element with display none draws nothing")
+  func containersWithoutDisplay() async throws {
+    let tree = try await renderTree(
+      #"<g display="none"><rect width="10" height="10"/></g><svg display="none"><rect width="10" height="10"/></svg>"#)
+    #expect(try children(of: tree).isEmpty)
+  }
+
+  @Test("the bounds of an svg element don't include its children with display none")
+  func svgBoundsWithoutHiddenChildren() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <clipPath id="c"><rect width="10" height="10"/></clipPath>
+      <g clip-path="url(#c)">
+        <svg width="20" height="20"><rect x="10" width="10" height="10" display="none"/><rect width="5" height="5"/></svg>
+      </g>
+      """##)
+    guard case .group(let group) = try children(of: tree).last else {
+      Issue.record("The last child isn't a group")
+      return
+    }
+    #expect(try #require(group.clip).frame == CGRect(x: 0, y: 0, width: 5, height: 5))
+  }
+
+  @Test("a group, an svg element and a use element are masked for their bounds")
+  func containerMasks() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <mask id="m"><rect width="20" height="20" fill="white"/></mask>
+      <g mask="url(#m)"><rect x="2" width="5" height="5"/></g>
+      <svg width="10" height="10" viewBox="0 0 5 5" mask="url(#m)"><rect width="5" height="5"/></svg>
+      <use href="#r" x="3" mask="url(#m)"/>
+      <defs><rect id="r" width="4" height="4"/></defs>
+      """##)
+    let nodes = try children(of: tree)
+    guard case .group(let group) = nodes[0], case .viewport(let svg) = nodes[1], case .use(let use) = nodes[2] else {
+      Issue.record("The children aren't a group, an svg element and a use element")
+      return
+    }
+    let groupMask = try #require(group.mask)
+    #expect(groupMask.frame == CGRect(x: 2, y: 0, width: 5, height: 5))
+    #expect(groupMask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
+    let svgContent = try #require(svg.content)
+    #expect(try #require(svgContent.mask).frame == CGRect(x: 0, y: 0, width: 5, height: 5))
+    #expect(try #require(use.mask).frame == CGRect(x: 3, y: 0, width: 4, height: 4))
+  }
+
   private func filteredNode(_ content: String) async throws -> FilteredNode {
     let tree = try await renderTree(content)
     guard case .filtered(let filtered) = try children(of: tree).last else {
