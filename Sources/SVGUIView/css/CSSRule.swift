@@ -1,6 +1,6 @@
 import _SelectorParser
 
-struct CSSRule: Equatable {
+struct CSSRule {
   let selectors: SelectorList<SVGSelectorImpl>
   let declarations: [CSSDeclaration]
   var sourceOrder: Int
@@ -13,9 +13,5 @@ struct CSSRule: Equatable {
       }
     }
     return nil
-  }
-
-  subscript(key: CSSValueType) -> CSSValue? {
-    nil
   }
 }

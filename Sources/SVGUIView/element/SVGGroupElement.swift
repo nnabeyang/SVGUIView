@@ -13,45 +13,18 @@ final class SVGGroupElement: SVGDrawableElement {
   let base: SVGBaseElement
 
   let children: [any SVGElement]
-  let textAnchor: TextAnchor?
 
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
-    textAnchor = TextAnchor(rawValue: base.attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
   }
 
-  init(other: SVGGroupElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    children = other.children
-    textAnchor = other.textAnchor
-  }
-
-  init(other: SVGGroupElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    children = other.children
-    textAnchor = other.textAnchor
-  }
-
   func toPath(context _: SVGContext) -> CGPath? {
     nil
-  }
-
-  private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
-    let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
-    let size = attributes["font-size"]
-    let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
-    if name == nil,
-      size == nil,
-      weight == nil
-    {
-      return nil
-    }
-    return SVGUIFont(name: name, size: size, weight: weight)
   }
 
   func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
@@ -61,6 +34,7 @@ final class SVGGroupElement: SVGDrawableElement {
       if case .none = content.display ?? .inline {
         continue
       }
+      let context = context.styled(by: content)
       if rect != nil {
         rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity))
       } else {
@@ -71,6 +45,7 @@ final class SVGGroupElement: SVGDrawableElement {
   }
 
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
+    let context = context.styled(by: self)
     context.saveGState()
     if mode != .filter(isRoot: true) {
       context.concatenate(transform ?? .identity)
@@ -78,22 +53,6 @@ final class SVGGroupElement: SVGDrawableElement {
     context.setAlpha(opacity)
     let gContext = context.graphics
     gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-    font.map {
-      context.push(font: $0)
-    }
-    writingMode.map {
-      context.push(writingMode: $0)
-    }
-    fill.map {
-      context.push(fill: $0)
-    }
-    color.map {
-      context.push(color: $0)
-    }
-    context.push(stroke: stroke)
-    textAnchor.map {
-      context.push(textAnchor: $0)
-    }
     switch mode {
     case .root, .filter:
       context.pushClipIdStack()
@@ -113,22 +72,6 @@ final class SVGGroupElement: SVGDrawableElement {
     default:
       break
     }
-    font.map { _ in
-      _ = context.popFont()
-    }
-    writingMode.map { _ in
-      _ = context.popWritingMode()
-    }
-    fill.map { _ in
-      _ = context.popFill()
-    }
-    color.map { _ in
-      _ = context.popColor()
-    }
-    _ = context.popStroke()
-    textAnchor.map { _ in
-      _ = context.popTextAnchor()
-    }
     gContext.endTransparencyLayer()
     context.restoreGState()
   }
@@ -147,14 +90,8 @@ final class SVGGroupElement: SVGDrawableElement {
   }
 
   func clip(context: inout SVGBaseContext) {
-    clipRule.map {
-      context.push(clipRule: $0)
-    }
     for child in children {
       child.clip(context: &context)
-    }
-    clipRule.map { _ in
-      _ = context.popClipRule()
     }
   }
 

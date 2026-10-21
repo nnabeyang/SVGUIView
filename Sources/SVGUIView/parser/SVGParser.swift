@@ -164,7 +164,14 @@ extension SVGParser: XMLParserDelegate {
       let parseInput = ParserInput(input: text)
       let input = Parser(input: parseInput)
       var parser = CSSParser(input: input)
-      rules.append(contentsOf: parser.parseRules())
+      // Number the rules in document order across `<style>` elements, so that a later rule wins a tie.
+      let offset = rules.count
+      rules.append(
+        contentsOf: parser.parseRules().map {
+          var rule = $0
+          rule.sourceOrder += offset
+          return rule
+        })
     }
     let element = DocumentElement(
       id: open.id, name: open.name, localName: open.localName, attributes: filter(attributes: open.attributes),

@@ -36,9 +36,6 @@ extension SVGGradientServer {
     children.compactMap { $0 as? SVGStopElement }
   }
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
 }
 
 final class SVGLinearGradientServer: SVGGradientServer {
@@ -52,7 +49,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
 
   let base: SVGBaseElement
   let display: CSSDisplay?
-  let color: SVGColor?
   let children: [any SVGElement]
   let id: String?
   let parentId: String?
@@ -74,13 +70,12 @@ final class SVGLinearGradientServer: SVGGradientServer {
     self.children = children
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
-    display = CSSDisplay(rawValue: attributes["display", default: ""])
+    display = base.cascaded.declared(DisplayProperty.self)
 
     x1 = SVGLength(attributes["x1"])
     y1 = SVGLength(attributes["y1"])
     x2 = SVGLength(attributes["x2"])
     y2 = SVGLength(attributes["y2"])
-    color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
 
     parentId = Self.parseLink(description: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
@@ -107,7 +102,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
     y1 = lhs.y1 ?? rhs.y1
     x2 = lhs.x2 ?? rhs.x2
     y2 = lhs.y2 ?? rhs.y2
-    color = lhs.color ?? rhs.color
     children = lhs.children.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
@@ -128,7 +122,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
     y1 = lhs.y1
     x2 = lhs.x2
     y2 = lhs.y2
-    color = lhs.color ?? rhs.color
     children = lhs.children.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
@@ -157,20 +150,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     let y2 = (y2 ?? .percent(0)).value(context: context, mode: .height, unitType: gradientUnits)
     let spreadMethod = spreadMethod ?? .pad
 
-    let colors = stops.compactMap {
-      switch $0.color {
-      case .current:
-        return color?.toCGColor(opacity: $0.opacity * opacity)
-      case .color(let color, let colorOpacity):
-        let colorOpacity = colorOpacity?.value ?? 1.0
-        return color?.toCGColor(opacity: $0.opacity * opacity * colorOpacity)
-      case .inherit, .none:
-        // TODO: implement inherit, url(...), auto case
-        return nil
-      case .image:
-        fatalError("Images not supported in gradient")
-      }
-    }
+    let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
     guard !colors.isEmpty else { return }
     let space = CGColorSpaceCreateDeviceRGB()
     let locations: [CGFloat] = stops.map(\.offset.value)
@@ -275,7 +255,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
 
   let base: SVGBaseElement
   let display: CSSDisplay?
-  let color: SVGColor?
   let children: [any SVGElement]
   let spreadMethod: SpreadMethod?
   let gradientUnits: SVGUnitType?
@@ -299,8 +278,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     self.children = children
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
-    display = CSSDisplay(rawValue: attributes["display", default: ""])
-    color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
+    display = base.cascaded.declared(DisplayProperty.self)
     cx = SVGLength(attributes["cx"])
     cy = SVGLength(attributes["cy"])
     fx = SVGLength(attributes["fx"])
@@ -323,7 +301,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
     id = lhs.id
     base = lhs.base
     display = lhs.display ?? rhs.display
-    color = lhs.color ?? rhs.color
     cx = lhs.cx ?? rhs.cx
     cy = lhs.cy ?? rhs.cy
     fx = lhs.fx ?? rhs.fx
@@ -345,7 +322,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
     id = lhs.id
     base = lhs.base
     display = lhs.display ?? rhs.display
-    color = lhs.color ?? rhs.color
     cx = lhs.cx
     cy = lhs.cy
     fx = lhs.fx
@@ -376,20 +352,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
     let cy = (cy ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
     let r = (r ?? .percent(50)).value(context: context, mode: .height, unitType: gradientUnits)
-    let colors = stops.compactMap {
-      switch $0.color {
-      case .current:
-        return color?.toCGColor(opacity: opacity)
-      case .color(let color, let colorOpacity):
-        let colorOpacity = colorOpacity?.value ?? 1.0
-        return color?.toCGColor(opacity: $0.opacity * opacity * colorOpacity)
-      case .inherit, .none:
-        // TODO: implement inherit, url(...), auto case
-        return nil
-      case .image:
-        fatalError("Images not supported in gradient")
-      }
-    }
+    let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
     guard !colors.isEmpty else { return }
     let space = CGColorSpaceCreateDeviceRGB()
     let locations: [CGFloat] = stops.map(\.offset.value)

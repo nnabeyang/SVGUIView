@@ -2,7 +2,7 @@ import Accelerate
 import CoreGraphics
 import Foundation
 
-enum SVGColorInterpolation: String {
+enum SVGColorInterpolation: String, CaseIterable {
   case sRGB
   case linearRGB
 }
@@ -38,23 +38,12 @@ final class SVGMaskElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
+    colorInterpolation = base.style.colorInterpolation
     x = .init(attributes["x"])
     y = .init(attributes["y"])
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
-  }
-
-  init(other: SVGMaskElement, css _: SVGUIStyle) {
-    base = other.base
-    colorInterpolation = other.colorInterpolation
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-    maskContentUnits = other.maskContentUnits
-    children = other.children
   }
 
   var colorSpace: CGColorSpace {
@@ -118,18 +107,12 @@ final class SVGMaskElement: SVGDrawableElement {
       if let display = content.display, case .none = display {
         continue
       }
-      content.font.map {
-        context.push(font: $0)
-      }
-      guard let path = await content.toPath(context: context) else { continue }
-      content.font.map { _ in
-        _ = context.popFont()
-      }
+      guard let path = await content.toPath(context: context.styled(by: content)) else { continue }
       graphics.saveGState()
       graphics.concatenate(content.transform ?? .identity)
       await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
       await content.mask?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-      await content.applySVGFill(fill: content.fill, path: path, context: maskContext, mode: .root)
+      await content.applyFill(path: path, context: maskContext, mode: .root)
       graphics.restoreGState()
     }
     await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
@@ -178,10 +161,6 @@ final class SVGMaskElement: SVGDrawableElement {
   }
 
   func draw(_: SVGContext, mode _: DrawMode) async {}
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
-  }
 
   func mask(context: inout SVGBaseContext) {
     if let id = id, context.masks[id] == nil {

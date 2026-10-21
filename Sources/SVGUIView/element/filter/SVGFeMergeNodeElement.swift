@@ -10,10 +10,6 @@ final class SVGFeMergeNodeElement: SVGElement {
   let base: SVGBaseElement
   let input: SVGFilterInput?
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
-
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
     let attributes = base.attributes
     self.base = base

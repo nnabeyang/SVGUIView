@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import ImageIO
 import _SelectorParser
 
 protocol SVGElement: AnyObject, Encodable, Sendable {
@@ -10,7 +9,6 @@ protocol SVGElement: AnyObject, Encodable, Sendable {
   var index: ObjectIdentifier { get }
   func draw(_ context: SVGContext, mode: DrawMode) async
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async
-  func style(with style: Stylesheet, element: ElementCursor) -> any SVGElement
   func contains(index: ObjectIdentifier, context: SVGContext) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
@@ -59,7 +57,7 @@ extension SVGElement {
   }
 }
 
-enum WritingMode: String {
+enum WritingMode: String, CaseIterable {
   case horizontalTB = "horizontal-tb"
   case verticalRL = "vertical-rl"
   case verticalLR = "vertical-lr"
@@ -71,116 +69,47 @@ enum DrawMode: Equatable {
   case filter(isRoot: Bool)
 }
 
-/// The presentation attributes of an element, parsed, with the values of the cascade applied.
+/// The attributes of an element, with the values that the cascade gives its properties.
 final class SVGBaseElement: Sendable {
   let name: SVGElementName
   let text: String
   let id: String?
   var index: ObjectIdentifier { ObjectIdentifier(self) }
-  let opacity: Double
-  let eoFill: Bool
-  let clipRule: Bool?
   let className: String?
-  let transform: CGAffineTransform?
-  let font: SVGUIFont?
-  let fill: SVGFill?
-  let stroke: SVGUIStroke
-  let color: SVGColor?
-  let clipPath: SVGClipPath?
-  let mask: SVGMask?
-  let filter: SVGFilter?
-  let display: CSSDisplay?
-  let visibility: CSSVisibility?
-  let writingMode: WritingMode?
-  let style: SVGUIInlineStyle
   let attributes: [String: String]
+  /// The values that the element's presentation attributes, the style sheets and its `style` attribute declare.
+  let cascaded: CascadedValues
+  /// The computed values of the element's properties.
+  let style: ComputedStyle
 
-  init(name: SVGElementName, text: String, attributes: [String: String]) {
+  init(name: SVGElementName, text: String, attributes: [String: String], cascaded: CascadedValues, style: ComputedStyle) {
     self.name = name
     self.text = text
     self.attributes = attributes
+    self.cascaded = cascaded
+    self.style = style
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
-    style = SVGUIInlineStyle(description: attributes["style", default: ""])
-    color = SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
-    clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
-    mask = SVGMask(description: attributes["mask", default: ""])
-    filter = SVGFilter(description: attributes["filter", default: ""])
-    font = Self.parseFont(attributes: attributes)
-    fill = SVGFill(attributes: attributes)
-    stroke = SVGUIStroke(attributes: attributes)
-    opacity = Double(attributes["opacity", default: "1"]) ?? 1.0
-    transform = CGAffineTransform(description: attributes["transform", default: ""])
-    writingMode = WritingMode(rawValue: attributes["writing-mode", default: ""])
-    eoFill = attributes["fill-rule", default: ""].trimmingCharacters(in: .whitespaces) == "evenodd"
-    clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
-    display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
-    visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
   }
 
-  init(other: SVGBaseElement, attributes: [String: String]) {
-    self.name = other.name
-    self.text = other.text
-    self.attributes = attributes
-    id = other.id
-    className = other.className
-    style = other.style
-    color = other.color ?? SVGAttributeScanner.parseColor(description: attributes["color", default: ""])
-    clipPath = other.clipPath
-    mask = other.mask
-    filter = other.filter ?? SVGFilter(description: attributes["filter", default: ""])
-    font = other.font.flatMap { SVGUIFont(lhs: $0, rhs: Self.parseFont(attributes: attributes)) } ?? Self.parseFont(attributes: attributes)
-    fill = SVGFill(lhs: other.fill, rhs: SVGFill(attributes: attributes))
-    stroke = SVGUIStroke(lhs: other.stroke, rhs: SVGUIStroke(attributes: attributes))
-    opacity = other.opacity * (Double(attributes["opacity", default: "1"]) ?? 1.0)
+  /// The element with its computed values computed again for another parent.
+  func restyled(parent: ComputedStyle, root: ComputedStyle) -> SVGBaseElement {
+    SVGBaseElement(
+      name: name, text: text, attributes: attributes, cascaded: cascaded,
+      style: ComputedStyle(cascaded: cascaded, parent: parent, root: root))
+  }
+}
 
-    let transform =
-      CGAffineTransform(description: attributes["transform", default: ""])
-      .flatMap { other.transform?.concatenating($0) ?? $0 } ?? other.transform
-    self.transform = transform
-    writingMode = other.writingMode
-    eoFill = other.eoFill
-    clipRule = other.clipRule
-    let display = CSSDisplay(rawValue: attributes["display", default: ""].trimmingCharacters(in: .whitespaces))
-    self.display = display ?? other.display
-    let visibility = CSSVisibility(rawValue: attributes["visibility", default: ""].trimmingCharacters(in: .whitespaces))
-    self.visibility = visibility ?? other.visibility
+extension SVGElement {
+  var style: ComputedStyle {
+    base.style
   }
 
-  init(other: SVGBaseElement, css: SVGUIStyle) {
-    self.name = other.name
-    self.text = other.text
-    self.attributes = other.attributes
-    id = other.id
-    style = other.style
-    className = other.className
-    font = other.font
-    fill = SVGFill(style: css) ?? other.fill
-    clipPath = SVGClipPath(style: css) ?? other.clipPath
-    mask = other.mask
-    filter = other.filter
-    color = other.color
-    stroke = SVGUIStroke(lhs: SVGUIStroke(style: css), rhs: other.stroke)
-    opacity = other.opacity
-    transform = CGAffineTransform(style: css[.transform]) ?? other.transform
-    writingMode = other.writingMode
-    eoFill = other.eoFill
-    clipRule = other.clipRule
-    display = other.display
-    visibility = other.visibility
-  }
-
-  private static func parseFont(attributes: [String: String]) -> SVGUIFont? {
-    let name = attributes["font-family"]?.trimmingCharacters(in: .whitespaces)
-    let size = attributes["font-size"]?.trimmingCharacters(in: .whitespaces)
-    let weight = attributes["font-weight"]?.trimmingCharacters(in: .whitespaces)
-    if name == nil,
-      size == nil,
-      weight == nil
-    {
-      return nil
-    }
-    return SVGUIFont(name: name, size: size, weight: weight)
+  /// The element and its descendants with their computed values computed again for another parent, such as a
+  /// `<use>` element that shows them. Their cascaded values stay the ones of their places in the document.
+  func restyled(parent: ComputedStyle, root: ComputedStyle) -> any SVGElement {
+    let base = base.restyled(parent: parent, root: root)
+    return Self(base: base, contents: children.map { $0.restyled(parent: base.style, root: root) })
   }
 }
 
@@ -189,71 +118,38 @@ protocol SVGDrawableElement: SVGElement {
   var base: SVGBaseElement { get }
   var type: SVGElementName { get }
   var opacity: Double { get }
-  var eoFill: Bool { get }
-  var clipRule: Bool? { get }
   var className: String? { get }
   var transform: CGAffineTransform? { get }
-  var writingMode: WritingMode? { get }
-  var font: SVGUIFont? { get }
-  var fill: SVGFill? { get }
-  var stroke: SVGUIStroke { get }
-  var color: SVGColor? { get }
-  var style: SVGUIInlineStyle { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
   func frame(context: SVGContext, path: CGPath?) async -> CGRect
   func scale(context: SVGContext) -> CGAffineTransform
-  init(text: String, attributes: [String: String])
   init(base: SVGBaseElement, text: String, attributes: [String: String])
-  init(other: Self, css: SVGUIStyle)
-  init(other: Self, attributes: [String: String])
-  func use(attributes: [String: String]) -> Self
   func toPath(context: SVGContext) async -> CGPath?
-  func applySVGStroke(stroke: SVGUIStroke, path: CGPath, context: SVGContext)
-  func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) async
+  func applyStroke(path: CGPath, context: SVGContext)
+  func applyFill(path: CGPath, context: SVGContext, mode: DrawMode) async
 }
 
 extension SVGDrawableElement {
   var id: String? { base.id }
   var index: ObjectIdentifier { base.index }
-  var opacity: Double { base.opacity }
-  var eoFill: Bool { base.eoFill }
-  var clipRule: Bool? { base.clipRule }
+  var opacity: Double { style.opacity }
   var className: String? { base.className }
-  var transform: CGAffineTransform? { base.transform }
-  var writingMode: WritingMode? { base.writingMode }
-  var font: SVGUIFont? { base.font }
-  var fill: SVGFill? { base.fill }
-  var stroke: SVGUIStroke { base.stroke }
-  var clipPath: SVGClipPath? { base.clipPath }
-  var mask: SVGMask? { base.mask }
-  var filter: SVGFilter? { base.filter }
-  var color: SVGColor? { base.color }
-  var style: SVGUIInlineStyle { base.style }
-  var display: CSSDisplay? { base.display }
-  var visibility: CSSVisibility? { base.visibility }
+  var transform: CGAffineTransform? { style.transform }
+  // `nil` for `none`, so that `clipPath?.clipIfNeeded(frame:…)` doesn't find the frame of an element without one.
+  var clipPath: SVGClipPath? { if case .url = style.clipPath { style.clipPath } else { nil } }
+  var mask: SVGMask? { if case .url = style.mask { style.mask } else { nil } }
+  var filter: SVGFilter? { if case .url = style.filter { style.filter } else { nil } }
+  var display: CSSDisplay? { style.display }
+  var visibility: CSSVisibility? { style.visibility }
+
+  /// The fill rule of the element's path.
+  var pathFillRule: CGPathDrawingMode {
+    style.fillRule == .evenodd ? .eoFill : .fill
+  }
 
   init(base: SVGBaseElement, contents: [any SVGElement]) {
     self.init(base: base, text: base.text, attributes: base.attributes)
-  }
-
-  init(text: String, attributes: [String: String]) {
-    let base = SVGBaseElement(name: Self.type, text: text, attributes: attributes)
-    self.init(base: base, text: text, attributes: attributes)
-  }
-
-  init(other: Self, attributes: [String: String]) {
-    let base = SVGBaseElement(other: other.base, attributes: attributes)
-    self.init(base: base, text: "", attributes: attributes)
-  }
-
-  func use(attributes: [String: String]) -> Self {
-    Self(other: self, attributes: attributes)
-  }
-
-  func style(with style: Stylesheet, element: ElementCursor) -> any SVGElement {
-    let css = cascadeElement(element: element, stylesheets: [style], inlineStyle: self.style.declarations)
-    return Self(other: self, css: css)
   }
 
   func frame(context _: SVGContext, path: CGPath?) -> CGRect {
@@ -272,15 +168,10 @@ extension SVGDrawableElement {
   }
 
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
+    let context = context.styled(by: self)
     context.saveGState()
     if mode != .filter(isRoot: true) {
       context.concatenate(transform ?? .identity)
-    }
-    writingMode.map {
-      context.push(writingMode: $0)
-    }
-    font.map {
-      context.push(font: $0)
     }
     switch mode {
     case .root, .filter:
@@ -295,9 +186,9 @@ extension SVGDrawableElement {
     if let path = path {
       let frame = await frame(context: context, path: path)
       await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
-      let lineWidth = stroke.width?.value(context: context, mode: .other)
+      let lineWidth = style.strokeWidth.value(context: context, mode: .other)
 
-      if mask != nil, type == .line, frame.width == lineWidth || frame.height == lineWidth {
+      if case .url = style.mask, type == .line, frame.width == lineWidth || frame.height == lineWidth {
         context.graphics.clip(to: .zero)
       } else {
         await mask?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
@@ -306,9 +197,9 @@ extension SVGDrawableElement {
     let gContext = context.graphics
     gContext.setAlpha(opacity)
     gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-    if let path = path {
-      await applySVGFill(fill: fill, path: path, context: context, mode: mode)
-      applySVGStroke(stroke: stroke, path: path, context: context)
+    if let path = path, style.visibility == .visible {
+      await applyFill(path: path, context: context, mode: mode)
+      applyStroke(path: path, context: context)
     }
     switch mode {
     case .root, .filter:
@@ -318,12 +209,6 @@ extension SVGDrawableElement {
       context.popPatternIdStack()
     default:
       break
-    }
-    writingMode.map { _ in
-      _ = context.popWritingMode()
-    }
-    font.map { _ in
-      _ = context.popFont()
     }
     gContext.endTransparencyLayer()
     context.restoreGState()
@@ -347,46 +232,27 @@ extension SVGDrawableElement {
     await drawWithoutFilter(context, mode: mode)
   }
 
-  private func applyStrokeFill(fill: SVGFill, opacity: Double, path: CGPath, context: SVGContext) {
+  func applyStroke(path: CGPath, context: SVGContext) {
     let cgContext = context.graphics
-    switch fill {
-    case .inherit:
-      if let fill = context.fill {
-        applyStrokeFill(fill: fill, opacity: opacity, path: path, context: context)
-      }
-    case .current:
-      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
-        cgContext.setStrokeColor(cgColor)
-      }
-    case .color(let color, let colorOpacity):
-      if case .url = color { return }
-      let colorOpacity = colorOpacity?.value ?? 1.0
-      if let cgColor = color?.toCGColor(opacity: opacity * colorOpacity) {
-        cgContext.setStrokeColor(cgColor)
-      } else {
-        cgContext.setStrokeColor(CGColor.transparent)
-      }
-    case .image:
-      fatalError("Images not supported in stroke fill")
+    switch style.resolved(style.stroke) {
+    case .none:
+      return
+    case .url:
+      // Paint servers aren't supported on strokes yet, which keep the stroke color of the context.
+      break
+    case .color(let color):
+      cgContext.setStrokeColor(color.toCGColor(opacity: style.strokeOpacity) ?? CGColor.transparent)
+    case .currentColor:
+      preconditionFailure("currentColor is resolved")
     }
-  }
-
-  func applySVGStroke(stroke elementStroke: SVGUIStroke, path: CGPath, context: SVGContext) {
-    let stroke = SVGUIStroke(lhs: elementStroke, rhs: context.stroke)
-    guard let fill = stroke.fill else { return }
-    let dashes = stroke.dashes ?? []
-    let offset = stroke.offset ?? 0
-    applyStrokeFill(fill: fill, opacity: stroke.opacity ?? 1.0, path: path, context: context)
-    let cgContext = context.graphics
-    if !dashes.filter({ $0 > 0 }).isEmpty {
-      cgContext.setLineDash(phase: offset, lengths: dashes)
+    if !style.strokeDasharray.filter({ $0 > 0 }).isEmpty {
+      cgContext.setLineDash(phase: style.strokeDashoffset, lengths: style.strokeDasharray)
     }
-    let lineWidth = stroke.width?.value(context: context, mode: .other) ?? 1.0
     cgContext.addPath(path)
-    cgContext.setLineWidth(lineWidth)
-    cgContext.setLineCap(stroke.cap ?? .butt)
-    cgContext.setLineJoin(stroke.join ?? .miter)
-    cgContext.setMiterLimit(stroke.miterLimit ?? 4.0)
+    cgContext.setLineWidth(style.strokeWidth.value(context: context, mode: .other))
+    cgContext.setLineCap(style.strokeLinecap)
+    cgContext.setLineJoin(style.strokeLinejoin)
+    cgContext.setMiterLimit(style.strokeMiterlimit)
     cgContext.drawPath(using: .stroke)
   }
 
@@ -401,108 +267,65 @@ extension SVGDrawableElement {
     server.draw(path: path, context: context, opacity: opacity)
   }
 
-  func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) async {
+  func applyFill(path: CGPath, context: SVGContext, mode: DrawMode) async {
     let cgContext = context.graphics
-    guard let fill = fill ?? context.fill else {
-      cgContext.setFillColor(CGColor.opaqueBlack)
-      cgContext.addPath(path)
-      cgContext.drawPath(using: eoFill ? .eoFill : .fill)
+    let opacity = style.fillOpacity
+    switch style.resolved(style.fill) {
+    case .none:
       return
-    }
-    switch fill {
-    case .inherit:
-      if let fill = context.fill {
-        if case .inherit = fill {
-          let fill = context.popFill()
-          if let fill = context.fill {
-            await applySVGFill(fill: fill, path: path, context: context, mode: mode)
-          }
-          fill.map {
-            context.push(fill: $0)
-          }
-        } else {
-          await applySVGFill(fill: fill, path: path, context: context, mode: mode)
-        }
-      } else {
-        cgContext.setFillColor(CGColor.opaqueBlack)
-        cgContext.addPath(path)
-        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      }
-    case .current:
-      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
-        cgContext.setFillColor(cgColor)
-      } else {
-        cgContext.setFillColor(CGColor.opaqueBlack)
-      }
-      cgContext.addPath(path)
-      cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-    case .color(let color, let opacity):
-      let opacity = opacity?.value ?? 1.0
-      if case .url(let id) = color {
-        if let server = context.pservers[id] {
-          switch server.display ?? .inline {
-          case .none:
-            break
-          default:
-            applyPServerFill(server: server, path: path, context: context, opacity: opacity)
-            return
-          }
-        } else if let pattern = context.patterns[id],
-          context.check(patternId: id)
-        {
-          let frame = await frame(context: context, path: path)
-          let cgContext = context.graphics
-          cgContext.saveGState()
-          cgContext.setAlpha(opacity)
-          cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
-          _ = await pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
-          cgContext.endTransparencyLayer()
-          cgContext.restoreGState()
-          context.remove(patternId: id)
+    case .color(let color):
+      // A color that isn't known, such as a misspelled name, paints nothing.
+      guard let cgColor = color.toCGColor(opacity: opacity) else { return }
+      cgContext.setFillColor(cgColor)
+    case .url(let id):
+      if let server = context.pservers[id] {
+        switch server.display ?? .inline {
+        case .none:
+          break
+        default:
+          applyPServerFill(server: server, path: path, context: context, opacity: opacity)
           return
         }
-        cgContext.setFillColor(CGColor.opaqueBlack)
-        cgContext.addPath(path)
-        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      } else if let cgColor = color?.toCGColor(opacity: opacity) {
-        cgContext.setFillColor(cgColor)
-        cgContext.addPath(path)
-        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      }
-    case .image(let data):
-      // The pixels as stored, without the orientation in the image's metadata, as `UIImage.cgImage` gives them.
-      if let data = data,
-        let source = CGImageSourceCreateWithData(data as CFData, nil),
-        let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+      } else if let pattern = context.patterns[id],
+        context.check(patternId: id)
       {
-        let bounds = path.boundingBoxOfPath
-        let imageWidth = CGFloat(cgImage.width)
-        let imageHeight = CGFloat(cgImage.height)
-        let scale = scale(width: bounds.width, height: bounds.height, imageSize: .init(width: imageWidth, height: imageHeight))
-        let frame = CGRect(origin: bounds.origin, size: .init(width: imageWidth * scale, height: imageHeight * scale))
-        cgContext.scaleBy(x: 1, y: -1)
-        cgContext.draw(cgImage, in: CGRect(x: frame.minX, y: -frame.height - frame.minY, width: frame.width, height: frame.height))
+        let frame = await frame(context: context, path: path)
+        let cgContext = context.graphics
+        cgContext.saveGState()
+        cgContext.setAlpha(opacity)
+        cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
+        _ = await pattern.pattern(path: path, frame: frame, context: context, cgContext: cgContext, mode: mode)
+        cgContext.endTransparencyLayer()
+        cgContext.restoreGState()
+        context.remove(patternId: id)
+        return
       }
+      cgContext.setFillColor(CGColor.opaqueBlack)
+    case .currentColor:
+      preconditionFailure("currentColor is resolved")
     }
-  }
-
-  private func scale(width: CGFloat, height: CGFloat, imageSize size: CGSize) -> CGFloat {
-    let sx = width / size.width
-    let sy = height / size.height
-    if width == 0 { return sy }
-    if height == 0 { return sx }
-    return width > height ? sy : sx
+    cgContext.addPath(path)
+    cgContext.drawPath(using: pathFillRule)
   }
 }
 
 extension ElementCursor {
   /// Makes the element to render, with the values of the cascade applied, or `nil` for an element that isn't
   /// rendered, such as `<style>` or an unknown element, whose descendants aren't rendered either.
-  func makeElement(with css: Stylesheet) -> (any SVGElement)? {
+  ///
+  /// - Parameters:
+  ///   - parent: The computed values of the parent element, or `nil` for the root element.
+  ///   - root: The computed values of the root element, or `nil` for the root element itself.
+  func makeElement(with css: Stylesheet, parent: ComputedStyle? = nil, root: ComputedStyle? = nil) -> (any SVGElement)? {
     let name = element.name
     if name == .style || name == .unknown { return nil }
-    let contents = element.children.indices.compactMap { child(at: $0).makeElement(with: css) }
-    let base = SVGBaseElement(name: name, text: element.text, attributes: element.attributes)
+    let cascaded = cascade(element: self, stylesheet: css)
+    let style = ComputedStyle(cascaded: cascaded, parent: parent, root: root)
+    let contents = element.children.indices.compactMap {
+      child(at: $0).makeElement(with: css, parent: style, root: root ?? style)
+    }
+    let base = SVGBaseElement(
+      name: name, text: element.text, attributes: element.attributes, cascaded: cascaded, style: style)
     let rendered: any SVGElement =
       switch name {
       case .svg:
@@ -560,6 +383,6 @@ extension ElementCursor {
       case .style, .unknown:
         preconditionFailure("\(name.rawValue) isn't rendered")
       }
-    return rendered.style(with: css, element: self)
+    return rendered
   }
 }

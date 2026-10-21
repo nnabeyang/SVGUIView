@@ -43,7 +43,7 @@ final class SVGPatternElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    colorInterpolation = SVGColorInterpolation(rawValue: attributes["color-interpolation", default: ""])
+    colorInterpolation = base.style.colorInterpolation
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
@@ -55,22 +55,6 @@ final class SVGPatternElement: SVGDrawableElement {
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
     viewBox = Self.parseViewBox(attributes["viewBox"])
     parentId = Self.parseLink(description: attributes["href"])
-  }
-
-  init(other: SVGPatternElement, css _: SVGUIStyle) {
-    base = other.base
-    colorInterpolation = other.colorInterpolation
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-    patternTransform = other.patternTransform
-    patternUnits = other.patternUnits
-    patternContentUnits = other.patternContentUnits
-    preserveAspectRatio = other.preserveAspectRatio
-    viewBox = other.viewBox
-    parentId = other.parentId
-    children = other.children
   }
 
   init(lhs: SVGPatternElement, rhs: SVGPatternElement) {
@@ -271,10 +255,6 @@ final class SVGPatternElement: SVGDrawableElement {
   }
 
   func draw(_: SVGContext, mode _: DrawMode) async {}
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
-  }
 
   func pattern(context: inout SVGBaseContext) {
     if let id = id, context.patterns[id] == nil {

@@ -22,10 +22,6 @@ final class SVGFeOffsetElement: SVGElement, SVGFilterApplier {
   let dx: Double?
   let dy: Double?
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
-
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
     self.base = base
     let attributes = base.attributes

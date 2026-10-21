@@ -20,38 +20,15 @@ final class SVGRectElement: SVGDrawableElement {
 
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
-    x = SVGLength(attributes["x"])
-    y = SVGLength(attributes["y"])
+    x = base.style.x
+    y = base.style.y
     rx = .init(attributes["rx"])
     ry = .init(attributes["ry"])
-    width = SVGLength(attributes["width"])
-    height = SVGLength(attributes["height"])
-  }
-
-  init(other: SVGRectElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    x = SVGLength(style: css[.x], value: nil) ?? other.x
-    y = SVGLength(style: css[.y], value: nil) ?? other.y
-    rx = other.rx
-    ry = other.ry
-    width = SVGLength(style: css[.width], value: nil) ?? other.width
-    height = SVGLength(style: css[.height], value: nil) ?? other.height
-  }
-
-  init(other: SVGRectElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    x = other.x
-    y = other.y
-    rx = other.rx
-    ry = other.ry
-    width = other.width
-    height = other.height
+    width = base.style.width
+    height = base.style.height
   }
 
   func toPath(context: SVGContext) -> CGPath? {
-    color.map {
-      context.push(color: $0)
-    }
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
     let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }
@@ -76,7 +53,6 @@ extension SVGRectElement: Encodable {
     case y
     case width
     case height
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -85,6 +61,5 @@ extension SVGRectElement: Encodable {
     try container.encode(y, forKey: .y)
     try container.encode(width, forKey: .width)
     try container.encode(height, forKey: .height)
-    try container.encode(fill, forKey: .fill)
   }
 }

@@ -14,7 +14,6 @@ final class SVGClipPathElement: SVGElement {
   let children: [any SVGElement]
   let transform: CGAffineTransform?
   let clipPathUnits: SVGUnitType?
-  let clipRule: Bool?
   let clipPath: SVGClipPath?
   let id: String?
 
@@ -25,29 +24,8 @@ final class SVGClipPathElement: SVGElement {
     let attributes = base.attributes
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     clipPathUnits = SVGUnitType(rawValue: attributes["clipPathUnits", default: ""])
-    clipRule = attributes["clip-rule"].map { $0.trimmingCharacters(in: .whitespaces) == "evenodd" }
-    clipPath = SVGClipPath(description: attributes["clip-path", default: ""])
-    transform = CGAffineTransform(description: attributes["transform", default: ""])
-  }
-
-  init(other: SVGClipPathElement, css _: SVGUIStyle) {
-    id = other.id
-    base = other.base
-    clipPathUnits = other.clipPathUnits
-    clipRule = other.clipRule
-    clipPath = other.clipPath
-    transform = other.transform
-    children = other.children
-  }
-
-  init(other: SVGClipPathElement, clipRule: Bool?) {
-    id = other.id
-    base = other.base
-    clipPathUnits = other.clipPathUnits
-    self.clipRule = other.clipRule ?? clipRule
-    clipPath = other.clipPath
-    children = other.children
-    transform = other.transform
+    clipPath = base.style.clipPath
+    transform = base.style.transform
   }
 
   func clip(frame: CGRect, context: SVGContext, cgContext: CGContext) async -> Bool {
@@ -90,22 +68,15 @@ final class SVGClipPathElement: SVGElement {
       if let display = content.display, case .none = display {
         continue
       }
-      content.font.map {
-        context.push(font: $0)
-      }
-      guard let path = await content.toPath(context: context) else { continue }
-      content.font.map { _ in
-        _ = context.popFont()
-      }
+      guard let path = await content.toPath(context: context.styled(by: content)) else { continue }
       graphics.saveGState()
       content.transform.map {
         graphics.concatenate($0)
       }
 
       await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)
-      let clipRule = content.clipRule ?? clipRule ?? false
       graphics.addPath(path)
-      graphics.drawPath(using: clipRule ? .eoFill : .fill)
+      graphics.drawPath(using: content.style.clipRule == .evenodd ? .eoFill : .fill)
       graphics.restoreGState()
     }
     await clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: context.graphics)
@@ -118,13 +89,9 @@ final class SVGClipPathElement: SVGElement {
     fatalError()
   }
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
-  }
-
   func clip(context: inout SVGBaseContext) {
     if let id = id, context.clipPaths[id] == nil {
-      context.setClipPath(id: id, value: .init(other: self, clipRule: context.clipRule))
+      context.setClipPath(id: id, value: self)
     }
   }
 }

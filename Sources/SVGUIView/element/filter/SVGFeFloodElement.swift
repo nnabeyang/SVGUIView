@@ -20,12 +20,8 @@ final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
 
   let result: String?
 
-  let floodColor: SVGColor?
-  let floodOpacity: Double?
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
+  let floodColor: SVGColor
+  let floodOpacity: Double
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
     self.base = base
@@ -37,8 +33,8 @@ final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
 
     result = attributes["result"]
 
-    floodColor = SVGAttributeScanner.parseColor(description: attributes["flood-color", default: ""])
-    floodOpacity = Double(attributes["flood-opacity", default: ""])
+    floodColor = base.style.resolved(base.style.floodColor)
+    floodOpacity = base.style.floodOpacity
   }
 
   func apply(
@@ -54,8 +50,6 @@ final class SVGFeFloodElement: SVGElement, SVGFilterApplier {
       var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
     else { return nil }
     defer { inputBuffer.free() }
-    let floodColor = floodColor ?? .named(SVGColorName(name: "black"))
-    let floodOpacity = floodOpacity ?? 1.0
     let (red:r, green:g, blue:b, alpha:a) = floodColor.rgba
 
     let y = (r * 0.2125 + g * 0.7154 + b * 0.0721) * floodOpacity

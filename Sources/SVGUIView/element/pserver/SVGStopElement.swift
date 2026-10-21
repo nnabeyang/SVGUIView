@@ -35,13 +35,9 @@ final class SVGStopElement: SVGElement {
     .stop
   }
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
-
   let base: SVGBaseElement
   let offset: StopDimension
-  let color: SVGFill?
+  let color: SVGColor
   let opacity: Double
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
@@ -53,8 +49,8 @@ final class SVGStopElement: SVGElement {
     } else {
       offset = .absolute(Double(attribute) ?? 0)
     }
-    color = SVGFill(description: attributes["stop-color", default: "black"])
-    opacity = Double(attributes["stop-opacity", default: ""].trimmingCharacters(in: .whitespaces)) ?? 1.0
+    color = base.style.resolved(base.style.stopColor)
+    opacity = base.style.stopOpacity
   }
 }
 

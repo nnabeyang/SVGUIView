@@ -24,14 +24,6 @@ final class SVGEllipseElement: SVGDrawableElement {
     ry = SVGLength(attributes["ry"])
   }
 
-  init(other: SVGEllipseElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    cx = other.cx
-    cy = other.cy
-    rx = other.rx
-    ry = other.ry
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
@@ -51,7 +43,6 @@ extension SVGEllipseElement: Encodable {
     case cy
     case rx
     case ry
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -60,6 +51,5 @@ extension SVGEllipseElement: Encodable {
     try container.encode(cy, forKey: .cy)
     try container.encode(rx, forKey: .rx)
     try container.encode(ry, forKey: .ry)
-    try container.encode(fill, forKey: .fill)
   }
 }

@@ -2,20 +2,21 @@ import CoreGraphics
 import CoreText
 import Foundation
 
+/// A font with the computed values of `font-family`, `font-size` and `font-weight`.
 struct SVGUIFont {
-  let name: String?
-  let size: Size?
-  let weight: Weight?
+  let name: String
+  let size: Size
+  let weight: Weight
   /// The font families, in order of preference.
   let families: [String]
   /// The locale for choosing fonts, such as the fonts for Han characters, or `nil` for none.
   let specifiedLocale: String?
 
-  init(name: String?, size: String?, weight: String?) {
+  init(name: String, size: Size, weight: Weight) {
     self.name = name
-    self.size = size.flatMap { Size(rawValue: $0) }
-    self.weight = Weight(rawValue: weight ?? "")
-    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
+    self.size = size
+    self.weight = weight
+    var name = name
     let families = name.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
       var scanner = SVGAttributeScanner(bytes: bytes)
@@ -25,59 +26,8 @@ struct SVGUIFont {
     specifiedLocale = Locale.current.identifier
   }
 
-  init(name: String?, weight: Weight?) {
-    self.name = name
-    size = nil
-    self.weight = weight
-    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
-    let families = name.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanFontFamilies()
-    }
-    self.families = families
-    specifiedLocale = nil
-  }
-
-  init(lhs: SVGUIFont, rhs: SVGUIFont?) {
-    guard let rhs = rhs else {
-      self = lhs
-      return
-    }
-    name = lhs.name ?? rhs.name
-    size = lhs.size ?? rhs.size
-    weight = lhs.weight ?? rhs.weight
-    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
-    let families = name.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanFontFamilies()
-    }
-    self.families = families
-    specifiedLocale = nil
-  }
-
-  init(child: SVGUIFont, context: SVGContext) {
-    guard let parent = context.font else {
-      self = child
-      return
-    }
-    name = child.name ?? parent.name
-    size = Size(child: child.size, context: context)
-    weight = Weight(child: child.weight, parent: parent.weight)
-    var name = name ?? FontCacheCoreText.familyNamesData[.standard]
-    let families = name.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanFontFamilies()
-    }
-    self.families = families
-    specifiedLocale = nil
-  }
-
   func sizeValue(context: any SVGLengthContext, textScale: Double = 1.0) -> CGFloat {
-    let size = size ?? .medium
-    return size.value(context: context, shouldUseFixedDefaultSize: useFixedDefaultSize) * textScale
+    size.value(context: context, shouldUseFixedDefaultSize: useFixedDefaultSize) * textScale
   }
 
   /// Whether the font uses the fixed default size, as `monospace` does.
@@ -295,54 +245,11 @@ extension SVGUIFont {
       case .xLarge: shouldUseFixedDefaultSize ? 20 : 24
       case .xxLarge: shouldUseFixedDefaultSize ? 26 : 32
       case .xxxLarge: shouldUseFixedDefaultSize ? 40 : 48
-      case .smaller: fatalError()
-      case .larger: fatalError()
+      case .smaller, .larger: preconditionFailure("a computed font size isn't relative")
       case .length(let length):
         length.fontValue(context: context)
       }
     }
 
-    init?(child: Size?, context: SVGContext) {
-      guard let parent = context.font else {
-        guard let child = child else { return nil }
-        self = child
-        return
-      }
-      switch child {
-      case .xxSmall, .xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge:
-        self = child!
-      case .smaller:
-        let size: CGFloat = context.font?.sizeValue(context: context, textScale: 1.0) ?? Self.defaultFontSize
-        self = .length(.pixel(Self.smallerFontSize(size)))
-      case .larger:
-        let size: CGFloat = context.font?.sizeValue(context: context, textScale: 1.0) ?? Self.defaultFontSize
-        self = .length(.pixel(Self.largerFontSize(size)))
-      case .length(let length):
-        let fontValue = length.fontValue(context: context)
-        self = .length(.number(fontValue))
-      case .none:
-        guard let parentSize = parent.size else { return nil }
-        self = parentSize
-      }
-    }
-
-    private static func smallerFontSize(_ size: CGFloat) -> CGFloat {
-      size / 1.2
-    }
-
-    private static func largerFontSize(_ size: CGFloat) -> CGFloat {
-      size * 1.2
-    }
-  }
-}
-
-extension CTFont {
-  static func standard(context: any SVGLengthContext) -> CTFont {
-    let name = FontCacheCoreText.familyNamesData[.standard]
-    let size: SVGUIFont.Size = .length(.pixel(SVGUIFont.Size.defaultFontSize))
-    let fontDescription = FontCascadeDescription()
-    fontDescription.setFamilies(familyNames: [name])
-    let fontCascade = SVGUIFont.createFontCascade(size: size, weight: .normal, fontDescription: fontDescription, textScale: 1.0, context: context)
-    return fontCascade.primaryFont().ctFont
   }
 }

@@ -81,10 +81,6 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
 
   let colorInterpolationFilters: SVGColorInterpolation?
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    self
-  }
-
   let stdDeviation: StdDeviation?
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
@@ -100,7 +96,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     stdDeviation = StdDeviation(description: attributes["stdDeviation", default: ""])
     input = SVGFilterInput(rawValue: attributes["in", default: ""])
 
-    colorInterpolationFilters = SVGColorInterpolation(rawValue: attributes["color-interpolation-filters", default: ""])
+    colorInterpolationFilters = base.style.colorInterpolationFilters
   }
 
   static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {

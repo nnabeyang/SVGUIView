@@ -44,8 +44,12 @@ class FontGenericFamilies {
     return true
   }
 
+  /// The family for the script, or the family for the common script if the script has none, as WebKit chooses it.
   static func genericFontFamilyForScript(fontMap: ScriptFontFamilyMap, script: UScriptCode) -> String? {
-    fontMap[Int(script.rawValue)]
+    if let family = fontMap[Int(script.rawValue)] {
+      return family
+    }
+    return script == .common ? nil : genericFontFamilyForScript(fontMap: fontMap, script: .common)
   }
 
   func standardFontFamily(script: UScriptCode) -> String? {

@@ -23,33 +23,13 @@ final class SVGDefsElement: SVGDrawableElement {
     fatalError()
   }
 
-  init(other: SVGDefsElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    children = other.children
-  }
-
-  init(other: SVGDefsElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    children = other.children
-  }
-
   func toPath(context _: SVGContext) -> CGPath? {
     nil
   }
 
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
-  }
-
   func clip(context: inout SVGBaseContext) {
-    clipRule.map {
-      context.push(clipRule: $0)
-    }
     for child in children {
       child.clip(context: &context)
-    }
-    clipRule.map { _ in
-      _ = context.popClipRule()
     }
   }
 

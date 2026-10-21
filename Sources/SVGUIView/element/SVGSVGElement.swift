@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-enum SVGOverflow: String {
+enum SVGOverflow: String, CaseIterable {
   case visible
   case hidden
   case scroll
@@ -38,8 +38,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   let viewBox: SVGElementRect?
   let children: [any SVGElement]
 
-  let textAnchor: TextAnchor?
-
   var textScale: Double { 1.0 }
 
   private enum CodingKeys: String, CodingKey {
@@ -57,48 +55,33 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     viewBox = Self.parseViewBox(attributes["viewBox"])
-    textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
-    overflow = SVGOverflow(rawValue: attributes["overflow", default: ""].trimmingCharacters(in: .whitespaces))
+    overflow = base.style.overflow
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
   }
 
-  init(other: SVGSVGElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-
+  private init(other: SVGSVGElement, width: SVGLength?, height: SVGLength?) {
+    base = other.base
     x = other.x
     y = other.y
-    width = .init(attributes["width"]) ?? other.width
-    height = .init(attributes["height"]) ?? other.height
+    self.width = width ?? other.width
+    self.height = height ?? other.height
     viewBox = other.viewBox
-    textAnchor = other.textAnchor
     children = other.children
     preserveAspectRatio = other.preserveAspectRatio
     overflow = other.overflow
   }
 
-  init(other: SVGSVGElement, css _: SVGUIStyle) {
-    base = other.base
-    preserveAspectRatio = other.preserveAspectRatio
-    overflow = other.overflow
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-    viewBox = other.viewBox
-    children = other.children
-    textAnchor = other.textAnchor
+  /// The element with the width and height of the `<use>` element that shows it, where that element has them.
+  func sized(width: SVGLength?, height: SVGLength?) -> SVGSVGElement {
+    SVGSVGElement(other: self, width: width, height: height)
   }
 
   var viewPort: CGRect {
     fatalError("not implemented")
-  }
-
-  func style(with _: Stylesheet, element _: ElementCursor) -> any SVGElement {
-    Self(other: self, css: SVGUIStyle(decratations: [:]))
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
@@ -116,18 +99,22 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   }
 
   var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
-  var rootFont: SVGUIFont? { font }
+  var font: SVGUIFont? { style.font }
+  var rootFont: SVGUIFont? { style.font }
+  var writingMode: WritingMode? { style.writingMode }
 
   func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
     var rect: CGRect = .zero
     for child in children {
       guard let content = child as? (any SVGDrawableElement) else { continue }
+      let context = context.styled(by: content)
       rect = await CGRectUnion(rect, content.frame(context: context, path: content.toPath(context: context)))
     }
     return rect
   }
 
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
+    let context = context.styled(by: self)
     context.saveGState()
     let x = (x ?? .pixel(0)).value(context: context, mode: .width)
     let y = (y ?? .pixel(0)).value(context: context, mode: .height)
@@ -164,21 +151,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     }
 
     gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-    let font: SVGUIFont?
-    if mode == .root {
-      font = self.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
-    } else {
-      font = self.font
-    }
-    font.map {
-      context.push(font: $0)
-    }
-    textAnchor.map {
-      context.push(textAnchor: $0)
-    }
-    writingMode.map {
-      context.push(writingMode: $0)
-    }
     switch mode {
     case .root, .filter:
       context.pushClipIdStack()
@@ -197,15 +169,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       context.popMaskIdStack()
     default:
       break
-    }
-    font.map { _ in
-      _ = context.popFont()
-    }
-    textAnchor.map { _ in
-      _ = context.popTextAnchor()
-    }
-    writingMode.map { _ in
-      _ = context.popWritingMode()
     }
     context.popViewBox()
     gContext.endTransparencyLayer()

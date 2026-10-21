@@ -1,32 +1,11 @@
 import _SelectorParser
 
-func cascade(_ declarations: [CSSDeclaration]) -> SVGUIStyle {
-  var byProperty = [CSSValueType: [CSSDeclaration]]()
-  for declaration in declarations {
-    if var values = byProperty[declaration.type] {
-      values.append(declaration)
-      byProperty[declaration.type] = values
-    } else {
-      byProperty[declaration.type] = [declaration]
-    }
-  }
-  var cascadedValues = [CSSValueType: CSSDeclaration]()
-  for (type, declarations) in byProperty {
-    guard let declaration = findWinningDeclaration(declarations) else { continue }
-    cascadedValues[type] = declaration
-  }
-  return SVGUIStyle(decratations: cascadedValues)
-}
-
-func findWinningDeclaration(_ declarations: [CSSDeclaration]) -> CSSDeclaration? {
-  guard !declarations.isEmpty else { return nil }
-  var winner = declarations[0]
-  for declaration in declarations {
-    if declaration > winner {
-      winner = declaration
-    }
-  }
-  return winner
+/// The declarations sorted by precedence in the cascade, from lowest to highest. Of equal declarations, the later
+/// one has the higher precedence.
+func sortedByPrecedence(_ declarations: [CSSDeclaration]) -> [CSSDeclaration] {
+  declarations.enumerated()
+    .sorted { $0.element == $1.element ? $0.offset < $1.offset : $0.element < $1.element }
+    .map(\.element)
 }
 
 struct RuleMatch {
@@ -43,8 +22,7 @@ func collectDeclarations(matches: [RuleMatch], inlineStyle declarations: [CSSDec
   for declaration in declarations {
     allDeclarations.append(
       CSSDeclaration(
-        type: declaration.type,
-        value: declaration.value,
+        declaration: declaration.declaration,
         importance: declaration.importance,
         specificity: .max,
         sourceOrder: declaration.sourceOrder))
@@ -52,11 +30,14 @@ func collectDeclarations(matches: [RuleMatch], inlineStyle declarations: [CSSDec
   return allDeclarations
 }
 
-func cascadeElement(element: ElementCursor, stylesheets: [Stylesheet], inlineStyle declarations: [CSSDeclaration]) -> SVGUIStyle {
-  var allMatches = [RuleMatch]()
-  for stylesheet in stylesheets {
-    allMatches.append(contentsOf: stylesheet.matchElement(element: element))
-  }
-  let declarations = collectDeclarations(matches: allMatches, inlineStyle: declarations)
-  return cascade(declarations)
+/// The cascaded values of an element: its presentation attributes, then the rules of the style sheet that match
+/// it, then its `style` attribute, each overriding the ones before, and important declarations overriding the
+/// others.
+func cascade(element: ElementCursor, stylesheet: Stylesheet) -> CascadedValues {
+  let attributes = element.element.attributes
+  let inlineStyle = attributes["style"].map { SVGUIInlineStyle(description: $0).declarations } ?? []
+  let declarations = collectDeclarations(matches: stylesheet.matchElement(element: element), inlineStyle: inlineStyle)
+  return CascadedValues(
+    CascadedValues.presentationAttributes(of: element.element.name, attributes: attributes)
+      + sortedByPrecedence(declarations).map(\.declaration))
 }

@@ -24,14 +24,6 @@ final class SVGLineElement: SVGDrawableElement {
     y2 = .init(attributes["y2"])
   }
 
-  init(other: SVGLineElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    x1 = other.x1
-    y1 = other.y1
-    x2 = other.x2
-    y2 = other.y2
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let x1 = x1?.value(context: context, mode: .width) ?? 0
     let y1 = y1?.value(context: context, mode: .height) ?? 0
@@ -58,7 +50,7 @@ final class SVGLineElement: SVGDrawableElement {
     let x2 = x2?.value(context: context, mode: .width) ?? 0
     let y2 = y2?.value(context: context, mode: .height) ?? 0
     let length = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
-    let lineWidth = stroke.width?.value(context: context, mode: .other) ?? 1.0
+    let lineWidth = style.strokeWidth.value(context: context, mode: .other)
     let xmin = min(x1, x2)
     let ymin = min(y1, y2)
     if r.width > 0 {
@@ -79,7 +71,6 @@ extension SVGLineElement: Encodable {
     case y1
     case x2
     case y2
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -88,6 +79,5 @@ extension SVGLineElement: Encodable {
     try container.encode(y1, forKey: .y1)
     try container.encode(x1, forKey: .x2)
     try container.encode(y1, forKey: .y2)
-    try container.encode(fill, forKey: .fill)
   }
 }

@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 
 final class SVGImageElement: SVGDrawableElement {
   static var type: SVGElementName {
@@ -27,15 +28,6 @@ final class SVGImageElement: SVGDrawableElement {
     height = SVGLength(attributes["height"])
   }
 
-  init(other: SVGImageElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    data = other.data
-    x = other.x
-    y = other.y
-    width = other.width
-    height = other.height
-  }
-
   func toPath(context: SVGContext) -> CGPath? {
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .width) ?? 0
@@ -49,8 +41,29 @@ final class SVGImageElement: SVGDrawableElement {
     return path.applying(scale(context: context))
   }
 
-  var fill: SVGFill? {
-    .image(data: data)
+  /// Draws the image in the element's rectangle. The pixels are drawn as they're stored, without the orientation in
+  /// the image's metadata, as `UIImage.cgImage` gives them.
+  func applyFill(path: CGPath, context: SVGContext, mode _: DrawMode) async {
+    guard let data = data,
+      let source = CGImageSourceCreateWithData(data as CFData, nil),
+      let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+    else { return }
+    let cgContext = context.graphics
+    let bounds = path.boundingBoxOfPath
+    let imageWidth = CGFloat(cgImage.width)
+    let imageHeight = CGFloat(cgImage.height)
+    let scale = scale(width: bounds.width, height: bounds.height, imageSize: .init(width: imageWidth, height: imageHeight))
+    let frame = CGRect(origin: bounds.origin, size: .init(width: imageWidth * scale, height: imageHeight * scale))
+    cgContext.scaleBy(x: 1, y: -1)
+    cgContext.draw(cgImage, in: CGRect(x: frame.minX, y: -frame.height - frame.minY, width: frame.width, height: frame.height))
+  }
+
+  private func scale(width: CGFloat, height: CGFloat, imageSize size: CGSize) -> CGFloat {
+    let sx = width / size.width
+    let sy = height / size.height
+    if width == 0 { return sy }
+    if height == 0 { return sx }
+    return width > height ? sy : sx
   }
 }
 
@@ -60,7 +73,6 @@ extension SVGImageElement: Encodable {
     case y
     case width
     case height
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -69,6 +81,5 @@ extension SVGImageElement: Encodable {
     try container.encode(y, forKey: .y)
     try container.encode(width, forKey: .width)
     try container.encode(height, forKey: .height)
-    try container.encode(fill, forKey: .fill)
   }
 }

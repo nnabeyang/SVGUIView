@@ -2,7 +2,7 @@ import CoreGraphics
 import CoreText
 import Foundation
 
-enum TextAnchor: String {
+enum TextAnchor: String, CaseIterable {
   case start
   case middle
   case end
@@ -19,67 +19,19 @@ final class SVGTextElement: SVGDrawableElement {
 
   let base: SVGBaseElement
   let text: String
-  let textAnchor: TextAnchor?
   let x: SVGLength?
   let y: SVGLength?
 
   init(base: SVGBaseElement, text: String, attributes: [String: String]) {
     self.base = base
     self.text = text
-    textAnchor = TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
   }
 
-  init(other: SVGTextElement, attributes: [String: String]) {
-    base = SVGBaseElement(other: other.base, attributes: attributes)
-    text = other.text
-    textAnchor = other.textAnchor ?? TextAnchor(rawValue: attributes["text-anchor", default: ""].trimmingCharacters(in: .whitespaces))
-    x = other.x
-    y = other.y
-  }
-
-  init(other: SVGTextElement, css: SVGUIStyle) {
-    base = SVGBaseElement(other: other.base, css: css)
-    text = other.text
-    textAnchor = other.textAnchor
-    x = other.x
-    y = other.y
-  }
-
-  func applySVGFill(fill: SVGFill?, path: CGPath, context: SVGContext, mode: DrawMode) {
-    let cgContext = context.graphics
-    guard let fill = fill else {
-      cgContext.addPath(path)
-      cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      return
-    }
-    switch fill {
-    case .inherit:
-      if let fill = context.fill {
-        applySVGFill(fill: fill, path: path, context: context, mode: mode)
-      }
-    case .current:
-      if let color = context.color, let cgColor = color.toCGColor(opacity: opacity) {
-        cgContext.setFillColor(cgColor)
-        cgContext.addPath(path)
-        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      }
-    case .color(let color, let opacity):
-      let opacity = opacity?.value ?? 1.0
-      if let cgColor = color?.toCGColor(opacity: self.opacity * opacity) {
-        cgContext.setFillColor(cgColor)
-        cgContext.addPath(path)
-        cgContext.drawPath(using: eoFill ? .eoFill : .fill)
-      }
-    case .image:
-      fatalError("Images not supported in text")
-    }
-  }
-
   private func getLine(context: SVGContext) async -> CTLine? {
     var attributes: [CFString: Any] = [:]
-    let font = context.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
+    let font = style.font
     let modifiedFont: SVGUIFont? = {
       switch font.size {
       case .length(.number(let value)), .length(.pixel(let value)):
@@ -87,7 +39,7 @@ final class SVGTextElement: SVGDrawableElement {
           return nil
         }
         if value < 0 {
-          return SVGUIFont(name: font.name, weight: font.weight)
+          return SVGUIFont(name: style.fontFamily, size: .medium, weight: style.fontWeight)
         }
       default:
         break
@@ -114,7 +66,7 @@ final class SVGTextElement: SVGDrawableElement {
     var transform = CGAffineTransform(translationX: x, y: y)
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
     let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    if case .middle = textAnchor ?? context.textAnchor ?? .start {
+    if case .middle = style.textAnchor {
       transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
     }
     return rect.applying(transform)
@@ -150,7 +102,7 @@ final class SVGTextElement: SVGDrawableElement {
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
 
     let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    if case .middle = textAnchor ?? context.textAnchor ?? .start {
+    if case .middle = style.textAnchor {
       transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
     }
     return letters.applying(transform)
@@ -165,14 +117,10 @@ final class SVGTextElement: SVGDrawableElement {
 extension SVGTextElement: Encodable {
   private enum CodingKeys: String, CodingKey {
     case text
-    case fill
   }
 
   func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: Self.CodingKeys.self)
     try container.encode(text, forKey: .text)
-    if let fill = fill {
-      try container.encode(fill, forKey: .fill)
-    }
   }
 }
