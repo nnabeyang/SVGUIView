@@ -285,38 +285,16 @@ enum SVGLength: Equatable {
       return total * percent / 100.0
     case .pixel(let pixel), .number(let pixel):
       return pixel
+    // The computed size of a font isn't relative to another font, so it's resolved without the parent's font.
     case .ems(let value):
       guard let font = context.font else { return 0 }
-      switch font.size {
-      case .length(.ems(let value)):
-        let fontSize = SVGUIFont.Size.defaultFontSize
-        return Self.ems(value: value, fontSize: fontSize)
-      default:
-        let fontSize = font.sizeValue(context: context)
-        return Self.ems(value: value, fontSize: fontSize)
-      }
+      return Self.ems(value: value, fontSize: font.sizeValue(context: context))
     case .rems(let value):
       guard let font = context.rootFont else { return 0 }
-      switch font.size {
-      case .length(.rems(let value)):
-        let fontSize = SVGUIFont.Size.defaultFontSize
-        return Self.ems(value: value, fontSize: fontSize)
-      default:
-        let fontSize = font.sizeValue(context: context)
-        return Self.ems(value: value, fontSize: fontSize)
-      }
+      return Self.ems(value: value, fontSize: font.sizeValue(context: context))
     case .exs(let value):
-      guard let font = context.font else {
-        return 0
-      }
-      switch font.size {
-      case .length(.exs(value)):
-        let ctFont = CTFont.standard(context: context)
-        return Self.exs(value: value, ctFont: ctFont)
-      default:
-        let ctFont = font.ctFont(context: context)
-        return Self.exs(value: value, ctFont: ctFont)
-      }
+      guard let font = context.font else { return 0 }
+      return Self.exs(value: value, ctFont: font.ctFont(context: context))
     case .centimeters(let value):
       return value * Self.pixelsPerInch / 2.54
     case .millimeters(let value):
@@ -329,42 +307,16 @@ enum SVGLength: Equatable {
       return value * Self.pixelsPerInch / 6.0
     case .chs(let value):
       guard let font = context.font else { return 0 }
-      switch font.size {
-      case .length(.chs(value)):
-        let ctFont = CTFont.standard(context: context)
-        return Self.chs(value: value, ctFont: ctFont)
-      default:
-        return Self.chs(value: value, ctFont: font.ctFont(context: context))
-      }
+      return Self.chs(value: value, ctFont: font.ctFont(context: context))
     case .ic(let value):
       guard let font = context.font else { return 0 }
-      switch font.size {
-      case .length(.ic(value)):
-        let ctFont = CTFont.standard(context: context)
-        return Self.ic(value: value, ctFont: ctFont)
-      default:
-        return Self.ic(value: value, ctFont: font.ctFont(context: context))
-      }
+      return Self.ic(value: value, ctFont: font.ctFont(context: context))
     case .lhs(let value):
       guard let font = context.font else { return 0 }
-      switch font.size {
-      case .length(.lhs(value)):
-        let ctFont = CTFont.standard(context: context)
-        return Self.lhs(value: value, ctFont: ctFont)
-      default:
-        let ctFont = font.ctFont(context: context)
-        return Self.lhs(value: value, ctFont: ctFont)
-      }
+      return Self.lhs(value: value, ctFont: font.ctFont(context: context))
     case .rlhs(let value):
       guard let font = context.rootFont else { return 0 }
-      switch font.size {
-      case .length(.lhs(value)):
-        let ctFont = CTFont.standard(context: context)
-        return Self.lhs(value: value, ctFont: ctFont)
-      default:
-        let ctFont = font.ctFont(context: context)
-        return Self.lhs(value: value, ctFont: ctFont)
-      }
+      return Self.lhs(value: value, ctFont: font.ctFont(context: context))
     case .vw(let value):
       return value * context.viewPort.width / 100.0
     case .vh(let value):

@@ -13,12 +13,10 @@ final class SVGGroupElement: SVGDrawableElement {
   let base: SVGBaseElement
 
   let children: [any SVGElement]
-  let textAnchor: TextAnchor?
 
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
-    textAnchor = base.cascaded.declared(TextAnchorProperty.self)
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
@@ -37,8 +35,10 @@ final class SVGGroupElement: SVGDrawableElement {
         continue
       }
       if rect != nil {
+        let context = context.styled(by: content)
         rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity))
       } else {
+        let context = context.styled(by: content)
         rect = await content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity)
       }
     }
@@ -46,6 +46,7 @@ final class SVGGroupElement: SVGDrawableElement {
   }
 
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
+    let context = context.styled(by: self)
     context.saveGState()
     if mode != .filter(isRoot: true) {
       context.concatenate(transform ?? .identity)
@@ -53,15 +54,6 @@ final class SVGGroupElement: SVGDrawableElement {
     context.setAlpha(opacity)
     let gContext = context.graphics
     gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-    font.map {
-      context.push(font: $0)
-    }
-    writingMode.map {
-      context.push(writingMode: $0)
-    }
-    textAnchor.map {
-      context.push(textAnchor: $0)
-    }
     switch mode {
     case .root, .filter:
       context.pushClipIdStack()
@@ -80,15 +72,6 @@ final class SVGGroupElement: SVGDrawableElement {
       context.popMaskIdStack()
     default:
       break
-    }
-    font.map { _ in
-      _ = context.popFont()
-    }
-    writingMode.map { _ in
-      _ = context.popWritingMode()
-    }
-    textAnchor.map { _ in
-      _ = context.popTextAnchor()
     }
     gContext.endTransparencyLayer()
     context.restoreGState()

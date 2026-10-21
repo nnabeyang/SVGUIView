@@ -107,13 +107,7 @@ final class SVGMaskElement: SVGDrawableElement {
       if let display = content.display, case .none = display {
         continue
       }
-      content.font.map {
-        context.push(font: $0)
-      }
-      guard let path = await content.toPath(context: context) else { continue }
-      content.font.map { _ in
-        _ = context.popFont()
-      }
+      guard let path = await content.toPath(context: context.styled(by: content)) else { continue }
       graphics.saveGState()
       graphics.concatenate(content.transform ?? .identity)
       await content.clipPath?.clipIfNeeded(frame: frame, context: context, cgContext: graphics)

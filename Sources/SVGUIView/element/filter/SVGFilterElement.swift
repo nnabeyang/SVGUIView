@@ -60,8 +60,9 @@ final class SVGFilterElement: SVGDrawableElement {
 
   func filter(content: any SVGDrawableElement, context: SVGContext, cgContext: CGContext) async {
     guard !children.isEmpty else { return }
-    let path = await content.toPath(context: context)
-    let frame = await content.frame(context: context, path: path)
+    let contentContext = context.styled(by: content)
+    let path = await content.toPath(context: contentContext)
+    let frame = await content.frame(context: contentContext, path: path)
     let effectRect = effectRect(frame: frame, context: context)
     guard let imageCgContext = createImageCGContext(rect: effectRect, scale: context.scale, colorInterpolation: colorInterpolation ?? .sRGB),
       let srcImage = await srcImage(content: content, graphics: imageCgContext, rect: effectRect, context: context),

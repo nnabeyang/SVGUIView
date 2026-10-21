@@ -38,8 +38,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   let viewBox: SVGElementRect?
   let children: [any SVGElement]
 
-  let textAnchor: TextAnchor?
-
   var textScale: Double { 1.0 }
 
   private enum CodingKeys: String, CodingKey {
@@ -57,7 +55,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     viewBox = Self.parseViewBox(attributes["viewBox"])
-    textAnchor = base.cascaded.declared(TextAnchorProperty.self)
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
     overflow = base.cascaded.declared(OverflowProperty.self) ?? nil
   }
@@ -73,7 +70,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     self.width = width ?? other.width
     self.height = height ?? other.height
     viewBox = other.viewBox
-    textAnchor = other.textAnchor
     children = other.children
     preserveAspectRatio = other.preserveAspectRatio
     overflow = other.overflow
@@ -103,18 +99,22 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   }
 
   var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
-  var rootFont: SVGUIFont? { font }
+  var font: SVGUIFont? { style.font }
+  var rootFont: SVGUIFont? { style.font }
+  var writingMode: WritingMode? { style.writingMode }
 
   func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
     var rect: CGRect = .zero
     for child in children {
       guard let content = child as? (any SVGDrawableElement) else { continue }
+      let context = context.styled(by: content)
       rect = await CGRectUnion(rect, content.frame(context: context, path: content.toPath(context: context)))
     }
     return rect
   }
 
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
+    let context = context.styled(by: self)
     context.saveGState()
     let x = (x ?? .pixel(0)).value(context: context, mode: .width)
     let y = (y ?? .pixel(0)).value(context: context, mode: .height)
@@ -151,21 +151,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     }
 
     gContext.beginTransparencyLayer(auxiliaryInfo: nil)
-    let font: SVGUIFont?
-    if mode == .root {
-      font = self.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
-    } else {
-      font = self.font
-    }
-    font.map {
-      context.push(font: $0)
-    }
-    textAnchor.map {
-      context.push(textAnchor: $0)
-    }
-    writingMode.map {
-      context.push(writingMode: $0)
-    }
     switch mode {
     case .root, .filter:
       context.pushClipIdStack()
@@ -184,15 +169,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       context.popMaskIdStack()
     default:
       break
-    }
-    font.map { _ in
-      _ = context.popFont()
-    }
-    textAnchor.map { _ in
-      _ = context.popTextAnchor()
-    }
-    writingMode.map { _ in
-      _ = context.popWritingMode()
     }
     context.popViewBox()
     gContext.endTransparencyLayer()

@@ -19,9 +19,8 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
 
   private let viewBoxStack: Stack<CGRect> = Stack()
   private let patternContentUnitStack = Stack<SVGUnitType>()
-  private let fontStack: Stack<SVGUIFont> = Stack()
-  private let writingModeStack = Stack<WritingMode>()
-  private let textAnchorStack: Stack<TextAnchor> = Stack()
+  /// The computed values of the element being drawn, which lengths relative to fonts are resolved with.
+  private(set) var style = ComputedStyle.initial
   private let clipIdStack = ElementIdStack<String>()
   private let maskIdStack = ElementIdStack<String>()
   private let patternIdStack: ElementIdStack<String>
@@ -97,19 +96,22 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   }
 
   var rootFont: SVGUIFont? {
-    fontStack.first
+    base.root?.style.font
   }
 
   var font: SVGUIFont? {
-    fontStack.last
+    style.font
   }
 
   var writingMode: WritingMode? {
-    writingModeStack.last
+    style.writingMode
   }
 
-  var textAnchor: TextAnchor? {
-    textAnchorStack.last
+  /// The context for drawing the given element, which resolves lengths with the element's computed values.
+  func styled(by element: some SVGElement) -> SVGContext {
+    var context = self
+    context.style = element.style
+    return context
   }
 
   /// Pushes a level of each of the stacks of IDs that find cycles of references.
@@ -199,19 +201,6 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
     patternContentUnitStack.push(patternContentUnit)
   }
 
-  func push(writingMode: WritingMode) {
-    writingModeStack.push(writingMode)
-  }
-
-  func push(font: SVGUIFont) {
-    let font = SVGUIFont(child: font, context: self)
-    fontStack.push(font)
-  }
-
-  func push(textAnchor: TextAnchor) {
-    textAnchorStack.push(textAnchor)
-  }
-
   @discardableResult
   func popViewBox() -> CGRect? {
     viewBoxStack.pop()
@@ -220,21 +209,6 @@ struct SVGContext: SVGLengthContext, @unchecked Sendable {
   @discardableResult
   func popPatternContentUnit() -> SVGUnitType? {
     patternContentUnitStack.pop()
-  }
-
-  @discardableResult
-  func popWritingMode() -> WritingMode? {
-    writingModeStack.pop()
-  }
-
-  @discardableResult
-  func popFont() -> SVGUIFont? {
-    fontStack.pop()
-  }
-
-  @discardableResult
-  func popTextAnchor() -> TextAnchor? {
-    textAnchorStack.pop()
   }
 
   func saveGState() {

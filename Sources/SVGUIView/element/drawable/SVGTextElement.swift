@@ -19,21 +19,19 @@ final class SVGTextElement: SVGDrawableElement {
 
   let base: SVGBaseElement
   let text: String
-  let textAnchor: TextAnchor?
   let x: SVGLength?
   let y: SVGLength?
 
   init(base: SVGBaseElement, text: String, attributes: [String: String]) {
     self.base = base
     self.text = text
-    textAnchor = base.cascaded.declared(TextAnchorProperty.self)
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
   }
 
   private func getLine(context: SVGContext) async -> CTLine? {
     var attributes: [CFString: Any] = [:]
-    let font = context.font ?? SVGUIFont(name: nil, size: nil, weight: nil)
+    let font = style.font
     let modifiedFont: SVGUIFont? = {
       switch font.size {
       case .length(.number(let value)), .length(.pixel(let value)):
@@ -41,7 +39,7 @@ final class SVGTextElement: SVGDrawableElement {
           return nil
         }
         if value < 0 {
-          return SVGUIFont(name: font.name, weight: font.weight)
+          return SVGUIFont(name: style.fontFamily, size: .medium, weight: style.fontWeight)
         }
       default:
         break
@@ -68,7 +66,7 @@ final class SVGTextElement: SVGDrawableElement {
     var transform = CGAffineTransform(translationX: x, y: y)
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
     let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    if case .middle = textAnchor ?? context.textAnchor ?? .start {
+    if case .middle = style.textAnchor {
       transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
     }
     return rect.applying(transform)
@@ -104,7 +102,7 @@ final class SVGTextElement: SVGDrawableElement {
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
 
     let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    if case .middle = textAnchor ?? context.textAnchor ?? .start {
+    if case .middle = style.textAnchor {
       transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
     }
     return letters.applying(transform)

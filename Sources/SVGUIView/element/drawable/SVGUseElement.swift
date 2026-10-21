@@ -79,7 +79,7 @@ final class SVGUseElement: SVGDrawableElement {
   /// The path of the referenced element, moved by `x` and `y`.
   func toPath(context: SVGContext) async -> CGPath? {
     let path = await withReferencedElement(context: context) { element in
-      await element.toPath(context: context)
+      await element.toPath(context: context.styled(by: element))
     }
     var translation = translation(context: context)
     return path.flatMap { $0 }.flatMap { $0.copy(using: &translation) }
@@ -88,6 +88,7 @@ final class SVGUseElement: SVGDrawableElement {
   /// The bounds of the referenced element, moved by `x` and `y`.
   func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
     let frame = await withReferencedElement(context: context) { element in
+      let context = context.styled(by: element)
       return await element.frame(context: context, path: element.toPath(context: context))
     }
     return (frame ?? .zero).applying(translation(context: context))
@@ -126,6 +127,7 @@ final class SVGUseElement: SVGDrawableElement {
   }
 
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
+    let context = context.styled(by: self)
     context.saveGState()
     defer {
       context.restoreGState()
@@ -147,23 +149,11 @@ final class SVGUseElement: SVGDrawableElement {
     }
     await withReferencedElement(context: context) { element in
       context.concatenate(translation(context: context))
-      font.map {
-        context.push(font: $0)
-      }
-      writingMode.map {
-        context.push(writingMode: $0)
-      }
       context.setAlpha(opacity)
       let gContext = context.graphics
       gContext.beginTransparencyLayer(auxiliaryInfo: nil)
       await element.draw(context, mode: .normal)
       gContext.endTransparencyLayer()
-      font.map { _ in
-        _ = context.popFont()
-      }
-      writingMode.map { _ in
-        _ = context.popWritingMode()
-      }
     }
   }
 

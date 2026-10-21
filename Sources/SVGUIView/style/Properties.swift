@@ -28,8 +28,16 @@ where T.RawValue == String {
   }
 }
 
-/// A length relative to a font, such as `2em`, in pixels, and any other length as it is.
+/// A length relative to a font, such as `2em`, in pixels, and any other length as it is. A length relative to a
+/// font whose size is in viewport units stays as it is too, since the viewport is known only when drawing.
 private func resolvingFontRelative(_ length: SVGLength, in resolver: StyleResolver) -> SVGLength {
+  let isRoot = if case .rems = length { true } else if case .rlhs = length { true } else { false }
+  switch (isRoot ? resolver.root : resolver.style).fontSize {
+  case .length(.vw), .length(.vh), .length(.vi), .length(.vb), .length(.vmin), .length(.vmax):
+    return length
+  default:
+    break
+  }
   switch length {
   case .ems, .rems, .exs, .chs, .ic, .lhs, .rlhs:
     let context = FontLengthContext(font: resolver.style.font, rootFont: resolver.root.font)
@@ -98,13 +106,20 @@ enum FontSizeProperty: StyleProperty {
       case .vw, .vh, .vi, .vb, .vmin, .vmax:
         return size
       case .exs, .chs, .ic, .lhs, .rlhs:
-        // Measure the font of the parent, or of the root for `rlh`, at 1 pixel, and scale its size.
+        // Measure the font of the parent, or of the root for `rlh`. A font in viewport units is measured at
+        // 100 pixels, and the size stays in its unit.
         let isRoot = if case .rlhs = length { true } else { false }
         let base = isRoot ? resolver.root : resolver.parent
-        var unit = base
-        unit.fontSize = .length(.pixel(1))
-        let context = FontLengthContext(font: unit.font, rootFont: unit.font)
-        return scaled(base.fontSize, by: length.value(total: 0, context: context), family: base.fontFamily)
+        switch base.fontSize {
+        case .length(.vw), .length(.vh), .length(.vi), .length(.vb), .length(.vmin), .length(.vmax):
+          var reference = base
+          reference.fontSize = .length(.pixel(100))
+          let context = FontLengthContext(font: reference.font, rootFont: reference.font)
+          return scaled(base.fontSize, by: length.value(total: 0, context: context) / 100, family: base.fontFamily)
+        default:
+          let context = FontLengthContext(font: base.font, rootFont: base.font)
+          return .length(.pixel(length.value(total: 0, context: context)))
+        }
       case .centimeters, .millimeters, .inches, .points, .picas, .q:
         return .length(.pixel(length.value(total: 0, context: FontLengthContext(font: nil, rootFont: nil))))
       }
@@ -121,7 +136,7 @@ enum FontSizeProperty: StyleProperty {
     case .length(.vmin(let value)): .length(.vmin(value * factor))
     case .length(.vmax(let value)): .length(.vmax(value * factor))
     default:
-      .length(.pixel(SVGUIFont(name: family, size: size, weight: nil).sizeValue(context: FontLengthContext(font: nil, rootFont: nil)) * factor))
+      .length(.pixel(SVGUIFont(name: family, size: size, weight: .normal).sizeValue(context: FontLengthContext(font: nil, rootFont: nil)) * factor))
     }
   }
 }

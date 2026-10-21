@@ -76,8 +76,6 @@ final class SVGBaseElement: Sendable {
   let id: String?
   var index: ObjectIdentifier { ObjectIdentifier(self) }
   let className: String?
-  let font: SVGUIFont?
-  let writingMode: WritingMode?
   let attributes: [String: String]
   /// The values that the element's presentation attributes, the style sheets and its `style` attribute declare.
   let cascaded: CascadedValues
@@ -92,10 +90,6 @@ final class SVGBaseElement: Sendable {
     self.style = style
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
-    font = SVGUIFont(
-      specifiedName: cascaded.declared(FontFamilyProperty.self), size: cascaded.declared(FontSizeProperty.self),
-      weight: cascaded.declared(FontWeightProperty.self))
-    writingMode = cascaded.declared(WritingModeProperty.self)
   }
 
   /// The element with its computed values computed again for another parent.
@@ -126,8 +120,6 @@ protocol SVGDrawableElement: SVGElement {
   var opacity: Double { get }
   var className: String? { get }
   var transform: CGAffineTransform? { get }
-  var writingMode: WritingMode? { get }
-  var font: SVGUIFont? { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
   func frame(context: SVGContext, path: CGPath?) async -> CGRect
@@ -144,8 +136,6 @@ extension SVGDrawableElement {
   var opacity: Double { style.opacity }
   var className: String? { base.className }
   var transform: CGAffineTransform? { style.transform }
-  var writingMode: WritingMode? { base.writingMode }
-  var font: SVGUIFont? { base.font }
   // `nil` for `none`, so that `clipPath?.clipIfNeeded(frame:…)` doesn't find the frame of an element without one.
   var clipPath: SVGClipPath? { if case .url = style.clipPath { style.clipPath } else { nil } }
   var mask: SVGMask? { if case .url = style.mask { style.mask } else { nil } }
@@ -178,15 +168,10 @@ extension SVGDrawableElement {
   }
 
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async {
+    let context = context.styled(by: self)
     context.saveGState()
     if mode != .filter(isRoot: true) {
       context.concatenate(transform ?? .identity)
-    }
-    writingMode.map {
-      context.push(writingMode: $0)
-    }
-    font.map {
-      context.push(font: $0)
     }
     switch mode {
     case .root, .filter:
@@ -224,12 +209,6 @@ extension SVGDrawableElement {
       context.popPatternIdStack()
     default:
       break
-    }
-    writingMode.map { _ in
-      _ = context.popWritingMode()
-    }
-    font.map { _ in
-      _ = context.popFont()
     }
     gContext.endTransparencyLayer()
     context.restoreGState()

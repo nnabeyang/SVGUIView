@@ -68,13 +68,7 @@ final class SVGClipPathElement: SVGElement {
       if let display = content.display, case .none = display {
         continue
       }
-      content.font.map {
-        context.push(font: $0)
-      }
-      guard let path = await content.toPath(context: context) else { continue }
-      content.font.map { _ in
-        _ = context.popFont()
-      }
+      guard let path = await content.toPath(context: context.styled(by: content)) else { continue }
       graphics.saveGState()
       content.transform.map {
         graphics.concatenate($0)
