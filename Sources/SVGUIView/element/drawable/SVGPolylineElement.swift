@@ -18,10 +18,6 @@ final class SVGPolylineElement: ShapeGeometry {
     points = .init(description: attributes["points", default: ""])
   }
 
-  func toPath(context: SVGContext) -> CGPath? {
-    path(in: context)
-  }
-
   func path(in context: any GeometryContext) -> CGPath? {
     points.polyline?.applying(scale(context: context))
   }

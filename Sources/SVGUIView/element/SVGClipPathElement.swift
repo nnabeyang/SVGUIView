@@ -28,10 +28,6 @@ final class SVGClipPathElement: SVGElement {
     transform = base.style.transform
   }
 
-  func toPath(context _: SVGContext, frame _: CGRect) -> CGPath {
-    fatalError()
-  }
-
   func clip(context: inout SVGBaseContext) {
     if let id = id, context.clipPaths[id] == nil {
       context.setClipPath(id: id, value: self)

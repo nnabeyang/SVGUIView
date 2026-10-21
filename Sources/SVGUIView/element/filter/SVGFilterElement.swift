@@ -45,10 +45,6 @@ final class SVGFilterElement: SVGDrawableElement {
     primitiveUnits = SVGUnitType(rawValue: attributes["primitiveUnits", default: ""])
   }
 
-  func toPath(context _: SVGContext) -> CGPath? {
-    nil
-  }
-
   func filter(context: inout SVGBaseContext) {
     if let id = id, context.filters[id] == nil {
       context.setFilter(id: id, value: self)

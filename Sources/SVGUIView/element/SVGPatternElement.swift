@@ -76,10 +76,6 @@ final class SVGPatternElement: SVGDrawableElement {
     }
   }
 
-  func toPath(context _: SVGContext) -> CGPath? {
-    fatalError()
-  }
-
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
     guard let value = value?.trimmingCharacters(in: .whitespaces) else { return nil }
     let nums = value.components(separatedBy: .whitespaces)

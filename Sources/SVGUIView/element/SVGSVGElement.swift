@@ -103,16 +103,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   var rootFont: SVGUIFont? { style.font }
   var writingMode: WritingMode? { style.writingMode }
 
-  func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
-    var rect: CGRect = .zero
-    for child in children {
-      guard let content = child as? (any SVGDrawableElement) else { continue }
-      let context = context.styled(by: content)
-      rect = await CGRectUnion(rect, content.frame(context: context, path: content.toPath(context: context)))
-    }
-    return rect
-  }
-
   func contains(index: ObjectIdentifier) -> Bool {
     children.contains(where: { $0.index == index })
   }
@@ -149,9 +139,6 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       height: height.value(context: self, mode: .height))
   }
 
-  func toPath(context _: SVGContext) -> CGPath? {
-    nil
-  }
 }
 
 extension SVGSVGElement {

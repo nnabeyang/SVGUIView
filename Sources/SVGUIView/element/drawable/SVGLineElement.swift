@@ -24,10 +24,6 @@ final class SVGLineElement: ShapeGeometry {
     y2 = .init(attributes["y2"])
   }
 
-  func toPath(context: SVGContext) -> CGPath? {
-    path(in: context)
-  }
-
   func path(in context: any GeometryContext) -> CGPath? {
     let x1 = x1?.value(context: context, mode: .width) ?? 0
     let y1 = y1?.value(context: context, mode: .height) ?? 0
@@ -40,10 +36,6 @@ final class SVGLineElement: ShapeGeometry {
     path.move(to: start)
     path.addLine(to: end)
     return path
-  }
-
-  func frame(context: SVGContext, path: CGPath?) -> CGRect {
-    frame(in: context, path: path)
   }
 
   /// The bounding box of the path, or of the stroke for a horizontal or vertical line, whose path has no area.

@@ -23,27 +23,6 @@ final class SVGGroupElement: SVGDrawableElement {
     fatalError()
   }
 
-  func toPath(context _: SVGContext) -> CGPath? {
-    nil
-  }
-
-  func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
-    var rect: CGRect? = nil
-    for content in children {
-      guard let content = content as? (any SVGDrawableElement) else { continue }
-      if case .none = content.display ?? .inline {
-        continue
-      }
-      let context = context.styled(by: content)
-      if rect != nil {
-        rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity))
-      } else {
-        rect = await content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity)
-      }
-    }
-    return rect ?? .zero
-  }
-
   func clip(context: inout SVGBaseContext) {
     for child in children {
       child.clip(context: &context)

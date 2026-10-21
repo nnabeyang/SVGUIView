@@ -55,10 +55,6 @@ final class SVGMaskElement: SVGDrawableElement {
     maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
   }
 
-  func toPath(context _: SVGContext) -> CGPath? {
-    fatalError()
-  }
-
   func mask(context: inout SVGBaseContext) {
     if let id = id, context.masks[id] == nil {
       context.setMask(id: id, value: self)

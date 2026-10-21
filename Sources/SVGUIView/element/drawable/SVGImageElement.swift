@@ -28,10 +28,6 @@ final class SVGImageElement: ShapeGeometry {
     height = SVGLength(attributes["height"])
   }
 
-  func toPath(context: SVGContext) -> CGPath? {
-    path(in: context)
-  }
-
   func path(in context: any GeometryContext) -> CGPath? {
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .width) ?? 0

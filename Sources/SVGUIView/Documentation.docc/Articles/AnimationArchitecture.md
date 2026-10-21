@@ -64,6 +64,11 @@ The current design assumes that a document never changes after it's parsed.
 - **Filters run on the CPU.** Filter primitives are implemented with Core
   Graphics and vImage.
 
+Phase 0 has since removed two of these limits. The cascade covers every
+property that SVGUIView supports, and inherited values are computed when the
+document is parsed. Rendering builds an immutable render tree and paints it, so
+no drawing state is shared, and `SVGContext` is gone.
+
 Animation needs the opposite assumptions: values that depend on time and on
 changes made through the API, and redrawing only what changed.
 
@@ -413,10 +418,10 @@ display link's preferred frame rate is lowered to what the animations need.
 - **Back on the main actor:** new layer contents and changes to the layer
   tree are applied together in one transaction.
 
-`SVGContext` becomes the painter's private state. It's created by one painting
-task and never leaves it, so it no longer needs to be `Sendable`, and
-`@unchecked Sendable` is removed. Values that painting currently reads from the
-main actor, such as the screen scale, are passed in when painting starts.
+Painting has no state of its own to share. The painter reads the render tree,
+which is `Sendable`, and draws into a bitmap that its task creates. Values that
+rendering reads from the main actor, such as the screen scale, are passed in
+when rendering starts.
 
 ## Frame budget and timeouts
 

@@ -119,9 +119,7 @@ protocol SVGDrawableElement: SVGElement {
   var transform: CGAffineTransform? { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
-  func frame(context: SVGContext, path: CGPath?) async -> CGRect
   init(base: SVGBaseElement, text: String, attributes: [String: String])
-  func toPath(context: SVGContext) async -> CGPath?
 }
 
 /// An element whose shape doesn't depend on other elements: a shape, text or an image.
@@ -158,10 +156,6 @@ extension SVGDrawableElement {
 
   init(base: SVGBaseElement, contents: [any SVGElement]) {
     self.init(base: base, text: base.text, attributes: base.attributes)
-  }
-
-  func frame(context _: SVGContext, path: CGPath?) -> CGRect {
-    path?.boundingBoxOfPath ?? .zero
   }
 
   /// The transform that `patternContentUnits` of `objectBoundingBox` scales the element's shape by.

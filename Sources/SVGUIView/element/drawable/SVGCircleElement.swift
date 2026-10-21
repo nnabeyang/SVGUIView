@@ -22,10 +22,6 @@ final class SVGCircleElement: ShapeGeometry {
     r = .init(attributes["r"])
   }
 
-  func toPath(context: SVGContext) -> CGPath? {
-    path(in: context)
-  }
-
   func path(in context: any GeometryContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
