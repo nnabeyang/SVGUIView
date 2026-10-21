@@ -56,7 +56,7 @@ final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     height = SVGLength(attributes["height"])
     viewBox = Self.parseViewBox(attributes["viewBox"])
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
-    overflow = base.cascaded.declared(OverflowProperty.self) ?? nil
+    overflow = base.style.overflow
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {

@@ -29,8 +29,9 @@ struct CascadedValues: Sendable {
     values[P.id] as? Declared<P.Specified>
   }
 
-  var isEmpty: Bool {
-    values.isEmpty
+  /// The value that the element declares for the property, or `nil` if it declares none or a keyword.
+  func declared<P: StyleProperty>(_: P.Type) -> P.Specified? {
+    if case .value(let value) = self[P.self] { value } else { nil }
   }
 
   /// The declarations of the presentation attributes of an element.

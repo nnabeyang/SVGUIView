@@ -34,11 +34,10 @@ final class SVGGroupElement: SVGDrawableElement {
       if case .none = content.display ?? .inline {
         continue
       }
+      let context = context.styled(by: content)
       if rect != nil {
-        let context = context.styled(by: content)
         rect = await CGRectUnion(rect!, content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity))
       } else {
-        let context = context.styled(by: content)
         rect = await content.frame(context: context, path: content.toPath(context: context)).applying(content.transform ?? .identity)
       }
     }

@@ -386,11 +386,3 @@ extension ElementCursor {
     return rendered
   }
 }
-
-extension CascadedValues {
-  /// The value that the element declares for the property, or `nil` if it declares none or a keyword, which
-  /// leaves the value to the inheritance while drawing.
-  func declared<P: StyleProperty>(_: P.Type) -> P.Specified? {
-    if case .value(let value) = self[P.self] { value } else { nil }
-  }
-}

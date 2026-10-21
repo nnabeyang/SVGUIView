@@ -21,14 +21,12 @@ enum CSSDisplay: String, CaseIterable {
   case tableCell = "table-cell"
   case tableCaption = "table-caption"
   case none
-  case inherit
 }
 
 enum CSSVisibility: String, CaseIterable {
   case visible
   case hidden
   case collapse
-  case inherit
 }
 
 /// A declaration in a style sheet or the `style` attribute, with what the cascade sorts it by.

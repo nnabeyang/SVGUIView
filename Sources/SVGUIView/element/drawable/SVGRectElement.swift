@@ -20,12 +20,12 @@ final class SVGRectElement: SVGDrawableElement {
 
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
-    x = base.cascaded.declared(XProperty.self)
-    y = base.cascaded.declared(YProperty.self)
+    x = base.style.x
+    y = base.style.y
     rx = .init(attributes["rx"])
     ry = .init(attributes["ry"])
-    width = base.cascaded.declared(WidthProperty.self)
-    height = base.cascaded.declared(HeightProperty.self)
+    width = base.style.width
+    height = base.style.height
   }
 
   func toPath(context: SVGContext) -> CGPath? {

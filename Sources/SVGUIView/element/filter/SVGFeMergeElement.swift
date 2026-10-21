@@ -32,7 +32,7 @@ final class SVGFeMergeElement: SVGElement, SVGFilterApplier {
     height = SVGLength(attributes["height"])
 
     result = attributes["result"]
-    colorInterpolationFilters = base.cascaded.declared(ColorInterpolationFiltersProperty.self) ?? nil
+    colorInterpolationFilters = base.style.colorInterpolationFilters
   }
 
   private func colorSpace(colorInterpolation: SVGColorInterpolation) -> CGColorSpace {

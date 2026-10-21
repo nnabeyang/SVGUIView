@@ -35,8 +35,8 @@ final class SVGFilterElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    colorInterpolation = base.cascaded.declared(ColorInterpolationProperty.self) ?? nil
-    colorInterpolationFilters = base.cascaded.declared(ColorInterpolationFiltersProperty.self) ?? nil
+    colorInterpolation = base.style.colorInterpolation
+    colorInterpolationFilters = base.style.colorInterpolationFilters
     x = .init(attributes["x"])
     y = .init(attributes["y"])
     width = SVGLength(attributes["width"])

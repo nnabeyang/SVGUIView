@@ -4,15 +4,6 @@ enum SVGOpacity: Equatable, Encodable {
   case number(CGFloat)
   case percent(CGFloat)
 
-  init(value: Double, unit: CSSUnitType) {
-    switch unit {
-    case .percentage:
-      self = .percent(value)
-    default:
-      self = .number(value)
-    }
-  }
-
   init?(_ description: String?) {
     guard var data = description?.trimmingCharacters(in: .whitespaces) else {
       return nil

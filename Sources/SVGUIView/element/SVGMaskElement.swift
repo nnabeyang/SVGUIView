@@ -38,7 +38,7 @@ final class SVGMaskElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    colorInterpolation = base.cascaded.declared(ColorInterpolationProperty.self) ?? nil
+    colorInterpolation = base.style.colorInterpolation
     x = .init(attributes["x"])
     y = .init(attributes["y"])
     width = SVGLength(attributes["width"])

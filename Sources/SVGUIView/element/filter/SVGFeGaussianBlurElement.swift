@@ -96,7 +96,7 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterApplier {
     stdDeviation = StdDeviation(description: attributes["stdDeviation", default: ""])
     input = SVGFilterInput(rawValue: attributes["in", default: ""])
 
-    colorInterpolationFilters = base.cascaded.declared(ColorInterpolationFiltersProperty.self) ?? nil
+    colorInterpolationFilters = base.style.colorInterpolationFilters
   }
 
   static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {

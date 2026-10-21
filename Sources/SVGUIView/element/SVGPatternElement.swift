@@ -43,7 +43,7 @@ final class SVGPatternElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    colorInterpolation = base.cascaded.declared(ColorInterpolationProperty.self) ?? nil
+    colorInterpolation = base.style.colorInterpolation
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
