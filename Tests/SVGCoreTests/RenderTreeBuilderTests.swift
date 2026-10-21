@@ -297,6 +297,23 @@ struct RenderTreeBuilderTests {
     #expect(try #require(use.mask).frame == CGRect(x: 3, y: 0, width: 4, height: 4))
   }
 
+  @Test("a gradient paints whether its display, or the display of its ancestor, is none")
+  func gradientWithoutDisplay() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <linearGradient id="a" display="none"><stop stop-color="lime"/></linearGradient>
+      <defs display="none"><linearGradient id="b"><stop stop-color="lime"/></linearGradient></defs>
+      <rect width="10" height="10" fill="url(#a)"/>
+      <rect width="10" height="10" fill="url(#b)"/>
+      """##)
+    for node in try children(of: tree).suffix(2) {
+      guard case .vector(.gradient(.some), _, _) = try shape(node).content else {
+        Issue.record("The rectangle isn't filled with a gradient")
+        continue
+      }
+    }
+  }
+
   private func filteredNode(_ content: String) async throws -> FilteredNode {
     let tree = try await renderTree(content)
     guard case .filtered(let filtered) = try children(of: tree).last else {

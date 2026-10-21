@@ -362,10 +362,8 @@ package struct RenderTreeBuilder {
       return color.toCGColor(opacity: opacity).map { .color($0) }
     case .url(let id):
       if let server = base.pservers[id] {
-        if case .none = server.display ?? .inline {
-        } else {
-          return .gradient(gradientPaint(of: server, context: context, opacity: opacity))
-        }
+        // Display doesn't apply to paint servers, which are never rendered themselves.
+        return .gradient(gradientPaint(of: server, context: context, opacity: opacity))
       } else if let pattern = base.patterns[id] {
         // A cycle of patterns stops the pattern, which paints black.
         var references = references
