@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-final class SVGEllipseElement: SVGDrawableElement {
+final class SVGEllipseElement: ShapeGeometry {
   static var type: SVGElementName {
     .ellipse
   }
@@ -25,6 +25,10 @@ final class SVGEllipseElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) -> CGPath? {
+    path(in: context)
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
     let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }

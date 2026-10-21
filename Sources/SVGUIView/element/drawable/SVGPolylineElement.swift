@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-final class SVGPolylineElement: SVGDrawableElement {
+final class SVGPolylineElement: ShapeGeometry {
   static var type: SVGElementName {
     .polyline
   }
@@ -19,6 +19,10 @@ final class SVGPolylineElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) -> CGPath? {
+    path(in: context)
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
     points.polyline?.applying(scale(context: context))
   }
 }

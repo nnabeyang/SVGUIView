@@ -8,7 +8,7 @@ enum TextAnchor: String, CaseIterable {
   case end
 }
 
-final class SVGTextElement: SVGDrawableElement {
+final class SVGTextElement: ShapeGeometry {
   static var type: SVGElementName {
     .text
   }
@@ -29,7 +29,7 @@ final class SVGTextElement: SVGDrawableElement {
     y = SVGLength(attributes["y"])
   }
 
-  private func getLine(context: SVGContext) async -> CTLine? {
+  private func getLine(context: any SVGLengthContext) -> CTLine? {
     var attributes: [CFString: Any] = [:]
     let font = style.font
     let modifiedFont: SVGUIFont? = {
@@ -58,8 +58,13 @@ final class SVGTextElement: SVGDrawableElement {
     return CTLineCreateWithAttributedString(attributedText)
   }
 
-  func frame(context: SVGContext, path _: CGPath?) async -> CGRect {
-    guard let line = await getLine(context: context) else { return .zero }
+  func frame(context: SVGContext, path: CGPath?) async -> CGRect {
+    frame(in: context, path: path)
+  }
+
+  /// The bounds of the line of text, which are larger than the bounds of its glyphs.
+  func frame(in context: any GeometryContext, path _: CGPath?) -> CGRect {
+    guard let line = getLine(context: context) else { return .zero }
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .height) ?? 0
     let textScale = context.textScale
@@ -73,7 +78,12 @@ final class SVGTextElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) async -> CGPath? {
-    guard let line = await getLine(context: context) else { return nil }
+    path(in: context)
+  }
+
+  /// The outlines of the glyphs of the text.
+  func path(in context: any GeometryContext) -> CGPath? {
+    guard let line = getLine(context: context) else { return nil }
     let letters = CGMutablePath()
     let runs = CTLineGetGlyphRuns(line)
     for i in 0..<CFArrayGetCount(runs) {

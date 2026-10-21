@@ -214,8 +214,7 @@ public class SVGUIView: UIView {
     fit: ContentFit,
     timeoutDuration: Duration
   ) async -> Result<CGImage, SVGRenderingError> {
-    guard let svg = base.root else { return .failure(.missingRootElement) }
-    let viewBox = svg.getViewBox(size: rect.size)
+    guard base.root != nil else { return .failure(.missingRootElement) }
 
     // `CGContext` cannot make a bitmap without a pixel.
     guard (rect.width * scale).rounded(.up) > 0, (rect.height * scale).rounded(.up) > 0 else {
@@ -226,31 +225,10 @@ public class SVGUIView: UIView {
     }
     graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
 
-    let context = SVGContext(
-      base: base,
-      graphics: graphics,
-      viewPort: rect,
-      scale: scale
-    )
-    context.saveGState()
-    context.push(viewBox: viewBox)
-    let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
-    let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
-    if fit.stretches {
-      let scaleX = viewBox.width / width
-      let scaleY = viewBox.height / height
-      context.concatenate(CGAffineTransform(scaleX: scaleX, y: scaleY))
-    }
-
-    context.concatenate(fit.transform(viewBox: viewBox, size: rect.size))
-    if fit.scales {
-      let scale = viewBox.width / width
-      context.concatenate(CGAffineTransform(scaleX: scale, y: scale))
-    }
     let drawTask = Task<CGImage?, Never> {
-      await svg.draw(context, mode: .root)
-      context.popViewBox()
-      context.restoreGState()
+      let builder = RenderTreeBuilder(base: base, viewPort: rect, scale: scale)
+      guard let tree = await builder.build(fit: fit) else { return nil }
+      await CGPainter(base: base, viewPort: rect, scale: scale).paint(tree, into: graphics)
       guard !Task.isCancelled else {
         return nil
       }

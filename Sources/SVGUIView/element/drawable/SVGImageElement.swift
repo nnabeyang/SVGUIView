@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
-final class SVGImageElement: SVGDrawableElement {
+final class SVGImageElement: ShapeGeometry {
   static var type: SVGElementName {
     .circle
   }
@@ -29,6 +29,10 @@ final class SVGImageElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) -> CGPath? {
+    path(in: context)
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
     let x = x?.value(context: context, mode: .width) ?? 0
     let y = y?.value(context: context, mode: .width) ?? 0
     let width = width?.value(context: context, mode: .width) ?? 0
@@ -41,29 +45,18 @@ final class SVGImageElement: SVGDrawableElement {
     return path.applying(scale(context: context))
   }
 
-  /// Draws the image in the element's rectangle. The pixels are drawn as they're stored, without the orientation in
-  /// the image's metadata, as `UIImage.cgImage` gives them.
+  /// Draws the image in the element's rectangle.
   func applyFill(path: CGPath, context: SVGContext, mode _: DrawMode) async {
-    guard let data = data,
-      let source = CGImageSourceCreateWithData(data as CFData, nil),
-      let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
-    else { return }
-    let cgContext = context.graphics
-    let bounds = path.boundingBoxOfPath
-    let imageWidth = CGFloat(cgImage.width)
-    let imageHeight = CGFloat(cgImage.height)
-    let scale = scale(width: bounds.width, height: bounds.height, imageSize: .init(width: imageWidth, height: imageHeight))
-    let frame = CGRect(origin: bounds.origin, size: .init(width: imageWidth * scale, height: imageHeight * scale))
-    cgContext.scaleBy(x: 1, y: -1)
-    cgContext.draw(cgImage, in: CGRect(x: frame.minX, y: -frame.height - frame.minY, width: frame.width, height: frame.height))
+    guard let image = decodedImage() else { return }
+    paintImage(image, in: path, graphics: context.graphics)
   }
 
-  private func scale(width: CGFloat, height: CGFloat, imageSize size: CGSize) -> CGFloat {
-    let sx = width / size.width
-    let sy = height / size.height
-    if width == 0 { return sy }
-    if height == 0 { return sx }
-    return width > height ? sy : sx
+  /// The image of the data, or `nil` if the data isn't an image.
+  func decodedImage() -> CGImage? {
+    guard let data = data,
+      let source = CGImageSourceCreateWithData(data as CFData, nil)
+    else { return nil }
+    return CGImageSourceCreateImageAtIndex(source, 0, nil)
   }
 }
 

@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-final class SVGLineElement: SVGDrawableElement {
+final class SVGLineElement: ShapeGeometry {
   static var type: SVGElementName {
     .line
   }
@@ -25,6 +25,10 @@ final class SVGLineElement: SVGDrawableElement {
   }
 
   func toPath(context: SVGContext) -> CGPath? {
+    path(in: context)
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
     let x1 = x1?.value(context: context, mode: .width) ?? 0
     let y1 = y1?.value(context: context, mode: .height) ?? 0
     let x2 = x2?.value(context: context, mode: .width) ?? 0
@@ -39,6 +43,11 @@ final class SVGLineElement: SVGDrawableElement {
   }
 
   func frame(context: SVGContext, path: CGPath?) -> CGRect {
+    frame(in: context, path: path)
+  }
+
+  /// The bounding box of the path, or of the stroke for a horizontal or vertical line, whose path has no area.
+  func frame(in context: any GeometryContext, path: CGPath?) -> CGRect {
     guard let path = path else { return .zero }
     let r = path.boundingBoxOfPath
     if r.width > 0, r.height > 0 {

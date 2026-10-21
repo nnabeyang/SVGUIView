@@ -9,7 +9,7 @@ protocol SVGElement: AnyObject, Encodable, Sendable {
   var index: ObjectIdentifier { get }
   func draw(_ context: SVGContext, mode: DrawMode) async
   func drawWithoutFilter(_ context: SVGContext, mode: DrawMode) async
-  func contains(index: ObjectIdentifier, context: SVGContext) -> Bool
+  func contains(index: ObjectIdentifier) -> Bool
   func clip(context: inout SVGBaseContext)
   func mask(context: inout SVGBaseContext)
   func pattern(context: inout SVGBaseContext)
@@ -39,7 +39,7 @@ extension SVGElement {
     return elements
   }
 
-  func contains(index _: ObjectIdentifier, context _: SVGContext) -> Bool {
+  func contains(index _: ObjectIdentifier) -> Bool {
     false
   }
 
@@ -71,6 +71,8 @@ enum DrawMode: Equatable {
 
 /// The attributes of an element, with the values that the cascade gives its properties.
 final class SVGBaseElement: Sendable {
+  /// The identifier of the element in its document, which the nodes of the render tree that it makes keep.
+  let elementID: ElementID
   let name: SVGElementName
   let text: String
   let id: String?
@@ -82,7 +84,11 @@ final class SVGBaseElement: Sendable {
   /// The computed values of the element's properties.
   let style: ComputedStyle
 
-  init(name: SVGElementName, text: String, attributes: [String: String], cascaded: CascadedValues, style: ComputedStyle) {
+  init(
+    elementID: ElementID, name: SVGElementName, text: String, attributes: [String: String], cascaded: CascadedValues,
+    style: ComputedStyle
+  ) {
+    self.elementID = elementID
     self.name = name
     self.text = text
     self.attributes = attributes
@@ -95,7 +101,7 @@ final class SVGBaseElement: Sendable {
   /// The element with its computed values computed again for another parent.
   func restyled(parent: ComputedStyle, root: ComputedStyle) -> SVGBaseElement {
     SVGBaseElement(
-      name: name, text: text, attributes: attributes, cascaded: cascaded,
+      elementID: elementID, name: name, text: text, attributes: attributes, cascaded: cascaded,
       style: ComputedStyle(cascaded: cascaded, parent: parent, root: root))
   }
 }
@@ -123,11 +129,24 @@ protocol SVGDrawableElement: SVGElement {
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
   func frame(context: SVGContext, path: CGPath?) async -> CGRect
-  func scale(context: SVGContext) -> CGAffineTransform
   init(base: SVGBaseElement, text: String, attributes: [String: String])
   func toPath(context: SVGContext) async -> CGPath?
   func applyStroke(path: CGPath, context: SVGContext)
   func applyFill(path: CGPath, context: SVGContext, mode: DrawMode) async
+}
+
+/// An element whose shape doesn't depend on other elements: a shape, text or an image.
+protocol ShapeGeometry: SVGDrawableElement {
+  /// The shape, or `nil` for an element without one.
+  func path(in context: any GeometryContext) -> CGPath?
+  /// The bounds that units relative to the element use.
+  func frame(in context: any GeometryContext, path: CGPath?) -> CGRect
+}
+
+extension ShapeGeometry {
+  func frame(in _: any GeometryContext, path: CGPath?) -> CGRect {
+    path?.boundingBoxOfPath ?? .zero
+  }
 }
 
 extension SVGDrawableElement {
@@ -156,7 +175,8 @@ extension SVGDrawableElement {
     path?.boundingBoxOfPath ?? .zero
   }
 
-  func scale(context: SVGContext) -> CGAffineTransform {
+  /// The transform that `patternContentUnits` of `objectBoundingBox` scales the element's shape by.
+  func scale(context: any GeometryContext) -> CGAffineTransform {
     let contentUnit = context.patternContentUnit ?? .userSpaceOnUse
     switch contentUnit {
     case .userSpaceOnUse:
@@ -325,7 +345,7 @@ extension ElementCursor {
       child(at: $0).makeElement(with: css, parent: style, root: root ?? style)
     }
     let base = SVGBaseElement(
-      name: name, text: element.text, attributes: element.attributes, cascaded: cascaded, style: style)
+      elementID: element.id, name: name, text: element.text, attributes: element.attributes, cascaded: cascaded, style: style)
     let rendered: any SVGElement =
       switch name {
       case .svg:
