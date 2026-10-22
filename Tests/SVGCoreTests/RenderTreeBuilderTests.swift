@@ -140,6 +140,23 @@ struct RenderTreeBuilderTests {
     #expect(group.clip == nil)
   }
 
+  @Test("a group of use elements has the bounds of the elements that they reference, also in its clip path")
+  func clippedGroupOfUseElements() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <defs><rect id="r" x="2" y="3" width="10" height="10"/></defs>
+      <clipPath id="c"><use href="#r"/></clipPath>
+      <g clip-path="url(#c)"><use href="#r" x="1"/></g>
+      """##)
+    guard case .group(let group) = try children(of: tree).last else {
+      Issue.record("The last child isn't a group")
+      return
+    }
+    let clip = try #require(group.clip)
+    #expect(clip.frame == CGRect(x: 3, y: 3, width: 10, height: 10))
+    #expect(clip.shapes.count == 1)
+  }
+
   @Test("a mask covers its region, and a pattern in it paints, stopping a cycle of patterns")
   func maskWithPattern() async throws {
     let tree = try await renderTree(
