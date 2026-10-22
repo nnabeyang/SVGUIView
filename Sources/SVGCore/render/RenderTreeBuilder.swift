@@ -253,11 +253,13 @@ package struct RenderTreeBuilder {
   /// Calls `body` with the element that the `<use>` element shows, with its computed values computed again with
   /// the `<use>` element as its parent, and the guard with the elements added, or returns `nil` if there is none or
   /// showing it would make a cycle.
-  private func withReferencedElement<T>(
+  func withReferencedElement<T>(
     of use: SVGUseElement, context: ResolveContext, guard references: ReferenceGuard,
     _ body: (any SVGDrawableElement, ReferenceGuard) async -> T
   ) async -> T? {
-    var references = references
+    // A `<use>` element follows its reference also where no level of `<use>` elements has begun, such as in the
+    // bounds of a group or in a clip path of a group, and the level stops a cycle from there.
+    var references = references.uses == nil ? references.beginning(.uses) : references
     _ = references.insert(use: use.index)
     guard let parentId = use.parentId,
       let element = base[parentId],
