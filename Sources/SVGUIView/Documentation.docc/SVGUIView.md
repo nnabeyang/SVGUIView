@@ -78,3 +78,7 @@ do {
 
 - ``SVGUIViewConfiguration``
 - ``SVGRenderingError``
+
+### Design
+
+- <doc:AnimationArchitecture>

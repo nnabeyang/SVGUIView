@@ -18,5 +18,15 @@ extension SnapshotTests {
     func radialGradient(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(in: "basic", "paint-servers", "stop"))
+    func stop(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "paint-servers", "stop-opacity"))
+    func stopOpacity(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

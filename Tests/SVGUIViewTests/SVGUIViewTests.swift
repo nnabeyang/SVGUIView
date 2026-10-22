@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SVGCore
 import Testing
 import UIKit
 
@@ -154,6 +155,24 @@ struct SVGUIViewTests {
     #expect(other == [0, 255, 0, 255])
   }
 
+  @Test("a group with a clip path is drawn when it contains a pattern or a mask")
+  func clippedGroupWithPattern() async throws {
+    let view = makeView(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <clipPath id="c"><rect width="10" height="20"/></clipPath>
+        <g clip-path="url(#c)">
+          <g><pattern id="p" width="2" height="2"/><mask id="m"/></g>
+          <rect width="20" height="20" fill="lime"/>
+        </g>
+      </svg>
+      """#)
+    let image = try await view.takeSnapshot()
+    let scale = Int(UIScreen.main.scale)
+    #expect(try pixel(of: image, x: 5 * scale, y: 10 * scale) == [0, 255, 0, 255])
+    #expect(try pixel(of: image, x: 15 * scale, y: 10 * scale) == [0, 0, 0, 0])
+  }
+
   @Test("a snapshot that takes longer than the timeout throws timedOut")
   func takeSnapshotTimesOut() async {
     // Rendering checks for cancellation between elements, so many groups make it stop soon after the timeout.
@@ -284,6 +303,12 @@ struct SVGUIViewTests {
     await task.value
     let stopped = clock.now - start
     #expect(stopped < full / 2, "Rendering took \(stopped) after the view was released, and \(full) in full")
+  }
+
+  @Test("a view gives the fonts of text styles to the documents that it parses")
+  func textStyleFonts() {
+    _ = makeView(#"<svg xmlns="http://www.w3.org/2000/svg"/>"#)
+    #expect(SystemFontDatabaseCoreText.textStyleDescriptor != nil)
   }
 
   @Test("a rendering may take ten seconds by default")

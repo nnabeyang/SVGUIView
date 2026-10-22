@@ -23,8 +23,16 @@ let package = Package(
     .target(name: "_ICU"),
     .target(name: "_CShims"),
     .target(
-      name: "SVGUIView",
+      name: "SVGCore",
       dependencies: ["_SPI", "_ICU", "_CShims", "_CSSParser", "_SelectorParser"],
+    ),
+    .target(
+      name: "SVGRenderCG",
+      dependencies: ["SVGCore"],
+    ),
+    .target(
+      name: "SVGUIView",
+      dependencies: ["SVGCore", "SVGRenderCG"],
     ),
     .target(
       name: "SVGView",
@@ -38,8 +46,12 @@ let package = Package(
       dependencies: ["_CSSParser"]
     ),
     .testTarget(
+      name: "SVGCoreTests",
+      dependencies: ["SVGCore", "_CSSParser", "_SelectorParser"],
+    ),
+    .testTarget(
       name: "SVGUIViewTests",
-      dependencies: ["SVGUIView"],
+      dependencies: ["SVGUIView", "SVGCore"],
     ),
     .testTarget(
       name: "SVGViewTests",
