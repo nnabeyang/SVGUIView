@@ -46,44 +46,57 @@ enum PropertyID: String, CaseIterable, Sendable {
 
   /// The description of the property.
   var property: any StyleProperty.Type {
+    var visitor = PropertyTypeVisitor()
+    return visit(&visitor)
+  }
+
+  /// Calls the visitor with the type that describes the property, so that what the visitor does is specialized for
+  /// the property instead of going through ``property``.
+  func visit<V: StylePropertyVisitor>(_ visitor: inout V) -> V.Result {
     switch self {
-    case .fontFamily: FontFamilyProperty.self
-    case .fontSize: FontSizeProperty.self
-    case .fontWeight: FontWeightProperty.self
-    case .writingMode: WritingModeProperty.self
-    case .color: ColorProperty.self
-    case .fill: FillProperty.self
-    case .fillOpacity: FillOpacityProperty.self
-    case .fillRule: FillRuleProperty.self
-    case .stroke: StrokeProperty.self
-    case .strokeOpacity: StrokeOpacityProperty.self
-    case .strokeWidth: StrokeWidthProperty.self
-    case .strokeLinecap: StrokeLinecapProperty.self
-    case .strokeLinejoin: StrokeLinejoinProperty.self
-    case .strokeMiterlimit: StrokeMiterlimitProperty.self
-    case .strokeDasharray: StrokeDasharrayProperty.self
-    case .strokeDashoffset: StrokeDashoffsetProperty.self
-    case .clipRule: ClipRuleProperty.self
-    case .textAnchor: TextAnchorProperty.self
-    case .visibility: VisibilityProperty.self
-    case .colorInterpolation: ColorInterpolationProperty.self
-    case .colorInterpolationFilters: ColorInterpolationFiltersProperty.self
-    case .opacity: OpacityProperty.self
-    case .transform: TransformProperty.self
-    case .clipPath: ClipPathProperty.self
-    case .mask: MaskProperty.self
-    case .filter: FilterProperty.self
-    case .display: DisplayProperty.self
-    case .overflow: OverflowProperty.self
-    case .stopColor: StopColorProperty.self
-    case .stopOpacity: StopOpacityProperty.self
-    case .floodColor: FloodColorProperty.self
-    case .floodOpacity: FloodOpacityProperty.self
-    case .x: XProperty.self
-    case .y: YProperty.self
-    case .width: WidthProperty.self
-    case .height: HeightProperty.self
+    case .fontFamily: visitor.visit(FontFamilyProperty.self)
+    case .fontSize: visitor.visit(FontSizeProperty.self)
+    case .fontWeight: visitor.visit(FontWeightProperty.self)
+    case .writingMode: visitor.visit(WritingModeProperty.self)
+    case .color: visitor.visit(ColorProperty.self)
+    case .fill: visitor.visit(FillProperty.self)
+    case .fillOpacity: visitor.visit(FillOpacityProperty.self)
+    case .fillRule: visitor.visit(FillRuleProperty.self)
+    case .stroke: visitor.visit(StrokeProperty.self)
+    case .strokeOpacity: visitor.visit(StrokeOpacityProperty.self)
+    case .strokeWidth: visitor.visit(StrokeWidthProperty.self)
+    case .strokeLinecap: visitor.visit(StrokeLinecapProperty.self)
+    case .strokeLinejoin: visitor.visit(StrokeLinejoinProperty.self)
+    case .strokeMiterlimit: visitor.visit(StrokeMiterlimitProperty.self)
+    case .strokeDasharray: visitor.visit(StrokeDasharrayProperty.self)
+    case .strokeDashoffset: visitor.visit(StrokeDashoffsetProperty.self)
+    case .clipRule: visitor.visit(ClipRuleProperty.self)
+    case .textAnchor: visitor.visit(TextAnchorProperty.self)
+    case .visibility: visitor.visit(VisibilityProperty.self)
+    case .colorInterpolation: visitor.visit(ColorInterpolationProperty.self)
+    case .colorInterpolationFilters: visitor.visit(ColorInterpolationFiltersProperty.self)
+    case .opacity: visitor.visit(OpacityProperty.self)
+    case .transform: visitor.visit(TransformProperty.self)
+    case .clipPath: visitor.visit(ClipPathProperty.self)
+    case .mask: visitor.visit(MaskProperty.self)
+    case .filter: visitor.visit(FilterProperty.self)
+    case .display: visitor.visit(DisplayProperty.self)
+    case .overflow: visitor.visit(OverflowProperty.self)
+    case .stopColor: visitor.visit(StopColorProperty.self)
+    case .stopOpacity: visitor.visit(StopOpacityProperty.self)
+    case .floodColor: visitor.visit(FloodColorProperty.self)
+    case .floodOpacity: visitor.visit(FloodOpacityProperty.self)
+    case .x: visitor.visit(XProperty.self)
+    case .y: visitor.visit(YProperty.self)
+    case .width: visitor.visit(WidthProperty.self)
+    case .height: visitor.visit(HeightProperty.self)
     }
+  }
+}
+
+private struct PropertyTypeVisitor: StylePropertyVisitor {
+  func visit<P: StyleProperty>(_: P.Type) -> any StyleProperty.Type {
+    P.self
   }
 }
 
@@ -153,12 +166,30 @@ struct ComputedStyle: Sendable {
   ///   - parent: The computed values of the parent element, or `nil` for the root element.
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
   init(cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?) {
-    let parent = parent ?? .initial
-    var style = Self.initial
+    var computer = Computer(
+      cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial))
     for id in PropertyID.allCases {
-      style.apply(id.property, cascaded: cascaded, parent: parent, root: root ?? .initial)
+      id.visit(&computer)
     }
-    self = style
+    self = computer.resolver.style
+  }
+
+  /// Computes the computed values in order, one property at a time, into the style of the resolver, so that
+  /// computing a value doesn't copy the styles.
+  private struct Computer: StylePropertyVisitor {
+    let cascaded: CascadedValues
+    var resolver: StyleResolver
+
+    mutating func visit<P: StyleProperty>(_: P.Type) {
+      let value: P.Computed =
+        switch cascaded[P.self] {
+        case .value(let value): P.compute(value, in: resolver)
+        case .inherit: resolver.parent[keyPath: P.computed]
+        case .initial: P.initial
+        case .unset, nil: P.isInherited ? resolver.parent[keyPath: P.computed] : P.initial
+        }
+      resolver.style[keyPath: P.computed] = value
+    }
   }
 
   private init(
@@ -208,21 +239,6 @@ struct ComputedStyle: Sendable {
     self.y = y
     self.width = width
     self.height = height
-  }
-
-  private mutating func apply<P: StyleProperty>(
-    _: P.Type, cascaded: CascadedValues, parent: ComputedStyle, root: ComputedStyle
-  ) {
-    switch cascaded[P.self] {
-    case .value(let value):
-      self[keyPath: P.computed] = P.compute(value, in: StyleResolver(style: self, parent: parent, root: root))
-    case .inherit:
-      self[keyPath: P.computed] = parent[keyPath: P.computed]
-    case .initial:
-      self[keyPath: P.computed] = P.initial
-    case .unset, nil:
-      self[keyPath: P.computed] = P.isInherited ? parent[keyPath: P.computed] : P.initial
-    }
   }
 
   /// The font, with its size resolved except for viewport units.
