@@ -90,8 +90,7 @@ extension RenderTreeBuilder {
       height: (element.height ?? .percent(120)).value(context: context, mode: .height))
     return MaskEffect(
       frame: frame, region: region, contentUnits: element.maskContentUnits ?? .userSpaceOnUse,
-      colorInterpolation: element.colorInterpolation ?? .sRGB, contents: contents,
-      clipPath: await clipEffect(element.clipPath, frame: frame, context: context, guard: references))
+      colorInterpolation: element.colorInterpolation ?? .sRGB, contents: contents)
   }
 
   // MARK: - Patterns
@@ -168,7 +167,6 @@ extension RenderTreeBuilder {
       }
     return PatternPaint(
       opacity: opacity, tileSize: tileSize, transform: transform, origin: origin, frame: frame,
-      viewBoxTransform: viewBoxTransform, colorInterpolation: pattern.colorInterpolation ?? .sRGB, content: content,
-      clipPath: await clipEffect(pattern.clipPath, frame: frame, context: context, guard: references))
+      viewBoxTransform: viewBoxTransform, colorInterpolation: pattern.colorInterpolation ?? .sRGB, content: content)
   }
 }
