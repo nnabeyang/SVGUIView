@@ -254,13 +254,18 @@ package struct CGPainter {
       guard let image = await image(of: clipPath) else { return nil }
       graphics.clip(to: CGRect(x: 0, y: 0, width: graphics.width, height: graphics.height), mask: image)
     }
-    let transform = clip.transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
-    switch clip.units {
-    case .userSpaceOnUse:
-      graphics.concatenate(transform.translatedBy(x: -clip.frame.minX, y: -clip.frame.minY))
-    case .objectBoundingBox:
-      graphics.concatenate(transform.scaledBy(x: size.width, y: size.height))
-    }
+    // The units place the content in the user space of the clipped element, where the transform of the
+    // `<clipPath>` element applies, and then the bounds move to the origin of the bitmap.
+    let units: CGAffineTransform =
+      switch clip.units {
+      case .userSpaceOnUse: .identity
+      case .objectBoundingBox:
+        CGAffineTransform(a: size.width, b: 0, c: 0, d: size.height, tx: clip.frame.minX, ty: clip.frame.minY)
+      }
+    graphics.concatenate(
+      units.concatenating(clip.transform)
+        .concatenating(CGAffineTransform(translationX: -clip.frame.minX, y: -clip.frame.minY))
+        .concatenating(CGAffineTransform(scaleX: scale, y: scale)))
     for shape in clip.shapes {
       if Task.isCancelled { break }
       await Task.yield()
