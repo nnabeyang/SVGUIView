@@ -32,11 +32,23 @@ extension RenderTreeBuilder {
         ClipShape(
           path: RenderPath(path), transform: content.transform ?? .identity,
           clip: await clipEffect(content.clipPath, frame: frame, context: context, guard: references),
-          fillRule: content.style.clipRule == .evenodd ? .eoFill : .fill))
+          fillRule: await clipRule(of: content, context: context, guard: references) == .evenodd ? .eoFill : .fill))
     }
     return ClipPathEffect(
       frame: frame, transform: element.transform ?? .identity, units: element.clipPathUnits ?? .userSpaceOnUse,
       shapes: shapes, clipPath: await clipEffect(element.clipPath, frame: frame, context: context, guard: references))
+  }
+
+  /// The clip rule of a child of a `<clipPath>` element. A `<use>` element takes the clip rule of the element that
+  /// it references, whose copy it shows.
+  private func clipRule(
+    of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard
+  ) async -> FillRule {
+    guard let use = element as? SVGUseElement else { return element.style.clipRule }
+    let rule = await withReferencedElement(of: use, context: context, guard: references) { element, references in
+      await clipRule(of: element, context: context.styled(by: element), guard: references)
+    }
+    return rule ?? use.style.clipRule
   }
 
   // MARK: - Masks

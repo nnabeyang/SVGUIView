@@ -157,6 +157,25 @@ struct RenderTreeBuilderTests {
     #expect(clip.shapes.count == 1)
   }
 
+  @Test("a use element in a clip path takes the clip rule of the element that it references")
+  func clipRuleOfUseElement() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <defs>
+        <path id="p" d="M0 0h10v10h-10z" clip-rule="evenodd"/>
+        <path id="q" d="M0 0h10v10h-10z"/>
+      </defs>
+      <clipPath id="c">
+        <use href="#p"/>
+        <use href="#q" clip-rule="evenodd"/>
+        <use href="#q"/>
+      </clipPath>
+      <rect width="20" height="20" clip-path="url(#c)"/>
+      """##)
+    let clip = try #require(try shape(try children(of: tree).last).clip)
+    #expect(clip.shapes.map(\.fillRule) == [.eoFill, .eoFill, .fill])
+  }
+
   @Test("a mask covers its region, and a pattern in it paints, stopping a cycle of patterns")
   func maskWithPattern() async throws {
     let tree = try await renderTree(
