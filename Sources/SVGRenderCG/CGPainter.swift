@@ -22,46 +22,87 @@ package struct CGPainter {
     graphics.restoreGState()
   }
 
-  func paint(_ node: RenderNode, into graphics: CGContext) async {
+  /// Paints a node.
+  ///
+  /// A clip or a mask that has been applied to the context since the last transparency layer applies to each
+  /// drawing, so where one applies, `isClipped` is `true`, and a node that draws more than once paints in a layer of
+  /// its own, so that the clip or the mask applies once to what it paints composited together.
+  func paint(_ node: RenderNode, into graphics: CGContext, isClipped: Bool = false) async {
     guard !Task.isCancelled else { return }
     // Painting hardly ever suspends otherwise, so let other tasks run on this thread of the cooperative thread
     // pool between nodes.
     await Task.yield()
     switch node {
     case .shape(let shape):
-      await paint(shape, into: graphics)
+      await paint(shape, into: graphics, isClipped: isClipped)
     case .group(let group):
-      await paint(group, into: graphics)
+      await paint(group, into: graphics, isClipped: isClipped)
     case .viewport(let viewport):
-      await paint(viewport, into: graphics)
+      await paint(viewport, into: graphics, isClipped: isClipped)
     case .use(let use):
-      await paint(use, into: graphics)
+      await paint(use, into: graphics, isClipped: isClipped)
     case .filtered(let filtered):
       await paint(filtered, into: graphics)
     }
   }
 
-  private func paint(_ shape: ShapeNode, into graphics: CGContext) async {
+  private func paint(_ shape: ShapeNode, into graphics: CGContext, isClipped: Bool) async {
     graphics.saveGState()
     graphics.concatenate(shape.transform)
+    var isClipped = isClipped
     if let clip = shape.clip {
       await apply(clip, to: graphics)
+      isClipped = true
     }
     switch shape.mask {
     case .none:
       break
     case .clipToZero:
       graphics.clip(to: .zero)
+      isClipped = true
     case .mask(let mask):
       await apply(mask, to: graphics)
+      isClipped = true
     }
-    graphics.setAlpha(shape.opacity)
-    graphics.beginTransparencyLayer(auxiliaryInfo: nil)
     if let path = shape.geometry?.path.cgPath, let content = shape.content {
-      await paint(content, path: path, into: graphics)
+      if isPaintedOnce(content) {
+        // The opacity and the clips apply to the one drawing as they would to a layer.
+        graphics.setAlpha(shape.opacity)
+        await paint(content, path: path, into: graphics)
+      } else {
+        await inLayer(opacity: shape.opacity, isNeeded: isClipped, of: graphics) {
+          await paint(content, path: path, into: graphics)
+        }
+      }
     }
-    graphics.endTransparencyLayer()
     graphics.restoreGState()
+  }
+
+  /// Whether the content is painted by one drawing of a color, so that its opacity can apply to that drawing.
+  private func isPaintedOnce(_ content: ShapeContent) -> Bool {
+    switch content {
+    case .vector(fill: .color?, stroke: nil, _), .vector(fill: nil, stroke: .some, _):
+      true
+    default:
+      false
+    }
+  }
+
+  /// Paints with `body` in a transparency layer, which composites what it paints together, only where the layer
+  /// changes the result: when the opacity is less than 1, or when `isNeeded`, such as when a clip or a mask applies
+  /// to what `body` paints composited together. Elsewhere `body` paints into the context directly, whose opacity is
+  /// 1 there, since an element with a smaller opacity paints its content in a layer.
+  private func inLayer(
+    opacity: CGFloat, isNeeded: Bool, of graphics: CGContext, _ body: () async -> Void
+  ) async {
+    guard isNeeded || opacity != 1 else {
+      await body()
+      return
+    }
+    graphics.setAlpha(opacity)
+    graphics.beginTransparencyLayer(auxiliaryInfo: nil)
+    await body()
+    graphics.endTransparencyLayer()
   }
 
   private func paint(_ content: ShapeContent, path: CGPath, into graphics: CGContext) async {
@@ -85,13 +126,11 @@ package struct CGPainter {
       gradient?.paint(path, in: graphics)
       return
     case .pattern(let pattern):
+      guard let pattern else { return }
       graphics.saveGState()
-      graphics.setAlpha(pattern?.opacity ?? 1)
-      graphics.beginTransparencyLayer(auxiliaryInfo: nil)
-      if let pattern {
+      await inLayer(opacity: pattern.opacity, isNeeded: false, of: graphics) {
         await paint(pattern, path: path, into: graphics)
       }
-      graphics.endTransparencyLayer()
       graphics.restoreGState()
       return
     }
@@ -114,26 +153,29 @@ package struct CGPainter {
     graphics.drawPath(using: .stroke)
   }
 
-  private func paint(_ group: GroupNode, into graphics: CGContext) async {
+  private func paint(_ group: GroupNode, into graphics: CGContext, isClipped: Bool) async {
     graphics.saveGState()
     graphics.concatenate(group.transform)
     // The mask applies to the children composited together, so it clips the context that the layer is drawn into.
     if let mask = group.mask {
       await apply(mask, to: graphics)
     }
-    graphics.setAlpha(group.opacity)
-    graphics.beginTransparencyLayer(auxiliaryInfo: nil)
-    if let clip = group.clip {
-      await apply(clip, to: graphics)
+    let isClipped = isClipped || group.mask != nil
+    let hasLayer = needsLayer(opacity: group.opacity, isClipped: isClipped, childCount: group.children.count)
+    await inLayer(opacity: group.opacity, isNeeded: hasLayer, of: graphics) {
+      // The clip path applies to each child.
+      if let clip = group.clip {
+        await apply(clip, to: graphics)
+      }
+      let isChildClipped = (isClipped && !hasLayer) || group.clip != nil
+      for child in group.children {
+        await paint(child, into: graphics, isClipped: isChildClipped)
+      }
     }
-    for child in group.children {
-      await paint(child, into: graphics)
-    }
-    graphics.endTransparencyLayer()
     graphics.restoreGState()
   }
 
-  private func paint(_ viewport: ViewportNode, into graphics: CGContext) async {
+  private func paint(_ viewport: ViewportNode, into graphics: CGContext, isClipped: Bool) async {
     graphics.saveGState()
     graphics.concatenate(viewport.translation)
     guard let content = viewport.content else {
@@ -150,18 +192,22 @@ package struct CGPainter {
     if let mask = content.mask {
       await apply(mask, to: graphics)
     }
-    graphics.beginTransparencyLayer(auxiliaryInfo: nil)
-    if let clip = content.clip {
-      await apply(clip, to: graphics)
+    let isClipped = isClipped || content.overflowClip != nil || content.mask != nil
+    let hasLayer = needsLayer(opacity: 1, isClipped: isClipped, childCount: content.children.count)
+    await inLayer(opacity: 1, isNeeded: hasLayer, of: graphics) {
+      // The clip path applies to each child.
+      if let clip = content.clip {
+        await apply(clip, to: graphics)
+      }
+      let isChildClipped = (isClipped && !hasLayer) || content.clip != nil
+      for child in content.children {
+        await paint(child, into: graphics, isClipped: isChildClipped)
+      }
     }
-    for child in content.children {
-      await paint(child, into: graphics)
-    }
-    graphics.endTransparencyLayer()
     graphics.restoreGState()
   }
 
-  private func paint(_ use: UseNode, into graphics: CGContext) async {
+  private func paint(_ use: UseNode, into graphics: CGContext, isClipped: Bool) async {
     graphics.saveGState()
     defer {
       graphics.restoreGState()
@@ -175,12 +221,18 @@ package struct CGPainter {
     }
     guard let instance = use.instance else { return }
     graphics.concatenate(instance.translation)
-    graphics.setAlpha(instance.opacity)
-    graphics.beginTransparencyLayer(auxiliaryInfo: nil)
-    if let content = instance.content {
-      await paint(content, into: graphics)
+    guard let content = instance.content else { return }
+    let isClipped = isClipped || use.clip != nil || use.mask != nil
+    let hasLayer = needsLayer(opacity: instance.opacity, isClipped: isClipped, childCount: 1)
+    await inLayer(opacity: instance.opacity, isNeeded: hasLayer, of: graphics) {
+      await paint(content, into: graphics, isClipped: isClipped && !hasLayer)
     }
-    graphics.endTransparencyLayer()
+  }
+
+  /// Whether a container paints its children in a layer: when it has an opacity, and when a clip or a mask applies
+  /// to more than one child. One child paints in a layer of its own if it needs one.
+  private func needsLayer(opacity: CGFloat, isClipped: Bool, childCount: Int) -> Bool {
+    opacity != 1 || (isClipped && childCount > 1)
   }
 
   // MARK: - Clip paths
