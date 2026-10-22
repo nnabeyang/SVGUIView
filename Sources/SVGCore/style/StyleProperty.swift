@@ -43,6 +43,13 @@ protocol StyleProperty {
   static func compute(_ value: Specified, in resolver: StyleResolver) -> Computed
 }
 
+/// Something done with the type of a property, which ``PropertyID/visit(_:)`` calls with the type that describes
+/// the property.
+protocol StylePropertyVisitor {
+  associatedtype Result
+  mutating func visit<P: StyleProperty>(_: P.Type) -> Result
+}
+
 extension StyleProperty {
   static func accepts(attributeOn _: SVGElementName) -> Bool {
     true
@@ -110,7 +117,7 @@ func removingComments(from text: String) -> String {
 struct StyleResolver {
   /// The computed values of the element so far. The values of the properties that come before the one being
   /// computed in ``PropertyID`` are final.
-  let style: ComputedStyle
+  var style: ComputedStyle
   let parent: ComputedStyle
   let root: ComputedStyle
 }
