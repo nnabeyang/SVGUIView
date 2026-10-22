@@ -56,8 +56,8 @@ extension RenderTreeBuilder {
       let element = base.masks[id],
       CGContext.bitmapLayout(size: frame.size, scale: scale) != nil
     else { return nil }
-    // The content is filled in a context of its own, with the viewBox and nothing else of the context. It has no
-    // level of references, so a pattern paints black (svg_ui_view-81).
+    // The content is filled in a context of its own, with the viewBox and nothing else of the context. References
+    // in it continue the ones of the masked element, so that a cycle of patterns stops there.
     let fillContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
     var contents = [MaskContent]()
     for child in element.children {
@@ -74,7 +74,7 @@ extension RenderTreeBuilder {
       } else {
         fill = .vector(
           fill: await fillPaint(
-            of: content, path: path, context: fillContext, mode: .root, guard: ReferenceGuard(), instance: []),
+            of: content, path: path, context: fillContext, mode: .root, guard: references, instance: []),
           stroke: nil, fillRule: content.pathFillRule)
       }
       contents.append(

@@ -140,11 +140,11 @@ struct RenderTreeBuilderTests {
     #expect(group.clip == nil)
   }
 
-  @Test("a mask covers its region, and a pattern in it paints black (svg_ui_view-81)")
+  @Test("a mask covers its region, and a pattern in it paints, stopping a cycle of patterns")
   func maskWithPattern() async throws {
     let tree = try await renderTree(
       ##"""
-      <pattern id="p" width="1" height="1"><rect width="1" height="1" fill="lime"/></pattern>
+      <pattern id="p" width="1" height="1"><rect width="1" height="1" fill="url(#p)"/></pattern>
       <mask id="m"><rect width="20" height="20" fill="url(#p)"/></mask>
       <rect width="10" height="10" mask="url(#m)"/>
       """##)
@@ -154,8 +154,13 @@ struct RenderTreeBuilderTests {
     }
     #expect(mask.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
     #expect(mask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
-    guard case .vector(.color(let color), _, _) = try #require(mask.contents.first).fill else {
-      Issue.record("The content of the mask isn't filled with a color")
+    guard case .vector(.pattern(let paint), _, _) = try #require(mask.contents.first).fill else {
+      Issue.record("The content of the mask isn't filled with a pattern")
+      return
+    }
+    // The rectangle in the tile references the pattern again, which paints black.
+    guard case .vector(.color(let color), _, _) = try shape(try #require(paint).content.first).content else {
+      Issue.record("The content of the pattern isn't filled with a color")
       return
     }
     #expect(color == CGColor.opaqueBlack)
