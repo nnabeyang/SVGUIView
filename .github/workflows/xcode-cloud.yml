@@ -4,6 +4,9 @@ name: Xcode Cloud
 #
 # A workflow that runs on a comment uses the file of the default branch, and the secrets of the repository, so
 # only the owner's comments start a build, and the job doesn't check out the pull request.
+#
+# Xcode Cloud builds a branch of this repository by its name, so a pull request from a fork, whose branch may have
+# the name of another branch here, doesn't start a build.
 
 on:
   issue_comment:
@@ -48,7 +51,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
-          branch=$(gh pr view "$PULL_REQUEST" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
+          pull_request=$(gh pr view "$PULL_REQUEST" --repo "${{ github.repository }}" \
+            --json headRefName,isCrossRepository --jq '"\(.headRefName) \(.isCrossRepository)"')
+          read -r branch from_fork <<< "$pull_request"
+          if [ "$from_fork" != false ]; then
+            echo "Xcode Cloud builds only branches of this repository, and this pull request is from a fork." \
+              | tee "$RUNNER_TEMP/start.log"
+            exit 1
+          fi
           scripts/start-xcode-cloud-build.py "$branch" 2>&1 | tee "$RUNNER_TEMP/start.log"
 
       - name: Report the build
