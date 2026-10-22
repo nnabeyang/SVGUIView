@@ -1,7 +1,7 @@
 import _CSSParser
 import _SelectorParser
 
-public struct IdentStaticSet: StaticAtomSet {
+struct IdentStaticSet: StaticAtomSet {
   private static let map: [String: Int] = [
     "scroll-position": 0,
     "visibilitychange": 1,
@@ -152,5 +152,5 @@ public struct IdentStaticSet: StaticAtomSet {
     "referrer": 146,
     "DOMContentLoaded": 147,
   ]
-  public static func get() -> [String: Int]? { map }
+  static func get() -> [String: Int]? { map }
 }

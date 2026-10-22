@@ -1,22 +1,22 @@
 import _CSSParser
 
-public struct AtomString: Equatable, RawRepresentable {
-  public let rawValue: String
+struct AtomString: Equatable, RawRepresentable {
+  let rawValue: String
 
-  public init(rawValue: String) {
+  init(rawValue: String) {
     self.rawValue = rawValue
   }
 }
 
 extension AtomString: ExpressibleByStringLiteral {
-  public init(stringLiteral value: String) {
+  init(stringLiteral value: String) {
     self = .init(rawValue: value)
   }
 }
 
 extension AtomString: From {
-  public typealias From = String
-  public static func from(_ string: String) -> Self {
+  typealias From = String
+  static func from(_ string: String) -> Self {
     Self(rawValue: string)
   }
 }
@@ -33,7 +33,7 @@ extension AtomString: Parse {
 }
 
 extension AtomString: ToCSS {
-  public func toCSS(to dest: inout some TextOutputStream) {
+  func toCSS(to dest: inout some TextOutputStream) {
     dest.write("\"")
     var writer = CssStringWriter(&dest)
     writer.write(self.rawValue)

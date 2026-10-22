@@ -1,4 +1,4 @@
-public struct NamespaceStaticSet: StaticAtomSet {
+struct NamespaceStaticSet: StaticAtomSet {
   private static let map: [String: Int] = [
     "http://www.w3.org/1999/xhtml": 0,
     "http://www.w3.org/1999/xlink": 1,
@@ -7,5 +7,5 @@ public struct NamespaceStaticSet: StaticAtomSet {
     "": 4,
     "http://www.w3.org/2000/svg": 5,
   ]
-  public static func get() -> [String: Int]? { map }
+  static func get() -> [String: Int]? { map }
 }

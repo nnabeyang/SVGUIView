@@ -40,7 +40,7 @@ package enum PreserveAspectRatio {
     case meet
     case slice
 
-    public func fit(size: CGSize, into sizeToFitIn: CGSize) -> CGSize {
+    func fit(size: CGSize, into sizeToFitIn: CGSize) -> CGSize {
       let widthRatio = sizeToFitIn.width / size.width
       let heightRatio = sizeToFitIn.height / size.height
       switch (self, heightRatio < widthRatio) {

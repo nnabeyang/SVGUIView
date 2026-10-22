@@ -1,7 +1,7 @@
 import _CSSParser
 import _SelectorParser
 
-public class ParserContext {
+class ParserContext {
   var parsingMode: ParsingMode
 
   init(parsingMode: ParsingMode = .default) {
@@ -14,14 +14,14 @@ protocol Parse {
 }
 
 typealias CSSParseError = ParseError<StyleParseErrorKind>
-public enum StyleParseErrorKind: Error, Equatable {
+enum StyleParseErrorKind: Error, Equatable {
   case invalid
   case selectorError(SelectorParseErrorKind)
 }
 
 extension StyleParseErrorKind: From {
-  public typealias From = SelectorParseErrorKind
-  public static func from(_ kind: SelectorParseErrorKind) -> StyleParseErrorKind {
+  typealias From = SelectorParseErrorKind
+  static func from(_ kind: SelectorParseErrorKind) -> StyleParseErrorKind {
     .selectorError(kind)
   }
 }
