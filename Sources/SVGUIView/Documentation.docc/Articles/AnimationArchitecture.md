@@ -4,14 +4,18 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 
 ## Overview
 
-> Important: This article describes planned work. The types, properties and
-> methods it proposes don't exist yet, and their names may change while the
-> work goes on.
+> Important: This article describes work that is partly planned. Phase 0,
+> which splits the code into `SVGCore` and `SVGRenderCG` and into the stages of
+> the rendering pipeline, is done. Animation, the document API,
+> `SVGRenderLayer` and filters on Metal are planned: the types, properties and
+> methods proposed for them don't exist yet, and their names may change while
+> the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
-will be extended to play animations, and records the decisions made before the
-implementation starts. Each section ends with the decisions it makes, and
-<doc:#Open-questions> lists what is still undecided.
+will be extended to play animations, and records the decisions made for the
+work. Each section ends with the decisions it makes, and <doc:#Open-questions>
+lists what is still undecided. <doc:#Implementation-phases> shows which phases
+are done.
 
 ### Scope
 
@@ -35,39 +39,41 @@ animations behaves as it does today.
 
 ## Current design and its limits
 
-The current design assumes that a document never changes after it's parsed.
+Before phase 0, the design assumed that a document never changes after it's
+parsed. This section records its limits, and which of them phase 0 removed.
 
-- **Styles are fixed when the document is parsed.** The parser builds a tree
-  of immutable element objects. The cascade picks one declaration per property
-  for each element and builds a new element object with the result. Nothing
-  records which declarations an element's values came from, so a value can't
-  change over time.
-- **Only a few properties take part in the cascade.** Style sheets and the
-  `style` attribute can set 13 properties: `fill`, `fill-opacity`, `stroke`,
+- **Styles were fixed when the document was parsed.** The parser built a tree
+  of immutable element objects. The cascade picked one declaration per property
+  for each element and built a new element object with the result. Nothing
+  recorded which declarations an element's values came from, so a value couldn't
+  change over time. Phase 0 removed this limit: the document tree is persistent,
+  and each element keeps its cascaded values, from which its computed values are
+  resolved.
+- **Only a few properties took part in the cascade.** Style sheets and the
+  `style` attribute could set 13 properties: `fill`, `fill-opacity`, `stroke`,
   `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`,
   `transform`, `clip-path`, `x`, `y`, `width` and `height`. Every other property,
-  such as `opacity`, `display` or `filter`, can only be set as a presentation
-  attribute. Inherited values are resolved while drawing, through stacks in
-  `SVGContext`.
+  such as `opacity`, `display` or `filter`, could only be set as a presentation
+  attribute. Inherited values were resolved while drawing, through stacks in
+  `SVGContext`. Phase 0 removed this limit: the cascade covers every property
+  that SVGUIView supports, and inherited values are computed with the styles.
+- **Drawing state was shared through an unchecked type.** `SVGContext` was
+  marked `@unchecked Sendable` and held reference-type stacks. Code was correct
+  only because a rendering used its context from one task at a time. Phase 0
+  removed this limit: rendering builds an immutable render tree and paints it,
+  so no drawing state is shared, and `SVGContext` is gone.
 - **At-rules are dropped.** The CSS parser doesn't parse any at-rule, so
   `@keyframes` rules are lost. Selector matching supports type, class and ID
-  selectors and combinators, but not pseudo-classes.
+  selectors and combinators, but not pseudo-classes. This remains until
+  phase 1.
 - **Every update redraws the whole document.** Drawing renders the entire
   tree into one bitmap, which becomes the contents of the view's layer. Nothing
   is cached between renderings, and a rendering that takes longer than
   ``SVGUIViewConfiguration/timeoutDuration`` (10 seconds by default) is
   cancelled. A frame of an animation has to be ready in about 16 milliseconds,
-  or 8 milliseconds at 120 Hz.
-- **Drawing state is shared through an unchecked type.** `SVGContext` is
-  marked `@unchecked Sendable` and holds reference-type stacks. Code is correct
-  only because a rendering uses its context from one task at a time.
+  or 8 milliseconds at 120 Hz. This remains until phase 2.
 - **Filters run on the CPU.** Filter primitives are implemented with Core
-  Graphics and vImage.
-
-Phase 0 has since removed two of these limits. The cascade covers every
-property that SVGUIView supports, and inherited values are computed when the
-document is parsed. Rendering builds an immutable render tree and paints it, so
-no drawing state is shared, and `SVGContext` is gone.
+  Graphics and vImage. This remains until phase 3.
 
 Animation needs the opposite assumptions: values that depend on time and on
 changes made through the API, and redrawing only what changed.
@@ -94,11 +100,13 @@ computing what to draw is separate from the two ways of drawing it.
 
 | Target | Role |
 |---|---|
-| `SVGCore` | Parsing, the document tree, the cascade and computed values, the render tree, the timeline, timing and interpolation. It uses Core Graphics and Core Text for geometry and text layout, but not UIKit. |
-| `SVGRenderCG` | Paints a render tree into a `CGContext`. It produces still images, and the contents of individual layers for `SVGRenderLayer`. Filters keep their Core Graphics and vImage implementations. |
-| `SVGRenderLayer` | Builds and updates a tree of `CALayer` objects from a render tree, and plays animations. Filters that run on Metal live here. |
-| `SVGUIView` | The public `UIView`. It picks one of the two renderers and owns the document and its clock. |
+| `SVGCore` | Parsing, the document tree, the cascade and computed values, and the render tree. From phase 1, also the timeline, timing and interpolation. It uses Core Graphics and Core Text for geometry and text layout, but not UIKit. |
+| `SVGRenderCG` | Paints a render tree into a `CGContext`. It produces still images, and from phase 2 the contents of individual layers for `SVGRenderLayer`. Filters keep their Core Graphics and vImage implementations. |
+| `SVGRenderLayer` | Planned for phase 2. Builds and updates a tree of `CALayer` objects from a render tree, and plays animations. Filters that run on Metal live here. |
+| `SVGUIView` | The public `UIView`. It draws still images with `SVGRenderCG`. From phase 2, it picks one of the two renderers and owns the document and its clock. |
 | `SVGView` | The SwiftUI wrapper of ``SVGUIView/SVGUIView``. |
+
+Phase 0 added `SVGCore` and `SVGRenderCG`. `SVGRenderLayer` doesn't exist yet.
 
 Decisions:
 
@@ -109,8 +117,8 @@ Decisions:
   can be added if someone needs it without UIKit.
 - The fonts of text styles, such as `UICTFontTextStyleBody`, come from UIKit,
   so `SVGUIView` passes them to `SVGCore` before it parses a document.
-- The private interfaces in `_SPI`, `_ICU` and `_CShims` move with the code that
-  uses them, which is mostly text layout in `SVGCore`.
+- The private interfaces in `_SPI`, `_ICU` and `_CShims` are used by the code
+  that needs them, which is mostly text layout in `SVGCore`.
 - The existing branch that adds separate Metal-backed views isn't continued.
   There is one view, and the renderer is chosen inside it.
 
@@ -152,23 +160,23 @@ Style resolution produces three sets of values for each element:
 - **Computed values:** cascaded values with inheritance and initial values
   applied, and units resolved as far as they can be without layout.
 - **Animated values:** computed values with the animations that are active
-  at the current time applied on top. See <doc:#Combining-animations>.
+  at the current time applied on top. They come with phase 1. See
+  <doc:#Combining-animations>.
 
 Every property is described once in a property registry: its parser, its
-initial value, whether it's inherited, and how it's animated. Adding a property
-to the cascade becomes adding an entry to the registry, and the 13-property
-limit goes away.
+initial value and whether it's inherited. Adding a property to the cascade is
+adding an entry to the registry. From phase 1, the registry also says how a
+property is animated.
 
-Inheritance moves from drawing time to style resolution, so the stacks in
-`SVGContext` that carry inherited values are no longer needed.
+Inheritance is resolved with the styles, not while drawing.
 
 ### Render tree
 
 The render tree holds what painting needs and nothing more: the geometry of each
-shape as a path, transforms, resolved paint servers, and references to clip
-paths, masks and filters. Text is laid out into glyph runs here. Each `<use>`
-element is expanded into its own copy of the referenced content, so that the
-copy can be styled and animated separately.
+shape as a path, transforms, resolved paint servers, and the clip paths, masks
+and filters, resolved for the elements that use them. Text is laid out here, and
+its glyphs become a path. Each `<use>` element is expanded into its own copy of
+the referenced content, so that the copy can be styled and animated separately.
 
 Render tree nodes are immutable `Sendable` values. Each node keeps the identity
 of the element it came from, which lets a renderer match a new render tree with
@@ -177,8 +185,12 @@ the previous one.
 ### Painting
 
 Painting is done by one of the two renderers. See <doc:#Rendering-strategies>.
+Until phase 2, `SVGRenderCG` is the only one.
 
 ### Invalidation
+
+Invalidation is planned for phase 2. Until then, every rendering runs all four
+stages.
 
 A change to the document, or a new animation frame, marks what has to be
 recomputed. The amount of work depends on what changed:
@@ -534,14 +546,18 @@ snapshots miss.
 Each phase leaves the package releasable, and a phase only starts when the one
 before it is merged.
 
-| Phase | Work |
-|---|---|
-| 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. |
-| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. |
-| 1.5 | SMIL animation, on the timing model and interpolation from phase 1. |
-| 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. |
-| 2.5 | The document API and CSS Transitions, which need the document API to start. |
-| 3 | Filters on Metal. |
+| Phase | Work | Status |
+|---|---|---|
+| 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. | Done in 0.25.0 |
+| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Planned |
+| 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Planned |
+| 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Planned |
+| 2.5 | The document API and CSS Transitions, which need the document API to start. | Planned |
+| 3 | Filters on Metal. | Planned |
+
+Phase 0 kept the output of every test document the same while it moved the
+code. The bugs it found on the way were fixed after the move, so 0.25.0 also
+changes the output of the documents that those bugs affected.
 
 ## Open questions
 
