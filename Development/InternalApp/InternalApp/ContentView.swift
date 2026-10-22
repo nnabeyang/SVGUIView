@@ -35,11 +35,18 @@ struct Folder: Hashable {
   let title: String
 
   static var testSuite: Folder {
-    Folder(url: TestSuite.bundle.bundleURL.appending(component: "w3c"), title: "Test Suite")
+    Folder(url: TestSuite.bundle.bundleURL, title: "Test Suite")
   }
+
+  /// The folders at the top of the test suite: `w3c` for the tests from other projects, and `custom` for the
+  /// ones written for SVGUIView. The bundle has other files beside them.
+  private static let topLevelFolders = ["w3c", "custom"]
 
   /// The subfolders and SVG files directly in the folder, sorted by name.
   func contents() -> (folders: [Folder], documents: [SVGDocument]) {
+    if url == Self.testSuite.url {
+      return (Self.topLevelFolders.map { Folder(url: url.appending(component: $0), title: $0) }, [])
+    }
     let urls =
       (try? FileManager.default.contentsOfDirectory(
         at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
