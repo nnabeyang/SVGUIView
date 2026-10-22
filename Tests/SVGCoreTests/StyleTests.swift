@@ -229,6 +229,20 @@ struct StyleTests {
     #expect(grandchild.strokeWidth == .pixel(10))
   }
 
+  @Test(
+    "lighter and bolder follow the table of CSS Fonts for the weight of the parent",
+    arguments: [
+      ("bold", "lighter", 400.0), ("normal", "lighter", 100), ("normal", "bolder", 700), ("bold", "bolder", 900),
+      ("50", "lighter", 50), ("50", "bolder", 400), ("549", "lighter", 100), ("549", "bolder", 700),
+      ("749", "lighter", 400), ("899", "lighter", 700), ("950", "lighter", 700), ("950", "bolder", 950),
+    ])
+  func relativeFontWeight(parent: String, child: String, weight: Double) throws {
+    let parent = style([PropertyDeclaration(FontWeightProperty.self, .value(try #require(.init(rawValue: parent))))])
+    let child = style(
+      [PropertyDeclaration(FontWeightProperty.self, .value(try #require(.init(rawValue: child))))], parent: parent)
+    #expect(child.fontWeight.value == FontSelectionValue(weight))
+  }
+
   @Test("presentation attributes of geometry are taken only by rect")
   func geometryAttributes() {
     let rect = CascadedValues(CascadedValues.presentationAttributes(of: .rect, attributes: ["x": "10", "fill": "red"]))
