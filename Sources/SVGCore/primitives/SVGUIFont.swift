@@ -119,6 +119,20 @@ extension SVGUIFont {
       }
     }
 
+    /// The weight as a number, which `value` also gives.
+    private var number: Double {
+      switch self {
+      case .normal: 400
+      case .lighter: 100
+      case .bold, .bolder: 700
+      case .number(let value): value
+      }
+    }
+
+    /// The computed weight of an element, from its weight and the computed weight of its parent.
+    ///
+    /// `lighter` and `bolder` follow the table of relative weights of CSS Fonts, with the weight of the parent as a
+    /// number.
     init?(child: Weight?, parent: Weight?) {
       switch child {
       case .normal:
@@ -126,48 +140,40 @@ extension SVGUIFont {
       case .bold:
         self = .bold
       case .lighter:
-        self = {
-          switch parent {
-          case .normal, .bold, .lighter, .bolder:
-            return .number(100)
-          case .number(let value):
-            if value <= 500 {
-              return .number(100)
-            }
-            if value <= 700 {
-              return .normal
-            }
-            return .bold
-          case .none:
-            return .lighter
-          }
-        }()
+        guard let parent else {
+          self = .lighter
+          return
+        }
+        self = .number(Self.lighter(than: parent.number))
       case .bolder:
-        self = {
-          switch parent {
-          case .lighter:
-            return .normal
-          case .normal:
-            return .bold
-          case .bold, .bolder:
-            return .number(900)
-          case .number(let value):
-            if value <= 300 {
-              return .normal
-            }
-            if value <= 500 {
-              return .bold
-            }
-            return .number(900)
-          case .none:
-            return .bold
-          }
-        }()
+        guard let parent else {
+          self = .bolder
+          return
+        }
+        self = .number(Self.bolder(than: parent.number))
       case .number(let value):
         self = .number(value)
       case .none:
         guard let parent = parent else { return nil }
         self = parent
+      }
+    }
+
+    private static func lighter(than weight: Double) -> Double {
+      switch weight {
+      case ..<100: weight
+      case ..<550: 100
+      case ..<750: 400
+      default: 700
+      }
+    }
+
+    private static func bolder(than weight: Double) -> Double {
+      switch weight {
+      case ..<350: 400
+      case ..<550: 700
+      case ..<900: 900
+      default: weight
       }
     }
   }
