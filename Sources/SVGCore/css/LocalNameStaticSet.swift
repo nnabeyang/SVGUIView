@@ -1,4 +1,4 @@
-public struct LocalNameStaticSet: StaticAtomSet {
+struct LocalNameStaticSet: StaticAtomSet {
   private static let map: [String: Int] = [
     "animatecolor": 0,
     "verythickmathspace": 1,
@@ -653,5 +653,5 @@ public struct LocalNameStaticSet: StaticAtomSet {
     "selected": 650,
     "veryverythinmathspace": 651,
   ]
-  public static func get() -> [String: Int]? { map }
+  static func get() -> [String: Int]? { map }
 }

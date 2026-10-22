@@ -1,4 +1,4 @@
-public struct PrefixStaticSet: StaticAtomSet {
+struct PrefixStaticSet: StaticAtomSet {
   private static let map: [String: Int] = [
     "*": 0,
     "html": 1,
@@ -8,5 +8,5 @@ public struct PrefixStaticSet: StaticAtomSet {
     "xml": 5,
     "xmlns": 6,
   ]
-  public static func get() -> [String: Int]? { map }
+  static func get() -> [String: Int]? { map }
 }

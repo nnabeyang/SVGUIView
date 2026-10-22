@@ -1,8 +1,8 @@
 import _CSSParser
 
 struct ParsingMode: OptionSet {
-  public let rawValue: UInt8
-  public init(rawValue: UInt8) {
+  let rawValue: UInt8
+  init(rawValue: UInt8) {
     self.rawValue = rawValue
   }
 

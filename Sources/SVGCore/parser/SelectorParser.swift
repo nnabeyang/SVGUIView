@@ -2,15 +2,15 @@ import Foundation
 import _CSSParser
 import _SelectorParser
 
-public typealias AttrValue = SVGSelectorImpl.AttrValue
+typealias AttrValue = SVGSelectorImpl.AttrValue
 
-public struct SelectorParser {
-  public let stylesheetOrigin: Origin
-  public let namespaces: Namespaces
-  public let urlData: URLExtraData
-  public let forSupportsRule: Bool
+struct SelectorParser {
+  let stylesheetOrigin: Origin
+  let namespaces: Namespaces
+  let urlData: URLExtraData
+  let forSupportsRule: Bool
 
-  public func parseAuthorOriginNoNamespace(input: String, urlData: URLExtraData) -> Result<SelectorList<SVGSelectorImpl>, ParseError<Failure>> {
+  func parseAuthorOriginNoNamespace(input: String, urlData: URLExtraData) -> Result<SelectorList<SVGSelectorImpl>, ParseError<Failure>> {
     let namespaces = Namespaces.default()
     let parser = SelectorParser(stylesheetOrigin: .author, namespaces: namespaces, urlData: urlData, forSupportsRule: false)
     let input = ParserInput(input: input)
@@ -18,54 +18,54 @@ public struct SelectorParser {
     return SelectorList.parse(parser: parser, input: &cssParser, parseRelative: .no)
   }
 
-  public var inUserAgentStylesheet: Bool {
+  var inUserAgentStylesheet: Bool {
     switch stylesheetOrigin {
     case .userAgent: true
     default: false
     }
   }
 
-  public var chromeRulesEnabled: Bool {
+  var chromeRulesEnabled: Bool {
     urlData.chromeRulesEnabled || stylesheetOrigin == .userAgent
   }
 }
 
 extension SelectorParser: _SelectorParser.Parser {
-  public typealias Impl = SVGSelectorImpl
-  public typealias Failure = StyleParseErrorKind
+  typealias Impl = SVGSelectorImpl
+  typealias Failure = StyleParseErrorKind
 
-  public func parseSlotted() -> Bool {
+  func parseSlotted() -> Bool {
     true
   }
 
-  public func parsePart() -> Bool {
+  func parsePart() -> Bool {
     true
   }
 
-  public func parseNthChildOf() -> Bool {
+  func parseNthChildOf() -> Bool {
     false
   }
 
-  public func parseIsAndWhere() -> Bool {
+  func parseIsAndWhere() -> Bool {
     true
   }
 
-  public func parseHas() -> Bool {
+  func parseHas() -> Bool {
     false
   }
 
-  public func parseParentSelector() -> Bool {
+  func parseParentSelector() -> Bool {
     true
   }
 
-  public func parseHost() -> Bool {
+  func parseHost() -> Bool {
     true
   }
-  public func allowForgivingSelectors() -> Bool {
+  func allowForgivingSelectors() -> Bool {
     !forSupportsRule
   }
 
-  public func parseNonTSPseudoClass(location: SourceLocation, name: String)
+  func parseNonTSPseudoClass(location: SourceLocation, name: String)
     -> Result<Impl.NonTSPseudoClass, ParseError<Failure>>
   {
     let pseudoClass: SVGSelectorImpl.NonTSPseudoClass
@@ -107,7 +107,7 @@ extension SelectorParser: _SelectorParser.Parser {
     return .success(pseudoClass)
   }
 
-  public func parseNonTSFunctionalPseudoClass(name: String, parser: inout _SelectorParser.CSSParser, afterPart: Bool) -> Result<Impl.NonTSPseudoClass, ParseError<Failure>> {
+  func parseNonTSFunctionalPseudoClass(name: String, parser: inout _SelectorParser.CSSParser, afterPart: Bool) -> Result<Impl.NonTSPseudoClass, ParseError<Failure>> {
     let pseudoClass: Impl.NonTSPseudoClass
     switch name.lowercased() {
     case "lang":
@@ -130,7 +130,7 @@ extension SelectorParser: _SelectorParser.Parser {
     return .success(pseudoClass)
   }
 
-  public func parsePseudoElement(location: SourceLocation, name: String)
+  func parsePseudoElement(location: SourceLocation, name: String)
     -> Result<Impl.PseudoElement, ParseError<Failure>>
   {
     let pseudoElement: Impl.PseudoElement
@@ -158,11 +158,11 @@ extension SelectorParser: _SelectorParser.Parser {
     return .success(pseudoElement)
   }
 
-  public func defaultNamespace() -> Impl.NamespaceUrl? {
+  func defaultNamespace() -> Impl.NamespaceUrl? {
     namespaces.default
   }
 
-  public func namespaceForPrefix(prefix: Impl.NamespacePrefix) -> Impl.NamespaceUrl? {
+  func namespaceForPrefix(prefix: Impl.NamespacePrefix) -> Impl.NamespaceUrl? {
     namespaces.prefixes[prefix]
   }
 }

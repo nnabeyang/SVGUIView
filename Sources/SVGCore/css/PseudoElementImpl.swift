@@ -1,7 +1,7 @@
 import _CSSParser
 import _SelectorParser
 
-public enum PseudoElementImpl: Int, Equatable {
+enum PseudoElementImpl: Int, Equatable {
   // Eager pseudos.
   case after = 0
   case before
@@ -13,12 +13,12 @@ public enum PseudoElementImpl: Int, Equatable {
   case colorSwatch
   case placeholder
 
-  public static let count = Self.placeholder.rawValue + 1
-  public static let eagerCount = 3
+  static let count = Self.placeholder.rawValue + 1
+  static let eagerCount = 3
 }
 
 extension PseudoElementImpl: ToCSS {
-  public func toCSS(to dest: inout some TextOutputStream) {
+  func toCSS(to dest: inout some TextOutputStream) {
     let string =
       switch self {
       case .after: "::after"
@@ -34,5 +34,5 @@ extension PseudoElementImpl: ToCSS {
 }
 
 extension PseudoElementImpl: PseudoElement {
-  public typealias Impl = SVGSelectorImpl
+  typealias Impl = SVGSelectorImpl
 }

@@ -134,8 +134,8 @@ extension CSSParser: QualifiedRuleParser {
     return .success(CSSRule(selectors: prelude, declarations: declarations, sourceOrder: 0))
   }
 
-  public typealias Element = Result<CSSDeclaration, RuleBodyError<StyleParseErrorKind>>
-  public mutating func next(input: inout _CSSParser.Parser, parser: inout CSSDeclarationParser) -> Element? {
+  typealias Element = Result<CSSDeclaration, RuleBodyError<StyleParseErrorKind>>
+  mutating func next(input: inout _CSSParser.Parser, parser: inout CSSDeclarationParser) -> Element? {
     while true {
       input.skipWhitespace()
       var start = input.state

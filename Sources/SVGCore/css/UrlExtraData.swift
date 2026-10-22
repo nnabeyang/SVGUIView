@@ -1,20 +1,20 @@
 import Foundation
 import _CSSParser
 
-public struct URLExtraData {
-  public let value: URL
+struct URLExtraData {
+  let value: URL
 
-  public init(_ value: URL) {
+  init(_ value: URL) {
     self.value = value
   }
 
-  public var chromeRulesEnabled: Bool {
+  var chromeRulesEnabled: Bool {
     value.scheme == "chrome"
   }
 }
 
 extension URLExtraData: From {
-  public static func from(_ other: URL) -> URLExtraData {
+  static func from(_ other: URL) -> URLExtraData {
     Self(other)
   }
 }

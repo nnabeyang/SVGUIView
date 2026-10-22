@@ -1,7 +1,7 @@
 import _CSSParser
 import _SelectorParser
 
-public enum NonTSPseudoClassImpl: Equatable {
+enum NonTSPseudoClassImpl: Equatable {
   case active
   case anyLink
   case autofill
@@ -41,29 +41,29 @@ public enum NonTSPseudoClassImpl: Equatable {
 }
 
 extension NonTSPseudoClassImpl: NonTSPseudoClass {
-  public typealias Impl = SVGSelectorImpl
+  typealias Impl = SVGSelectorImpl
 
-  public func isActiveOrHover() -> Bool {
+  func isActiveOrHover() -> Bool {
     switch self {
     case .active, .hover: true
     default: false
     }
   }
 
-  public func isUserActionState() -> Bool {
+  func isUserActionState() -> Bool {
     switch self {
     case .active, .hover, .focus: true
     default: false
     }
   }
 
-  public func visit<V: SelectorVisitor>(_ visitor: inout V) -> Bool where V.Impl == Impl {
+  func visit<V: SelectorVisitor>(_ visitor: inout V) -> Bool where V.Impl == Impl {
     true
   }
 }
 
 extension NonTSPseudoClassImpl: ToCSS {
-  public func toCSS(to dest: inout some TextOutputStream) {
+  func toCSS(to dest: inout some TextOutputStream) {
     if case .lang(let lang) = self {
       dest.write(":lang(")
       serializeIdentifier(lang, dest: &dest)
@@ -118,7 +118,7 @@ extension NonTSPseudoClassImpl: ToCSS {
 }
 
 extension NonTSPseudoClassImpl {
-  public var stateFlag: ElementState {
+  var stateFlag: ElementState {
     switch self {
     case .active: .active
     case .anyLink: .visitedOrUnvisited
@@ -157,11 +157,11 @@ extension NonTSPseudoClassImpl {
     }
   }
 
-  public var documentStateFlag: DocumentState {
+  var documentStateFlag: DocumentState {
     .empty
   }
 
-  public var needsCacheRevalidation: Bool {
+  var needsCacheRevalidation: Bool {
     self.stateFlag.isEmpty
   }
 }

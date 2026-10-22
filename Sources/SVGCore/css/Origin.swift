@@ -1,4 +1,4 @@
-public enum Origin: UInt8 {
+enum Origin: UInt8 {
   case userAgent = 1
   case user = 2
   case author = 4
