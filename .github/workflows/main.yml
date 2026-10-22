@@ -11,8 +11,39 @@ permissions:
   contents: read
 
 jobs:
+  # Finds whether a pull request changes the files that the tests and the documentation use. A pull request that
+  # changes none of them, such as one that only changes README.md, skips the tests and the documentation, and
+  # `ci-required` succeeds for them. Pushes and runs by hand always run everything.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Find whether the code changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            scripts/changes-code.sh "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
   test:
     name: Test on iOS (Xcode 27.0)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # Xcode 27 is only available on the xcode-27 image for now.
     runs-on: xcode-27
 
@@ -64,6 +95,8 @@ jobs:
   # silently degrading the hosted documentation.
   documentation:
     name: Build documentation
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # Xcode 27 is only available on the xcode-27 image for now.
     runs-on: xcode-27
 
@@ -80,3 +113,41 @@ jobs:
 
       - name: Build DocC documentation
         run: ./scripts/build-documentation.sh --strict
+
+  # The one check that the ruleset requires, which always runs, so that a pull request whose tests are skipped can
+  # be merged. Renaming the job requires renaming the check in the ruleset too.
+  ci-required:
+    name: CI Required
+    needs: [changes, test, documentation]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check the results of the other jobs
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          TEST: ${{ needs.test.result }}
+          DOCUMENTATION: ${{ needs.documentation.result }}
+        run: |
+          echo "changes: $CHANGES (code: $CODE), test: $TEST, documentation: $DOCUMENTATION"
+          # The tests and the documentation are skipped also when finding the changes fails.
+          if [ "$CHANGES" != success ]; then
+            echo "::error::Finding the changed paths didn't succeed ($CHANGES)"
+            exit 1
+          fi
+          # They may be skipped only when the code doesn't change.
+          case "$CODE" in
+            true) allowed=success ;;
+            false) allowed=skipped ;;
+            *)
+              echo "::error::Finding the changed paths gave no result"
+              exit 1
+              ;;
+          esac
+          for result in "$TEST" "$DOCUMENTATION"; do
+            if [ "$result" != "$allowed" ]; then
+              echo "::error::A required job didn't succeed ($result)"
+              exit 1
+            fi
+          done
