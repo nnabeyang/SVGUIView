@@ -45,7 +45,7 @@ package struct CGPainter {
     graphics.saveGState()
     graphics.concatenate(shape.transform)
     if let clip = shape.clip {
-      await apply(clip, to: graphics, level: graphics)
+      await apply(clip, to: graphics)
     }
     switch shape.mask {
     case .none:
@@ -53,7 +53,7 @@ package struct CGPainter {
     case .clipToZero:
       graphics.clip(to: .zero)
     case .mask(let mask):
-      await apply(mask, to: graphics, level: graphics)
+      await apply(mask, to: graphics)
     }
     graphics.setAlpha(shape.opacity)
     graphics.beginTransparencyLayer(auxiliaryInfo: nil)
@@ -119,12 +119,12 @@ package struct CGPainter {
     graphics.concatenate(group.transform)
     // The mask applies to the children composited together, so it clips the context that the layer is drawn into.
     if let mask = group.mask {
-      await apply(mask, to: graphics, level: graphics)
+      await apply(mask, to: graphics)
     }
     graphics.setAlpha(group.opacity)
     graphics.beginTransparencyLayer(auxiliaryInfo: nil)
     if let clip = group.clip {
-      await apply(clip, to: graphics, level: graphics)
+      await apply(clip, to: graphics)
     }
     for child in group.children {
       await paint(child, into: graphics)
@@ -148,11 +148,11 @@ package struct CGPainter {
       graphics.clip()
     }
     if let mask = content.mask {
-      await apply(mask, to: graphics, level: graphics)
+      await apply(mask, to: graphics)
     }
     graphics.beginTransparencyLayer(auxiliaryInfo: nil)
     if let clip = content.clip {
-      await apply(clip, to: graphics, level: graphics)
+      await apply(clip, to: graphics)
     }
     for child in content.children {
       await paint(child, into: graphics)
@@ -168,10 +168,10 @@ package struct CGPainter {
     }
     graphics.concatenate(use.transform)
     if let clip = use.clip {
-      await apply(clip, to: graphics, level: graphics)
+      await apply(clip, to: graphics)
     }
     if let mask = use.mask {
-      await apply(mask, to: graphics, level: graphics)
+      await apply(mask, to: graphics)
     }
     guard let instance = use.instance else { return }
     graphics.concatenate(instance.translation)
@@ -186,19 +186,21 @@ package struct CGPainter {
   // MARK: - Clip paths
 
   /// Clips `target` to a clip path.
-  ///
-  /// - Parameter level: The context that the clipped element is drawn into, which the clip path of the `<clipPath>`
-  ///   element clips (svg_ui_view-90).
-  private func apply(_ clip: ClipPathEffect, to target: CGContext, level: CGContext) async {
-    guard let image = await image(of: clip, level: level) else { return }
+  private func apply(_ clip: ClipPathEffect, to target: CGContext) async {
+    guard let image = await image(of: clip) else { return }
     target.clip(to: clip.frame, mask: image)
   }
 
   /// The bitmap of the bounds of the clipped element, whose alpha is the clip path, or `nil` if it can't be made.
-  private func image(of clip: ClipPathEffect, level: CGContext) async -> CGImage? {
+  private func image(of clip: ClipPathEffect) async -> CGImage? {
     let size = clip.frame.size
     guard let graphics = CGContext.bitmap(size: size, scale: scale, space: CGColorSpaceCreateDeviceRGB()) else {
       return nil
+    }
+    // The clip path of the `<clipPath>` element is built for the same bounds, so its bitmap covers this one.
+    if let clipPath = clip.clipPath {
+      guard let image = await image(of: clipPath) else { return nil }
+      graphics.clip(to: CGRect(x: 0, y: 0, width: graphics.width, height: graphics.height), mask: image)
     }
     let transform = clip.transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
     switch clip.units {
@@ -213,14 +215,11 @@ package struct CGPainter {
       graphics.saveGState()
       graphics.concatenate(shape.transform)
       if let clip = shape.clip {
-        await apply(clip, to: graphics, level: level)
+        await apply(clip, to: graphics)
       }
       graphics.addPath(shape.path.cgPath)
       graphics.drawPath(using: shape.fillRule)
       graphics.restoreGState()
-    }
-    if let clipPath = clip.clipPath {
-      await apply(clipPath, to: level, level: level)
     }
     return graphics.makeImage()
   }
@@ -228,18 +227,15 @@ package struct CGPainter {
   // MARK: - Masks
 
   /// Clips `target` to a mask.
-  ///
-  /// - Parameter level: The context that the masked element is drawn into, which the clip paths of `<clipPath>`
-  ///   elements in the mask clip (svg_ui_view-90).
-  private func apply(_ mask: MaskEffect, to target: CGContext, level: CGContext) async {
-    guard let image = await image(of: mask, level: level) else { return }
+  private func apply(_ mask: MaskEffect, to target: CGContext) async {
+    guard let image = await image(of: mask) else { return }
     target.clip(to: mask.region)
     target.clip(to: mask.frame, mask: image)
   }
 
   /// The bitmap of the bounds of the masked element, whose alpha is the luminance of the mask, or `nil` if it
   /// can't be made.
-  private func image(of mask: MaskEffect, level: CGContext) async -> CGImage? {
+  private func image(of mask: MaskEffect) async -> CGImage? {
     let size = mask.frame.size
     guard let graphics = CGContext.bitmap(size: size, scale: scale, space: mask.colorInterpolation.colorSpace) else {
       return nil
@@ -257,16 +253,13 @@ package struct CGPainter {
       graphics.saveGState()
       graphics.concatenate(content.transform)
       if let clip = content.clip {
-        await apply(clip, to: graphics, level: level)
+        await apply(clip, to: graphics)
       }
       if let mask = content.mask {
-        await apply(mask, to: graphics, level: level)
+        await apply(mask, to: graphics)
       }
       await paint(content.fill, path: content.path.cgPath, into: graphics)
       graphics.restoreGState()
-    }
-    if let clip = mask.clipPath {
-      await apply(clip, to: graphics, level: level)
     }
     return graphics.makeImage().flatMap(luminanceToAlpha)
   }
@@ -285,9 +278,6 @@ package struct CGPainter {
       tile.saveGState()
       await paint(node, into: tile)
       tile.restoreGState()
-    }
-    if let clip = pattern.clipPath {
-      await apply(clip, to: tile, level: graphics)
     }
     guard let tileImage = tile.makeImage() else { return }
     let drawPattern: CGPatternDrawPatternCallback = { info, context in

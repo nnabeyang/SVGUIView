@@ -11,8 +11,7 @@ package final class ClipPathEffect: Sendable {
   package let transform: CGAffineTransform
   package let units: SVGUnitType
   package let shapes: [ClipShape]
-  /// The clip path of the `<clipPath>` element. It clips what the element is drawn into, rather than the shapes,
-  /// after they're drawn (svg_ui_view-90).
+  /// The clip path of the `<clipPath>` element, which clips the shapes in the user space of the element.
   package let clipPath: ClipPathEffect?
 
   init(frame: CGRect, transform: CGAffineTransform, units: SVGUnitType, shapes: [ClipShape], clipPath: ClipPathEffect?) {
@@ -44,20 +43,16 @@ package final class MaskEffect: Sendable {
   package let contentUnits: SVGUnitType
   package let colorInterpolation: SVGColorInterpolation
   package let contents: [MaskContent]
-  /// The clip path of the `<mask>` element, which clips the bitmap after the content is drawn
-  /// (svg_ui_view-90).
-  package let clipPath: ClipPathEffect?
 
   init(
     frame: CGRect, region: CGRect, contentUnits: SVGUnitType, colorInterpolation: SVGColorInterpolation,
-    contents: [MaskContent], clipPath: ClipPathEffect?
+    contents: [MaskContent]
   ) {
     self.frame = frame
     self.region = region
     self.contentUnits = contentUnits
     self.colorInterpolation = colorInterpolation
     self.contents = contents
-    self.clipPath = clipPath
   }
 }
 
@@ -91,13 +86,10 @@ package final class PatternPaint: Sendable {
   package let viewBoxTransform: CGAffineTransform?
   package let colorInterpolation: SVGColorInterpolation
   package let content: [RenderNode]
-  /// The clip path of the `<pattern>` element, which clips the tile after the content is drawn (svg_ui_view-90).
-  package let clipPath: ClipPathEffect?
 
   init(
     opacity: CGFloat, tileSize: CGSize, transform: CGAffineTransform, origin: CGPoint, frame: CGRect,
-    viewBoxTransform: CGAffineTransform?, colorInterpolation: SVGColorInterpolation, content: [RenderNode],
-    clipPath: ClipPathEffect?
+    viewBoxTransform: CGAffineTransform?, colorInterpolation: SVGColorInterpolation, content: [RenderNode]
   ) {
     self.opacity = opacity
     self.tileSize = tileSize
@@ -107,6 +99,5 @@ package final class PatternPaint: Sendable {
     self.viewBoxTransform = viewBoxTransform
     self.colorInterpolation = colorInterpolation
     self.content = content
-    self.clipPath = clipPath
   }
 }
