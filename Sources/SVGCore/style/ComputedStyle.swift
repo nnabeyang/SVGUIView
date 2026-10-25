@@ -43,6 +43,14 @@ enum PropertyID: String, CaseIterable, Sendable {
   case y
   case width
   case height
+  case animationName = "animation-name"
+  case animationDuration = "animation-duration"
+  case animationTimingFunction = "animation-timing-function"
+  case animationDelay = "animation-delay"
+  case animationIterationCount = "animation-iteration-count"
+  case animationDirection = "animation-direction"
+  case animationFillMode = "animation-fill-mode"
+  case animationPlayState = "animation-play-state"
 
   /// The description of the property.
   var property: any StyleProperty.Type {
@@ -90,6 +98,14 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .y: visitor.visit(YProperty.self)
     case .width: visitor.visit(WidthProperty.self)
     case .height: visitor.visit(HeightProperty.self)
+    case .animationName: visitor.visit(AnimationNameProperty.self)
+    case .animationDuration: visitor.visit(AnimationDurationProperty.self)
+    case .animationTimingFunction: visitor.visit(AnimationTimingFunctionProperty.self)
+    case .animationDelay: visitor.visit(AnimationDelayProperty.self)
+    case .animationIterationCount: visitor.visit(AnimationIterationCountProperty.self)
+    case .animationDirection: visitor.visit(AnimationDirectionProperty.self)
+    case .animationFillMode: visitor.visit(AnimationFillModeProperty.self)
+    case .animationPlayState: visitor.visit(AnimationPlayStateProperty.self)
     }
   }
 }
@@ -141,6 +157,14 @@ struct ComputedStyle: Sendable {
   var y: SVGLength?
   var width: SVGLength?
   var height: SVGLength?
+  var animationName: [AnimationName]
+  var animationDuration: [Double]
+  var animationTimingFunction: [EasingFunction]
+  var animationDelay: [Double]
+  var animationIterationCount: [AnimationIterationCount]
+  var animationDirection: [AnimationDirection]
+  var animationFillMode: [AnimationFillMode]
+  var animationPlayState: [AnimationPlayState]
 
   /// The initial value of every property, which is the style of the parent of the root element.
   static let initial = ComputedStyle(
@@ -158,7 +182,12 @@ struct ComputedStyle: Sendable {
     filter: FilterProperty.initial, display: DisplayProperty.initial, overflow: OverflowProperty.initial,
     stopColor: StopColorProperty.initial, stopOpacity: StopOpacityProperty.initial,
     floodColor: FloodColorProperty.initial, floodOpacity: FloodOpacityProperty.initial, x: XProperty.initial,
-    y: YProperty.initial, width: WidthProperty.initial, height: HeightProperty.initial)
+    y: YProperty.initial, width: WidthProperty.initial, height: HeightProperty.initial,
+    animationName: AnimationNameProperty.initial, animationDuration: AnimationDurationProperty.initial,
+    animationTimingFunction: AnimationTimingFunctionProperty.initial, animationDelay: AnimationDelayProperty.initial,
+    animationIterationCount: AnimationIterationCountProperty.initial,
+    animationDirection: AnimationDirectionProperty.initial, animationFillMode: AnimationFillModeProperty.initial,
+    animationPlayState: AnimationPlayStateProperty.initial)
 
   /// The computed values of an element with the given cascaded values.
   ///
@@ -201,7 +230,10 @@ struct ComputedStyle: Sendable {
     colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: CGAffineTransform,
     clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow?,
     stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
-    y: SVGLength?, width: SVGLength?, height: SVGLength?
+    y: SVGLength?, width: SVGLength?, height: SVGLength?, animationName: [AnimationName],
+    animationDuration: [Double], animationTimingFunction: [EasingFunction], animationDelay: [Double],
+    animationIterationCount: [AnimationIterationCount], animationDirection: [AnimationDirection],
+    animationFillMode: [AnimationFillMode], animationPlayState: [AnimationPlayState]
   ) {
     self.fontFamily = fontFamily
     self.fontSize = fontSize
@@ -239,6 +271,14 @@ struct ComputedStyle: Sendable {
     self.y = y
     self.width = width
     self.height = height
+    self.animationName = animationName
+    self.animationDuration = animationDuration
+    self.animationTimingFunction = animationTimingFunction
+    self.animationDelay = animationDelay
+    self.animationIterationCount = animationIterationCount
+    self.animationDirection = animationDirection
+    self.animationFillMode = animationFillMode
+    self.animationPlayState = animationPlayState
   }
 
   /// The font, with its size resolved except for viewport units.

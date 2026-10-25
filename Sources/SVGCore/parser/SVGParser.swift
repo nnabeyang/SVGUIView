@@ -50,6 +50,7 @@ package final class SVGParser: NSObject {
 
   private var pservers: [String: any SVGGradientServer] = [:]
   private var rules: [CSSRule] = []
+  private var keyframes: [String: KeyframesRule] = [:]
   private var stack = [OpenElement]()
   private var root: DocumentElement?
   private var elementCount = 0
@@ -69,7 +70,7 @@ package final class SVGParser: NSObject {
     var contentIdMap: [String: ObjectIdentifier] = [:]
     var contentsMap: [ObjectIdentifier: any SVGElement] = [:]
     let document = SVGDocument(root: root)
-    let css = Stylesheet(rules: rules)
+    let css = Stylesheet(rules: rules, keyframes: keyframes)
     guard let documentRoot = root,
       let root = ElementCursor(root: documentRoot).makeElement(with: css) as? SVGSVGElement
     else {
@@ -166,12 +167,17 @@ extension SVGParser: XMLParserDelegate {
       var parser = CSSParser(input: input)
       // Number the rules in document order across `<style>` elements, so that a later rule wins a tie.
       let offset = rules.count
-      rules.append(
-        contentsOf: parser.parseRules().map {
-          var rule = $0
+      for rule in parser.parseRules() {
+        switch rule {
+        case .style(var rule):
           rule.sourceOrder += offset
-          return rule
-        })
+          rules.append(rule)
+        case .keyframes(let rule):
+          keyframes[rule.name] = rule
+        case .ignored:
+          break
+        }
+      }
     }
     let element = DocumentElement(
       id: open.id, name: open.name, localName: open.localName, attributes: filter(attributes: open.attributes),
