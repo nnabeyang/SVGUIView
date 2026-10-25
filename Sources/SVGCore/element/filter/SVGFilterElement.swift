@@ -21,10 +21,6 @@ final class SVGFilterElement: SVGDrawableElement {
     .filter
   }
 
-  var transform: CGAffineTransform {
-    .identity
-  }
-
   let children: [any SVGElement]
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {

@@ -116,7 +116,6 @@ protocol SVGDrawableElement: SVGElement {
   var type: SVGElementName { get }
   var opacity: Double { get }
   var className: String? { get }
-  var transform: CGAffineTransform? { get }
   var display: CSSDisplay? { get }
   var visibility: CSSVisibility? { get }
   init(base: SVGBaseElement, text: String, attributes: [String: String])
@@ -141,7 +140,6 @@ extension SVGDrawableElement {
   var index: ObjectIdentifier { base.index }
   var opacity: Double { style.opacity }
   var className: String? { base.className }
-  var transform: CGAffineTransform? { style.transform }
   // `nil` for `none`, so that the frame of an element without a clip path isn't found for it.
   var clipPath: SVGClipPath? { if case .url = style.clipPath { style.clipPath } else { nil } }
   var mask: SVGMask? { if case .url = style.mask { style.mask } else { nil } }

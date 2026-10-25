@@ -30,6 +30,8 @@ enum PropertyID: String, CaseIterable, Sendable {
   case colorInterpolationFilters = "color-interpolation-filters"
   case opacity
   case transform
+  case transformOrigin = "transform-origin"
+  case transformBox = "transform-box"
   case clipPath = "clip-path"
   case mask
   case filter
@@ -85,6 +87,8 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .colorInterpolationFilters: visitor.visit(ColorInterpolationFiltersProperty.self)
     case .opacity: visitor.visit(OpacityProperty.self)
     case .transform: visitor.visit(TransformProperty.self)
+    case .transformOrigin: visitor.visit(TransformOriginProperty.self)
+    case .transformBox: visitor.visit(TransformBoxProperty.self)
     case .clipPath: visitor.visit(ClipPathProperty.self)
     case .mask: visitor.visit(MaskProperty.self)
     case .filter: visitor.visit(FilterProperty.self)
@@ -143,7 +147,9 @@ struct ComputedStyle: Sendable {
   var colorInterpolation: SVGColorInterpolation?
   var colorInterpolationFilters: SVGColorInterpolation?
   var opacity: Double
-  var transform: CGAffineTransform
+  var transform: TransformList
+  var transformOrigin: TransformOrigin
+  var transformBox: TransformBox
   var clipPath: SVGClipPath
   var mask: SVGMask
   var filter: SVGFilter
@@ -178,7 +184,8 @@ struct ComputedStyle: Sendable {
     clipRule: ClipRuleProperty.initial, textAnchor: TextAnchorProperty.initial,
     visibility: VisibilityProperty.initial, colorInterpolation: ColorInterpolationProperty.initial,
     colorInterpolationFilters: ColorInterpolationFiltersProperty.initial, opacity: OpacityProperty.initial,
-    transform: TransformProperty.initial, clipPath: ClipPathProperty.initial, mask: MaskProperty.initial,
+    transform: TransformProperty.initial, transformOrigin: TransformOriginProperty.initial,
+    transformBox: TransformBoxProperty.initial, clipPath: ClipPathProperty.initial, mask: MaskProperty.initial,
     filter: FilterProperty.initial, display: DisplayProperty.initial, overflow: OverflowProperty.initial,
     stopColor: StopColorProperty.initial, stopOpacity: StopOpacityProperty.initial,
     floodColor: FloodColorProperty.initial, floodOpacity: FloodOpacityProperty.initial, x: XProperty.initial,
@@ -227,7 +234,8 @@ struct ComputedStyle: Sendable {
     strokeWidth: SVGLength, strokeLinecap: CGLineCap, strokeLinejoin: CGLineJoin, strokeMiterlimit: Double,
     strokeDasharray: [CGFloat], strokeDashoffset: CGFloat, clipRule: FillRule, textAnchor: TextAnchor,
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
-    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: CGAffineTransform,
+    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
+    transformOrigin: TransformOrigin, transformBox: TransformBox,
     clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow?,
     stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
     y: SVGLength?, width: SVGLength?, height: SVGLength?, animationName: [AnimationName],
@@ -258,6 +266,8 @@ struct ComputedStyle: Sendable {
     self.colorInterpolationFilters = colorInterpolationFilters
     self.opacity = opacity
     self.transform = transform
+    self.transformOrigin = transformOrigin
+    self.transformBox = transformBox
     self.clipPath = clipPath
     self.mask = mask
     self.filter = filter

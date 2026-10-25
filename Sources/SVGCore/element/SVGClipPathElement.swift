@@ -12,7 +12,6 @@ final class SVGClipPathElement: SVGElement {
 
   let base: SVGBaseElement
   let children: [any SVGElement]
-  let transform: CGAffineTransform?
   let clipPathUnits: SVGUnitType?
   let clipPath: SVGClipPath?
   let id: String?
@@ -25,7 +24,6 @@ final class SVGClipPathElement: SVGElement {
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     clipPathUnits = SVGUnitType(rawValue: attributes["clipPathUnits", default: ""])
     clipPath = base.style.clipPath
-    transform = base.style.transform
   }
 
   func clip(context: inout SVGBaseContext) {

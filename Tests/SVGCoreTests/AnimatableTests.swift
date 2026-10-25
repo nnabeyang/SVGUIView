@@ -169,4 +169,81 @@ struct AnimatableTests {
     #expect(size == .pixel(15))
     #expect(SVGUIFont.Size.medium.interpolated(to: .length(.pixel(20)), progress: 0.5) == nil)
   }
+
+  /// Transform lists that are interpolated function by function, and their interpolations halfway.
+  private static let transformLists: [([TransformFunction], [TransformFunction], [TransformFunction])] = [
+    ([.translate(.pixel(10), .pixel(0))], [.translate(.pixel(20), .pixel(10))], [.translate(.pixel(15), .pixel(5))]),
+    ([], [.rotate(90)], [.rotate(45)]),
+    ([.scale(2, 2)], [], [.scale(1.5, 1.5)]),
+    ([], [.translate(.percent(50), .number(0))], [.translate(.percent(25), .number(0))]),
+    (
+      [.translate(.percent(10), .number(0)), .rotate(0)], [.translate(.percent(30), .number(0))],
+      [.translate(.percent(20), .number(0)), .rotate(0)]
+    ),
+    ([.skew(10, 0)], [.skew(30, 20)], [.skew(20, 10)]),
+  ]
+
+  @Test("transform lists are interpolated function by function", arguments: transformLists)
+  func transformListInterpolation(from: [TransformFunction], to: [TransformFunction], halfway: [TransformFunction]) {
+    #expect(
+      TransformList(functions: from).interpolated(to: TransformList(functions: to), progress: 0.5)
+        == TransformList(functions: halfway))
+  }
+
+  @Test("transform lists are interpolated as matrices from a pair of functions of different kinds")
+  func transformMatrixInterpolation() throws {
+    // A translation and a rotation of 90 degrees halfway to the identity, which is a rotation of 45 degrees.
+    let list = try #require(
+      TransformList(functions: [.translate(.pixel(10), .pixel(0)), .rotate(90)])
+        .interpolated(to: TransformList(functions: [.scale(1, 1)]), progress: 0.5))
+    guard list.functions.count == 1, case .matrix(let matrix) = list.functions[0] else {
+      Issue.record("The list isn't a matrix: \(list)")
+      return
+    }
+    expectClose(matrix, CGAffineTransform(translationX: 5, y: 0).rotated(by: .pi / 4))
+
+    let scale = try #require(
+      TransformList(functions: [.rotate(0)]).interpolated(to: TransformList(functions: [.scale(2, 2)]), progress: 0.5))
+    expectClose(try #require(Self.matrix(scale)), CGAffineTransform(scaleX: 1.5, y: 1.5))
+
+    // Matrices are interpolated as matrices also when both are matrices.
+    let to = CGAffineTransform(translationX: 10, y: 20).rotated(by: .pi / 2)
+    let matrices = try #require(
+      TransformList(functions: [.matrix(.identity)]).interpolated(
+        to: TransformList(functions: [.matrix(to)]), progress: 0.5))
+    expectClose(try #require(Self.matrix(matrices)), CGAffineTransform(translationX: 5, y: 10).rotated(by: .pi / 4))
+  }
+
+  @Test("transform lists with lengths relative to the box are discrete when they're interpolated as matrices")
+  func transformListsDiscrete() {
+    let from = TransformList(functions: [.translate(.percent(10), .number(0))])
+    let to = TransformList(functions: [.rotate(90)])
+    #expect(from.interpolated(to: to, progress: 0.5) == nil)
+    #expect(from.animated(to: to, progress: 0.25) == from)
+    #expect(from.adding(to) == TransformList(functions: from.functions + to.functions))
+  }
+
+  @Test("transform origins are interpolated as two lengths")
+  func transformOrigins() {
+    let from = TransformOrigin(x: .percent(0), y: .percent(0))
+    #expect(
+      from.interpolated(to: TransformOrigin(x: .percent(100), y: .percent(50)), progress: 0.5)
+        == TransformOrigin(x: .percent(50), y: .percent(25)))
+    #expect(from.interpolated(to: TransformOrigin(x: .pixel(10), y: .percent(50)), progress: 0.5) == nil)
+  }
+
+  private static func matrix(_ list: TransformList) -> CGAffineTransform? {
+    guard list.functions.count == 1, case .matrix(let matrix) = list.functions[0] else { return nil }
+    return matrix
+  }
+
+  private func expectClose(
+    _ matrix: CGAffineTransform, _ expected: CGAffineTransform, sourceLocation: SourceLocation = #_sourceLocation
+  ) {
+    let values = [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty]
+    let expectedValues = [expected.a, expected.b, expected.c, expected.d, expected.tx, expected.ty]
+    #expect(
+      zip(values, expectedValues).allSatisfy { isClose($0, $1) }, "\(matrix) isn't \(expected)",
+      sourceLocation: sourceLocation)
+  }
 }

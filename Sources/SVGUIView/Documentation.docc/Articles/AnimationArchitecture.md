@@ -300,6 +300,7 @@ protocol Animatable: Sendable {
 | Colors | In premultiplied sRGB, as CSS Color 4 specifies for legacy color syntax |
 | Paint (`fill`, `stroke`) | Colors are interpolated. A change to or from a paint server is discrete. |
 | Transform lists | Function by function when the lists match. Otherwise, by decomposing the matrices. |
+| `transform-origin` | As two lengths |
 | `d` and `points` | Command by command when the paths have the same structure. Otherwise, discrete. |
 | `stroke-dasharray` | Element by element, after repeating both lists to a common length |
 | `visibility`, `display` and other keywords | Discrete, with the CSS rules for `visibility` |
