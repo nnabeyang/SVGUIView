@@ -14,5 +14,10 @@ extension SnapshotTests {
     func text(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(root: "custom", in: "transform"))
+    func transform(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }
