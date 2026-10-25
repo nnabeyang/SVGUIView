@@ -355,6 +355,22 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  @Test("a transform or a pattern transform that isn't valid is ignored")
+  func invalidTransforms() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <pattern id="p" width="1" height="1" patternTransform="("><rect width="1" height="1"/></pattern>
+      <rect width="10" height="10" transform="(" fill="url(#p)"/>
+      """##)
+    let rect = try shape(try children(of: tree).last)
+    #expect(rect.transform == .identity)
+    guard case .vector(.pattern(let paint), _, _) = rect.content else {
+      Issue.record("The rectangle isn't filled with a pattern")
+      return
+    }
+    #expect(try #require(paint).transform == .identity)
+  }
+
   private func filteredNode(_ content: String) async throws -> FilteredNode {
     let tree = try await renderTree(content)
     guard case .filtered(let filtered) = try children(of: tree).last else {
