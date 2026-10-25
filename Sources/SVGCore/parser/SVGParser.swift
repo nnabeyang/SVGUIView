@@ -48,7 +48,6 @@ package final class SVGParser: NSObject {
     var children: [DocumentElement] = []
   }
 
-  private var pservers: [String: any SVGGradientServer] = [:]
   private var rules: [CSSRule] = []
   private var keyframes: [String: KeyframesRule] = [:]
   private var stack = [OpenElement]()
@@ -67,45 +66,11 @@ package final class SVGParser: NSObject {
   private func parse(parser: XMLParser) -> SVGBaseContext {
     parser.delegate = self
     parser.parse()
-    var contentIdMap: [String: ObjectIdentifier] = [:]
-    var contentsMap: [ObjectIdentifier: any SVGElement] = [:]
     let document = SVGDocument(root: root)
     let css = Stylesheet(rules: rules, keyframes: keyframes)
-    guard let documentRoot = root,
-      let root = ElementCursor(root: documentRoot).makeElement(with: css) as? SVGSVGElement
-    else {
-      return SVGBaseContext(
-        document: document, root: nil, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
-    }
-
-    let contents = root.elements
-    for content in contents {
-      let identifier = content.index
-      contentsMap[identifier] = content
-      switch content {
-      case let content as any SVGDrawableElement:
-        if let id = content.id,
-          contentIdMap[id] == nil
-        {
-          contentIdMap[id] = identifier
-        }
-      case let pserver as any SVGGradientServer:
-        if let id = pserver.id, pservers[id] == nil {
-          pservers[id] = pserver
-        }
-      default:
-        break
-      }
-    }
-
-    var context = SVGBaseContext(
-      document: document, root: root, pservers: pservers, contentIdMap: contentIdMap, contents: contentsMap)
-
-    root.clip(context: &context)
-    root.mask(context: &context)
-    root.pattern(context: &context)
-    root.filter(context: &context)
-    return context
+    let element = root.flatMap { ElementCursor(root: $0).makeElement(with: css) as? SVGSVGElement }
+    return SVGBaseContext(
+      document: document, root: element, animations: DocumentAnimations(keyframes: keyframes, time: 0))
   }
 
   private func parse(data: Data) -> SVGBaseContext {

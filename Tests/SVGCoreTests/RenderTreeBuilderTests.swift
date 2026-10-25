@@ -6,10 +6,10 @@ import Testing
 
 @Suite("Render tree")
 struct RenderTreeBuilderTests {
-  /// The render tree of a document rendered into a rectangle of 20 by 20 at a scale of 1.
-  private func renderTree(_ content: String) async throws -> RenderTree {
+  /// The render tree of a document rendered into a rectangle of 20 by 20 at a scale of 1, at the time in seconds.
+  private func renderTree(_ content: String, at time: Double = 0) async throws -> RenderTree {
     let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">"# + content + "</svg>"
-    let base = SVGParser.parse(data: Data(svg.utf8))
+    let base = SVGParser.parse(data: Data(svg.utf8)).at(time: time)
     let builder = RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 20, height: 20), scale: 1)
     return try #require(
       await builder.build(
@@ -434,6 +434,20 @@ struct RenderTreeBuilderTests {
       """##)
     let clip = try #require(try shape(try children(of: tree).last).clip)
     #expect(CGPoint(x: 2, y: 2).applying(clip.transform) == .zero)
+  }
+
+  @Test("the content of a use element is animated at the time of the document")
+  func animatedUseContent() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <style>@keyframes a { from { opacity: 0 } to { opacity: 1 } }</style>
+      <defs><rect id="r" width="10" height="10" style="animation: a 1s linear"/></defs>
+      <use href="#r"/>
+      """##, at: 0.25)
+    let node = try #require(children(of: tree).last)
+    let instance = try #require(try use(node).instance)
+    let content = try shape(instance.content)
+    #expect(content.opacity == 0.25)
   }
 
   private func filteredNode(_ content: String) async throws -> FilteredNode {

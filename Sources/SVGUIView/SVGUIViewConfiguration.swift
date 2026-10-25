@@ -5,7 +5,7 @@ public struct SVGUIViewConfiguration: Sendable {
   /// The longest time a single rendering may take.
   ///
   /// When rendering takes longer, it is cancelled. The view keeps the image
-  /// that it shows, and ``SVGUIView/takeSnapshot(rect:)`` throws
+  /// that it shows, and ``SVGUIView/takeSnapshot(rect:at:)`` throws
   /// ``SVGRenderingError/timedOut``.
   ///
   /// The default is 10 seconds. It stops a rendering that would take far

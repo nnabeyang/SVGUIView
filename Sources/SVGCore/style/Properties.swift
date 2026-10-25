@@ -59,6 +59,11 @@ private struct FontLengthContext: SVGLengthContext {
   var writingMode: WritingMode? { nil }
 }
 
+/// An opacity of an animation, which an easing function can take outside 0 to 1, clamped to that range.
+private func clampedOpacity(_ opacity: Double) -> Double {
+  min(max(opacity, 0), 1)
+}
+
 enum FontFamilyProperty: StyleProperty {
   static let id = PropertyID.fontFamily
   static let isInherited = true
@@ -140,6 +145,15 @@ enum FontSizeProperty: StyleProperty {
       .length(.pixel(SVGUIFont(name: family, size: size, weight: .normal).sizeValue(context: FontLengthContext(font: nil, rootFont: nil)) * factor))
     }
   }
+
+  /// The size between two sizes, which isn't negative.
+  static func interpolated(
+    _ from: SVGUIFont.Size, _ to: SVGUIFont.Size, progress: Double, in _: StyleResolver
+  ) -> SVGUIFont.Size {
+    let size = from.animated(to: to, progress: progress)
+    if case .length(let length) = size { return .length(length.nonNegative) }
+    return size
+  }
 }
 
 enum FontWeightProperty: StyleProperty {
@@ -194,6 +208,11 @@ enum FillProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Paint? {
     Paint(text)
   }
+
+  /// The paint between two paints, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
+    resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
+  }
 }
 
 enum FillOpacityProperty: StyleProperty {
@@ -204,6 +223,10 @@ enum FillOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -227,6 +250,11 @@ enum StrokeProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Paint? {
     Paint(text)
   }
+
+  /// The paint between two paints, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
+    resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
+  }
 }
 
 enum StrokeOpacityProperty: StyleProperty {
@@ -237,6 +265,10 @@ enum StrokeOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -252,6 +284,11 @@ enum StrokeWidthProperty: StyleProperty {
 
   static func compute(_ width: SVGLength, in resolver: StyleResolver) -> SVGLength {
     resolvingFontRelative(width, in: resolver)
+  }
+
+  /// The width between two widths, which isn't negative.
+  static func interpolated(_ from: SVGLength, _ to: SVGLength, progress: Double, in _: StyleResolver) -> SVGLength {
+    from.animated(to: to, progress: progress).nonNegative
   }
 }
 
@@ -304,6 +341,11 @@ enum StrokeMiterlimitProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     number(text)
   }
+
+  /// The limit between two limits, which is at least 1.
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    max(from.animated(to: to, progress: progress), 1)
+  }
 }
 
 enum StrokeDasharrayProperty: StyleProperty {
@@ -317,6 +359,11 @@ enum StrokeDasharrayProperty: StyleProperty {
     if keyword(text) == "none" { return [] }
     let dashes = scanning(text) { $0.scanDashes() }
     return dashes.isEmpty ? nil : dashes
+  }
+
+  /// The dashes between two lists of dashes, which aren't negative.
+  static func interpolated(_ from: [CGFloat], _ to: [CGFloat], progress: Double, in _: StyleResolver) -> [CGFloat] {
+    from.animated(to: to, progress: progress).map { max($0, 0) }
   }
 }
 
@@ -398,6 +445,10 @@ enum OpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -540,6 +591,13 @@ enum StopColorProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
   }
+
+  /// The color between two colors, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(
+    _ from: ColorValue, _ to: ColorValue, progress: Double, in resolver: StyleResolver
+  ) -> ColorValue {
+    .color(resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress))
+  }
 }
 
 enum StopOpacityProperty: StyleProperty {
@@ -550,6 +608,10 @@ enum StopOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -562,6 +624,13 @@ enum FloodColorProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
   }
+
+  /// The color between two colors, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(
+    _ from: ColorValue, _ to: ColorValue, progress: Double, in resolver: StyleResolver
+  ) -> ColorValue {
+    .color(resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress))
+  }
 }
 
 enum FloodOpacityProperty: StyleProperty {
@@ -572,6 +641,10 @@ enum FloodOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 

@@ -45,7 +45,7 @@ couldn't be allocated, the view keeps the image that it shows.
 
 ### Taking a snapshot
 
-``SVGUIView/SVGUIView/takeSnapshot(rect:)`` renders the current document into a
+``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders the current document into a
 `UIImage` without changing what the view displays. It throws an
 ``SVGRenderingError`` when the document has no root `svg` element, the rectangle
 to render into has no width or no height, rendering times out, the task that

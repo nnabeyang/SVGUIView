@@ -35,6 +35,11 @@ extension SVGLength: Animatable {
     with(magnitude: 0) == other.with(magnitude: 0)
   }
 
+  /// The length, or zero in its unit if it's negative.
+  var nonNegative: SVGLength {
+    magnitude < 0 ? with(magnitude: 0) : self
+  }
+
   /// The length in pixels, if its unit is absolute. A number is in pixels.
   fileprivate var absolutePixels: CGFloat? {
     switch self {

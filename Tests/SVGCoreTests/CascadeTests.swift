@@ -47,6 +47,23 @@ struct CascadeTests {
     #expect(important > normal)
   }
 
+  @Test("the cascade keeps which properties important declarations win, and the document keeps its keyframes")
+  func importantProperties() throws {
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <style>
+          rect { fill: red !important; opacity: 0.5 }
+          @keyframes spin { to { opacity: 1 } }
+        </style>
+        <rect id="r" style="fill: blue; opacity: 1; stroke: red !important" fill-opacity="0.5"/>
+      </svg>
+      """#
+    let base = SVGParser.parse(data: Data(svg.utf8))
+    let rect = try #require(base["r"])
+    #expect(rect.base.cascaded.important == [PropertyID.fill, .stroke])
+    #expect(base.animations.keyframes["spin"]?.keyframes.count == 1)
+  }
+
   @Test("of equal declarations, the later one comes later")
   func sortKeepsOrderOfEqualDeclarations() {
     let specificity = Specificity(idSelectors: 0, classLikeSelectors: 0, elementSelectors: 1)

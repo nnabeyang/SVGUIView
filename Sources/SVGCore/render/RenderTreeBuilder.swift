@@ -277,7 +277,8 @@ package struct RenderTreeBuilder {
     else {
       return nil
     }
-    let restyled = element.restyled(parent: use.style, root: base.root?.style ?? use.style)
+    let restyled = element.restyled(
+      parent: use.style, root: base.root?.style ?? use.style, animations: base.isAnimated ? base.animations : nil)
     if let svg = restyled as? SVGSVGElement {
       return await body(svg.sized(width: use.width, height: use.height), references)
     }

@@ -127,7 +127,7 @@ public class SVGUIView: UIView {
     let timeoutDuration = configuration.timeoutDuration
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       let result = await SVGUIView.makeImage(
-        rect: rect, scale: scale, base: capturedBase,
+        rect: rect, scale: scale, base: capturedBase, time: .zero,
         fit: fit, timeoutDuration: timeoutDuration
       )
       self?.show(result, ofRendering: generation)
@@ -185,13 +185,20 @@ public class SVGUIView: UIView {
     }
   }
 
-  /// Renders the current SVG document into an image.
+  /// Renders the current SVG document into an image, as it is at a time of its
+  /// animations.
   ///
   /// The image is rendered at the main screen's scale with the view's current
   /// `contentMode`. The view's displayed contents do not change.
   ///
-  /// - Parameter rect: The rectangle to render into. Pass `nil` to use the
-  ///   view's frame.
+  /// The time starts at zero when the document is loaded, which is the time
+  /// that the view displays. A document without animations looks the same at
+  /// any time.
+  ///
+  /// - Parameters:
+  ///   - rect: The rectangle to render into. Pass `nil` to use the view's
+  ///     frame.
+  ///   - time: The time of the document's animations.
   /// - Returns: The rendered image.
   /// - Throws: ``SVGRenderingError/missingRootElement`` if the document has no
   ///   root `svg` element, ``SVGRenderingError/zeroSizedRect`` if the rectangle
@@ -201,14 +208,16 @@ public class SVGUIView: UIView {
   ///   cancelled before rendering finishes, or
   ///   ``SVGRenderingError/allocationFailed`` if the memory for the image
   ///   couldn't be allocated.
-  public func takeSnapshot(rect: CGRect? = nil) async throws(SVGRenderingError) -> UIImage {
+  public func takeSnapshot(
+    rect: CGRect? = nil, at time: Duration = .zero
+  ) async throws(SVGRenderingError) -> UIImage {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
     let capturedBase = baseContext
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
     let image = try await SVGUIView.makeImage(
-      rect: rect, scale: scale, base: capturedBase,
+      rect: rect, scale: scale, base: capturedBase, time: time,
       fit: fit, timeoutDuration: timeoutDuration
     ).get()
     return UIImage(cgImage: image)
@@ -219,6 +228,7 @@ public class SVGUIView: UIView {
     rect: CGRect,
     scale: CGFloat,
     base: SVGBaseContext,
+    time: Duration,
     fit: ContentFit,
     timeoutDuration: Duration
   ) async -> Result<CGImage, SVGRenderingError> {
@@ -234,7 +244,8 @@ public class SVGUIView: UIView {
     graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
 
     let drawTask = Task<CGImage?, Never> {
-      let builder = RenderTreeBuilder(base: base, viewPort: rect, scale: scale)
+      // The computed values at the time are computed in the task, so that the timeout stops them too.
+      let builder = RenderTreeBuilder(base: base.at(time: time.seconds), viewPort: rect, scale: scale)
       guard let tree = await builder.build(fit: fit) else { return nil }
       await CGPainter(scale: scale).paint(tree, into: graphics)
       guard !Task.isCancelled else {
@@ -266,6 +277,12 @@ public class SVGUIView: UIView {
 }
 
 extension Duration {
+  /// The duration in seconds.
+  var seconds: Double {
+    let (seconds, attoseconds) = components
+    return Double(seconds) + Double(attoseconds) / 1e18
+  }
+
   /// The duration as a dispatch time interval, which counts whole nanoseconds.
   var dispatchTimeInterval: DispatchTimeInterval {
     let (seconds, attoseconds) = components

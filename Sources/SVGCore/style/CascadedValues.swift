@@ -17,11 +17,18 @@ struct CascadedValues: Sendable {
   /// The declarations that win, one for each property. An element declares few properties, so searching them is
   /// faster than hashing the names of the properties.
   private var values: [PropertyDeclaration] = []
+  /// The properties whose declarations that win are important, which animations don't override.
+  let important: Set<PropertyID>
 
-  init() {}
+  init() {
+    important = []
+  }
 
   /// Cascaded values with the given declarations applied in order, so that a later declaration wins.
-  init(_ declarations: [PropertyDeclaration]) {
+  ///
+  /// - Parameter important: The properties whose declarations that win are important.
+  init(_ declarations: [PropertyDeclaration], important: Set<PropertyID> = []) {
+    self.important = important
     for declaration in declarations {
       if let index = values.firstIndex(where: { $0.id == declaration.id }) {
         values[index] = declaration

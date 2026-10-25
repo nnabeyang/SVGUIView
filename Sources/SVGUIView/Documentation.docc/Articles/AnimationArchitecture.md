@@ -370,10 +370,9 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 - **Controlling the timeline:** ``SVGUIView/SVGUIView`` gains `play()`,
   `pause()`, `seek(to:)` and `currentTime`. Times are `Duration` values, like
   ``SVGUIViewConfiguration/timeoutDuration``.
-- **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:)``
-  gains a time parameter, so that any frame can be rendered as an image. This is
-  what the planned `render(at:)` API became, because it keeps one method for
-  snapshots.
+- **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)``
+  takes a time, so that any frame can be rendered as an image. This is what the
+  planned `render(at:)` API became, because it keeps one method for snapshots.
 - **Reaching the document:** ``SVGUIView/SVGUIView`` gains a `document`
   property for the document API. Assigning new ``SVGUIView/SVGUIView/data``
   replaces the document.
@@ -500,7 +499,7 @@ playback is smooth.
   cases at the edges: just before and after a delay, at iteration boundaries,
   for each fill mode, and at each step of `steps()`.
 - **Snapshots at given times:** Because a time fully decides the output,
-  ``SVGUIView/SVGUIView/takeSnapshot(rect:)`` with a time gives stable
+  ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` with a time gives stable
   snapshots. Each test document is captured at a few times, such as 0, 0.5 and
   1 second.
 - **References from a browser:** Reference images are captured from WebKit
