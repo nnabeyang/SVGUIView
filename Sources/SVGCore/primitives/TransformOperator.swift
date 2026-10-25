@@ -136,7 +136,7 @@ struct MatrixOperator: TransformOperator {
 
   func apply(transform: inout CGAffineTransform) {
     let matrix = CGAffineTransform(a: a, b: b, c: c, d: d, tx: tx, ty: ty)
-    transform = transform.concatenating(matrix)
+    transform = matrix.concatenating(transform)
   }
 }
 
