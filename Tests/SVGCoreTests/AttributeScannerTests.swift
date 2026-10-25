@@ -36,3 +36,23 @@ struct AttributeScannerTests {
     #expect(SVGUIFont(name: text, size: .medium, weight: .normal).families == families)
   }
 }
+
+extension AttributeScannerTests {
+  /// Transform lists and their matrices.
+  private static let transformTexts: [(String, CGAffineTransform)] = [
+    ("translate(10,0) matrix(2,0,0,2,0,0)", CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 10, ty: 0)),
+    ("matrix(2,0,0,2,0,0) translate(10,0)", CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 20, ty: 0)),
+    ("matrix(1 0 0 1 5 0), matrix(0 1 -1 0 0 0)", CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 5, ty: 0)),
+    ("translate(10, 20) scale(2)", CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 10, ty: 20)),
+    ("scale(2) translate(10 20)", CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 20, ty: 40)),
+    ("rotate(90 10 10)", CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 20, ty: 0)),
+  ]
+
+  @Test("the functions of a transform list apply in the order of the list", arguments: transformTexts)
+  func transformOrder(text: String, matrix: CGAffineTransform) throws {
+    let transform = try #require(CGAffineTransform(description: text))
+    let values = [transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty]
+    let expected = [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty]
+    #expect(zip(values, expected).allSatisfy { abs($0 - $1) < 1e-9 }, "\(transform)")
+  }
+}
