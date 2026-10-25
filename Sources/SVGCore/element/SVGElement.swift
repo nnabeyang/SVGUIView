@@ -89,11 +89,16 @@ final class SVGBaseElement: Sendable {
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
   }
 
-  /// The element with its computed values computed again for another parent.
-  func restyled(parent: ComputedStyle, root: ComputedStyle) -> SVGBaseElement {
+  /// The element with its computed values computed again for another parent, or with animations.
+  ///
+  /// - Parameters:
+  ///   - parent: The computed values of the parent, or `nil` for the root element.
+  ///   - root: The computed values of the root element, or `nil` for the root element itself.
+  ///   - animations: The animations of the document at its time, or `nil` for no animations.
+  func restyled(parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?) -> SVGBaseElement {
     SVGBaseElement(
       elementID: elementID, name: name, text: text, attributes: attributes, cascaded: cascaded,
-      style: ComputedStyle(cascaded: cascaded, parent: parent, root: root))
+      style: ComputedStyle(cascaded: cascaded, parent: parent, root: root, animations: animations))
   }
 }
 
@@ -103,10 +108,18 @@ extension SVGElement {
   }
 
   /// The element and its descendants with their computed values computed again for another parent, such as a
-  /// `<use>` element that shows them. Their cascaded values stay the ones of their places in the document.
-  func restyled(parent: ComputedStyle, root: ComputedStyle) -> any SVGElement {
-    let base = base.restyled(parent: parent, root: root)
-    return Self(base: base, contents: children.map { $0.restyled(parent: base.style, root: root) })
+  /// `<use>` element that shows them, or with the animations of the document at its time. Their cascaded values
+  /// stay the ones of their places in the document.
+  ///
+  /// - Parameters:
+  ///   - parent: The computed values of the parent, or `nil` for the root element.
+  ///   - root: The computed values of the root element, or `nil` for the root element itself.
+  ///   - animations: The animations of the document at its time, or `nil` for no animations.
+  func restyled(parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?) -> any SVGElement {
+    let base = base.restyled(parent: parent, root: root, animations: animations)
+    return Self(
+      base: base,
+      contents: children.map { $0.restyled(parent: base.style, root: root ?? base.style, animations: animations) })
   }
 }
 

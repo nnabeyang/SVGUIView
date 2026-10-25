@@ -201,9 +201,20 @@ struct ComputedStyle: Sendable {
   /// - Parameters:
   ///   - parent: The computed values of the parent element, or `nil` for the root element.
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
-  init(cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?) {
+  ///   - animations: The keyframes of the document and the time of the animations that the element runs, which
+  ///     override its values except for important declarations, or `nil` for no animations.
+  init(
+    cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations? = nil
+  ) {
     var computer = Computer(
       cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial))
+    if let animations, !animations.keyframes.isEmpty {
+      // The properties of CSS Animations come last in the order, and are computed first to find the animations.
+      for id in PropertyID.allCases where id.isAnimation {
+        id.visit(&computer)
+      }
+      computer.animations = ElementAnimation.animations(of: computer.resolver.style, in: animations)
+    }
     for id in PropertyID.allCases {
       id.visit(&computer)
     }
@@ -215,15 +226,20 @@ struct ComputedStyle: Sendable {
   private struct Computer: StylePropertyVisitor {
     let cascaded: CascadedValues
     var resolver: StyleResolver
+    /// The animations that the element runs, in the order of `animation-name`.
+    var animations = [ElementAnimation]()
 
     mutating func visit<P: StyleProperty>(_: P.Type) {
-      let value: P.Computed =
-        switch cascaded[P.self] {
-        case .value(let value): P.compute(value, in: resolver)
-        case .inherit: resolver.parent[keyPath: P.computed]
-        case .initial: P.initial
-        case .unset, nil: P.isInherited ? resolver.parent[keyPath: P.computed] : P.initial
+      var value = resolver.computed(cascaded[P.self], of: P.self)
+      // Animations override the cascaded values except for important declarations, and a later animation
+      // overrides an earlier one, with the value under it as the value of its missing keyframes.
+      if !animations.isEmpty, !P.id.isAnimation, !cascaded.important.contains(P.id) {
+        for animation in animations {
+          if let animated = animation.value(of: P.self, over: value, in: resolver) {
+            value = animated
+          }
         }
+      }
       resolver.style[keyPath: P.computed] = value
     }
   }

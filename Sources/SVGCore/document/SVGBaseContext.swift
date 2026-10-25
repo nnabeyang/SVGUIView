@@ -14,6 +14,8 @@ package struct SVGBaseContext: Sendable {
   let document: SVGDocument
   package let root: SVGSVGElement?
   let animations: DocumentAnimations
+  /// Whether an element runs an animation with keyframes, so that the computed values change with the time.
+  let isAnimated: Bool
   private(set) var pservers = [String: any SVGGradientServer]()
   private(set) var contentIdMap = [String: ObjectIdentifier]()
   private(set) var contents = [ObjectIdentifier: any SVGElement]()
@@ -29,6 +31,13 @@ package struct SVGBaseContext: Sendable {
     self.document = document
     self.root = root
     self.animations = animations
+    isAnimated =
+      !animations.keyframes.isEmpty
+      && (root?.elements ?? []).contains { element in
+        element.style.animationName.contains {
+          if case .keyframes(let name) = $0 { animations.keyframes[name] != nil } else { false }
+        }
+      }
     guard let root else { return }
     for content in root.elements {
       let identifier = content.index
@@ -50,6 +59,18 @@ package struct SVGBaseContext: Sendable {
     root.mask(context: &self)
     root.pattern(context: &self)
     root.filter(context: &self)
+  }
+
+  /// The context with the computed values at the given time, or the context itself if they don't change with the
+  /// time.
+  ///
+  /// - Parameter time: The time since the document was loaded, in seconds.
+  package func at(time: Double) -> SVGBaseContext {
+    guard isAnimated, let root else { return self }
+    var animations = animations
+    animations.time = time
+    let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
+    return SVGBaseContext(document: document, root: animated, animations: animations)
   }
 
   mutating func setClipPath(id: String, value: SVGClipPathElement) {

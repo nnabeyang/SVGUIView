@@ -41,6 +41,8 @@ protocol StyleProperty {
   /// The value of a declaration in a style sheet, read from its tokens.
   static func parse(css input: inout _CSSParser.Parser) -> Specified?
   static func compute(_ value: Specified, in resolver: StyleResolver) -> Computed
+  /// The value between two computed values of an animation, at a progress that can be outside 0 to 1.
+  static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in resolver: StyleResolver) -> Computed
 }
 
 /// Something done with the type of a property, which ``PropertyID/visit(_:)`` calls with the type that describes
@@ -65,6 +67,19 @@ extension StyleProperty {
 extension StyleProperty where Specified == Computed {
   static func compute(_ value: Specified, in _: StyleResolver) -> Computed {
     value
+  }
+}
+
+extension StyleProperty {
+  /// One of the values, for a property whose values can't be interpolated.
+  static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
+    discrete(from, to, progress: progress)
+  }
+}
+
+extension StyleProperty where Computed: Animatable {
+  static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
+    from.animated(to: to, progress: progress)
   }
 }
 
@@ -120,4 +135,14 @@ struct StyleResolver {
   var style: ComputedStyle
   let parent: ComputedStyle
   let root: ComputedStyle
+
+  /// The computed value of a declared value of the property, or of no declaration.
+  func computed<P: StyleProperty>(_ declared: Declared<P.Specified>?, of _: P.Type) -> P.Computed {
+    switch declared {
+    case .value(let value): P.compute(value, in: self)
+    case .inherit: parent[keyPath: P.computed]
+    case .initial: P.initial
+    case .unset, nil: P.isInherited ? parent[keyPath: P.computed] : P.initial
+    }
+  }
 }
