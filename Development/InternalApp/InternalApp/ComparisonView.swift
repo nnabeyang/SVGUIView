@@ -8,7 +8,8 @@ import SwiftUI
 /// Both views stay in the hierarchy in every mode, so that switching does not load or render the file again.
 /// Stepping to the previous or next file keeps the same views and only changes what they load, as an app does.
 /// The size of the views and the content mode of SVGView can be changed, to check that SVGView renders again
-/// for them.
+/// for them. The time sets where the animations of the file are: SVGView shows the start, and a snapshot of
+/// SVGUIView shows the other times, while the web view pauses its animations at the time.
 struct ComparisonView: View {
   enum Mode: String, CaseIterable, Identifiable {
     case svgView = "SVGView"
@@ -24,6 +25,8 @@ struct ComparisonView: View {
   /// The size of the views, as a fraction of the space for each.
   @State private var size = 1.0
   @State private var contentMode = ContentMode.fit
+  /// The time of the animations, in seconds.
+  @State private var time = 0.0
   /// The rendering timeout of SVGView, kept across files and launches.
   @AppStorage("timeoutMilliseconds") private var timeoutMilliseconds = 1000
 
@@ -35,6 +38,10 @@ struct ComparisonView: View {
   }
 
   private var document: SVGDocument { comparison.documents[index] }
+
+  private var configuration: SVGUIViewConfiguration {
+    SVGUIViewConfiguration(timeoutDuration: .milliseconds(timeoutMilliseconds))
+  }
 
   var body: some View {
     VStack {
@@ -55,19 +62,35 @@ struct ComparisonView: View {
       }
       .padding(.horizontal)
 
+      HStack {
+        Text("Time")
+        Slider(value: $time, in: 0...10)
+        TextField("Time", value: $time, format: .number.precision(.fractionLength(0...3)))
+          .keyboardType(.decimalPad)
+          .multilineTextAlignment(.trailing)
+          .monospacedDigit()
+          .frame(width: 64)
+        Text("s")
+      }
+      .padding(.horizontal)
+
       // Changing the layout keeps the identity of the views, so that they are not created again.
       let layout = mode == .sideBySide ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(ZStackLayout())
       layout {
-        SVGView(contentsOf: document.url, contentMode: contentMode)
-          .environment(
-            \.svgViewConfiguration, SVGUIViewConfiguration(timeoutDuration: .milliseconds(timeoutMilliseconds))
-          )
-          .modifier(
-            Pane(
-              title: contentMode == .fill ? "\(Mode.svgView.rawValue) (Fill)" : Mode.svgView.rawValue,
-              size: size, isVisible: mode != .webView))
+        ZStack {
+          SVGView(contentsOf: document.url, contentMode: contentMode)
+            .environment(\.svgViewConfiguration, configuration)
+            .opacity(time == 0 ? 1 : 0)
+          if time != 0 {
+            SnapshotAtTime(url: document.url, time: time, contentMode: contentMode, configuration: configuration)
+          }
+        }
+        .modifier(
+          Pane(
+            title: contentMode == .fill ? "\(Mode.svgView.rawValue) (Fill)" : Mode.svgView.rawValue,
+            size: size, isVisible: mode != .webView))
         // The web view always fits the file in.
-        SVGWebView(url: document.url)
+        SVGWebView(url: document.url, time: time)
           .modifier(Pane(title: Mode.webView.rawValue, size: size, isVisible: mode != .svgView))
       }
 
@@ -136,5 +159,44 @@ private struct Pane: ViewModifier {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .opacity(isVisible ? 1 : 0)
+  }
+}
+
+/// An SVG file rendered by SVGUIView at a time of its animations, as a snapshot, since SVGView shows the start.
+private struct SnapshotAtTime: View {
+  let url: URL
+  /// The time of the animations, in seconds.
+  let time: Double
+  let contentMode: ContentMode
+  let configuration: SVGUIViewConfiguration
+  @State private var image: UIImage?
+
+  /// What the snapshot depends on, which renders it again when it changes.
+  private struct Input: Equatable {
+    let url: URL
+    let time: Double
+    let size: CGSize
+    let contentMode: ContentMode
+  }
+
+  var body: some View {
+    GeometryReader { proxy in
+      ZStack {
+        if let image {
+          Image(uiImage: image).resizable()
+        }
+      }
+      .task(id: Input(url: url, time: time, size: proxy.size, contentMode: contentMode)) {
+        image = await snapshot(size: proxy.size)
+      }
+    }
+  }
+
+  private func snapshot(size: CGSize) async -> UIImage? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    let view = SVGUIView(frame: CGRect(origin: .zero, size: size), data: data)
+    view.contentMode = contentMode.asUIView()
+    view.configuration = configuration
+    return try? await view.takeSnapshot(at: .seconds(time))
   }
 }
