@@ -371,6 +371,71 @@ struct RenderTreeBuilderTests {
     #expect(try #require(paint).transform == .identity)
   }
 
+  /// Elements with transforms, a point and where the transform of the last element moves the point.
+  private static let transformedElements: [(String, CGPoint, CGPoint)] = [
+    (
+      #"<rect x="5" y="5" width="10" height="10" transform="rotate(90)" transform-origin="10 10"/>"#,
+      CGPoint(x: 5, y: 5), CGPoint(x: 15, y: 5)
+    ),
+    (
+      #"<rect x="5" y="5" width="10" height="10" style="transform: scale(2); transform-box: fill-box; transform-origin: center"/>"#,
+      CGPoint(x: 5, y: 5), CGPoint(x: 0, y: 0)
+    ),
+    (
+      #"<rect x="5" y="5" width="10" height="10" stroke="black" stroke-width="2" style="transform: scale(2); transform-box: stroke-box"/>"#,
+      CGPoint(x: 5, y: 5), CGPoint(x: 6, y: 6)
+    ),
+    (
+      #"<rect x="5" y="5" width="10" height="10" stroke-width="2" style="transform: scale(2); transform-box: border-box"/>"#,
+      CGPoint(x: 5, y: 5), CGPoint(x: 5, y: 5)
+    ),
+    (
+      #"<rect width="10" height="10" style="transform: translate(50%, 25%)"/>"#,
+      CGPoint(x: 0, y: 0), CGPoint(x: 10, y: 5)
+    ),
+    (
+      #"<rect x="2" width="4" height="8" style="transform: translate(50%, 25%); transform-box: fill-box"/>"#,
+      CGPoint(x: 0, y: 0), CGPoint(x: 2, y: 2)
+    ),
+    (
+      #"<g style="transform: rotate(180deg); transform-box: fill-box; transform-origin: 50% 50%"><rect x="2" y="2" width="4" height="4"/></g>"#,
+      CGPoint(x: 2, y: 2), CGPoint(x: 6, y: 6)
+    ),
+    (
+      ##"<defs><rect id="r" width="4" height="4"/></defs><use href="#r" x="2" y="2" style="transform: scale(2); transform-box: content-box; transform-origin: right bottom"/>"##,
+      CGPoint(x: 2, y: 2), CGPoint(x: -2, y: -2)
+    ),
+  ]
+
+  @Test(
+    "transforms apply about the transform origin, in the reference box of the transform box",
+    arguments: transformedElements)
+  func transformOrigins(content: String, point: CGPoint, expected: CGPoint) async throws {
+    let node = try children(of: try await renderTree(content)).last
+    let transform: CGAffineTransform =
+      switch node {
+      case .shape(let shape): shape.transform
+      case .group(let group): group.transform
+      case .use(let use): use.transform
+      default: throw NodeError.unexpected(node)
+      }
+    let moved = point.applying(transform)
+    #expect(abs(moved.x - expected.x) < 1e-9 && abs(moved.y - expected.y) < 1e-9, "\(moved)")
+  }
+
+  @Test("the reference box of a clipPath element is the bounds of its content")
+  func clipPathTransformBox() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <clipPath id="c" style="transform: scale(2); transform-box: fill-box; transform-origin: center">
+        <rect x="2" y="2" width="4" height="4"/>
+      </clipPath>
+      <rect width="20" height="20" clip-path="url(#c)"/>
+      """##)
+    let clip = try #require(try shape(try children(of: tree).last).clip)
+    #expect(CGPoint(x: 2, y: 2).applying(clip.transform) == .zero)
+  }
+
   private func filteredNode(_ content: String) async throws -> FilteredNode {
     let tree = try await renderTree(content)
     guard case .filtered(let filtered) = try children(of: tree).last else {

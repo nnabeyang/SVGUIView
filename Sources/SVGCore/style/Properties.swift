@@ -427,6 +427,53 @@ enum TransformProperty: StyleProperty {
   }
 }
 
+enum TransformOriginProperty: StyleProperty {
+  static let id = PropertyID.transformOrigin
+  static let isInherited = false
+  static let initial = TransformOrigin.zero
+  static let computed = \ComputedStyle.transformOrigin
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TransformOrigin? {
+    var input = _CSSParser.Parser(input: ParserInput(input: text))
+    return TransformOrigin.parse(&input, origin: origin)
+  }
+
+  static func parse(css input: inout _CSSParser.Parser) -> TransformOrigin? {
+    TransformOrigin.parse(&input, origin: .css)
+  }
+
+  /// The origin with lengths relative to a font in pixels.
+  static func compute(_ origin: TransformOrigin, in resolver: StyleResolver) -> TransformOrigin {
+    TransformOrigin(x: resolvingFontRelative(origin.x, in: resolver), y: resolvingFontRelative(origin.y, in: resolver))
+  }
+}
+
+/// The reference box of transforms. It isn't a presentation attribute.
+enum TransformBoxProperty: StyleProperty {
+  static let id = PropertyID.transformBox
+  static let isInherited = false
+  static let initial = TransformBox.viewBox
+  static let computed = \ComputedStyle.transformBox
+
+  static func accepts(attributeOn _: SVGElementName) -> Bool {
+    false
+  }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TransformBox? {
+    keyword(text, origin: origin)
+  }
+
+  /// The box of an SVG element: an SVG element has no box of CSS layout, so `content-box` is `fill-box`, and
+  /// `border-box` is `stroke-box`.
+  static func compute(_ box: TransformBox, in _: StyleResolver) -> TransformBox {
+    switch box {
+    case .contentBox: .fillBox
+    case .borderBox: .strokeBox
+    default: box
+    }
+  }
+}
+
 enum ClipPathProperty: StyleProperty {
   static let id = PropertyID.clipPath
   static let isInherited = false

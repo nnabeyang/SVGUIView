@@ -241,3 +241,108 @@ private func angle(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) 
     return nil
   }
 }
+
+// MARK: - Transform origin
+
+/// The value of `transform-origin`: the point that transforms are applied about, from the top left corner of the
+/// reference box. Percentages are of the size of the box.
+struct TransformOrigin: Sendable, Equatable {
+  /// The origin of SVG elements, which have no box of CSS layout.
+  static let zero = TransformOrigin(x: .number(0), y: .number(0))
+
+  var x: SVGLength
+  var y: SVGLength
+}
+
+extension TransformOrigin {
+  /// The transform origin, or `nil` if it's invalid. Keywords are percentages, and a length along the z axis is read
+  /// and dropped, since transforms here are 2D. An attribute also takes numbers without units, as lengths in user
+  /// units.
+  static func parse(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> TransformOrigin? {
+    var values = [OriginValue]()
+    while values.count < 2, !input.isExhausted() {
+      guard let value = originValue(&input, origin: origin) else { return nil }
+      values.append(value)
+    }
+    if values.count == 2, !input.isExhausted() {
+      // A length along the z axis can't be a percentage.
+      guard let z = length(&input, origin: origin) else { return nil }
+      if case .percent = z { return nil }
+    }
+    guard input.isExhausted() else { return nil }
+    switch values.count {
+    case 1:
+      switch values[0] {
+      case .top, .bottom: return TransformOrigin(x: .percent(50), y: values[0].length)
+      default: return TransformOrigin(x: values[0].length, y: .percent(50))
+      }
+    case 2:
+      var (x, y) = (values[0], values[1])
+      // Two keywords can come in either order.
+      if x.isKeyword, y.isKeyword, x.isVertical || y.isHorizontal { swap(&x, &y) }
+      guard !x.isVertical, !y.isHorizontal else { return nil }
+      return TransformOrigin(x: x.length, y: y.length)
+    default:
+      return nil
+    }
+  }
+}
+
+/// A value of `transform-origin`, before its axis is known.
+private enum OriginValue {
+  case left, center, right, top, bottom
+  case length(SVGLength)
+
+  var isKeyword: Bool {
+    if case .length = self { false } else { true }
+  }
+
+  var isHorizontal: Bool {
+    switch self {
+    case .left, .right: true
+    default: false
+    }
+  }
+
+  var isVertical: Bool {
+    switch self {
+    case .top, .bottom: true
+    default: false
+    }
+  }
+
+  var length: SVGLength {
+    switch self {
+    case .left, .top: .percent(0)
+    case .center: .percent(50)
+    case .right, .bottom: .percent(100)
+    case .length(let length): length
+    }
+  }
+}
+
+private func originValue(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> OriginValue? {
+  let state = input.state
+  if case .success(.ident(let name)) = input.next() {
+    switch name.lowercased() {
+    case "left": return .left
+    case "center": return .center
+    case "right": return .right
+    case "top": return .top
+    case "bottom": return .bottom
+    default: return nil
+    }
+  }
+  input.reset(state: state)
+  return length(&input, origin: origin).map(OriginValue.length)
+}
+
+/// The value of `transform-box`: the box that `transform-origin` and percentages of transform functions are
+/// relative to.
+enum TransformBox: String, CaseIterable, Sendable {
+  case contentBox = "content-box"
+  case borderBox = "border-box"
+  case fillBox = "fill-box"
+  case strokeBox = "stroke-box"
+  case viewBox = "view-box"
+}

@@ -122,6 +122,65 @@ struct StyleTests {
     #expect(child.transform == TransformList(functions: [.translate(.pixel(40), .percent(5))]))
   }
 
+  /// Values of `transform-origin` in a style sheet, and their origins.
+  private static let transformOrigins: [(String, TransformOrigin)] = [
+    ("center", TransformOrigin(x: .percent(50), y: .percent(50))),
+    ("top", TransformOrigin(x: .percent(50), y: .percent(0))),
+    ("right", TransformOrigin(x: .percent(100), y: .percent(50))),
+    ("10px", TransformOrigin(x: .pixel(10), y: .percent(50))),
+    ("left bottom", TransformOrigin(x: .percent(0), y: .percent(100))),
+    ("bottom left", TransformOrigin(x: .percent(0), y: .percent(100))),
+    ("top center", TransformOrigin(x: .percent(50), y: .percent(0))),
+    ("CENTER Right", TransformOrigin(x: .percent(100), y: .percent(50))),
+    ("10px 20%", TransformOrigin(x: .pixel(10), y: .percent(20))),
+    ("right 5px 3px", TransformOrigin(x: .percent(100), y: .pixel(5))),
+  ]
+
+  @Test("transform-origin in a style sheet", arguments: transformOrigins)
+  func cssTransformOrigin(text: String, origin: TransformOrigin) {
+    guard case .value(let value) = declared(TransformOriginProperty.self, css: text) else {
+      Issue.record("transform-origin isn't parsed")
+      return
+    }
+    #expect(value == origin)
+  }
+
+  private static let invalidTransformOrigins = [
+    "left right", "10px left", "top 10px", "1px 2px 3%", "1px 2px 3px 4px", "10 20", "middle", "",
+  ]
+
+  @Test("transform-origin that isn't valid", arguments: invalidTransformOrigins)
+  func invalidTransformOrigin(text: String) {
+    #expect(declared(TransformOriginProperty.self, css: text) == nil)
+  }
+
+  @Test("transform-origin is a presentation attribute, and transform-box isn't")
+  func transformOriginAttribute() {
+    guard case .value(let origin) = TransformOriginProperty.declared(attribute: "10 20") else {
+      Issue.record("The attribute isn't parsed")
+      return
+    }
+    #expect(origin == TransformOrigin(x: .number(10), y: .number(20)))
+    let cascaded = CascadedValues(
+      CascadedValues.presentationAttributes(
+        of: .rect, attributes: ["transform-origin": "center", "transform-box": "fill-box"]))
+    #expect(cascaded[TransformOriginProperty.self] != nil)
+    #expect(cascaded[TransformBoxProperty.self] == nil)
+  }
+
+  @Test("transform-box of the box of CSS layout is the box of the SVG element")
+  func transformBox() throws {
+    let boxes: [(String, TransformBox)] = [
+      ("Fill-Box", .fillBox), ("content-box", .fillBox), ("border-box", .strokeBox), ("view-box", .viewBox),
+    ]
+    for (text, box) in boxes {
+      let declared = try #require(declared(TransformBoxProperty.self, css: text))
+      #expect(style([PropertyDeclaration(TransformBoxProperty.self, declared)]).transformBox == box)
+    }
+    #expect(ComputedStyle.initial.transformBox == .viewBox)
+    #expect(ComputedStyle.initial.transformOrigin == .zero)
+  }
+
   @Test("inherited properties take the value of the parent, and others the initial value")
   func inheritance() {
     let parent = style([
