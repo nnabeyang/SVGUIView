@@ -56,3 +56,14 @@ extension AttributeScannerTests {
     #expect(zip(values, expected).allSatisfy { abs($0 - $1) < 1e-9 }, "\(transform)")
   }
 }
+
+extension AttributeScannerTests {
+  private static let invalidTransformTexts = [
+    "translate(10) bogus(1)", "translate(10) )", "scale(2) translate(10", "translate(10) x", "rotate(45deg)",
+  ]
+
+  @Test("a transform list with a function that isn't valid is ignored", arguments: invalidTransformTexts)
+  func invalidTransformLists(text: String) {
+    #expect(CGAffineTransform(description: text) == nil)
+  }
+}

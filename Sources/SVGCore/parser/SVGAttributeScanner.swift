@@ -335,12 +335,15 @@ extension SVGAttributeScanner {
 
 // for transform attribute
 extension SVGAttributeScanner {
+  /// The functions of a transform list, or none if the list has a function that isn't valid, as in CSS.
   mutating func scanTransform() -> [any TransformOperator] {
     var ops = [any TransformOperator]()
-    while let op = scanSingleTransform() {
+    while true {
+      consumeWhitespaceIfNext(UInt8(ascii: ","))
+      if reader.isEOF { return ops }
+      guard let op = scanSingleTransform() else { return [] }
       ops.append(op)
     }
-    return ops
   }
 
   mutating func scanSingleTransform() -> (any TransformOperator)? {
