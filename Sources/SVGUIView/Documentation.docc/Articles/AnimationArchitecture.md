@@ -289,7 +289,7 @@ protocol Animatable: Sendable {
   /// The sum used by additive and accumulating animations.
   func adding(_ other: Self) -> Self?
   /// The distance used by `calcMode="paced"`.
-  func distance(to other: Self) -> Double?
+  func pacedDistance(to other: Self) -> Double?
 }
 ```
 

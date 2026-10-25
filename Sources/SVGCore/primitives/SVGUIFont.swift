@@ -74,7 +74,7 @@ struct SVGUIFont {
 }
 
 extension SVGUIFont {
-  enum Weight: RawRepresentable {
+  enum Weight: RawRepresentable, Sendable {
     typealias RawValue = String
     case normal
     case bold
@@ -178,7 +178,7 @@ extension SVGUIFont {
     }
   }
 
-  enum Size: RawRepresentable {
+  enum Size: RawRepresentable, Sendable {
     static var defaultFixedFontSize: CGFloat { 13 }
     static var defaultFontSize: CGFloat { 16 }
     typealias RawValue = String

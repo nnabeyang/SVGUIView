@@ -33,7 +33,7 @@ enum SVGLengthMode {
   case other
 }
 
-enum SVGLength: Equatable {
+enum SVGLength: Equatable, Sendable {
   case number(CGFloat)
   case pixel(CGFloat)
   case percent(CGFloat)
