@@ -16,8 +16,9 @@ struct SVGAttributeScanner {
     return true
   }
 
+  /// The name at the reader, or `nil` if the next character can't be in a name.
   mutating func scanIdentity() -> String? {
-    if reader.isEOF { return nil }
+    guard reader.peek().isName else { return nil }
     return consumeName()
   }
 
@@ -43,21 +44,22 @@ struct SVGAttributeScanner {
     }
   }
 
+  /// The string in quotes at the reader. A string without the closing quote ends at the end of the value, as in
+  /// CSS.
   mutating func consumeString() -> String {
     let endingCodePoint = reader.peek()
     precondition(endingCodePoint == UInt8(ascii: "'") || endingCodePoint == UInt8(ascii: "\""))
     _ = reader.read()
     let start = reader.readIndex
     var size = 0
-    while !reader.isEOF {
-      let c = reader.peek(offset: size)
-      guard c != endingCodePoint else {
-        break
-      }
+    while case let c = reader.peek(offset: size), c > 0, c != endingCodePoint {
       size += 1
     }
-    reader.moveReaderIndex(forwardBy: size + 1)
-    let end = reader.readIndex.advanced(by: -1)
+    reader.moveReaderIndex(forwardBy: size)
+    let end = reader.readIndex
+    if !reader.isEOF {
+      reader.advance()
+    }
     return String(decoding: reader.bytes[start..<end], as: UTF8.self)
   }
 
@@ -286,6 +288,7 @@ extension SVGAttributeScanner {
     "standard",
   ]
 
+  /// The families of a `font-family` value, or none if a character is neither in a name nor in quotes.
   mutating func scanFontFamilies() -> [String] {
     var families = [String]()
     guard reader.consumeWhitespace() != nil else { return families }
@@ -294,8 +297,10 @@ extension SVGAttributeScanner {
       let ch = reader.peek()
       if ch == UInt8(ascii: "\"") || ch == UInt8(ascii: "'") {
         family = consumeString()
+      } else if let name = scanIdentity() {
+        family = name
       } else {
-        family = consumeName()
+        return []
       }
       let prefix = Self.familyNames.contains(family) ? "-webkit-" : ""
       families.append("\(prefix)\(family)")
@@ -330,12 +335,15 @@ extension SVGAttributeScanner {
 
 // for transform attribute
 extension SVGAttributeScanner {
+  /// The functions of a transform list, or none if the list has a function that isn't valid, as in CSS.
   mutating func scanTransform() -> [any TransformOperator] {
     var ops = [any TransformOperator]()
-    while let op = scanSingleTransform() {
+    while true {
+      consumeWhitespaceIfNext(UInt8(ascii: ","))
+      if reader.isEOF { return ops }
+      guard let op = scanSingleTransform() else { return [] }
       ops.append(op)
     }
-    return ops
   }
 
   mutating func scanSingleTransform() -> (any TransformOperator)? {
