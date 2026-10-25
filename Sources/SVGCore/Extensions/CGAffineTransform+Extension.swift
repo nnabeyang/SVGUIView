@@ -1,21 +1,6 @@
 import CoreGraphics
 
 extension CGAffineTransform {
-  init?(description: String) {
-    var data = description
-    let ops = data.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var parser = SVGAttributeScanner(bytes: bytes)
-      return parser.scanTransform()
-    }
-    guard !ops.isEmpty else { return nil }
-    var transform: CGAffineTransform = .identity
-    for op in ops {
-      op.apply(transform: &transform)
-    }
-    self = transform
-  }
-
   package var scale: CGAffineTransform {
     let scaleX = sqrt(pow(a, 2) + pow(c, 2))
     let scaleY = sqrt(pow(b, 2) + pow(d, 2))

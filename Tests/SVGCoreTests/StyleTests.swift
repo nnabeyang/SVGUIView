@@ -104,13 +104,22 @@ struct StyleTests {
     #expect(FillProperty.declared(attribute: "green") != nil)
   }
 
-  @Test("transform in a style sheet")
+  @Test("transform in a style sheet, whose lengths have units")
   func cssTransform() {
-    guard case .value(let transform) = declared(TransformProperty.self, css: "translate(10, 20) scale(2)") else {
+    guard case .value(let transform) = declared(TransformProperty.self, css: "translate(10px, 20px) scale(2)") else {
       Issue.record("transform isn't parsed")
       return
     }
-    #expect(transform == CGAffineTransform(translationX: 10, y: 20).scaledBy(x: 2, y: 2))
+    #expect(transform == TransformList(functions: [.translate(.pixel(10), .pixel(20)), .scale(2, 2)]))
+    #expect(declared(TransformProperty.self, css: "translate(10, 20)") == nil)
+  }
+
+  @Test("lengths of transform functions relative to the font are computed in pixels")
+  func transformFontRelativeLengths() throws {
+    let parent = style([PropertyDeclaration(FontSizeProperty.self, .value(.length(.pixel(20))))])
+    let list = try #require(TransformProperty.parse("translate(2em 5%)", origin: .attribute))
+    let child = style([PropertyDeclaration(TransformProperty.self, .value(list))], parent: parent)
+    #expect(child.transform == TransformList(functions: [.translate(.pixel(40), .percent(5))]))
   }
 
   @Test("inherited properties take the value of the parent, and others the initial value")

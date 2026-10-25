@@ -115,7 +115,7 @@ package struct RenderTreeBuilder {
     instance: [ElementID]
   ) async -> RenderNode {
     let context = context.styled(by: element)
-    let transform = mode != .filter(isRoot: true) ? (element.transform ?? .identity) : .identity
+    let transform = mode != .filter(isRoot: true) ? transform(of: element, context: context) : .identity
     let references = beginsLevel(mode) ? references.beginning(.all) : references
     let path = await path(of: element, context: context, guard: references)
     var geometry: Geometry?
@@ -154,7 +154,7 @@ package struct RenderTreeBuilder {
     instance: [ElementID]
   ) async -> RenderNode {
     let context = context.styled(by: group)
-    let transform = mode != .filter(isRoot: true) ? (group.transform ?? .identity) : .identity
+    let transform = mode != .filter(isRoot: true) ? transform(of: group, context: context) : .identity
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
     var clip: ClipPathEffect?
     var mask: MaskEffect?
@@ -227,7 +227,7 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: use)
     let isFilterRoot = mode == .filter(isRoot: true)
-    let transform = isFilterRoot ? .identity : (use.transform ?? .identity)
+    let transform = isFilterRoot ? .identity : transform(of: use, context: context)
     let references = isFilterRoot ? references.beginning(.all) : references
     var clip: ClipPathEffect?
     var mask: MaskEffect?
@@ -304,6 +304,13 @@ package struct RenderTreeBuilder {
     }
   }
 
+  /// The transform of an element, in a context styled by the element.
+  func transform(of element: some SVGElement, context: ResolveContext) -> CGAffineTransform {
+    let list = element.style.transform
+    guard !list.functions.isEmpty else { return .identity }
+    return list.matrix(box: context.viewBoxSize, context: context)
+  }
+
   /// The bounds that units relative to an element use, in a context styled by the element.
   func frame(
     of element: any SVGDrawableElement, context: ResolveContext, path: CGPath?, guard references: ReferenceGuard
@@ -321,7 +328,7 @@ package struct RenderTreeBuilder {
         let context = context.styled(by: child)
         let childPath = await self.path(of: child, context: context, guard: references)
         let childFrame = await frame(of: child, context: context, path: childPath, guard: references)
-          .applying(child.transform ?? .identity)
+          .applying(transform(of: child, context: context))
         rect = rect.map { CGRectUnion($0, childFrame) } ?? childFrame
       }
       return rect ?? .zero

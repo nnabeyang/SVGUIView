@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import _CSSParser
 
 // The properties that styles set. Each property is described here, and nowhere else.
 
@@ -403,11 +404,26 @@ enum OpacityProperty: StyleProperty {
 enum TransformProperty: StyleProperty {
   static let id = PropertyID.transform
   static let isInherited = false
-  static let initial = CGAffineTransform.identity
+  static let initial = TransformList.none
   static let computed = \ComputedStyle.transform
 
-  static func parse(_ text: String, origin _: DeclarationOrigin) -> CGAffineTransform? {
-    keyword(text) == "none" ? .identity : CGAffineTransform(description: text)
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TransformList? {
+    var input = _CSSParser.Parser(input: ParserInput(input: text))
+    return TransformList.parse(&input, origin: origin)
+  }
+
+  static func parse(css input: inout _CSSParser.Parser) -> TransformList? {
+    TransformList.parse(&input, origin: .css)
+  }
+
+  /// The list with lengths relative to a font in pixels. Percentages are of the reference box, which is known only
+  /// when drawing.
+  static func compute(_ list: TransformList, in resolver: StyleResolver) -> TransformList {
+    TransformList(
+      functions: list.functions.map {
+        guard case .translate(let x, let y) = $0 else { return $0 }
+        return .translate(resolvingFontRelative(x, in: resolver), resolvingFontRelative(y, in: resolver))
+      })
   }
 }
 

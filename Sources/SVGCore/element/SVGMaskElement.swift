@@ -32,10 +32,6 @@ final class SVGMaskElement: SVGDrawableElement {
     .mask
   }
 
-  var transform: CGAffineTransform {
-    .identity
-  }
-
   let children: [any SVGElement]
   let maskContentUnits: SVGUnitType?
 

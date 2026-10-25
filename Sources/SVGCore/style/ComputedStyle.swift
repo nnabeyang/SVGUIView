@@ -143,7 +143,7 @@ struct ComputedStyle: Sendable {
   var colorInterpolation: SVGColorInterpolation?
   var colorInterpolationFilters: SVGColorInterpolation?
   var opacity: Double
-  var transform: CGAffineTransform
+  var transform: TransformList
   var clipPath: SVGClipPath
   var mask: SVGMask
   var filter: SVGFilter
@@ -227,7 +227,7 @@ struct ComputedStyle: Sendable {
     strokeWidth: SVGLength, strokeLinecap: CGLineCap, strokeLinejoin: CGLineJoin, strokeMiterlimit: Double,
     strokeDasharray: [CGFloat], strokeDashoffset: CGFloat, clipRule: FillRule, textAnchor: TextAnchor,
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
-    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: CGAffineTransform,
+    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
     clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow?,
     stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
     y: SVGLength?, width: SVGLength?, height: SVGLength?, animationName: [AnimationName],
