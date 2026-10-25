@@ -24,7 +24,7 @@ protocol SVGUIColor: CustomStringConvertible, Codable {
   var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) { get }
 }
 
-enum SVGColor: SVGUIColor {
+enum SVGColor: SVGUIColor, Sendable {
   case named(SVGColorName)
   case hex(SVGHexColor)
   case rgb(SVGRGBColor)

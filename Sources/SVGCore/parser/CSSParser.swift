@@ -23,7 +23,7 @@ enum CSSDisplay: String, CaseIterable {
   case none
 }
 
-enum CSSVisibility: String, CaseIterable {
+enum CSSVisibility: String, CaseIterable, Sendable {
   case visible
   case hidden
   case collapse
