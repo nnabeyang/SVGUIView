@@ -20,8 +20,9 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
-    /// The times that documents with animations are rendered at.
-    private static let times: [Duration] = [
+    /// The times that documents with animations are rendered at, which the arguments of a test read from outside
+    /// the main actor.
+    nonisolated private static let times: [Duration] = [
       .zero, .milliseconds(500), .seconds(1), .milliseconds(1500), .milliseconds(2500),
     ]
 
