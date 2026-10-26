@@ -19,7 +19,7 @@ extension LinearGradientPaint {
       return
     }
     let frame = path.boundingBoxOfPath
-    guard let transform = gradientTransform(units: units, frame: frame) else { return }
+    guard let transform = gradientTransform(self.transform, units: units, frame: frame) else { return }
     graphics.saveGState()
     defer { graphics.restoreGState() }
     graphics.addPath(path)
@@ -67,7 +67,7 @@ extension RadialGradientPaint {
     guard let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else {
       return
     }
-    guard let transform = gradientTransform(units: units, frame: path.boundingBoxOfPath) else { return }
+    guard let transform = gradientTransform(self.transform, units: units, frame: path.boundingBoxOfPath) else { return }
     graphics.saveGState()
     defer { graphics.restoreGState() }
     graphics.addPath(path)
@@ -82,13 +82,18 @@ extension RadialGradientPaint {
 
 /// The transform from the coordinates of a gradient to user space, or `nil` if it can't be inverted, such as for
 /// the bounding box of a path without a width or a height, which a gradient doesn't paint.
-private func gradientTransform(units: SVGUnitType, frame: CGRect) -> CGAffineTransform? {
+///
+/// The gradient's own transform applies first, and then the transform of its units.
+private func gradientTransform(
+  _ gradientTransform: CGAffineTransform, units: SVGUnitType, frame: CGRect
+) -> CGAffineTransform? {
   let transform: CGAffineTransform
   switch units {
   case .userSpaceOnUse:
-    transform = .identity
+    transform = gradientTransform
   case .objectBoundingBox:
-    transform = CGAffineTransform(a: frame.width, b: 0, c: 0, d: frame.height, tx: frame.minX, ty: frame.minY)
+    transform = gradientTransform.concatenating(
+      CGAffineTransform(a: frame.width, b: 0, c: 0, d: frame.height, tx: frame.minX, ty: frame.minY))
   }
   return transform.a * transform.d - transform.b * transform.c != 0 ? transform : nil
 }

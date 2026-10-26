@@ -15,6 +15,7 @@ protocol SVGGradientServer: SVGElement {
   func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
   func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint?
   func stops(context: any SVGLengthContext) -> [SVGStopElement]
+  var gradientTransform: TransformList? { get }
   init?(lhs: Self, rhs: SVGLinearGradientServer)
   init?(lhs: Self, rhs: SVGRadialGradientServer)
 }
@@ -35,6 +36,11 @@ extension SVGGradientServer {
     children.compactMap { $0 as? SVGStopElement }
   }
 
+  /// The transform from the coordinates of the gradient to the coordinates of its units.
+  func transform(context: any SVGLengthContext) -> CGAffineTransform {
+    gradientTransform?.matrix(box: context.viewBoxSize, context: context) ?? .identity
+  }
+
 }
 
 final class SVGLinearGradientServer: SVGGradientServer {
@@ -51,6 +57,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
   let id: String?
   let parentId: String?
   let gradientUnits: SVGUnitType?
+  let gradientTransform: TransformList?
   let spreadMethod: SpreadMethod?
   let x1: SVGLength?
   let y1: SVGLength?
@@ -76,6 +83,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
 
     parentId = Self.parseLink(description: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
+    gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
 
     if let parentId = parentId {
@@ -101,6 +109,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     children = lhs.children.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
+    gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
   }
 
@@ -120,6 +129,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     children = lhs.children.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
+    gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
   }
 
@@ -148,8 +158,8 @@ final class SVGLinearGradientServer: SVGGradientServer {
     guard !colors.isEmpty else { return nil }
     return .linear(
       LinearGradientPaint(
-        units: gradientUnits, x1: x1, y1: y1, x2: x2, y2: y2, spreadMethod: spreadMethod ?? .pad, colors: colors,
-        locations: stops.map(\.offset.value)))
+        units: gradientUnits, transform: transform(context: context), x1: x1, y1: y1, x2: x2, y2: y2,
+        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: stops.map(\.offset.value)))
   }
 }
 
@@ -172,6 +182,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
   let children: [any SVGElement]
   let spreadMethod: SpreadMethod?
   let gradientUnits: SVGUnitType?
+  let gradientTransform: TransformList?
 
   let id: String?
   let parentId: String?
@@ -200,6 +211,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
     parentId = Self.parseLink(description: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
+    gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
 
     parentIds = []
   }
@@ -222,6 +234,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
+    gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
   }
 
   init?(lhs: SVGRadialGradientServer, rhs: SVGLinearGradientServer) {
@@ -242,6 +255,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
+    gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
   }
 
   private static func parseLink(description: String?) -> String? {
@@ -268,7 +282,8 @@ final class SVGRadialGradientServer: SVGGradientServer {
     guard !colors.isEmpty else { return nil }
     return .radial(
       RadialGradientPaint(
-        units: gradientUnits, cx: cx, cy: cy, r: r, colors: colors, locations: stops.map(\.offset.value)))
+        units: gradientUnits, transform: transform(context: context), cx: cx, cy: cy, r: r, colors: colors,
+        locations: stops.map(\.offset.value)))
   }
 }
 

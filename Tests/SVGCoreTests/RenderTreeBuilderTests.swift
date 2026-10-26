@@ -87,6 +87,50 @@ struct RenderTreeBuilderTests {
     #expect(gradient.y2 == 1)
   }
 
+  /// Gradients, and the transform of the gradient that the last rectangle is filled with.
+  private static let gradientTransforms: [(String, CGAffineTransform)] = [
+    (
+      #"<linearGradient id="g" gradientTransform="translate(5 10) scale(2)"><stop stop-color="lime"/></linearGradient>"#,
+      CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 5, ty: 10)
+    ),
+    (
+      #"<radialGradient id="g" gradientTransform="translate(5, 10)"><stop stop-color="lime"/></radialGradient>"#,
+      CGAffineTransform(translationX: 5, y: 10)
+    ),
+    // A gradient takes the transform of the gradient that it references, of either kind, if it has none.
+    (
+      ##"""
+      <radialGradient id="a" gradientTransform="translate(5)"><stop stop-color="lime"/></radialGradient>
+      <linearGradient id="g" href="#a"/>
+      """##,
+      CGAffineTransform(translationX: 5, y: 0)
+    ),
+    (
+      ##"""
+      <linearGradient id="a" gradientTransform="translate(5)"><stop stop-color="lime"/></linearGradient>
+      <linearGradient id="g" href="#a" gradientTransform="scale(3)"/>
+      """##,
+      CGAffineTransform(scaleX: 3, y: 3)
+    ),
+    (#"<linearGradient id="g" gradientTransform="("><stop stop-color="lime"/></linearGradient>"#, .identity),
+  ]
+
+  @Test(
+    "a gradient transform is the transform of the gradient, and is ignored if it isn't valid",
+    arguments: gradientTransforms)
+  func gradientTransform(gradients: String, transform: CGAffineTransform) async throws {
+    let tree = try await renderTree(gradients + #"<rect width="20" height="20" fill="url(#g)"/>"#)
+    let rect = try shape(try children(of: tree).last)
+    switch rect.content {
+    case .vector(.gradient(.linear(let gradient)), _, _):
+      #expect(gradient.transform == transform)
+    case .vector(.gradient(.radial(let gradient)), _, _):
+      #expect(gradient.transform == transform)
+    default:
+      Issue.record("The rectangle isn't filled with a gradient")
+    }
+  }
+
   @Test("lengths in percentages and text scale with the viewBox of a nested svg element")
   func nestedViewBox() async throws {
     let tree = try await renderTree(
