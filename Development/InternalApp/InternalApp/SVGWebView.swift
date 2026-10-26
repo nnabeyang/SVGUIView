@@ -29,8 +29,12 @@ struct SVGWebView: UIViewRepresentable {
     WKUserScript(
       source: """
         if (document.documentElement instanceof SVGElement) {
+          // The animations that seeking has paused. An animation that the file pauses stays where it is.
+          const seeking = new WeakSet();
           window.addEventListener("message", (event) => {
             for (const animation of document.getAnimations()) {
+              if (animation.playState === "paused" && !seeking.has(animation)) continue;
+              seeking.add(animation);
               animation.pause();
               animation.currentTime = event.data.time;
             }
