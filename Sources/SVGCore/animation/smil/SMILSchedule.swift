@@ -11,6 +11,18 @@ struct SMILInterval: Sendable, Equatable {
   let playEnd: Double
 }
 
+/// The state of a SMIL animation at a time, when it has an effect.
+struct SMILState: Sendable, Equatable {
+  /// The time in seconds that the current interval began at, which orders the animations of an attribute.
+  let intervalBegin: Double
+  /// The index of the repeat of the simple duration, starting at 0.
+  let iteration: Double
+  /// The progress through the simple duration, from 0 to 1, which stays 0 for an indefinite simple duration.
+  let progress: Double
+  /// Whether the animation has stopped playing and keeps its last value, as `fill="freeze"` makes it.
+  let isFrozen: Bool
+}
+
 /// The intervals of the SMIL animations of a document, up to a time.
 ///
 /// The intervals follow SMIL 3.0: the begin and end values of an animation give its interval times, and its
@@ -51,6 +63,31 @@ struct SMILSchedule: Sendable {
       intervals = next
     }
     self.intervals = intervals
+  }
+
+  /// The state of an animation at a time, or `nil` if it has no effect then: before its first interval, and after
+  /// an interval or between intervals when it doesn't freeze.
+  ///
+  /// - Parameters:
+  ///   - index: The index of the animation in the animations that the schedule was made with.
+  ///   - time: The time in seconds since the document began, which isn't later than the time of the schedule.
+  func state(of index: Int, at time: Double) -> SMILState? {
+    guard let interval = intervals[index].last(where: { $0.begin <= time }) else { return nil }
+    let animation = animations[index]
+    let isFrozen = time >= interval.playEnd
+    if isFrozen, animation.fill != .freeze { return nil }
+    guard let duration = animation.duration else {
+      return SMILState(intervalBegin: interval.begin, iteration: 0, progress: 0, isFrozen: isFrozen)
+    }
+    // The repeats of the simple duration play as the iterations of an animation that fills forwards.
+    let played = interval.playEnd - interval.begin
+    let timing = AnimationTiming(
+      delay: interval.begin, duration: duration,
+      iterations: played.isInfinite ? .infinite : .count(played / duration), direction: .normal,
+      fillMode: .forwards)
+    guard let sample = timing.sample(at: time) else { return nil }
+    return SMILState(
+      intervalBegin: interval.begin, iteration: sample.iteration, progress: sample.progress, isFrozen: isFrozen)
   }
 
   /// The times of a `begin` or `end` list, in order, with the times of syncbase values from the intervals found so

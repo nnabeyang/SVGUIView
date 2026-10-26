@@ -131,4 +131,54 @@ struct SMILTimingTests {
       until: 10)
     #expect(schedule.intervals.first?.first?.playEnd == 5)
   }
+
+  /// Timing attributes, times, and the iteration and the progress at each time, or `nil` without an effect.
+  private static let states: [(String, Double, (iteration: Double, progress: Double, isFrozen: Bool)?)] = [
+    (#"begin="1s" dur="2s""#, 0.5, nil),
+    (#"begin="1s" dur="2s""#, 1, (0, 0, false)),
+    (#"begin="1s" dur="2s""#, 2, (0, 0.5, false)),
+    (#"begin="1s" dur="2s""#, 3, nil),
+    (#"begin="1s" dur="2s" repeatCount="2""#, 3, (1, 0, false)),
+    (#"begin="1s" dur="2s" repeatCount="2""#, 4.5, (1, 0.75, false)),
+    // A frozen animation keeps the value at the end of its active duration, which is the end value when the
+    // duration ends with a repeat.
+    (#"begin="1s" dur="2s" repeatCount="2" fill="freeze""#, 9, (1, 1, true)),
+    (#"begin="1s" dur="2s" repeatCount="1.5" fill="freeze""#, 9, (1, 0.5, true)),
+    (#"begin="1s" dur="2s" end="2s" fill="freeze""#, 9, (0, 0.5, true)),
+    // Between intervals, a frozen animation keeps the value of the previous one.
+    (#"begin="0s; 5s" dur="2s" fill="freeze""#, 3, (0, 1, true)),
+    (#"begin="0s; 5s" dur="2s""#, 3, nil),
+    (#"begin="0s; 5s" dur="2s" fill="freeze""#, 6, (0, 0.5, false)),
+    // An indefinite simple duration stays at its start.
+    (#"begin="1s""#, 9, (0, 0, false)),
+    (#"begin="1s" end="2s" fill="freeze""#, 9, (0, 0, true)),
+    // After the repeats, an interval that `min` makes longer fills.
+    (#"dur="1s" repeatCount="5" end="2s" min="8s""#, 4.5, (4, 0.5, false)),
+    (#"dur="1s" repeatCount="5" end="2s" min="8s""#, 6, nil),
+    (#"dur="1s" repeatCount="5" end="2s" min="8s" fill="freeze""#, 6, (4, 1, true)),
+  ]
+
+  @Test("the state of an animation at a time", arguments: states)
+  func statesAtTimes(
+    attributes: String, time: Double, expected: (iteration: Double, progress: Double, isFrozen: Bool)?
+  ) throws {
+    let schedule = SMILSchedule(animations: [try animation(attributes)], until: time)
+    let state = schedule.state(of: 0, at: time)
+    if let expected {
+      let state = try #require(state)
+      #expect(state.iteration == expected.iteration)
+      #expect(abs(state.progress - expected.progress) < 1e-9)
+      #expect(state.isFrozen == expected.isFrozen)
+    } else {
+      #expect(state == nil)
+    }
+  }
+
+  @Test("the state says when the current interval began")
+  func intervalBegins() throws {
+    let schedule = SMILSchedule(
+      animations: [try animation(#"begin="1s; 4s" dur="2s" fill="freeze""#)], until: 5)
+    #expect(schedule.state(of: 0, at: 3.5)?.intervalBegin == 1)
+    #expect(schedule.state(of: 0, at: 5)?.intervalBegin == 4)
+  }
 }
