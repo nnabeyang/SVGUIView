@@ -105,8 +105,14 @@ struct SMILAttributeValues: SMILValueType {
 extension SMILEffect {
   /// Whether the animation changes an attribute of its target that isn't a property.
   var changesAttribute: Bool {
-    (animation.kind == .animate || animation.kind == .set) && animation.attributeName != nil
-      && animation.attributeName != "transform" && property == nil
+    switch animation.kind {
+    case .animate, .set:
+      animation.attributeName != nil && animation.attributeName != "transform" && property == nil
+    case .animateTransform:
+      animatesTransform("gradientTransform") || animatesTransform("patternTransform")
+    case .animateMotion:
+      false
+    }
   }
 
   /// The attributes that SMIL animations change at their time, by the elements that they change, with the values
@@ -129,16 +135,26 @@ extension SMILEffect {
     for (id, effects) in targets {
       guard let element = elements[id] else { continue }
       var values = [String: SMILAttributeValues.Value]()
+      // The transform lists of `<animateTransform>`, which have values of their own.
+      var transforms = [String: TransformList]()
       for effect in effects where effect.changesAttribute {
         guard let name = effect.animation.attributeName else { continue }
+        if effect.animation.kind == .animateTransform {
+          let underlying = transforms[name] ?? element.attributes[name].flatMap(TransformList.init(attribute:)) ?? .none
+          if let list = effect.transformed(underlying) {
+            transforms[name] = list
+          }
+          continue
+        }
         let type = SMILAttributeValues(attribute: name)
         let underlying = values[name] ?? element.attributes[name].flatMap(type.value) ?? type.initial
         if let value = effect.value(of: type, over: underlying) {
           values[name] = value
         }
       }
-      if !values.isEmpty {
-        attributes[id] = values.mapValues(\.text)
+      let texts = values.mapValues(\.text).merging(transforms.mapValues(\.attributeText)) { $1 }
+      if !texts.isEmpty {
+        attributes[id] = texts
       }
     }
     return attributes

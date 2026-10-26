@@ -30,11 +30,17 @@ struct SMILEffect: Sendable {
   ///
   /// `<animate>` doesn't change `transform`, which `<animateTransform>` animates instead.
   var property: PropertyID? {
-    guard animation.kind == .animate || animation.kind == .set, let name = animation.attributeName,
-      let id = PropertyID(rawValue: name), !id.isAnimation, id != .transform
-    else { return nil }
-    var visitor = AttributeAcceptance(name: animation.targetName)
-    return id.visit(&visitor) ? id : nil
+    guard let name = animation.attributeName, let id = PropertyID(rawValue: name), !id.isAnimation else { return nil }
+    switch animation.kind {
+    case .animateTransform:
+      return id == .transform ? id : nil
+    case .animate, .set:
+      guard id != .transform else { return nil }
+      var visitor = AttributeAcceptance(name: animation.targetName)
+      return id.visit(&visitor) ? id : nil
+    case .animateMotion:
+      return nil
+    }
   }
 
   /// The value of the property that the animation gives at its time, or `nil` if a value of the animation is
@@ -43,7 +49,12 @@ struct SMILEffect: Sendable {
   /// - Parameter underlying: The value under the animation, which a to-animation starts from, and which additive
   ///   animations add to.
   func value<P: StyleProperty>(of _: P.Type, over underlying: P.Computed, in resolver: StyleResolver) -> P.Computed? {
-    value(of: PropertyValues<P>(resolver: resolver), over: underlying)
+    // `<animateTransform>` changes the transform list of `transform` with the values of its type.
+    if animation.kind == .animateTransform {
+      guard let list = underlying as? TransformList else { return nil }
+      return transformed(list) as? P.Computed
+    }
+    return value(of: PropertyValues<P>(resolver: resolver), over: underlying)
   }
 
   /// The value that the animation gives at its time, or `nil` if a value of the animation is invalid for what it
