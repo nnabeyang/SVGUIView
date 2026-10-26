@@ -1,8 +1,8 @@
 import SwiftUI
 import WebKit
 
-/// Shows an SVG file with WebKit, fitted into the view as SVGView does with `.fit`, with its animations paused at
-/// a time.
+/// Shows an SVG file with WebKit, fitted into the view as SVGView does with `.fit`, with its CSS and SMIL animations
+/// paused at a time.
 struct SVGWebView: UIViewRepresentable {
   let url: URL
   /// The time of the animations, in seconds.
@@ -12,7 +12,7 @@ struct SVGWebView: UIViewRepresentable {
     var url: URL?
     var time = 0.0
 
-    /// Pauses the CSS animations of the file at the time, once the file has loaded.
+    /// Pauses the animations of the file at the time, once the file has loaded.
     func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
       seek(webView)
     }
@@ -24,7 +24,7 @@ struct SVGWebView: UIViewRepresentable {
     }
   }
 
-  /// Pauses the CSS animations of the SVG file at the time that the page sends.
+  /// Pauses the CSS animations and the SMIL animations of the SVG file at the time that the page sends.
   private static var seekScript: WKUserScript {
     WKUserScript(
       source: """
@@ -37,6 +37,12 @@ struct SVGWebView: UIViewRepresentable {
               seeking.add(animation);
               animation.pause();
               animation.currentTime = event.data.time;
+            }
+            // SMIL animations share the timeline of the document, which takes seconds.
+            const root = document.documentElement;
+            if (root instanceof SVGSVGElement) {
+              root.pauseAnimations();
+              root.setCurrentTime(event.data.time / 1000);
             }
           });
         }
