@@ -1,4 +1,4 @@
-public struct RelativeSelector<Impl: SelectorImpl>: Equatable {
+public struct RelativeSelector<Impl: SelectorImpl>: Equatable, Sendable {
   public let matchHint: RelativeSelectorMatchHint
   public let selector: Selector<Impl>
 
@@ -54,7 +54,7 @@ public struct CombinatorComposition: OptionSet, Sendable {
   }
 }
 
-public enum RelativeSelectorMatchHint {
+public enum RelativeSelectorMatchHint: Sendable {
   case inSubtree
   case inChild
   case inNextSibling

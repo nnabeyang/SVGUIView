@@ -43,41 +43,47 @@ struct SMILEffect: Sendable {
   /// - Parameter underlying: The value under the animation, which a to-animation starts from, and which additive
   ///   animations add to.
   func value<P: StyleProperty>(of _: P.Type, over underlying: P.Computed, in resolver: StyleResolver) -> P.Computed? {
-    func computed(_ text: String) -> P.Computed? {
-      P.declared(attribute: text).map { resolver.computed($0, of: P.self) }
-    }
-    let values: [P.Computed]
+    value(of: PropertyValues<P>(resolver: resolver), over: underlying)
+  }
+
+  /// The value that the animation gives at its time, or `nil` if a value of the animation is invalid for what it
+  /// changes, which makes the animation have no effect.
+  ///
+  /// - Parameter underlying: The value under the animation, which a to-animation starts from, and which additive
+  ///   animations add to.
+  func value<T: SMILValueType>(of type: T, over underlying: T.Value) -> T.Value? {
+    let values: [T.Value]
     // The value that each repeat adds to with `accumulate="sum"`, or `nil` if the animation doesn't accumulate.
-    var accumulated: P.Computed?
+    var accumulated: T.Value?
     switch animation.values {
     case .to(let from, let to):
-      guard let to = computed(to) else { return nil }
+      guard let to = type.value(to) else { return nil }
       if animation.kind == .set { return to }
       guard let from else {
         // A to-animation goes from the value under it, and neither adds to it nor accumulates.
-        return interpolated([underlying, to], of: P.self, in: resolver)
+        return interpolated([underlying, to], of: type)
       }
-      guard let from = computed(from) else { return nil }
+      guard let from = type.value(from) else { return nil }
       values = [from, to]
       accumulated = to
     case .by(let from, let by):
-      guard let by = computed(by) else { return nil }
+      guard let by = type.value(by) else { return nil }
       guard let from else {
         // A by-animation adds to the value under it.
-        guard let end = P.added(by, to: underlying, in: resolver) else { return nil }
-        var value = interpolated([underlying, end], of: P.self, in: resolver)
+        guard let end = type.added(by, to: underlying) else { return nil }
+        var value = interpolated([underlying, end], of: type)
         if animation.isAccumulative {
-          value = Self.accumulating(by, to: value, times: state.iteration, of: P.self, in: resolver)
+          value = Self.accumulating(by, to: value, times: state.iteration, of: type)
         }
         return value
       }
-      guard let from = computed(from), let end = P.added(by, to: from, in: resolver) else { return nil }
+      guard let from = type.value(from), let end = type.added(by, to: from) else { return nil }
       values = [from, end]
       accumulated = end
     case .list(let texts):
-      var list = [P.Computed]()
+      var list = [T.Value]()
       for text in texts {
-        guard let value = computed(text) else { return nil }
+        guard let value = type.value(text) else { return nil }
         list.append(value)
       }
       values = list
@@ -85,38 +91,36 @@ struct SMILEffect: Sendable {
     case .none:
       return nil
     }
-    var value = interpolated(values, of: P.self, in: resolver)
+    var value = interpolated(values, of: type)
     if animation.isAccumulative, let accumulated {
-      value = Self.accumulating(accumulated, to: value, times: state.iteration, of: P.self, in: resolver)
+      value = Self.accumulating(accumulated, to: value, times: state.iteration, of: type)
     }
-    if animation.isAdditive, let sum = P.added(value, to: underlying, in: resolver) {
+    if animation.isAdditive, let sum = type.added(value, to: underlying) {
       value = sum
     }
     return value
   }
 
   /// The value with another value added to it once for each repeat before the current one.
-  private static func accumulating<P: StyleProperty>(
-    _ addend: P.Computed, to value: P.Computed, times: Double, of _: P.Type, in resolver: StyleResolver
-  ) -> P.Computed {
+  private static func accumulating<T: SMILValueType>(
+    _ addend: T.Value, to value: T.Value, times: Double, of type: T
+  ) -> T.Value {
     var value = value
     // A very large count stops, as a value that big can't be drawn anyway.
     for _ in 0..<Int(min(times, 1000)) {
-      guard let sum = P.added(addend, to: value, in: resolver) else { break }
+      guard let sum = type.added(addend, to: value) else { break }
       value = sum
     }
     return value
   }
 
   /// The value at the progress of the animation through the values, as its `calcMode`, `keyTimes` and `keySplines`
-  /// say. A property whose values can't be interpolated changes discretely.
-  private func interpolated<P: StyleProperty>(
-    _ values: [P.Computed], of _: P.Type, in resolver: StyleResolver
-  ) -> P.Computed {
+  /// say. Values that can't be interpolated change discretely.
+  private func interpolated<T: SMILValueType>(_ values: [T.Value], of type: T) -> T.Value {
     let count = values.count
     guard count > 1 else { return values[0] }
     let progress = min(max(state.progress, 0), 1)
-    let calcMode = P.isInterpolable ? animation.calcMode : .discrete
+    let calcMode = type.isInterpolable ? animation.calcMode : .discrete
     if calcMode == .discrete {
       // Each value lasts from its time to the next one, and the end of the simple duration has the last value.
       if progress >= 1 { return values[count - 1] }
@@ -126,7 +130,7 @@ struct SMILEffect: Sendable {
     var times = animation.keyTimes ?? (0..<count).map { Double($0) / Double(count - 1) }
     // A paced animation spaces the values by their distances, and is linear if they have none.
     if calcMode == .paced {
-      let distances = zip(values, values.dropFirst()).map { P.distance($0, $1, in: resolver) }
+      let distances = zip(values, values.dropFirst()).map { type.distance($0, $1) }
       let total = distances.reduce(0) { $0 + ($1 ?? .nan) }
       if total.isFinite, total > 0 {
         var sum = 0.0
@@ -147,7 +151,47 @@ struct SMILEffect: Sendable {
     if calcMode == .spline, let splines = animation.keySplines, index < splines.count {
       intervalProgress = splines[index](intervalProgress)
     }
-    return P.interpolated(values[index], values[index + 1], progress: intervalProgress, in: resolver)
+    return type.interpolated(values[index], values[index + 1], progress: intervalProgress)
+  }
+}
+
+/// The values of what a SMIL animation changes: how its texts are read, and how values are found between them,
+/// added and measured.
+protocol SMILValueType {
+  associatedtype Value
+  /// Whether values between two values exist, so that animations interpolate them instead of changing them
+  /// discretely.
+  var isInterpolable: Bool { get }
+  /// The value of a text of an animation, or `nil` if it's invalid.
+  func value(_ text: String) -> Value?
+  func interpolated(_ from: Value, _ to: Value, progress: Double) -> Value
+  /// The sum of a value and the value under it, or `nil` if the values can't be added.
+  func added(_ value: Value, to underlying: Value) -> Value?
+  /// The distance between two values, or `nil` if it isn't defined.
+  func distance(_ from: Value, _ to: Value) -> Double?
+}
+
+/// The computed values of a property of an element, which the texts of animations are read as presentation
+/// attributes into.
+struct PropertyValues<P: StyleProperty>: SMILValueType {
+  let resolver: StyleResolver
+
+  var isInterpolable: Bool { P.isInterpolable }
+
+  func value(_ text: String) -> P.Computed? {
+    P.declared(attribute: text).map { resolver.computed($0, of: P.self) }
+  }
+
+  func interpolated(_ from: P.Computed, _ to: P.Computed, progress: Double) -> P.Computed {
+    P.interpolated(from, to, progress: progress, in: resolver)
+  }
+
+  func added(_ value: P.Computed, to underlying: P.Computed) -> P.Computed? {
+    P.added(value, to: underlying, in: resolver)
+  }
+
+  func distance(_ from: P.Computed, _ to: P.Computed) -> Double? {
+    P.distance(from, to, in: resolver)
   }
 }
 
