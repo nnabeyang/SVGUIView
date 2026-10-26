@@ -350,12 +350,14 @@ package struct RenderTreeBuilder {
   func transform(
     of element: any SVGDrawableElement, context: ResolveContext, frame: CGRect?, guard references: ReferenceGuard
   ) async -> CGAffineTransform {
-    await transform(of: element.style, context: context) { box in
+    let transform = await transform(of: element.style, context: context) { box in
       if box == .fillBox, let frame { return frame }
       let path = await path(of: element, context: context, guard: references)
       return await self.frame(
         of: element, context: context, path: path, includesStroke: box == .strokeBox, guard: references)
     }
+    // The motion of `<animateMotion>` applies after the transform, in the coordinates of the parent.
+    return transform.concatenating(element.style.motion)
   }
 
   /// The transform of computed values about their transform origin.

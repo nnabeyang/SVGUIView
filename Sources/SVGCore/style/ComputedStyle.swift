@@ -174,6 +174,8 @@ struct ComputedStyle: Sendable {
   var animationDirection: [AnimationDirection]
   var animationFillMode: [AnimationFillMode]
   var animationPlayState: [AnimationPlayState]
+  /// The transform that SMIL `<animateMotion>` elements add after `transform`, which isn't a property.
+  var motion = CGAffineTransform.identity
 
   /// The initial value of every property, which is the style of the parent of the root element.
   static let initial = ComputedStyle(
@@ -224,6 +226,12 @@ struct ComputedStyle: Sendable {
     }
     for id in PropertyID.allCases {
       id.visit(&computer)
+    }
+    // Motions apply in the order of the sandwich model, each over the ones under it.
+    for effect in smil where effect.animation.kind == .animateMotion {
+      if let motion = effect.motion(over: computer.resolver.style.motion) {
+        computer.resolver.style.motion = motion
+      }
     }
     self = computer.resolver.style
   }

@@ -127,7 +127,7 @@ struct SMILEffect: Sendable {
 
   /// The value at the progress of the animation through the values, as its `calcMode`, `keyTimes` and `keySplines`
   /// say. Values that can't be interpolated change discretely.
-  private func interpolated<T: SMILValueType>(_ values: [T.Value], of type: T) -> T.Value {
+  func interpolated<T: SMILValueType>(_ values: [T.Value], of type: T) -> T.Value {
     let count = values.count
     guard count > 1 else { return values[0] }
     let progress = min(max(state.progress, 0), 1)
