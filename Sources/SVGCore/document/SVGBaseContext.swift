@@ -80,7 +80,18 @@ package struct SVGBaseContext: Sendable {
     var animations = animations
     animations.time = time
     animations.smilEffects = SMILEffect.effects(of: animations.smil, at: time)
-    let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
+    let attributes = SMILEffect.attributes(of: animations.smilEffects, in: document)
+    let animated: SVGSVGElement?
+    if attributes.isEmpty {
+      animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
+    } else {
+      // Animations of attributes that aren't properties change the attributes before the cascade, so the elements
+      // are made again from the document with the animated attributes.
+      animated =
+        document.replacingAttributes(attributes).root.flatMap {
+          ElementCursor(root: $0).makeElement(with: stylesheet, animations: animations)
+        } as? SVGSVGElement
+    }
     return SVGBaseContext(document: document, stylesheet: stylesheet, root: animated, animations: animations)
   }
 

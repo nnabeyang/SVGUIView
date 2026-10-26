@@ -48,6 +48,19 @@ final class DocumentElement: Sendable {
     return DocumentElement(
       id: id, name: name, localName: localName, attributes: attributes, text: text, children: children)
   }
+
+  /// The element with the given attributes of it and of its descendants replaced. The elements that change, and
+  /// their ancestors, are copied with their identifiers, and every other subtree is shared.
+  ///
+  /// - Parameter replacements: The attributes to set by the elements that they're set on.
+  func replacingAttributes(_ replacements: [ElementID: [String: String]]) -> DocumentElement {
+    let children = children.map { $0.replacingAttributes(replacements) }
+    let replaced = replacements[id]
+    if replaced == nil, zip(children, self.children).allSatisfy({ $0 === $1 }) { return self }
+    return DocumentElement(
+      id: id, name: name, localName: localName,
+      attributes: attributes.merging(replaced ?? [:]) { $1 }, text: text, children: children)
+  }
 }
 
 /// A parsed SVG document.
@@ -57,6 +70,14 @@ final class DocumentElement: Sendable {
 struct SVGDocument: Sendable {
   /// The root element, or `nil` for data without an element.
   let root: DocumentElement?
+
+  /// The document with the given attributes of its elements replaced.
+  ///
+  /// - Parameter replacements: The attributes to set by the elements that they're set on.
+  func replacingAttributes(_ replacements: [ElementID: [String: String]]) -> SVGDocument {
+    guard !replacements.isEmpty else { return self }
+    return SVGDocument(root: root?.replacingAttributes(replacements))
+  }
 
   /// The document with the element at `path`, a list of child positions from the root, replaced.
   func replacingElement(at path: [Int], with replacement: DocumentElement) -> SVGDocument {
