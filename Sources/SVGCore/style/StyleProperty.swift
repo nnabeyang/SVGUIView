@@ -43,6 +43,11 @@ protocol StyleProperty {
   static func compute(_ value: Specified, in resolver: StyleResolver) -> Computed
   /// The value between two computed values of an animation, at a progress that can be outside 0 to 1.
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in resolver: StyleResolver) -> Computed
+  /// The sum of a computed value and the value under it, which additive and accumulating animations use, or `nil`
+  /// if the values can't be added.
+  static func added(_ value: Computed, to underlying: Computed, in resolver: StyleResolver) -> Computed?
+  /// The distance between two computed values, which paced animations use, or `nil` if it isn't defined.
+  static func distance(_ from: Computed, _ to: Computed, in resolver: StyleResolver) -> Double?
 }
 
 /// Something done with the type of a property, which ``PropertyID/visit(_:)`` calls with the type that describes
@@ -75,11 +80,29 @@ extension StyleProperty {
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
     discrete(from, to, progress: progress)
   }
+
+  /// No sum, for a property whose values can't be added.
+  static func added(_: Computed, to _: Computed, in _: StyleResolver) -> Computed? {
+    nil
+  }
+
+  /// No distance, for a property whose values have none.
+  static func distance(_: Computed, _: Computed, in _: StyleResolver) -> Double? {
+    nil
+  }
 }
 
 extension StyleProperty where Computed: Animatable {
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
     from.animated(to: to, progress: progress)
+  }
+
+  static func added(_ value: Computed, to underlying: Computed, in _: StyleResolver) -> Computed? {
+    underlying.adding(value)
+  }
+
+  static func distance(_ from: Computed, _ to: Computed, in _: StyleResolver) -> Double? {
+    from.pacedDistance(to: to)
   }
 }
 
