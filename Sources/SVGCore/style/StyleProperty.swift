@@ -41,6 +41,9 @@ protocol StyleProperty {
   /// The value of a declaration in a style sheet, read from its tokens.
   static func parse(css input: inout _CSSParser.Parser) -> Specified?
   static func compute(_ value: Specified, in resolver: StyleResolver) -> Computed
+  /// Whether values between two computed values exist, so that SMIL animations interpolate them instead of changing
+  /// them discretely.
+  static var isInterpolable: Bool { get }
   /// The value between two computed values of an animation, at a progress that can be outside 0 to 1.
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in resolver: StyleResolver) -> Computed
   /// The sum of a computed value and the value under it, which additive and accumulating animations use, or `nil`
@@ -76,6 +79,8 @@ extension StyleProperty where Specified == Computed {
 }
 
 extension StyleProperty {
+  static var isInterpolable: Bool { false }
+
   /// One of the values, for a property whose values can't be interpolated.
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
     discrete(from, to, progress: progress)
@@ -93,6 +98,8 @@ extension StyleProperty {
 }
 
 extension StyleProperty where Computed: Animatable {
+  static var isInterpolable: Bool { true }
+
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
     from.animated(to: to, progress: progress)
   }

@@ -451,6 +451,8 @@ enum VisibilityProperty: StyleProperty {
   static let isInherited = true
   static let initial = CSSVisibility.visible
   static let computed = \ComputedStyle.visibility
+  /// SMIL animations change keywords discretely, as SVG says. CSS animations interpolate with the rules of CSS.
+  static let isInterpolable = false
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> CSSVisibility? {
     keyword(text, origin: origin)

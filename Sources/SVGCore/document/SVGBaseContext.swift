@@ -9,6 +9,9 @@ struct DocumentAnimations: Sendable {
   var smil: [SMILAnimation] = []
   /// The time since the document was loaded, in seconds.
   var time: Double
+  /// The effects of the SMIL animations at the time, by the elements that they change, in the order that they apply
+  /// in.
+  var smilEffects: [ElementID: [SMILEffect]] = [:]
 }
 
 package struct SVGBaseContext: Sendable {
@@ -16,7 +19,8 @@ package struct SVGBaseContext: Sendable {
   let document: SVGDocument
   package let root: SVGSVGElement?
   let animations: DocumentAnimations
-  /// Whether an element runs an animation with keyframes, so that the computed values change with the time.
+  /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
+  /// values change with the time.
   let isAnimated: Bool
   private(set) var pservers = [String: any SVGGradientServer]()
   private(set) var contentIdMap = [String: ObjectIdentifier]()
@@ -34,12 +38,13 @@ package struct SVGBaseContext: Sendable {
     self.root = root
     self.animations = animations
     isAnimated =
-      !animations.keyframes.isEmpty
-      && (root?.elements ?? []).contains { element in
-        element.style.animationName.contains {
-          if case .keyframes(let name) = $0 { animations.keyframes[name] != nil } else { false }
+      !animations.smil.isEmpty
+      || !animations.keyframes.isEmpty
+        && (root?.elements ?? []).contains { element in
+          element.style.animationName.contains {
+            if case .keyframes(let name) = $0 { animations.keyframes[name] != nil } else { false }
+          }
         }
-      }
     guard let root else { return }
     for content in root.elements {
       let identifier = content.index
@@ -71,6 +76,7 @@ package struct SVGBaseContext: Sendable {
     guard isAnimated, let root else { return self }
     var animations = animations
     animations.time = time
+    animations.smilEffects = SMILEffect.effects(of: animations.smil, at: time)
     let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
     return SVGBaseContext(document: document, root: animated, animations: animations)
   }
