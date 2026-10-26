@@ -189,25 +189,18 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: svg)
     let id = renderID(of: svg, instance: instance)
-    let x = (svg.x ?? .pixel(0)).value(context: context, mode: .width)
-    let y = (svg.y ?? .pixel(0)).value(context: context, mode: .height)
-    let translation = CGAffineTransform(translationX: x, y: y)
-    let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
-    let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
-    guard height > 0, width > 0 else {
+    let (translation, layout) = viewport(of: svg, context: context)
+    guard let layout else {
       return .viewport(ViewportNode(id: id, translation: translation, content: nil))
     }
-    let viewPortSize = CGSize(width: width, height: height)
-    let transform = svg.viewBox.map { svg.getTransform(viewBox: $0.toCGRect(), size: viewPortSize) } ?? .identity
-    let rect = CGRect(origin: .zero, size: viewPortSize).applying(transform.inverted())
-    let inner = context.with(viewBox: svg.viewBox?.toCGRect() ?? rect)
+    let inner = layout.context
     var overflowClip: CGRect?
     switch svg.overflow ?? .hidden {
     case .visible, .auto:
       break
     default:
       if svg.width != nil, svg.height != nil {
-        overflowClip = rect
+        overflowClip = layout.rect
       }
     }
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
@@ -224,7 +217,39 @@ package struct RenderTreeBuilder {
       ViewportNode(
         id: id, translation: translation,
         content: ViewportContent(
-          viewBoxTransform: transform, overflowClip: overflowClip, clip: clip, mask: mask, children: children)))
+          viewBoxTransform: layout.viewBoxTransform, overflowClip: overflowClip, clip: clip, mask: mask,
+          children: children)))
+  }
+
+  /// The content of a viewport, which has an area.
+  private struct ViewportLayout {
+    /// The transform from the coordinates of the content to the viewport.
+    let viewBoxTransform: CGAffineTransform
+    /// The viewport in the coordinates of its content.
+    let rect: CGRect
+    /// The context of the content.
+    let context: ResolveContext
+  }
+
+  /// The translation of a viewport by `x` and `y`, and its content, or `nil` if it has no area, in a context styled by
+  /// the `svg` element.
+  private func viewport(
+    of svg: SVGSVGElement, context: ResolveContext
+  ) -> (translation: CGAffineTransform, layout: ViewportLayout?) {
+    let x = (svg.x ?? .pixel(0)).value(context: context, mode: .width)
+    let y = (svg.y ?? .pixel(0)).value(context: context, mode: .height)
+    let translation = CGAffineTransform(translationX: x, y: y)
+    let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
+    let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
+    guard height > 0, width > 0 else { return (translation, nil) }
+    let viewPortSize = CGSize(width: width, height: height)
+    let transform = svg.viewBox.map { svg.getTransform(viewBox: $0.toCGRect(), size: viewPortSize) } ?? .identity
+    let rect = CGRect(origin: .zero, size: viewPortSize).applying(transform.inverted())
+    return (
+      translation,
+      ViewportLayout(
+        viewBoxTransform: transform, rect: rect, context: context.with(viewBox: svg.viewBox?.toCGRect() ?? rect))
+    )
   }
 
   private func useNode(
@@ -369,17 +394,13 @@ package struct RenderTreeBuilder {
       return await frame(of: group.children, context: context, includesStroke: includesStroke, guard: references)
         ?? .zero
     case let svg as SVGSVGElement:
-      var rect = CGRect.zero
-      for child in svg.children {
-        guard let child = child as? (any SVGDrawableElement), child.display != CSSDisplay.none else { continue }
-        let context = context.styled(by: child)
-        let childPath = await self.path(of: child, context: context, guard: references)
-        rect = CGRectUnion(
-          rect,
-          await frame(
-            of: child, context: context, path: childPath, includesStroke: includesStroke, guard: references))
-      }
-      return rect
+      // The bounds of the children, each with its transform, in the coordinates that the viewport is placed in.
+      let (translation, layout) = viewport(of: svg, context: context)
+      guard let layout,
+        let frame = await frame(
+          of: svg.children, context: layout.context, includesStroke: includesStroke, guard: references)
+      else { return .zero }
+      return frame.applying(layout.viewBoxTransform.concatenating(translation))
     case let use as SVGUseElement:
       let frame = await withReferencedElement(of: use, context: context, guard: references) { element, references in
         let context = context.styled(by: element)
