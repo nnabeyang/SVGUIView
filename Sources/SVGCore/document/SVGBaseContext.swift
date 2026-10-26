@@ -1,10 +1,12 @@
 import CoreGraphics
 import Foundation
 
-/// The `@keyframes` rules of a document, and the time that its animations are at.
+/// The `@keyframes` rules and the SMIL animations of a document, and the time that its animations are at.
 struct DocumentAnimations: Sendable {
   /// The rules by their names. Of rules with the same name, the last one in the document wins.
   let keyframes: [String: KeyframesRule]
+  /// The SMIL animations in document order.
+  var smil: [SMILAnimation] = []
   /// The time since the document was loaded, in seconds.
   var time: Double
 }

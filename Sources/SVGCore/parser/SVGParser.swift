@@ -30,7 +30,29 @@ enum SVGElementName: String, Equatable {
   case feOffset
   case feMerge
   case feMergeNode
+  case animate
+  case set
+  case animateTransform
+  case animateMotion
+  case mpath
   case unknown
+
+  /// Whether the element is a SMIL animation element.
+  var isAnimation: Bool {
+    switch self {
+    case .animate, .set, .animateTransform, .animateMotion: true
+    default: false
+    }
+  }
+
+  /// Whether the element is rendered or used by rendered elements. `<style>`, unknown elements and the elements of
+  /// SMIL animation aren't.
+  var isRendered: Bool {
+    switch self {
+    case .style, .unknown, .animate, .set, .animateTransform, .animateMotion, .mpath: false
+    default: true
+    }
+  }
 }
 
 enum SVGXmlNameSpace: String {
@@ -71,7 +93,9 @@ package final class SVGParser: NSObject {
     let css = Stylesheet(rules: rules, keyframes: keyframes)
     let element = root.flatMap { ElementCursor(root: $0).makeElement(with: css) as? SVGSVGElement }
     return SVGBaseContext(
-      document: document, root: element, animations: DocumentAnimations(keyframes: keyframes, time: 0))
+      document: document, root: element,
+      animations: DocumentAnimations(
+        keyframes: keyframes, smil: SMILAnimation.animations(of: document), time: 0))
   }
 
   private func parse(data: Data) -> SVGBaseContext {
