@@ -189,9 +189,13 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: svg)
     let id = renderID(of: svg, instance: instance)
+    // The root element is placed by the view, and its transform isn't supported yet.
+    let transform =
+      mode != .filter(isRoot: true) && svg.base.elementID != base.root?.base.elementID
+      ? await transform(of: svg, context: context, frame: nil, guard: references) : .identity
     let (translation, layout) = viewport(of: svg, context: context)
     guard let layout else {
-      return .viewport(ViewportNode(id: id, translation: translation, content: nil))
+      return .viewport(ViewportNode(id: id, transform: transform, translation: translation, content: nil))
     }
     let inner = layout.context
     var overflowClip: CGRect?
@@ -206,16 +210,17 @@ package struct RenderTreeBuilder {
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
     let clip = await clipEffect(svg.clipPath, frame: inner.viewBox, context: inner, guard: references)
     let mask = await maskEffect(svg.mask, frame: inner.viewBox, context: inner, guard: references)
+    let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
     for child in svg.children {
       guard let child = child as? (any SVGDrawableElement) else { continue }
-      if let node = await node(of: child, context: inner, mode: mode, guard: references, instance: instance) {
+      if let node = await node(of: child, context: inner, mode: childMode, guard: references, instance: instance) {
         children.append(node)
       }
     }
     return .viewport(
       ViewportNode(
-        id: id, translation: translation,
+        id: id, transform: transform, translation: translation,
         content: ViewportContent(
           viewBoxTransform: layout.viewBoxTransform, overflowClip: overflowClip, clip: clip, mask: mask,
           children: children)))

@@ -177,6 +177,7 @@ package struct CGPainter {
 
   private func paint(_ viewport: ViewportNode, into graphics: CGContext, isClipped: Bool) async {
     graphics.saveGState()
+    graphics.concatenate(viewport.transform)
     graphics.concatenate(viewport.translation)
     guard let content = viewport.content else {
       graphics.restoreGState()
