@@ -98,7 +98,9 @@ final class SVGBaseElement: Sendable {
   func restyled(parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?) -> SVGBaseElement {
     SVGBaseElement(
       elementID: elementID, name: name, text: text, attributes: attributes, cascaded: cascaded,
-      style: ComputedStyle(cascaded: cascaded, parent: parent, root: root, animations: animations))
+      style: ComputedStyle(
+        cascaded: cascaded, parent: parent, root: root, animations: animations,
+        smil: animations?.smilEffects[elementID] ?? []))
   }
 }
 

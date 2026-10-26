@@ -32,6 +32,24 @@ struct SVGFile: Sendable, CustomTestStringConvertible {
       .sorted { $0.path < $1.path }
       .map(SVGFile.init(url:))
   }
+
+  /// The SVG files with animations under `<root>/<components>` of the test suite, each with the times to render it
+  /// at, sorted by path and time.
+  ///
+  /// The times come from `animation-times.json` at the top of the test suite, which maps the paths of the files from
+  /// the top, such as `w3c/1.1F2/name.svg`, to times in milliseconds. Its tests check the files at those times.
+  static func timed(root: String = "w3c", in components: String...) -> [(SVGFile, Duration)] {
+    let top = TestSuite.bundle.bundleURL
+    guard let data = try? Data(contentsOf: top.appending(component: "animation-times.json")),
+      let times = try? JSONDecoder().decode([String: [Int]].self, from: data)
+    else { return [] }
+    let prefix = ([root] + components).joined(separator: "/") + "/"
+    return times.filter { $0.key.hasPrefix(prefix) }
+      .sorted { $0.key < $1.key }
+      .flatMap { path, milliseconds in
+        milliseconds.sorted().map { (SVGFile(url: top.appending(path: path)), Duration.milliseconds($0)) }
+      }
+  }
 }
 
 /// The device, OS and language that the reference images are recorded with.
