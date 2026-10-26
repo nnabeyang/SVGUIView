@@ -7,6 +7,9 @@ import UIKit
 
 /// Renders an SVG file and compares the image with its reference image.
 ///
+/// With a time, the file is rendered as it is at that time of its animations, and the name of the reference image
+/// ends with the time in milliseconds, such as `-500ms`.
+///
 /// Reference images are read from `__Snapshots__/<environment>/<test file>/` next to the test file when that
 /// directory exists, and otherwise from the `SVGSnapshotReferences` bundle. New reference images, and all of
 /// them when `SNAPSHOT_TESTING_RECORD` is `all`, are written next to the test file. When a comparison fails,
@@ -14,6 +17,7 @@ import UIKit
 @MainActor
 func assertSVGSnapshot(
   of file: SVGFile,
+  at time: Duration? = nil,
   fileID: StaticString = #fileID,
   filePath: StaticString = #filePath,
   testName: String = #function,
@@ -33,7 +37,7 @@ func assertSVGSnapshot(
   view.layoutIfNeeded()
   let image: UIImage
   do {
-    image = try await view.takeSnapshot()
+    image = try await view.takeSnapshot(at: time ?? .zero)
   } catch .missingRootElement {
     // A document without a root `svg` element, such as one in another namespace, draws nothing, and its
     // reference image is empty.
@@ -58,7 +62,7 @@ func assertSVGSnapshot(
   let failure = verifySnapshot(
     of: image,
     as: .image(precision: 0.999, perceptualPrecision: 0.98),
-    named: file.name,
+    named: time.map { "\(file.name)-\(milliseconds(of: $0))ms" } ?? file.name,
     record: recordMode,
     snapshotDirectory: snapshotDirectory(filePath: filePath),
     fileID: fileID,
@@ -70,6 +74,12 @@ func assertSVGSnapshot(
   if let failure {
     Issue.record(Comment(rawValue: failure), sourceLocation: sourceLocation)
   }
+}
+
+/// The time in whole milliseconds, for the names of reference images, which can't have a period.
+private func milliseconds(of time: Duration) -> Int64 {
+  let (seconds, attoseconds) = time.components
+  return seconds * 1000 + attoseconds / 1_000_000_000_000_000
 }
 
 /// The record mode that `SNAPSHOT_TESTING_RECORD` sets, such as `all`, or `nil` for the default.

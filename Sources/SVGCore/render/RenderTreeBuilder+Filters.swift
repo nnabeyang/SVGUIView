@@ -40,7 +40,8 @@ extension RenderTreeBuilder {
     return .filtered(
       .filtered(
         FilteredNode(
-          id: RenderID(element: element.base.elementID, instance: instance), transform: element.transform ?? .identity,
+          id: RenderID(element: element.base.elementID, instance: instance),
+          transform: await transform(of: element, context: elementContext, frame: frame, guard: references),
           frame: frame, effectRect: effectRect(of: filter, frame: frame, context: context),
           colorInterpolation: filter.colorInterpolation ?? .sRGB,
           colorInterpolationFilters: filter.colorInterpolationFilters ?? .linearRGB, opacity: element.opacity,

@@ -14,5 +14,20 @@ extension SnapshotTests {
     func text(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(root: "custom", in: "transform"))
+    func transform(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    /// The times that documents with animations are rendered at.
+    private static let times: [Duration] = [
+      .zero, .milliseconds(500), .seconds(1), .milliseconds(1500), .milliseconds(2500),
+    ]
+
+    @Test(arguments: SVGFile.all(root: "custom", in: "animation"), times)
+    func animation(_ file: SVGFile, at time: Duration) async throws {
+      try await assertSVGSnapshot(of: file, at: time)
+    }
   }
 }

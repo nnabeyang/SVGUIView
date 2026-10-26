@@ -36,8 +36,12 @@ func collectDeclarations(matches: [RuleMatch], inlineStyle declarations: [CSSDec
 func cascade(element: ElementCursor, stylesheet: Stylesheet) -> CascadedValues {
   let attributes = element.element.attributes
   let inlineStyle = attributes["style"].map { SVGUIInlineStyle(description: $0).declarations } ?? []
-  let declarations = collectDeclarations(matches: stylesheet.matchElement(element: element), inlineStyle: inlineStyle)
+  let declarations = sortedByPrecedence(
+    collectDeclarations(matches: stylesheet.matchElement(element: element), inlineStyle: inlineStyle))
+  // Important declarations come after the normal ones, so a property with an important declaration has an
+  // important one that wins.
+  let important = Set(declarations.filter { $0.importance == .important }.map(\.id))
   return CascadedValues(
     CascadedValues.presentationAttributes(of: element.element.name, attributes: attributes)
-      + sortedByPrecedence(declarations).map(\.declaration))
+      + declarations.map(\.declaration), important: important)
 }

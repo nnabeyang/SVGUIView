@@ -6,10 +6,12 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 
 > Important: This article describes work that is partly planned. Phase 0,
 > which splits the code into `SVGCore` and `SVGRenderCG` and into the stages of
-> the rendering pipeline, is done. Animation, the document API,
-> `SVGRenderLayer` and filters on Metal are planned: the types, properties and
-> methods proposed for them don't exist yet, and their names may change while
-> the work goes on.
+> the rendering pipeline, is done. Phase 1 is done too: CSS Animations are
+> parsed and applied to the computed values at a time, and
+> ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders that time. SMIL
+> animation, playback, the document API, `SVGRenderLayer` and filters on Metal
+> are planned: the types, properties and methods proposed for them don't exist
+> yet, and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -64,8 +66,9 @@ parsed. This section records its limits, and which of them phase 0 removed.
   so no drawing state is shared, and `SVGContext` is gone.
 - **At-rules are dropped.** The CSS parser doesn't parse any at-rule, so
   `@keyframes` rules are lost. Selector matching supports type, class and ID
-  selectors and combinators, but not pseudo-classes. This remains until
-  phase 1.
+  selectors and combinators, but not pseudo-classes. Phase 1 removed this limit
+  for `@keyframes`: the rules are parsed and kept with the document. Other
+  at-rules are still dropped, and pseudo-classes still aren't supported.
 - **Every update redraws the whole document.** Drawing renders the entire
   tree into one bitmap, which becomes the contents of the view's layer. Nothing
   is cached between renderings, and a rendering that takes longer than
@@ -289,7 +292,7 @@ protocol Animatable: Sendable {
   /// The sum used by additive and accumulating animations.
   func adding(_ other: Self) -> Self?
   /// The distance used by `calcMode="paced"`.
-  func distance(to other: Self) -> Double?
+  func pacedDistance(to other: Self) -> Double?
 }
 ```
 
@@ -300,7 +303,8 @@ protocol Animatable: Sendable {
 | Colors | In premultiplied sRGB, as CSS Color 4 specifies for legacy color syntax |
 | Paint (`fill`, `stroke`) | Colors are interpolated. A change to or from a paint server is discrete. |
 | Transform lists | Function by function when the lists match. Otherwise, by decomposing the matrices. |
-| `d` and `points` | Command by command when the paths have the same structure. Otherwise, discrete. |
+| `transform-origin` | As two lengths |
+| `d` and `points` | Command by command when the paths have the same structure. Otherwise, discrete. `points` isn't a property yet, so it isn't animated. |
 | `stroke-dasharray` | Element by element, after repeating both lists to a common length |
 | `visibility`, `display` and other keywords | Discrete, with the CSS rules for `visibility` |
 
@@ -369,10 +373,9 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 - **Controlling the timeline:** ``SVGUIView/SVGUIView`` gains `play()`,
   `pause()`, `seek(to:)` and `currentTime`. Times are `Duration` values, like
   ``SVGUIViewConfiguration/timeoutDuration``.
-- **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:)``
-  gains a time parameter, so that any frame can be rendered as an image. This is
-  what the planned `render(at:)` API became, because it keeps one method for
-  snapshots.
+- **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)``
+  takes a time, so that any frame can be rendered as an image. This is what the
+  planned `render(at:)` API became, because it keeps one method for snapshots.
 - **Reaching the document:** ``SVGUIView/SVGUIView`` gains a `document`
   property for the document API. Assigning new ``SVGUIView/SVGUIView/data``
   replaces the document.
@@ -499,15 +502,16 @@ playback is smooth.
   cases at the edges: just before and after a delay, at iteration boundaries,
   for each fill mode, and at each step of `steps()`.
 - **Snapshots at given times:** Because a time fully decides the output,
-  ``SVGUIView/SVGUIView/takeSnapshot(rect:)`` with a time gives stable
+  ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` with a time gives stable
   snapshots. Each test document is captured at a few times, such as 0, 0.5 and
   1 second.
-- **References from a browser:** Reference images are captured from WebKit
-  with the same document held at the same time. CSS animations are held with
-  `document.getAnimations()` and their `currentTime`, and SMIL animations with
-  `pauseAnimations()` and `setCurrentTime()`. This script runs only when the
-  references are captured, never in the package. Antialiasing differs slightly
-  from the browser's, so the comparison has a tolerance.
+- **Checking against a browser:** Reference images are recorded from
+  SVGUIView, after its renderings are compared with WebKit holding the same
+  document at the same time. The viewer of the test app holds CSS animations
+  with `document.getAnimations()` and their `currentTime`, and will hold SMIL
+  animations with `pauseAnimations()` and `setCurrentTime()`. WebKit is a
+  reference, not a target: a difference is decided by the specifications. The
+  script runs only in the test app, never in the package.
 - **Agreement between renderers:** For the same time, the image from
   `SVGRenderCG` and the image of the layer tree from `SVGRenderLayer` must
   match. This keeps playback from looking different from snapshots.
@@ -549,7 +553,7 @@ before it is merged.
 | Phase | Work | Status |
 |---|---|---|
 | 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. | Done in 0.25.0 |
-| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Planned |
+| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done |
 | 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Planned |
 | 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Planned |
 | 2.5 | The document API and CSS Transitions, which need the document API to start. | Planned |

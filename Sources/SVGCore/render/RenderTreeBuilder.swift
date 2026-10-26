@@ -115,7 +115,6 @@ package struct RenderTreeBuilder {
     instance: [ElementID]
   ) async -> RenderNode {
     let context = context.styled(by: element)
-    let transform = mode != .filter(isRoot: true) ? (element.transform ?? .identity) : .identity
     let references = beginsLevel(mode) ? references.beginning(.all) : references
     let path = await path(of: element, context: context, guard: references)
     var geometry: Geometry?
@@ -132,6 +131,9 @@ package struct RenderTreeBuilder {
         mask = .mask(effect)
       }
     }
+    let transform =
+      mode != .filter(isRoot: true)
+      ? await transform(of: element, context: context, frame: geometry?.frame ?? .zero, guard: references) : .identity
     var content: ShapeContent?
     if let path, element.style.visibility == .visible {
       let stroke = strokeStyle(of: element, context: context)
@@ -154,15 +156,19 @@ package struct RenderTreeBuilder {
     instance: [ElementID]
   ) async -> RenderNode {
     let context = context.styled(by: group)
-    let transform = mode != .filter(isRoot: true) ? (group.transform ?? .identity) : .identity
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
     var clip: ClipPathEffect?
     var mask: MaskEffect?
+    var frame: CGRect?
     if group.clipPath != nil || group.mask != nil {
-      let frame = await frame(of: group, context: context, path: nil, guard: references)
-      clip = await clipEffect(group.clipPath, frame: frame, context: context, guard: references)
-      mask = await maskEffect(group.mask, frame: frame, context: context, guard: references)
+      let groupFrame = await self.frame(of: group, context: context, path: nil, guard: references)
+      clip = await clipEffect(group.clipPath, frame: groupFrame, context: context, guard: references)
+      mask = await maskEffect(group.mask, frame: groupFrame, context: context, guard: references)
+      frame = groupFrame
     }
+    let transform =
+      mode != .filter(isRoot: true)
+      ? await transform(of: group, context: context, frame: frame, guard: references) : .identity
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
     for child in group.children {
@@ -227,15 +233,18 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: use)
     let isFilterRoot = mode == .filter(isRoot: true)
-    let transform = isFilterRoot ? .identity : (use.transform ?? .identity)
     let references = isFilterRoot ? references.beginning(.all) : references
     var clip: ClipPathEffect?
     var mask: MaskEffect?
+    var frame: CGRect?
     if use.clipPath != nil || use.mask != nil {
-      let frame = await frame(of: use, context: context, path: nil, guard: references)
-      clip = await clipEffect(use.clipPath, frame: frame, context: context, guard: references)
-      mask = await maskEffect(use.mask, frame: frame, context: context, guard: references)
+      let useFrame = await self.frame(of: use, context: context, path: nil, guard: references)
+      clip = await clipEffect(use.clipPath, frame: useFrame, context: context, guard: references)
+      mask = await maskEffect(use.mask, frame: useFrame, context: context, guard: references)
+      frame = useFrame
     }
+    let transform =
+      isFilterRoot ? .identity : await transform(of: use, context: context, frame: frame, guard: references)
     let content = await withReferencedElement(of: use, context: context, guard: references) { element, references in
       UseInstance(
         translation: translation(of: use, context: context), opacity: use.opacity,
@@ -268,7 +277,8 @@ package struct RenderTreeBuilder {
     else {
       return nil
     }
-    let restyled = element.restyled(parent: use.style, root: base.root?.style ?? use.style)
+    let restyled = element.restyled(
+      parent: use.style, root: base.root?.style ?? use.style, animations: base.isAnimated ? base.animations : nil)
     if let svg = restyled as? SVGSVGElement {
       return await body(svg.sized(width: use.width, height: use.height), references)
     }
@@ -304,34 +314,70 @@ package struct RenderTreeBuilder {
     }
   }
 
+  /// The transform of an element about its transform origin, in a context styled by the element.
+  ///
+  /// - Parameter frame: The bounds of the element, if they're known.
+  func transform(
+    of element: any SVGDrawableElement, context: ResolveContext, frame: CGRect?, guard references: ReferenceGuard
+  ) async -> CGAffineTransform {
+    await transform(of: element.style, context: context) { box in
+      if box == .fillBox, let frame { return frame }
+      let path = await path(of: element, context: context, guard: references)
+      return await self.frame(
+        of: element, context: context, path: path, includesStroke: box == .strokeBox, guard: references)
+    }
+  }
+
+  /// The transform of computed values about their transform origin.
+  ///
+  /// - Parameter reference: The reference box of the element for `fill-box` or `stroke-box`, which is found only for
+  ///   a transform that isn't `none`.
+  func transform(
+    of style: ComputedStyle, context: ResolveContext, reference: (TransformBox) async -> CGRect
+  ) async -> CGAffineTransform {
+    let list = style.transform
+    guard !list.functions.isEmpty else { return .identity }
+    // The box of `view-box` starts at the origin of user space, also for a `viewBox` that doesn't.
+    let box =
+      style.transformBox == .viewBox ? CGRect(origin: .zero, size: context.viewBoxSize) : await reference(style.transformBox)
+    let matrix = list.matrix(box: box.size, context: context)
+    let origin = CGPoint(
+      x: box.minX + style.transformOrigin.x.value(total: box.width, context: context),
+      y: box.minY + style.transformOrigin.y.value(total: box.height, context: context))
+    guard origin != .zero else { return matrix }
+    return CGAffineTransform(translationX: -origin.x, y: -origin.y).concatenating(matrix)
+      .concatenating(CGAffineTransform(translationX: origin.x, y: origin.y))
+  }
+
   /// The bounds that units relative to an element use, in a context styled by the element.
+  ///
+  /// - Parameter includesStroke: Whether the bounds are the stroke bounding box, which includes the strokes without
+  ///   their dashes, instead of the object bounding box.
   func frame(
-    of element: any SVGDrawableElement, context: ResolveContext, path: CGPath?, guard references: ReferenceGuard
+    of element: any SVGDrawableElement, context: ResolveContext, path: CGPath?, includesStroke: Bool = false,
+    guard references: ReferenceGuard
   ) async -> CGRect {
     switch element {
     case let shape as any ShapeGeometry:
-      return shape.frame(in: context, path: path)
+      let frame = shape.frame(in: context, path: path)
+      guard includesStroke, !(shape is SVGTextElement), let path, let stroke = strokeStyle(of: shape, context: context)
+      else { return frame }
+      let strokePath = path.copy(
+        strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)
+      return CGRectUnion(frame, strokePath.boundingBoxOfPath)
     case let group as SVGGroupElement:
-      var rect: CGRect?
-      for child in group.children {
-        guard let child = child as? (any SVGDrawableElement) else { continue }
-        if case .none = child.display ?? .inline {
-          continue
-        }
-        let context = context.styled(by: child)
-        let childPath = await self.path(of: child, context: context, guard: references)
-        let childFrame = await frame(of: child, context: context, path: childPath, guard: references)
-          .applying(child.transform ?? .identity)
-        rect = rect.map { CGRectUnion($0, childFrame) } ?? childFrame
-      }
-      return rect ?? .zero
+      return await frame(of: group.children, context: context, includesStroke: includesStroke, guard: references)
+        ?? .zero
     case let svg as SVGSVGElement:
       var rect = CGRect.zero
       for child in svg.children {
         guard let child = child as? (any SVGDrawableElement), child.display != CSSDisplay.none else { continue }
         let context = context.styled(by: child)
         let childPath = await self.path(of: child, context: context, guard: references)
-        rect = CGRectUnion(rect, await frame(of: child, context: context, path: childPath, guard: references))
+        rect = CGRectUnion(
+          rect,
+          await frame(
+            of: child, context: context, path: childPath, includesStroke: includesStroke, guard: references))
       }
       return rect
     case let use as SVGUseElement:
@@ -339,12 +385,36 @@ package struct RenderTreeBuilder {
         let context = context.styled(by: element)
         return await self.frame(
           of: element, context: context, path: await self.path(of: element, context: context, guard: references),
-          guard: references)
+          includesStroke: includesStroke, guard: references)
       }
       return (frame ?? .zero).applying(translation(of: use, context: context))
     default:
       return path?.boundingBoxOfPath ?? .zero
     }
+  }
+
+  /// The union of the bounds of elements, each with its transform, as the bounds of a group are, or `nil` if none of
+  /// them is rendered.
+  func frame(
+    of children: [any SVGElement], context: ResolveContext, includesStroke: Bool = false,
+    guard references: ReferenceGuard
+  ) async -> CGRect? {
+    var rect: CGRect?
+    for child in children {
+      guard let child = child as? (any SVGDrawableElement) else { continue }
+      if case .none = child.display ?? .inline {
+        continue
+      }
+      let context = context.styled(by: child)
+      let childPath = await self.path(of: child, context: context, guard: references)
+      let childFrame = await frame(
+        of: child, context: context, path: childPath, includesStroke: includesStroke, guard: references)
+      let transform = await transform(
+        of: child, context: context, frame: includesStroke ? nil : childFrame, guard: references)
+      let transformed = childFrame.applying(transform)
+      rect = rect.map { CGRectUnion($0, transformed) } ?? transformed
+    }
+    return rect
   }
 
   // MARK: - Paint

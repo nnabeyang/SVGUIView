@@ -14,7 +14,7 @@ final class SVGPatternElement: SVGDrawableElement {
   let width: SVGLength?
   let height: SVGLength?
   let patternContentUnits: SVGUnitType?
-  let patternTransform: CGAffineTransform?
+  let patternTransform: TransformList?
   let preserveAspectRatio: PreserveAspectRatio?
   let viewBox: SVGElementRect?
   let parentId: String?
@@ -25,10 +25,6 @@ final class SVGPatternElement: SVGDrawableElement {
 
   var type: SVGElementName {
     .pattern
-  }
-
-  var transform: CGAffineTransform {
-    .identity
   }
 
   let children: [any SVGElement]
@@ -48,7 +44,7 @@ final class SVGPatternElement: SVGDrawableElement {
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
 
-    patternTransform = CGAffineTransform(description: attributes["patternTransform", default: ""])
+    patternTransform = TransformList(attribute: attributes["patternTransform", default: ""])
     patternUnits = SVGUnitType(rawValue: attributes["patternUnits", default: ""])
     patternContentUnits = SVGUnitType(rawValue: attributes["patternContentUnits", default: ""])
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])

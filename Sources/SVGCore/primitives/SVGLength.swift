@@ -33,7 +33,7 @@ enum SVGLengthMode {
   case other
 }
 
-enum SVGLength: Equatable {
+enum SVGLength: Equatable, Sendable {
   case number(CGFloat)
   case pixel(CGFloat)
   case percent(CGFloat)
@@ -152,55 +152,7 @@ enum SVGLength: Equatable {
       let bytes = BufferView(unsafeBufferPointer: $0)!
       var scanner = SVGAttributeScanner(bytes: bytes)
       guard let value = scanner.scanNumber() else { return nil }
-      let lengthType = scanner.scanLengthType()
-      switch lengthType {
-      case .unknown:
-        return nil
-      case .percentage:
-        return .percent(value)
-      case .ems:
-        return .ems(value)
-      case .rems:
-        return .rems(value)
-      case .exs:
-        return .exs(value)
-      case .centimeters:
-        return .centimeters(value)
-      case .millimeters:
-        return .millimeters(value)
-      case .inches:
-        return .inches(value)
-      case .points:
-        return .points(value)
-      case .picas:
-        return .picas(value)
-      case .chs:
-        return .chs(value)
-      case .ic:
-        return .ic(value)
-      case .lhs:
-        return .lhs(value)
-      case .rlhs:
-        return .rlhs(value)
-      case .vw:
-        return .vw(value)
-      case .vh:
-        return .vh(value)
-      case .vi:
-        return .vi(value)
-      case .vb:
-        return .vb(value)
-      case .vmin:
-        return .vmin(value)
-      case .vmax:
-        return .vmax(value)
-      case .q:
-        return .q(value)
-      case .pixels:
-        return .pixel(value)
-      case .number:
-        return .number(value)
-      }
+      return SVGLength(value: value, type: scanner.scanLengthType())
     }
 
     if let v = v {
@@ -208,6 +160,67 @@ enum SVGLength: Equatable {
       return
     }
     return nil
+  }
+
+  /// A length of the given type, or `nil` for a type that isn't known.
+  init?(value: CGFloat, type: SVGLengthType) {
+    switch type {
+    case .unknown:
+      return nil
+    case .percentage:
+      self = .percent(value)
+    case .ems:
+      self = .ems(value)
+    case .rems:
+      self = .rems(value)
+    case .exs:
+      self = .exs(value)
+    case .centimeters:
+      self = .centimeters(value)
+    case .millimeters:
+      self = .millimeters(value)
+    case .inches:
+      self = .inches(value)
+    case .points:
+      self = .points(value)
+    case .picas:
+      self = .picas(value)
+    case .chs:
+      self = .chs(value)
+    case .ic:
+      self = .ic(value)
+    case .lhs:
+      self = .lhs(value)
+    case .rlhs:
+      self = .rlhs(value)
+    case .vw:
+      self = .vw(value)
+    case .vh:
+      self = .vh(value)
+    case .vi:
+      self = .vi(value)
+    case .vb:
+      self = .vb(value)
+    case .vmin:
+      self = .vmin(value)
+    case .vmax:
+      self = .vmax(value)
+    case .q:
+      self = .q(value)
+    case .pixels:
+      self = .pixel(value)
+    case .number:
+      self = .number(value)
+    }
+  }
+
+  /// A length of a dimension in CSS, whose unit is case-insensitive, or `nil` if the unit isn't one of a length.
+  init?(value: CGFloat, cssUnit unit: String) {
+    let unit = unit.lowercased()
+    guard let type = SVGLengthType(rawValue: unit == "q" ? "Q" : unit),
+      type != .number, type != .percentage
+    else { return nil }
+    self.init(value: value, type: type)
   }
 
   func calculatedLength(frame: CGRect, context: any SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse, isPosition: Bool = false) -> CGFloat {

@@ -104,13 +104,81 @@ struct StyleTests {
     #expect(FillProperty.declared(attribute: "green") != nil)
   }
 
-  @Test("transform in a style sheet")
+  @Test("transform in a style sheet, whose lengths have units")
   func cssTransform() {
-    guard case .value(let transform) = declared(TransformProperty.self, css: "translate(10, 20) scale(2)") else {
+    guard case .value(let transform) = declared(TransformProperty.self, css: "translate(10px, 20px) scale(2)") else {
       Issue.record("transform isn't parsed")
       return
     }
-    #expect(transform == CGAffineTransform(translationX: 10, y: 20).scaledBy(x: 2, y: 2))
+    #expect(transform == TransformList(functions: [.translate(.pixel(10), .pixel(20)), .scale(2, 2)]))
+    #expect(declared(TransformProperty.self, css: "translate(10, 20)") == nil)
+  }
+
+  @Test("lengths of transform functions relative to the font are computed in pixels")
+  func transformFontRelativeLengths() throws {
+    let parent = style([PropertyDeclaration(FontSizeProperty.self, .value(.length(.pixel(20))))])
+    let list = try #require(TransformProperty.parse("translate(2em 5%)", origin: .attribute))
+    let child = style([PropertyDeclaration(TransformProperty.self, .value(list))], parent: parent)
+    #expect(child.transform == TransformList(functions: [.translate(.pixel(40), .percent(5))]))
+  }
+
+  /// Values of `transform-origin` in a style sheet, and their origins.
+  private static let transformOrigins: [(String, TransformOrigin)] = [
+    ("center", TransformOrigin(x: .percent(50), y: .percent(50))),
+    ("top", TransformOrigin(x: .percent(50), y: .percent(0))),
+    ("right", TransformOrigin(x: .percent(100), y: .percent(50))),
+    ("10px", TransformOrigin(x: .pixel(10), y: .percent(50))),
+    ("left bottom", TransformOrigin(x: .percent(0), y: .percent(100))),
+    ("bottom left", TransformOrigin(x: .percent(0), y: .percent(100))),
+    ("top center", TransformOrigin(x: .percent(50), y: .percent(0))),
+    ("CENTER Right", TransformOrigin(x: .percent(100), y: .percent(50))),
+    ("10px 20%", TransformOrigin(x: .pixel(10), y: .percent(20))),
+    ("right 5px 3px", TransformOrigin(x: .percent(100), y: .pixel(5))),
+  ]
+
+  @Test("transform-origin in a style sheet", arguments: transformOrigins)
+  func cssTransformOrigin(text: String, origin: TransformOrigin) {
+    guard case .value(let value) = declared(TransformOriginProperty.self, css: text) else {
+      Issue.record("transform-origin isn't parsed")
+      return
+    }
+    #expect(value == origin)
+  }
+
+  private static let invalidTransformOrigins = [
+    "left right", "10px left", "top 10px", "1px 2px 3%", "1px 2px 3px 4px", "10 20", "middle", "",
+  ]
+
+  @Test("transform-origin that isn't valid", arguments: invalidTransformOrigins)
+  func invalidTransformOrigin(text: String) {
+    #expect(declared(TransformOriginProperty.self, css: text) == nil)
+  }
+
+  @Test("transform-origin is a presentation attribute, and transform-box isn't")
+  func transformOriginAttribute() {
+    guard case .value(let origin) = TransformOriginProperty.declared(attribute: "10 20") else {
+      Issue.record("The attribute isn't parsed")
+      return
+    }
+    #expect(origin == TransformOrigin(x: .number(10), y: .number(20)))
+    let cascaded = CascadedValues(
+      CascadedValues.presentationAttributes(
+        of: .rect, attributes: ["transform-origin": "center", "transform-box": "fill-box"]))
+    #expect(cascaded[TransformOriginProperty.self] != nil)
+    #expect(cascaded[TransformBoxProperty.self] == nil)
+  }
+
+  @Test("transform-box of the box of CSS layout is the box of the SVG element")
+  func transformBox() throws {
+    let boxes: [(String, TransformBox)] = [
+      ("Fill-Box", .fillBox), ("content-box", .fillBox), ("border-box", .strokeBox), ("view-box", .viewBox),
+    ]
+    for (text, box) in boxes {
+      let declared = try #require(declared(TransformBoxProperty.self, css: text))
+      #expect(style([PropertyDeclaration(TransformBoxProperty.self, declared)]).transformBox == box)
+    }
+    #expect(ComputedStyle.initial.transformBox == .viewBox)
+    #expect(ComputedStyle.initial.transformOrigin == .zero)
   }
 
   @Test("inherited properties take the value of the parent, and others the initial value")
@@ -241,6 +309,43 @@ struct StyleTests {
     let child = style(
       [PropertyDeclaration(FontWeightProperty.self, .value(try #require(.init(rawValue: child))))], parent: parent)
     #expect(child.fontWeight.value == FontSelectionValue(weight))
+  }
+
+  @Test("d is a presentation attribute only of path, and is read up to its first error there")
+  func pathDataAttribute() {
+    let path = CascadedValues(CascadedValues.presentationAttributes(of: .path, attributes: ["d": "M0 0L10 10 20"]))
+    let rect = CascadedValues(CascadedValues.presentationAttributes(of: .rect, attributes: ["d": "M0 0L10 10"]))
+    #expect(path.declared(DProperty.self) == PathData("M0 0L10 10"))
+    #expect(rect[DProperty.self] == nil)
+  }
+
+  /// Values of `d` in a style sheet, and their path data, or `nil` for the ones that are invalid.
+  private static let pathData: [(String, PathData?)] = [
+    (#"path("M0 0 L10 10")"#, PathData("M0 0L10 10")),
+    (#"PATH('m0 0 h10')"#, PathData("m0 0h10")),
+    (#"path("")"#, PathData.none),
+    ("none", PathData.none),
+    (#"path("M0 0 L10")"#, nil),
+    (#"path("M0 0 L")"#, nil),
+    (#"path("L0 0")"#, nil),
+    (#"path("M0 0 X")"#, nil),
+    (#"path(evenodd, "M0 0")"#, nil),
+    ("path()", nil),
+    (#""M0 0""#, nil),
+    (#"path("M0 0") none"#, nil),
+  ]
+
+  @Test("d in a style sheet is none or path() with path data that has no error", arguments: pathData)
+  func cssPathData(text: String, data: PathData?) {
+    guard let data else {
+      #expect(declared(DProperty.self, css: text) == nil)
+      return
+    }
+    guard case .value(let value) = declared(DProperty.self, css: text) else {
+      Issue.record("d isn't parsed")
+      return
+    }
+    #expect(value == data)
   }
 
   @Test("presentation attributes of geometry are taken only by rect")

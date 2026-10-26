@@ -30,6 +30,8 @@ enum PropertyID: String, CaseIterable, Sendable {
   case colorInterpolationFilters = "color-interpolation-filters"
   case opacity
   case transform
+  case transformOrigin = "transform-origin"
+  case transformBox = "transform-box"
   case clipPath = "clip-path"
   case mask
   case filter
@@ -43,6 +45,15 @@ enum PropertyID: String, CaseIterable, Sendable {
   case y
   case width
   case height
+  case d
+  case animationName = "animation-name"
+  case animationDuration = "animation-duration"
+  case animationTimingFunction = "animation-timing-function"
+  case animationDelay = "animation-delay"
+  case animationIterationCount = "animation-iteration-count"
+  case animationDirection = "animation-direction"
+  case animationFillMode = "animation-fill-mode"
+  case animationPlayState = "animation-play-state"
 
   /// The description of the property.
   var property: any StyleProperty.Type {
@@ -77,6 +88,8 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .colorInterpolationFilters: visitor.visit(ColorInterpolationFiltersProperty.self)
     case .opacity: visitor.visit(OpacityProperty.self)
     case .transform: visitor.visit(TransformProperty.self)
+    case .transformOrigin: visitor.visit(TransformOriginProperty.self)
+    case .transformBox: visitor.visit(TransformBoxProperty.self)
     case .clipPath: visitor.visit(ClipPathProperty.self)
     case .mask: visitor.visit(MaskProperty.self)
     case .filter: visitor.visit(FilterProperty.self)
@@ -90,6 +103,15 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .y: visitor.visit(YProperty.self)
     case .width: visitor.visit(WidthProperty.self)
     case .height: visitor.visit(HeightProperty.self)
+    case .d: visitor.visit(DProperty.self)
+    case .animationName: visitor.visit(AnimationNameProperty.self)
+    case .animationDuration: visitor.visit(AnimationDurationProperty.self)
+    case .animationTimingFunction: visitor.visit(AnimationTimingFunctionProperty.self)
+    case .animationDelay: visitor.visit(AnimationDelayProperty.self)
+    case .animationIterationCount: visitor.visit(AnimationIterationCountProperty.self)
+    case .animationDirection: visitor.visit(AnimationDirectionProperty.self)
+    case .animationFillMode: visitor.visit(AnimationFillModeProperty.self)
+    case .animationPlayState: visitor.visit(AnimationPlayStateProperty.self)
     }
   }
 }
@@ -127,7 +149,9 @@ struct ComputedStyle: Sendable {
   var colorInterpolation: SVGColorInterpolation?
   var colorInterpolationFilters: SVGColorInterpolation?
   var opacity: Double
-  var transform: CGAffineTransform
+  var transform: TransformList
+  var transformOrigin: TransformOrigin
+  var transformBox: TransformBox
   var clipPath: SVGClipPath
   var mask: SVGMask
   var filter: SVGFilter
@@ -141,6 +165,15 @@ struct ComputedStyle: Sendable {
   var y: SVGLength?
   var width: SVGLength?
   var height: SVGLength?
+  var d: PathData
+  var animationName: [AnimationName]
+  var animationDuration: [Double]
+  var animationTimingFunction: [EasingFunction]
+  var animationDelay: [Double]
+  var animationIterationCount: [AnimationIterationCount]
+  var animationDirection: [AnimationDirection]
+  var animationFillMode: [AnimationFillMode]
+  var animationPlayState: [AnimationPlayState]
 
   /// The initial value of every property, which is the style of the parent of the root element.
   static let initial = ComputedStyle(
@@ -154,20 +187,37 @@ struct ComputedStyle: Sendable {
     clipRule: ClipRuleProperty.initial, textAnchor: TextAnchorProperty.initial,
     visibility: VisibilityProperty.initial, colorInterpolation: ColorInterpolationProperty.initial,
     colorInterpolationFilters: ColorInterpolationFiltersProperty.initial, opacity: OpacityProperty.initial,
-    transform: TransformProperty.initial, clipPath: ClipPathProperty.initial, mask: MaskProperty.initial,
+    transform: TransformProperty.initial, transformOrigin: TransformOriginProperty.initial,
+    transformBox: TransformBoxProperty.initial, clipPath: ClipPathProperty.initial, mask: MaskProperty.initial,
     filter: FilterProperty.initial, display: DisplayProperty.initial, overflow: OverflowProperty.initial,
     stopColor: StopColorProperty.initial, stopOpacity: StopOpacityProperty.initial,
     floodColor: FloodColorProperty.initial, floodOpacity: FloodOpacityProperty.initial, x: XProperty.initial,
-    y: YProperty.initial, width: WidthProperty.initial, height: HeightProperty.initial)
+    y: YProperty.initial, width: WidthProperty.initial, height: HeightProperty.initial, d: DProperty.initial,
+    animationName: AnimationNameProperty.initial, animationDuration: AnimationDurationProperty.initial,
+    animationTimingFunction: AnimationTimingFunctionProperty.initial, animationDelay: AnimationDelayProperty.initial,
+    animationIterationCount: AnimationIterationCountProperty.initial,
+    animationDirection: AnimationDirectionProperty.initial, animationFillMode: AnimationFillModeProperty.initial,
+    animationPlayState: AnimationPlayStateProperty.initial)
 
   /// The computed values of an element with the given cascaded values.
   ///
   /// - Parameters:
   ///   - parent: The computed values of the parent element, or `nil` for the root element.
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
-  init(cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?) {
+  ///   - animations: The keyframes of the document and the time of the animations that the element runs, which
+  ///     override its values except for important declarations, or `nil` for no animations.
+  init(
+    cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations? = nil
+  ) {
     var computer = Computer(
       cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial))
+    if let animations, !animations.keyframes.isEmpty {
+      // The properties of CSS Animations come last in the order, and are computed first to find the animations.
+      for id in PropertyID.allCases where id.isAnimation {
+        id.visit(&computer)
+      }
+      computer.animations = ElementAnimation.animations(of: computer.resolver.style, in: animations)
+    }
     for id in PropertyID.allCases {
       id.visit(&computer)
     }
@@ -179,15 +229,20 @@ struct ComputedStyle: Sendable {
   private struct Computer: StylePropertyVisitor {
     let cascaded: CascadedValues
     var resolver: StyleResolver
+    /// The animations that the element runs, in the order of `animation-name`.
+    var animations = [ElementAnimation]()
 
     mutating func visit<P: StyleProperty>(_: P.Type) {
-      let value: P.Computed =
-        switch cascaded[P.self] {
-        case .value(let value): P.compute(value, in: resolver)
-        case .inherit: resolver.parent[keyPath: P.computed]
-        case .initial: P.initial
-        case .unset, nil: P.isInherited ? resolver.parent[keyPath: P.computed] : P.initial
+      var value = resolver.computed(cascaded[P.self], of: P.self)
+      // Animations override the cascaded values except for important declarations, and a later animation
+      // overrides an earlier one, with the value under it as the value of its missing keyframes.
+      if !animations.isEmpty, !P.id.isAnimation, !cascaded.important.contains(P.id) {
+        for animation in animations {
+          if let animated = animation.value(of: P.self, over: value, in: resolver) {
+            value = animated
+          }
         }
+      }
       resolver.style[keyPath: P.computed] = value
     }
   }
@@ -198,10 +253,14 @@ struct ComputedStyle: Sendable {
     strokeWidth: SVGLength, strokeLinecap: CGLineCap, strokeLinejoin: CGLineJoin, strokeMiterlimit: Double,
     strokeDasharray: [CGFloat], strokeDashoffset: CGFloat, clipRule: FillRule, textAnchor: TextAnchor,
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
-    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: CGAffineTransform,
+    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
+    transformOrigin: TransformOrigin, transformBox: TransformBox,
     clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow?,
     stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
-    y: SVGLength?, width: SVGLength?, height: SVGLength?
+    y: SVGLength?, width: SVGLength?, height: SVGLength?, d: PathData, animationName: [AnimationName],
+    animationDuration: [Double], animationTimingFunction: [EasingFunction], animationDelay: [Double],
+    animationIterationCount: [AnimationIterationCount], animationDirection: [AnimationDirection],
+    animationFillMode: [AnimationFillMode], animationPlayState: [AnimationPlayState]
   ) {
     self.fontFamily = fontFamily
     self.fontSize = fontSize
@@ -226,6 +285,8 @@ struct ComputedStyle: Sendable {
     self.colorInterpolationFilters = colorInterpolationFilters
     self.opacity = opacity
     self.transform = transform
+    self.transformOrigin = transformOrigin
+    self.transformBox = transformBox
     self.clipPath = clipPath
     self.mask = mask
     self.filter = filter
@@ -239,6 +300,15 @@ struct ComputedStyle: Sendable {
     self.y = y
     self.width = width
     self.height = height
+    self.d = d
+    self.animationName = animationName
+    self.animationDuration = animationDuration
+    self.animationTimingFunction = animationTimingFunction
+    self.animationDelay = animationDelay
+    self.animationIterationCount = animationIterationCount
+    self.animationDirection = animationDirection
+    self.animationFillMode = animationFillMode
+    self.animationPlayState = animationPlayState
   }
 
   /// The font, with its size resolved except for viewport units.

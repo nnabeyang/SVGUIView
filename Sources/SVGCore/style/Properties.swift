@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import _CSSParser
 
 // The properties that styles set. Each property is described here, and nowhere else.
 
@@ -56,6 +57,11 @@ private struct FontLengthContext: SVGLengthContext {
   var textScale: Double { 1 }
   var viewPort: CGRect { .zero }
   var writingMode: WritingMode? { nil }
+}
+
+/// An opacity of an animation, which an easing function can take outside 0 to 1, clamped to that range.
+private func clampedOpacity(_ opacity: Double) -> Double {
+  min(max(opacity, 0), 1)
 }
 
 enum FontFamilyProperty: StyleProperty {
@@ -139,6 +145,15 @@ enum FontSizeProperty: StyleProperty {
       .length(.pixel(SVGUIFont(name: family, size: size, weight: .normal).sizeValue(context: FontLengthContext(font: nil, rootFont: nil)) * factor))
     }
   }
+
+  /// The size between two sizes, which isn't negative.
+  static func interpolated(
+    _ from: SVGUIFont.Size, _ to: SVGUIFont.Size, progress: Double, in _: StyleResolver
+  ) -> SVGUIFont.Size {
+    let size = from.animated(to: to, progress: progress)
+    if case .length(let length) = size { return .length(length.nonNegative) }
+    return size
+  }
 }
 
 enum FontWeightProperty: StyleProperty {
@@ -193,6 +208,11 @@ enum FillProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Paint? {
     Paint(text)
   }
+
+  /// The paint between two paints, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
+    resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
+  }
 }
 
 enum FillOpacityProperty: StyleProperty {
@@ -203,6 +223,10 @@ enum FillOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -226,6 +250,11 @@ enum StrokeProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Paint? {
     Paint(text)
   }
+
+  /// The paint between two paints, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
+    resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
+  }
 }
 
 enum StrokeOpacityProperty: StyleProperty {
@@ -236,6 +265,10 @@ enum StrokeOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -251,6 +284,11 @@ enum StrokeWidthProperty: StyleProperty {
 
   static func compute(_ width: SVGLength, in resolver: StyleResolver) -> SVGLength {
     resolvingFontRelative(width, in: resolver)
+  }
+
+  /// The width between two widths, which isn't negative.
+  static func interpolated(_ from: SVGLength, _ to: SVGLength, progress: Double, in _: StyleResolver) -> SVGLength {
+    from.animated(to: to, progress: progress).nonNegative
   }
 }
 
@@ -303,6 +341,11 @@ enum StrokeMiterlimitProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     number(text)
   }
+
+  /// The limit between two limits, which is at least 1.
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    max(from.animated(to: to, progress: progress), 1)
+  }
 }
 
 enum StrokeDasharrayProperty: StyleProperty {
@@ -316,6 +359,11 @@ enum StrokeDasharrayProperty: StyleProperty {
     if keyword(text) == "none" { return [] }
     let dashes = scanning(text) { $0.scanDashes() }
     return dashes.isEmpty ? nil : dashes
+  }
+
+  /// The dashes between two lists of dashes, which aren't negative.
+  static func interpolated(_ from: [CGFloat], _ to: [CGFloat], progress: Double, in _: StyleResolver) -> [CGFloat] {
+    from.animated(to: to, progress: progress).map { max($0, 0) }
   }
 }
 
@@ -398,16 +446,82 @@ enum OpacityProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
   }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
+  }
 }
 
 enum TransformProperty: StyleProperty {
   static let id = PropertyID.transform
   static let isInherited = false
-  static let initial = CGAffineTransform.identity
+  static let initial = TransformList.none
   static let computed = \ComputedStyle.transform
 
-  static func parse(_ text: String, origin _: DeclarationOrigin) -> CGAffineTransform? {
-    keyword(text) == "none" ? .identity : CGAffineTransform(description: text)
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TransformList? {
+    var input = _CSSParser.Parser(input: ParserInput(input: text))
+    return TransformList.parse(&input, origin: origin)
+  }
+
+  static func parse(css input: inout _CSSParser.Parser) -> TransformList? {
+    TransformList.parse(&input, origin: .css)
+  }
+
+  /// The list with lengths relative to a font in pixels. Percentages are of the reference box, which is known only
+  /// when drawing.
+  static func compute(_ list: TransformList, in resolver: StyleResolver) -> TransformList {
+    TransformList(
+      functions: list.functions.map {
+        guard case .translate(let x, let y) = $0 else { return $0 }
+        return .translate(resolvingFontRelative(x, in: resolver), resolvingFontRelative(y, in: resolver))
+      })
+  }
+}
+
+enum TransformOriginProperty: StyleProperty {
+  static let id = PropertyID.transformOrigin
+  static let isInherited = false
+  static let initial = TransformOrigin.zero
+  static let computed = \ComputedStyle.transformOrigin
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TransformOrigin? {
+    var input = _CSSParser.Parser(input: ParserInput(input: text))
+    return TransformOrigin.parse(&input, origin: origin)
+  }
+
+  static func parse(css input: inout _CSSParser.Parser) -> TransformOrigin? {
+    TransformOrigin.parse(&input, origin: .css)
+  }
+
+  /// The origin with lengths relative to a font in pixels.
+  static func compute(_ origin: TransformOrigin, in resolver: StyleResolver) -> TransformOrigin {
+    TransformOrigin(x: resolvingFontRelative(origin.x, in: resolver), y: resolvingFontRelative(origin.y, in: resolver))
+  }
+}
+
+/// The reference box of transforms. It isn't a presentation attribute.
+enum TransformBoxProperty: StyleProperty {
+  static let id = PropertyID.transformBox
+  static let isInherited = false
+  static let initial = TransformBox.viewBox
+  static let computed = \ComputedStyle.transformBox
+
+  static func accepts(attributeOn _: SVGElementName) -> Bool {
+    false
+  }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TransformBox? {
+    keyword(text, origin: origin)
+  }
+
+  /// The box of an SVG element: an SVG element has no box of CSS layout, so `content-box` is `fill-box`, and
+  /// `border-box` is `stroke-box`.
+  static func compute(_ box: TransformBox, in _: StyleResolver) -> TransformBox {
+    switch box {
+    case .contentBox: .fillBox
+    case .borderBox: .strokeBox
+    default: box
+    }
   }
 }
 
@@ -477,6 +591,13 @@ enum StopColorProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
   }
+
+  /// The color between two colors, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(
+    _ from: ColorValue, _ to: ColorValue, progress: Double, in resolver: StyleResolver
+  ) -> ColorValue {
+    .color(resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress))
+  }
 }
 
 enum StopOpacityProperty: StyleProperty {
@@ -487,6 +608,10 @@ enum StopOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -499,6 +624,13 @@ enum FloodColorProperty: StyleProperty {
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
   }
+
+  /// The color between two colors, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolated(
+    _ from: ColorValue, _ to: ColorValue, progress: Double, in resolver: StyleResolver
+  ) -> ColorValue {
+    .color(resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress))
+  }
 }
 
 enum FloodOpacityProperty: StyleProperty {
@@ -509,6 +641,10 @@ enum FloodOpacityProperty: StyleProperty {
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
+  }
+
+  static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
+    clampedOpacity(from.animated(to: to, progress: progress))
   }
 }
 
@@ -551,4 +687,31 @@ enum WidthProperty: RectGeometryProperty {
 enum HeightProperty: RectGeometryProperty {
   static let id = PropertyID.height
   static let computed = \ComputedStyle.height
+}
+
+/// The path data of `<path>`, which is the only element that has it.
+enum DProperty: StyleProperty {
+  static let id = PropertyID.d
+  static let isInherited = false
+  static let initial = PathData.none
+  static let computed = \ComputedStyle.d
+
+  static func accepts(attributeOn name: SVGElementName) -> Bool {
+    name == .path
+  }
+
+  /// The path data of the attribute up to its first error, as SVG specifies, or the value in CSS.
+  static func parse(_ text: String, origin: DeclarationOrigin) -> PathData? {
+    switch origin {
+    case .attribute:
+      return PathData(text)
+    case .css:
+      var input = _CSSParser.Parser(input: ParserInput(input: text))
+      return PathData.parse(&input)
+    }
+  }
+
+  static func parse(css input: inout _CSSParser.Parser) -> PathData? {
+    PathData.parse(&input)
+  }
 }

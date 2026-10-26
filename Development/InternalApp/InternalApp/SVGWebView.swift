@@ -1,20 +1,57 @@
 import SwiftUI
 import WebKit
 
-/// Shows an SVG file with WebKit, fitted into the view as SVGView does with `.fit`.
+/// Shows an SVG file with WebKit, fitted into the view as SVGView does with `.fit`, with its animations paused at
+/// a time.
 struct SVGWebView: UIViewRepresentable {
   let url: URL
+  /// The time of the animations, in seconds.
+  let time: Double
 
-  final class Coordinator {
+  final class Coordinator: NSObject, WKNavigationDelegate {
     var url: URL?
+    var time = 0.0
+
+    /// Pauses the CSS animations of the file at the time, once the file has loaded.
+    func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
+      seek(webView)
+    }
+
+    /// Sends the time to the file, which is in a frame of another origin that the page can't reach otherwise.
+    func seek(_ webView: WKWebView) {
+      webView.evaluateJavaScript(
+        #"document.querySelector("object")?.contentWindow?.postMessage({ time: \#(time * 1000) }, "*");"#)
+    }
+  }
+
+  /// Pauses the CSS animations of the SVG file at the time that the page sends.
+  private static var seekScript: WKUserScript {
+    WKUserScript(
+      source: """
+        if (document.documentElement instanceof SVGElement) {
+          // The animations that seeking has paused. An animation that the file pauses stays where it is.
+          const seeking = new WeakSet();
+          window.addEventListener("message", (event) => {
+            for (const animation of document.getAnimations()) {
+              if (animation.playState === "paused" && !seeking.has(animation)) continue;
+              seeking.add(animation);
+              animation.pause();
+              animation.currentTime = event.data.time;
+            }
+          });
+        }
+        """, injectionTime: .atDocumentStart, forMainFrameOnly: false)
   }
 
   func makeCoordinator() -> Coordinator {
     Coordinator()
   }
 
-  func makeUIView(context _: Context) -> WKWebView {
-    let webView = WKWebView()
+  func makeUIView(context: Context) -> WKWebView {
+    let configuration = WKWebViewConfiguration()
+    configuration.userContentController.addUserScript(Self.seekScript)
+    let webView = WKWebView(frame: .zero, configuration: configuration)
+    webView.navigationDelegate = context.coordinator
     webView.isOpaque = false
     webView.backgroundColor = .clear
     webView.scrollView.isScrollEnabled = false
@@ -23,6 +60,10 @@ struct SVGWebView: UIViewRepresentable {
   }
 
   func updateUIView(_ webView: WKWebView, context: Context) {
+    if context.coordinator.time != time {
+      context.coordinator.time = time
+      context.coordinator.seek(webView)
+    }
     guard context.coordinator.url != url else { return }
     context.coordinator.url = url
     // Loading the file through a page in its folder lets it be sized to the view, and lets it refer to

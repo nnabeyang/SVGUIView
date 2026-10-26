@@ -30,12 +30,18 @@ extension RenderTreeBuilder {
       else { continue }
       shapes.append(
         ClipShape(
-          path: RenderPath(path), transform: content.transform ?? .identity,
+          path: RenderPath(path),
+          transform: await transform(of: content, context: context.styled(by: content), frame: nil, guard: references),
           clip: await clipEffect(content.clipPath, frame: frame, context: context, guard: references),
           fillRule: await clipRule(of: content, context: context, guard: references) == .evenodd ? .eoFill : .fill))
     }
+    // The box of a `<clipPath>` element is the one of its content, as the box of a group is.
+    let transform = await transform(of: element.style, context: context.styled(by: element)) { box in
+      await self.frame(
+        of: element.children, context: context, includesStroke: box == .strokeBox, guard: references) ?? .zero
+    }
     return ClipPathEffect(
-      frame: frame, transform: element.transform ?? .identity, units: element.clipPathUnits ?? .userSpaceOnUse,
+      frame: frame, transform: transform, units: element.clipPathUnits ?? .userSpaceOnUse,
       shapes: shapes, clipPath: await clipEffect(element.clipPath, frame: frame, context: context, guard: references))
   }
 
@@ -91,7 +97,8 @@ extension RenderTreeBuilder {
       }
       contents.append(
         MaskContent(
-          path: RenderPath(path), transform: content.transform ?? .identity,
+          path: RenderPath(path),
+          transform: await transform(of: content, context: context.styled(by: content), frame: nil, guard: references),
           clip: await clipEffect(content.clipPath, frame: frame, context: context, guard: references),
           mask: await maskEffect(content.mask, frame: frame, context: context, guard: references), fill: fill))
     }
@@ -127,7 +134,7 @@ extension RenderTreeBuilder {
     {
       pattern = SVGPatternElement(lhs: pattern, rhs: parent)
     }
-    let transform = pattern.patternTransform ?? .identity
+    let transform = pattern.patternTransform?.matrix(box: context.viewBoxSize, context: context) ?? .identity
     let tileSize = pattern.size(frame: frame, context: context).applying(transform.scale)
     guard CGContext.bitmapLayout(size: tileSize, scale: scale) != nil else { return nil }
 

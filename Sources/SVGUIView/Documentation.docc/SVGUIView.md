@@ -45,7 +45,7 @@ couldn't be allocated, the view keeps the image that it shows.
 
 ### Taking a snapshot
 
-``SVGUIView/SVGUIView/takeSnapshot(rect:)`` renders the current document into a
+``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders the current document into a
 `UIImage` without changing what the view displays. It throws an
 ``SVGRenderingError`` when the document has no root `svg` element, the rectangle
 to render into has no width or no height, rendering times out, the task that
@@ -66,6 +66,16 @@ do {
   // There is nothing to render: the document has no root `svg` element, or the
   // rectangle has no width or no height.
 }
+```
+
+A snapshot can show a document at a time of its CSS animations, which are the
+`@keyframes` rules and the `animation-*` properties. The time starts at zero when
+the document is loaded, and the view displays the document at time zero. A
+document without animations looks the same at any time. SMIL animation
+elements, such as `<animate>`, aren't supported yet.
+
+```swift
+let image = try await svgView.takeSnapshot(at: .seconds(1.5))
 ```
 
 ## Topics
