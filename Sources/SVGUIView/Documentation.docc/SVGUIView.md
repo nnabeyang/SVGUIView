@@ -68,6 +68,16 @@ do {
 }
 ```
 
+A snapshot can show a document at a time of its CSS animations, which are the
+`@keyframes` rules and the `animation-*` properties. The time starts at zero when
+the document is loaded, and the view displays the document at time zero. A
+document without animations looks the same at any time. SMIL animation
+elements, such as `<animate>`, aren't supported yet.
+
+```swift
+let image = try await svgView.takeSnapshot(at: .seconds(1.5))
+```
+
 ## Topics
 
 ### Displaying SVG
