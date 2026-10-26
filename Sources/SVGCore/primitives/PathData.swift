@@ -63,6 +63,51 @@ extension PathData {
   }
 }
 
+extension PathData {
+  /// The path data with every command in its absolute form, which draws the same path. Commands before the first
+  /// moveto draw nothing, and stay as they are.
+  func absolute() -> PathData {
+    var current = CGPoint.zero
+    var start = CGPoint.zero
+    var hasStarted = false
+    return PathData(
+      commands: commands.map { command in
+        guard hasStarted || command.type == .M || command.type == .m else { return command }
+        hasStarted = true
+        let origin = command.type.isAbsolute ? CGPoint.zero : current
+        var values = command.values
+        // The indices of the pairs of coordinates of the command, and of the single coordinate of H and V.
+        let pairs: [Int]
+        switch command.type {
+        case .M, .m, .L, .l, .T, .t: pairs = [0]
+        case .C, .c: pairs = [0, 2, 4]
+        case .S, .s, .Q, .q: pairs = [0, 2]
+        case .A, .a: pairs = [5]
+        case .H, .h:
+          values[0] += origin.x
+          current.x = values[0]
+          pairs = []
+        case .V, .v:
+          values[0] += origin.y
+          current.y = values[0]
+          pairs = []
+        case .Z, .z:
+          current = start
+          pairs = []
+        }
+        for index in pairs {
+          values[index] += origin.x
+          values[index + 1] += origin.y
+        }
+        if let last = pairs.last {
+          current = CGPoint(x: values[last], y: values[last + 1])
+        }
+        if command.type == .M || command.type == .m { start = current }
+        return PathCommand(type: command.type.absolute, values: values)
+      })
+  }
+}
+
 enum PathSegmentType: UInt8, Equatable, Sendable {
   case A = 65
   case C = 67
@@ -91,6 +136,11 @@ enum PathSegmentType: UInt8, Equatable, Sendable {
 
   var isAbsolute: Bool {
     rawValue >= UInt8(ascii: "A") && rawValue <= UInt8(ascii: "Z")
+  }
+
+  /// The command in its absolute form, which is in uppercase.
+  var absolute: PathSegmentType {
+    isAbsolute ? self : PathSegmentType(rawValue: rawValue - 32)!
   }
 }
 

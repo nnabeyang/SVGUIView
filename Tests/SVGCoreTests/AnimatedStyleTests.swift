@@ -121,6 +121,15 @@ struct AnimatedStyleTests {
     #expect(style.fillRule == rule)
   }
 
+  @Test("the path data of a path is animated")
+  func animatedPathData() throws {
+    let base = document(
+      #"<style>@keyframes d { to { d: path("M0 0 L20 20") } }</style>"#
+        + #"<path id="r" d="M0 0 L10 0" style="animation: d 1s linear"/>"#, at: 0.5)
+    let path = try #require(base["r"] as? SVGPathElement)
+    #expect(path.data == PathData("M0 0 L15 10"))
+  }
+
   @Test("elements that copy computed values take the animated ones")
   func copiedValues() throws {
     let base = document(

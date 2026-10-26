@@ -246,4 +246,32 @@ struct AnimatableTests {
       zip(values, expectedValues).allSatisfy { isClose($0, $1) }, "\(matrix) isn't \(expected)",
       sourceLocation: sourceLocation)
   }
+
+  /// Path data, and their interpolations halfway, or `nil` where they're discrete.
+  private static let pathData: [(String, String, String?)] = [
+    ("M0 0 L10 0 C0 0 10 10 20 20", "M10 10 L30 0 C10 10 20 30 40 40", "M5 5 L20 0 C5 5 15 20 30 30"),
+    ("M0 0 h10 v10 z", "M10 0 h20 v-10 z", "M5 0 h15 v0 z"),
+    // A relative command and its absolute form are interpolated in absolute coordinates.
+    ("M10 10 l10 0", "M10 10 L40 10", "M10 10 L30 10"),
+    // The flags of an arc are 1 for a number that isn't zero.
+    ("M0 0 A10 10 0 0 0 20 0", "M0 0 A20 20 90 1 1 40 0", "M0 0 A15 15 45 1 1 30 0"),
+    ("M0 0 L10 10", "M0 0 Q10 10 20 20", nil),
+    ("M0 0 L10 10", "M0 0 L10 10 L20 20", nil),
+    ("M0 0 L10 10", "", nil),
+  ]
+
+  @Test("path data is interpolated number by number when it has the same commands", arguments: pathData)
+  func pathDataInterpolation(from: String, to: String, halfway: String?) {
+    #expect(PathData(from).interpolated(to: PathData(to), progress: 0.5) == halfway.map(PathData.init))
+  }
+
+  @Test("path data is made absolute with the current point and the start of the subpath")
+  func absolutePathData() {
+    let relative = PathData("m10 10 h10 v10 l-10 0 z m5 5 c1 1 2 2 3 3 s1 1 2 2 q1 1 2 2 t1 1 a1 1 0 0 1 5 5")
+    let absolute = PathData(
+      "M10 10 H20 V20 L10 20 Z M15 15 C16 16 17 17 18 18 S19 19 20 20 Q21 21 22 22 T23 23 A1 1 0 0 1 28 28")
+    #expect(relative.absolute() == absolute)
+    // Commands before the first moveto stay as they are.
+    #expect(PathData("l5 5 m1 1 l1 1").absolute() == PathData("l5 5 M1 1 L2 2"))
+  }
 }
