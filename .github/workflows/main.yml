@@ -3,8 +3,9 @@ name: Swift Package Tests
 on:
   push:
     branches: ["main", "epic/animation"]
+  # Every pull request, also one on the branch of another pull request, whose base changes to main or epic/animation
+  # when the other one is merged. That change doesn't run the workflow, so the checks of its first run are kept.
   pull_request:
-    branches: ["main", "epic/animation"]
   workflow_dispatch:
 
 permissions:
@@ -13,7 +14,8 @@ permissions:
 jobs:
   # Finds whether a pull request changes the files that the tests and the documentation use. A pull request that
   # changes none of them, such as one that only changes README.md, skips the tests and the documentation, and
-  # `ci-required` succeeds for them. Pushes and runs by hand always run everything.
+  # `ci-required` succeeds for them. Pushes, runs by hand and pull requests on other pull requests always run
+  # everything.
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
@@ -31,13 +33,18 @@ jobs:
         id: changes
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "$EVENT_NAME" = pull_request ]; then
-            scripts/changes-code.sh "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
-          else
+          if [ "$EVENT_NAME" != pull_request ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
+          elif [ "$BASE_REF" != main ] && [ "$BASE_REF" != epic/animation ]; then
+            # The changes from the branch of the other pull request don't tell what changes from main or
+            # epic/animation, which the base changes to.
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            scripts/changes-code.sh "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
           fi
 
   test:
