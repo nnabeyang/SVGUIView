@@ -68,7 +68,8 @@ jobs:
       - name: Run xcodebuild tests (iOS)
         env:
           TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
-        run: scripts/test-in-simulator.sh tests clean
+        # Warnings in the package's code fail the build. Remote dependencies are built without warnings.
+        run: scripts/test-in-simulator.sh tests clean SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 
       # With one thread in the cooperative thread pool, a rendering that never lets other tasks run keeps the
       # tests from cancelling it on time.
@@ -77,7 +78,7 @@ jobs:
         env:
           TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
           TEST_RUNNER_LIBDISPATCH_COOPERATIVE_POOL_STRICT: "1"
-        run: scripts/test-in-simulator.sh tests-one-thread
+        run: scripts/test-in-simulator.sh tests-one-thread SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 
       - name: Report failed tests
         if: ${{ failure() }}
