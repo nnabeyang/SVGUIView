@@ -6,12 +6,12 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 
 > Important: This article describes work that is partly planned. Phase 0,
 > which splits the code into `SVGCore` and `SVGRenderCG` and into the stages of
-> the rendering pipeline, is done. Phase 1 is in progress: CSS Animations are
+> the rendering pipeline, is done. Phase 1 is done too: CSS Animations are
 > parsed and applied to the computed values at a time, and
-> ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders that time. Animating
-> `d` remains. SMIL animation, playback, the document API, `SVGRenderLayer` and
-> filters on Metal are planned: the types, properties and methods proposed for
-> them don't exist yet, and their names may change while the work goes on.
+> ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders that time. SMIL
+> animation, playback, the document API, `SVGRenderLayer` and filters on Metal
+> are planned: the types, properties and methods proposed for them don't exist
+> yet, and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -304,7 +304,7 @@ protocol Animatable: Sendable {
 | Paint (`fill`, `stroke`) | Colors are interpolated. A change to or from a paint server is discrete. |
 | Transform lists | Function by function when the lists match. Otherwise, by decomposing the matrices. |
 | `transform-origin` | As two lengths |
-| `d` and `points` | Command by command when the paths have the same structure. Otherwise, discrete. |
+| `d` and `points` | Command by command when the paths have the same structure. Otherwise, discrete. `points` isn't a property yet, so it isn't animated. |
 | `stroke-dasharray` | Element by element, after repeating both lists to a common length |
 | `visibility`, `display` and other keywords | Discrete, with the CSS rules for `visibility` |
 
@@ -553,7 +553,7 @@ before it is merged.
 | Phase | Work | Status |
 |---|---|---|
 | 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. | Done in 0.25.0 |
-| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | In progress |
+| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done |
 | 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Planned |
 | 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Planned |
 | 2.5 | The document API and CSS Transitions, which need the document API to start. | Planned |

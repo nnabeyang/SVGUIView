@@ -11,25 +11,17 @@ final class SVGPathElement: ShapeGeometry {
   }
 
   let base: SVGBaseElement
-  let segments: [any PathSegment]
+  let data: PathData
 
-  init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
+  init(base: SVGBaseElement, text _: String, attributes _: [String: String]) {
     self.base = base
-    guard var d = attributes["d"] else {
-      segments = []
-      return
-    }
-    segments = d.withUTF8 {
-      let bytes = BufferView(unsafeBufferPointer: $0)!
-      var scanner = SVGAttributeScanner(bytes: bytes)
-      return scanner.scanPathSegments()
-    }
+    data = base.style.d
   }
 
   func path(in context: any GeometryContext) -> CGPath? {
     let pathContext = SVGPathContext()
-    for segment in segments {
-      segment.apply(context: pathContext)
+    for command in data.commands {
+      pathContext.apply(command)
     }
     return pathContext.path?.applying(scale(context: context))
   }
@@ -42,10 +34,7 @@ extension SVGPathElement: Encodable {
 
   func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    var dContainer = container.nestedUnkeyedContainer(forKey: .d)
-    for segment in segments {
-      try dContainer.encode(segment)
-    }
+    try container.encode(data.commands, forKey: .d)
   }
 }
 
@@ -69,52 +58,49 @@ final class SVGPathContext {
     return CGPoint(x: (2 * p1.x) - p2.x, y: (2 * p1.y) - p2.y)
   }
 
-  func apply(path: CGMutablePath?, arg: MPathArgument, isAbsolute: Bool) {
-    M(path: path, isMoved: arg.isMoved, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg _: ZPathArgument, isAbsolute _: Bool) {
-    Z(path: path)
-  }
-
-  func apply(path: CGMutablePath, arg: LPathArgument, isAbsolute: Bool) {
-    L(path: path, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg: CPathArgument, isAbsolute: Bool) {
-    C(path: path, x1: arg.x1, y1: arg.y1, x2: arg.x2, y2: arg.y2, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg: QPathArgument, isAbsolute: Bool) {
-    Q(path: path, x1: arg.x1, y1: arg.y1, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg: APathArgument, isAbsolute: Bool) {
-    A(path: path, rx: arg.rx, ry: arg.ry, angle: arg.angle, largeArc: arg.largeArc, sweep: arg.sweep, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path _: CGMutablePath, arg: (isMoved: Bool, x: Double, y: Double), isAbsolute: Bool) {
-    M(path: path, isMoved: arg.isMoved, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg _: Void, isAbsolute _: Bool) {
-    Z(path: path)
-  }
-
-  func apply(path: CGMutablePath, arg: (x: Double?, y: Double?), isAbsolute: Bool) {
-    L(path: path, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg: (x1: Double?, y1: Double?, x2: Double, y2: Double, x: Double, y: Double), isAbsolute: Bool) {
-    C(path: path, x1: arg.x1, y1: arg.y1, x2: arg.x2, y2: arg.y2, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg: (x1: Double?, y1: Double?, x: Double, y: Double), isAbsolute: Bool) {
-    Q(path: path, x1: arg.x1, y1: arg.y1, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
-  }
-
-  func apply(path: CGMutablePath, arg: (rx: Double, ry: Double, angle: Double, largeArc: Bool, sweep: Bool, x: Double, y: Double), isAbsolute: Bool) {
-    A(path: path, rx: arg.rx, ry: arg.ry, angle: arg.angle, largeArc: arg.largeArc, sweep: arg.sweep, x: arg.x, y: arg.y, isAbsolute: isAbsolute)
+  /// Adds a command to the path. A command before the first moveto draws nothing.
+  func apply(_ command: PathCommand) {
+    let isAbsolute = command.type.isAbsolute
+    let v = command.values
+    if command.type == .M || command.type == .m {
+      M(path: path, isMoved: false, x: v[0], y: v[1], isAbsolute: isAbsolute)
+    } else {
+      guard let path else { return }
+      switch command.type {
+      case .Z, .z:
+        Z(path: path)
+      case .L, .l:
+        L(path: path, x: v[0], y: v[1], isAbsolute: isAbsolute)
+      case .H, .h:
+        L(path: path, x: v[0], y: nil, isAbsolute: isAbsolute)
+      case .V, .v:
+        L(path: path, x: nil, y: v[0], isAbsolute: isAbsolute)
+      case .C, .c:
+        C(path: path, x1: v[0], y1: v[1], x2: v[2], y2: v[3], x: v[4], y: v[5], isAbsolute: isAbsolute)
+      case .S, .s:
+        C(path: path, x1: nil, y1: nil, x2: v[0], y2: v[1], x: v[2], y: v[3], isAbsolute: isAbsolute)
+      case .Q, .q:
+        Q(path: path, x1: v[0], y1: v[1], x: v[2], y: v[3], isAbsolute: isAbsolute)
+      case .T, .t:
+        Q(path: path, x1: nil, y1: nil, x: v[0], y: v[1], isAbsolute: isAbsolute)
+      case .A, .a:
+        A(
+          path: path, rx: v[0], ry: v[1], angle: v[2], largeArc: v[3] != 0, sweep: v[4] != 0, x: v[5], y: v[6],
+          isAbsolute: isAbsolute)
+      case .M, .m:
+        break
+      }
+    }
+    // The control point that a smooth curve reflects is the one of the curve of its kind just before it.
+    switch command.type {
+    case .C, .c, .S, .s:
+      quadrPoint = nil
+    case .Q, .q, .T, .t:
+      cubicPoint = nil
+    default:
+      cubicPoint = nil
+      quadrPoint = nil
+    }
   }
 
   // moveto
@@ -257,359 +243,5 @@ final class SVGPathContext {
   @inline(__always)
   func xsqrt(_ x: Double) -> Double {
     x > 0 ? sqrt(x) : 0
-  }
-}
-
-enum PathSegmentType: UInt8, Equatable {
-  case A = 65
-  case C = 67
-  case H = 72
-  case L = 76
-  case M = 77
-  case Q = 81
-  case S = 83
-  case T = 84
-  case V = 86
-  case Z = 90
-  case a = 97
-  case c = 99
-  case h = 104
-  case l = 108
-  case m = 109
-  case q = 113
-  case s = 115
-  case t = 116
-  case v = 118
-  case z = 122
-
-  var name: String {
-    String(decoding: [rawValue], as: UTF8.self)
-  }
-
-  var isAbsolute: Bool {
-    rawValue >= UInt8(ascii: "A") && rawValue <= UInt8(ascii: "Z")
-  }
-}
-
-extension PathSegmentType: Encodable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.singleValueContainer()
-    try container.encode(name)
-  }
-}
-
-protocol PathSegmentArgument: Equatable, Encodable {
-  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext)
-}
-
-struct MPathArgument: PathSegmentArgument {
-  let isMoved: Bool
-  let x: Double
-  let y: Double
-
-  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
-    context.apply(path: path, arg: self, isAbsolute: isAbsolute)
-  }
-}
-
-extension MPathArgument: Encodable {
-  private enum CondingKeys: String, CodingKey {
-    case x
-    case y
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CondingKeys.self)
-    try container.encode(x, forKey: .x)
-    try container.encode(y, forKey: .y)
-  }
-}
-
-struct ZPathArgument: PathSegmentArgument {
-  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
-    context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
-  }
-}
-
-struct LPathArgument: PathSegmentArgument {
-  let x: Double?
-  let y: Double?
-  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
-    context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
-  }
-}
-
-struct CPathArgument: PathSegmentArgument {
-  let x1: Double?
-  let y1: Double?
-  let x2: Double
-  let y2: Double
-  let x: Double
-  let y: Double
-  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
-    context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
-  }
-}
-
-struct QPathArgument: PathSegmentArgument {
-  let x1: Double?
-  let y1: Double?
-  let x: Double
-  let y: Double
-  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
-    context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
-  }
-}
-
-struct APathArgument: PathSegmentArgument {
-  let rx: Double
-  let ry: Double
-  let angle: Double
-  let largeArc: Bool
-  let sweep: Bool
-  let x: Double
-  let y: Double
-  func apply(path: CGMutablePath?, isAbsolute: Bool, context: SVGPathContext) {
-    context.apply(path: path!, arg: self, isAbsolute: isAbsolute)
-  }
-}
-
-protocol PathSegment: Equatable, Encodable, Sendable {
-  associatedtype Argument: PathSegmentArgument
-  var type: PathSegmentType { get }
-  var args: [Argument] { get }
-  var isAbsolute: Bool { get }
-  init(type: PathSegmentType, args: [Argument])
-  func apply(context: SVGPathContext)
-  func cleanUp(context: SVGPathContext)
-  func isRenderable(context: SVGPathContext) -> Bool
-}
-
-extension PathSegment {
-  func isRenderable(context: SVGPathContext) -> Bool {
-    context.path != nil
-  }
-
-  var isAbsolute: Bool {
-    type.isAbsolute
-  }
-
-  func apply(context: SVGPathContext) {
-    guard isRenderable(context: context) else { return }
-    for arg in args {
-      arg.apply(path: context.path, isAbsolute: isAbsolute, context: context)
-    }
-    cleanUp(context: context)
-  }
-}
-
-extension PathSegment /* Equatable */ {
-  static func == (lhs: Self, rhs: Self) -> Bool {
-    guard lhs.isAbsolute == rhs.isAbsolute,
-      lhs.args.count == rhs.args.count
-    else { return false }
-    for (l, r) in zip(lhs.args, rhs.args) {
-      if l != r {
-        return false
-      }
-    }
-    return true
-  }
-}
-
-private enum PathSegmentCodingKeys: String, CodingKey {
-  case type
-  case args
-}
-
-extension PathSegment /* Encodable */ {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: PathSegmentCodingKeys.self)
-    try container.encode(type, forKey: .type)
-    try container.encode(args, forKey: .args)
-  }
-}
-
-// moveto
-struct MPathSegment: PathSegment {
-  let type: PathSegmentType
-  let args: [MPathArgument]
-
-  init(type: PathSegmentType, args: [MPathArgument]) {
-    precondition(type == .M || type == .m)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.cubicPoint = nil
-    context.quadrPoint = nil
-  }
-
-  func isRenderable(context _: SVGPathContext) -> Bool {
-    true
-  }
-}
-
-// closepath
-struct ZPathSegment: PathSegment {
-  static func == (_: ZPathSegment, _: ZPathSegment) -> Bool {
-    true
-  }
-
-  let type: PathSegmentType
-  var args: [ZPathArgument] { [ZPathArgument()] }
-
-  init(type: PathSegmentType, args _: [ZPathArgument]) {
-    precondition(type == .Z || type == .z)
-    self.type = type
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.quadrPoint = nil
-    context.cubicPoint = nil
-  }
-}
-
-// lineto
-struct LPathSegment: PathSegment {
-  static func == (_: LPathSegment, _: LPathSegment) -> Bool {
-    true
-  }
-
-  let type: PathSegmentType
-  let args: [LPathArgument]
-  var isAbsolute: Bool {
-    type.isAbsolute
-  }
-
-  init(type: PathSegmentType, args: [LPathArgument]) {
-    precondition(type == .L || type == .l)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.quadrPoint = nil
-    context.cubicPoint = nil
-  }
-}
-
-struct HPathSegment: PathSegment {
-  static func == (_: HPathSegment, _: HPathSegment) -> Bool {
-    true
-  }
-
-  let type: PathSegmentType
-  let args: [LPathArgument]
-
-  init(type: PathSegmentType, args: [LPathArgument]) {
-    precondition(type == .H || type == .h)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.cubicPoint = nil
-    context.quadrPoint = nil
-  }
-}
-
-struct VPathSegment: PathSegment {
-  static func == (_: VPathSegment, _: VPathSegment) -> Bool {
-    true
-  }
-
-  let type: PathSegmentType
-  let args: [LPathArgument]
-
-  init(type: PathSegmentType, args: [LPathArgument]) {
-    precondition(type == .V || type == .v)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.cubicPoint = nil
-    context.quadrPoint = nil
-  }
-}
-
-// cubic Bézier
-struct CPathSegment: PathSegment {
-  let type: PathSegmentType
-  let args: [CPathArgument]
-
-  init(type: PathSegmentType, args: [CPathArgument]) {
-    precondition(type == .C || type == .c)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.quadrPoint = nil
-  }
-}
-
-struct SPathSegment: PathSegment {
-  let type: PathSegmentType
-  let args: [CPathArgument]
-
-  init(type: PathSegmentType, args: [CPathArgument]) {
-    precondition(type == .S || type == .s)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.quadrPoint = nil
-  }
-}
-
-// quadratic Bézier curve
-struct QPathSegment: PathSegment {
-  let type: PathSegmentType
-  let args: [QPathArgument]
-
-  init(type: PathSegmentType, args: [QPathArgument]) {
-    precondition(type == .Q || type == .q)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.cubicPoint = nil
-  }
-}
-
-struct TPathSegment: PathSegment {
-  let type: PathSegmentType
-  let args: [QPathArgument]
-
-  init(type: PathSegmentType, args: [QPathArgument]) {
-    precondition(type == .T || type == .t)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.cubicPoint = nil
-  }
-}
-
-// elliptical arc curve
-struct APathSegment: PathSegment {
-  let type: PathSegmentType
-  let args: [APathArgument]
-
-  init(type: PathSegmentType, args: [APathArgument]) {
-    precondition(type == .A || type == .a)
-    self.type = type
-    self.args = args
-  }
-
-  func cleanUp(context: SVGPathContext) {
-    context.cubicPoint = nil
-    context.quadrPoint = nil
   }
 }

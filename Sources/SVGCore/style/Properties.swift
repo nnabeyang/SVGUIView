@@ -688,3 +688,30 @@ enum HeightProperty: RectGeometryProperty {
   static let id = PropertyID.height
   static let computed = \ComputedStyle.height
 }
+
+/// The path data of `<path>`, which is the only element that has it.
+enum DProperty: StyleProperty {
+  static let id = PropertyID.d
+  static let isInherited = false
+  static let initial = PathData.none
+  static let computed = \ComputedStyle.d
+
+  static func accepts(attributeOn name: SVGElementName) -> Bool {
+    name == .path
+  }
+
+  /// The path data of the attribute up to its first error, as SVG specifies, or the value in CSS.
+  static func parse(_ text: String, origin: DeclarationOrigin) -> PathData? {
+    switch origin {
+    case .attribute:
+      return PathData(text)
+    case .css:
+      var input = _CSSParser.Parser(input: ParserInput(input: text))
+      return PathData.parse(&input)
+    }
+  }
+
+  static func parse(css input: inout _CSSParser.Parser) -> PathData? {
+    PathData.parse(&input)
+  }
+}

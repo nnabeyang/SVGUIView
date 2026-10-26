@@ -453,3 +453,40 @@ extension TransformOrigin: Animatable {
     return hypot(x, y)
   }
 }
+
+/// Path data is interpolated as SVG 2 specifies: number by number, when both have the same commands. A command in
+/// its relative form and the same command in its absolute form are interpolated in their absolute forms. Path data
+/// with other commands, or `none`, is discrete.
+extension PathData: Animatable {
+  func interpolated(to other: PathData, progress: Double) -> PathData? {
+    combined(with: other) { $0 + ($1 - $0) * progress }
+  }
+
+  func adding(_ other: PathData) -> PathData? {
+    combined(with: other, +)
+  }
+
+  func pacedDistance(to _: PathData) -> Double? {
+    nil
+  }
+
+  /// The path data that combines the numbers of two path data with the same commands. The flags of an arc are 1
+  /// for a number that isn't zero.
+  private func combined(with other: PathData, _ combine: (Double, Double) -> Double) -> PathData? {
+    guard commands.count == other.commands.count else { return nil }
+    var (from, to) = (self, other)
+    if zip(from.commands, to.commands).contains(where: { $0.type != $1.type }) {
+      (from, to) = (from.absolute(), to.absolute())
+      guard !zip(from.commands, to.commands).contains(where: { $0.type != $1.type }) else { return nil }
+    }
+    return PathData(
+      commands: zip(from.commands, to.commands).map { from, to in
+        let isArc = from.type == .A || from.type == .a
+        let values = zip(from.values, to.values).enumerated().map { index, values in
+          let value = combine(values.0, values.1)
+          return isArc && (index == 3 || index == 4) ? (value == 0 ? 0 : 1) : value
+        }
+        return PathCommand(type: from.type, values: values)
+      })
+  }
+}

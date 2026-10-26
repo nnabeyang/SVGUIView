@@ -436,6 +436,14 @@ struct RenderTreeBuilderTests {
     #expect(CGPoint(x: 2, y: 2).applying(clip.transform) == .zero)
   }
 
+  @Test("d in a style sheet overrides the attribute of a path")
+  func pathDataInStyleSheet() async throws {
+    let tree = try await renderTree(
+      #"<style>#p { d: path("M0 0 H10 V10 Z") }</style><path id="p" d="M0 0 H5 V5 Z"/>"#)
+    let path = try shape(try children(of: tree).last)
+    #expect(path.geometry?.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
+  }
+
   @Test("the content of a use element is animated at the time of the document")
   func animatedUseContent() async throws {
     let tree = try await renderTree(
