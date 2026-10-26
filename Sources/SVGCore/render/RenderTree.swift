@@ -105,6 +105,8 @@ package struct GroupNode: Sendable {
 
 package struct ViewportNode: Sendable {
   package let id: RenderID
+  /// The transform of the element, which applies before the translation.
+  package let transform: CGAffineTransform
   /// The translation by `x` and `y`.
   package let translation: CGAffineTransform
   /// The content, or `nil` if the viewport has no area.

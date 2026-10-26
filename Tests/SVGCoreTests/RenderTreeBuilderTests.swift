@@ -7,8 +7,11 @@ import Testing
 @Suite("Render tree")
 struct RenderTreeBuilderTests {
   /// The render tree of a document rendered into a rectangle of 20 by 20 at a scale of 1, at the time in seconds.
-  private func renderTree(_ content: String, at time: Double = 0) async throws -> RenderTree {
-    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">"# + content + "</svg>"
+  ///
+  /// - Parameter attributes: More attributes of the root `<svg>` element.
+  private func renderTree(_ content: String, at time: Double = 0, attributes: String = "") async throws -> RenderTree {
+    let svg =
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" "# + attributes + ">" + content + "</svg>"
     let base = SVGParser.parse(data: Data(svg.utf8)).at(time: time)
     let builder = RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 20, height: 20), scale: 1)
     return try #require(
@@ -449,6 +452,20 @@ struct RenderTreeBuilderTests {
       ##"<defs><rect id="r" width="4" height="4"/></defs><use href="#r" x="2" y="2" style="transform: scale(2); transform-box: content-box; transform-origin: right bottom"/>"##,
       CGPoint(x: 2, y: 2), CGPoint(x: -2, y: -2)
     ),
+    // The transform of a nested svg element applies before its position, and its bounds are the bounds of its
+    // content in the viewport.
+    (
+      #"<svg x="5" y="5" width="10" height="10" transform="rotate(90)" transform-origin="10 10"><rect width="10" height="10"/></svg>"#,
+      CGPoint(x: 5, y: 5), CGPoint(x: 15, y: 5)
+    ),
+    (
+      #"<svg x="2" y="2" width="8" height="8" viewBox="0 0 4 4" style="transform: rotate(180deg); transform-box: fill-box; transform-origin: center"><rect x="1" y="1" width="2" height="2"/></svg>"#,
+      CGPoint(x: 4, y: 4), CGPoint(x: 8, y: 8)
+    ),
+    (
+      #"<g style="transform: rotate(180deg); transform-box: fill-box; transform-origin: center"><svg x="2" y="2" width="8" height="8" viewBox="0 0 4 4" transform="translate(2)"><rect x="1" y="1" width="2" height="2"/></svg></g>"#,
+      CGPoint(x: 6, y: 4), CGPoint(x: 10, y: 8)
+    ),
   ]
 
   @Test(
@@ -461,10 +478,41 @@ struct RenderTreeBuilderTests {
       case .shape(let shape): shape.transform
       case .group(let group): group.transform
       case .use(let use): use.transform
+      case .viewport(let viewport): viewport.transform
       default: throw NodeError.unexpected(node)
       }
     let moved = point.applying(transform)
     #expect(abs(moved.x - expected.x) < 1e-9 && abs(moved.y - expected.y) < 1e-9, "\(moved)")
+  }
+
+  @Test("the root svg element isn't transformed")
+  func rootTransform() async throws {
+    let tree = try await renderTree(#"<rect width="10" height="10"/>"#, attributes: #"transform="rotate(90)""#)
+    guard case .viewport(let viewport) = tree.root else {
+      Issue.record("The root isn't a viewport")
+      return
+    }
+    #expect(viewport.transform == .identity)
+  }
+
+  @Test("the children of an svg element with a filter keep their transforms")
+  func filteredViewportChildren() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <filter id="f"><feOffset dx="1"/></filter>
+      <svg width="20" height="20" transform="translate(1 2)" filter="url(#f)">
+        <rect width="5" height="5" transform="translate(3 4)"/>
+      </svg>
+      """##)
+    guard case .filtered(let filtered) = try children(of: tree).last, case .viewport(let viewport) = filtered.source
+    else {
+      Issue.record("The svg element isn't filtered")
+      return
+    }
+    #expect(filtered.transform == CGAffineTransform(translationX: 1, y: 2))
+    #expect(viewport.transform == .identity)
+    let rect = try shape(try #require(viewport.content).children.first)
+    #expect(rect.transform == CGAffineTransform(translationX: 3, y: 4))
   }
 
   @Test("the reference box of a clipPath element is the bounds of its content")
