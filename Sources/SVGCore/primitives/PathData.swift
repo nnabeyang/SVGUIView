@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import _CSSParser
 
 /// A command of path data with one group of its numbers. A command that repeats its numbers is one command for each
 /// group, and the groups after the first of a moveto are linetos.
@@ -19,12 +20,46 @@ struct PathData: Sendable, Equatable {
 extension PathData {
   /// The path data of a text in the grammar of SVG, up to the first error, as SVG specifies for the `d` attribute.
   init(_ text: String) {
+    self = Self.scan(text).data
+  }
+
+  /// The path data of a text in the grammar of SVG, or `nil` if the text has an error, as CSS specifies for
+  /// `path()`.
+  init?(validating text: String) {
+    let (data, isValid) = Self.scan(text)
+    guard isValid else { return nil }
+    self = data
+  }
+
+  private static func scan(_ text: String) -> (data: PathData, isValid: Bool) {
     var text = text
-    self = text.withUTF8 {
-      guard let bytes = BufferView(unsafeBufferPointer: $0) else { return PathData.none }
+    return text.withUTF8 {
+      guard let bytes = BufferView(unsafeBufferPointer: $0) else { return (PathData.none, true) }
       var scanner = SVGAttributeScanner(bytes: bytes)
-      return PathData(commands: scanner.scanPathCommands())
+      let (commands, isValid) = scanner.scanPathCommands()
+      return (PathData(commands: commands), isValid)
     }
+  }
+
+  /// The value of `d` in CSS: `none`, or `path()` with path data that has no error. `path()` of `d` takes no fill
+  /// rule.
+  static func parse(_ input: inout _CSSParser.Parser) -> PathData? {
+    let value: PathData?
+    switch input.next() {
+    case .success(.ident(let name)) where name.lowercased() == "none":
+      value = PathData.none
+    case .success(.function(let name)) where name.lowercased() == "path":
+      let result: Result<PathData, CSSParseError> = input.parseNestedBlock { input in
+        guard case .success(let text) = input.expectString(), input.isExhausted(),
+          let data = PathData(validating: text)
+        else { return .failure(input.newCustomError(error: .invalid)) }
+        return .success(data)
+      }
+      value = try? result.get()
+    default:
+      value = nil
+    }
+    return input.isExhausted() ? value : nil
   }
 }
 
@@ -83,12 +118,25 @@ extension PathCommand: Encodable {
 extension SVGAttributeScanner {
   /// The commands of path data, up to the first command without a complete group of numbers. A group that isn't
   /// complete is dropped, and the data goes on at the next command.
-  mutating func scanPathCommands() -> [PathCommand] {
+  ///
+  /// - Returns: The commands, and whether the data has no error: it starts with a moveto, every group is complete,
+  ///   and nothing follows the last command.
+  mutating func scanPathCommands() -> (commands: [PathCommand], isValid: Bool) {
     var commands = [PathCommand]()
-    while let segment = scanPathSegment() {
+    var isValid = true
+    while true {
+      guard let type = readSegmentType() else {
+        if reader.consumeWhitespace() != nil { isValid = false }
+        break
+      }
+      guard let segment = scanPathSegment(of: type, isValid: &isValid) else {
+        isValid = false
+        break
+      }
       commands += segment
     }
-    return commands
+    if let first = commands.first, first.type != .M, first.type != .m { isValid = false }
+    return (commands, isValid)
   }
 
   mutating func readSegmentType() -> PathSegmentType? {
@@ -100,13 +148,12 @@ extension SVGAttributeScanner {
   }
 
   /// The commands of one command letter and its groups of numbers, or `nil` if it has no complete group.
-  private mutating func scanPathSegment() -> [PathCommand]? {
-    guard let type = readSegmentType() else { return nil }
+  private mutating func scanPathSegment(of type: PathSegmentType, isValid: inout Bool) -> [PathCommand]? {
     if type == .Z || type == .z {
       return [PathCommand(type: type, values: [])]
     }
     var commands = [PathCommand]()
-    while !reader.isEOF, let values = scanPathValues(of: type) {
+    while !reader.isEOF, let values = scanPathValues(of: type, isValid: &isValid) {
       // The groups after the first of a moveto are linetos.
       let groupType: PathSegmentType =
         switch type {
@@ -119,8 +166,9 @@ extension SVGAttributeScanner {
     return commands.isEmpty ? nil : commands
   }
 
-  /// One group of the numbers of a command, or `nil` if the group isn't complete.
-  private mutating func scanPathValues(of type: PathSegmentType) -> [Double]? {
+  /// One group of the numbers of a command, or `nil` if the group isn't complete. A group that has some of its
+  /// numbers is an error.
+  private mutating func scanPathValues(of type: PathSegmentType, isValid: inout Bool) -> [Double]? {
     let count: Int
     switch type {
     case .H, .h, .V, .v: count = 1
@@ -135,7 +183,10 @@ extension SVGAttributeScanner {
       consumeWhitespaceIfNext(UInt8(ascii: ","))
       // The flags of an arc are a single digit.
       let isFlag = (type == .A || type == .a) && (index == 3 || index == 4)
-      guard let value = isFlag ? scanBool().map({ $0 ? 1 : 0 }) : scanNumber() else { return nil }
+      guard let value = isFlag ? scanBool().map({ $0 ? 1 : 0 }) : scanNumber() else {
+        if !values.isEmpty || isFlag { isValid = false }
+        return nil
+      }
       values.append(value)
     }
     return values

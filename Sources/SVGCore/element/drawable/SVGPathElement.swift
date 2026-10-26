@@ -13,9 +13,9 @@ final class SVGPathElement: ShapeGeometry {
   let base: SVGBaseElement
   let data: PathData
 
-  init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
+  init(base: SVGBaseElement, text _: String, attributes _: [String: String]) {
     self.base = base
-    data = attributes["d"].map(PathData.init) ?? .none
+    data = base.style.d
   }
 
   func path(in context: any GeometryContext) -> CGPath? {

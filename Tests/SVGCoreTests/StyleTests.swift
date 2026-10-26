@@ -311,6 +311,43 @@ struct StyleTests {
     #expect(child.fontWeight.value == FontSelectionValue(weight))
   }
 
+  @Test("d is a presentation attribute only of path, and is read up to its first error there")
+  func pathDataAttribute() {
+    let path = CascadedValues(CascadedValues.presentationAttributes(of: .path, attributes: ["d": "M0 0L10 10 20"]))
+    let rect = CascadedValues(CascadedValues.presentationAttributes(of: .rect, attributes: ["d": "M0 0L10 10"]))
+    #expect(path.declared(DProperty.self) == PathData("M0 0L10 10"))
+    #expect(rect[DProperty.self] == nil)
+  }
+
+  /// Values of `d` in a style sheet, and their path data, or `nil` for the ones that are invalid.
+  private static let pathData: [(String, PathData?)] = [
+    (#"path("M0 0 L10 10")"#, PathData("M0 0L10 10")),
+    (#"PATH('m0 0 h10')"#, PathData("m0 0h10")),
+    (#"path("")"#, PathData.none),
+    ("none", PathData.none),
+    (#"path("M0 0 L10")"#, nil),
+    (#"path("M0 0 L")"#, nil),
+    (#"path("L0 0")"#, nil),
+    (#"path("M0 0 X")"#, nil),
+    (#"path(evenodd, "M0 0")"#, nil),
+    ("path()", nil),
+    (#""M0 0""#, nil),
+    (#"path("M0 0") none"#, nil),
+  ]
+
+  @Test("d in a style sheet is none or path() with path data that has no error", arguments: pathData)
+  func cssPathData(text: String, data: PathData?) {
+    guard let data else {
+      #expect(declared(DProperty.self, css: text) == nil)
+      return
+    }
+    guard case .value(let value) = declared(DProperty.self, css: text) else {
+      Issue.record("d isn't parsed")
+      return
+    }
+    #expect(value == data)
+  }
+
   @Test("presentation attributes of geometry are taken only by rect")
   func geometryAttributes() {
     let rect = CascadedValues(CascadedValues.presentationAttributes(of: .rect, attributes: ["x": "10", "fill": "red"]))

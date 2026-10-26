@@ -45,6 +45,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case y
   case width
   case height
+  case d
   case animationName = "animation-name"
   case animationDuration = "animation-duration"
   case animationTimingFunction = "animation-timing-function"
@@ -102,6 +103,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .y: visitor.visit(YProperty.self)
     case .width: visitor.visit(WidthProperty.self)
     case .height: visitor.visit(HeightProperty.self)
+    case .d: visitor.visit(DProperty.self)
     case .animationName: visitor.visit(AnimationNameProperty.self)
     case .animationDuration: visitor.visit(AnimationDurationProperty.self)
     case .animationTimingFunction: visitor.visit(AnimationTimingFunctionProperty.self)
@@ -163,6 +165,7 @@ struct ComputedStyle: Sendable {
   var y: SVGLength?
   var width: SVGLength?
   var height: SVGLength?
+  var d: PathData
   var animationName: [AnimationName]
   var animationDuration: [Double]
   var animationTimingFunction: [EasingFunction]
@@ -189,7 +192,7 @@ struct ComputedStyle: Sendable {
     filter: FilterProperty.initial, display: DisplayProperty.initial, overflow: OverflowProperty.initial,
     stopColor: StopColorProperty.initial, stopOpacity: StopOpacityProperty.initial,
     floodColor: FloodColorProperty.initial, floodOpacity: FloodOpacityProperty.initial, x: XProperty.initial,
-    y: YProperty.initial, width: WidthProperty.initial, height: HeightProperty.initial,
+    y: YProperty.initial, width: WidthProperty.initial, height: HeightProperty.initial, d: DProperty.initial,
     animationName: AnimationNameProperty.initial, animationDuration: AnimationDurationProperty.initial,
     animationTimingFunction: AnimationTimingFunctionProperty.initial, animationDelay: AnimationDelayProperty.initial,
     animationIterationCount: AnimationIterationCountProperty.initial,
@@ -254,7 +257,7 @@ struct ComputedStyle: Sendable {
     transformOrigin: TransformOrigin, transformBox: TransformBox,
     clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow?,
     stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
-    y: SVGLength?, width: SVGLength?, height: SVGLength?, animationName: [AnimationName],
+    y: SVGLength?, width: SVGLength?, height: SVGLength?, d: PathData, animationName: [AnimationName],
     animationDuration: [Double], animationTimingFunction: [EasingFunction], animationDelay: [Double],
     animationIterationCount: [AnimationIterationCount], animationDirection: [AnimationDirection],
     animationFillMode: [AnimationFillMode], animationPlayState: [AnimationPlayState]
@@ -297,6 +300,7 @@ struct ComputedStyle: Sendable {
     self.y = y
     self.width = width
     self.height = height
+    self.d = d
     self.animationName = animationName
     self.animationDuration = animationDuration
     self.animationTimingFunction = animationTimingFunction
