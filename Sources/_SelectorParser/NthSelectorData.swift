@@ -1,6 +1,6 @@
 import _CSSParser
 
-public struct AnPlusB: Equatable {
+public struct AnPlusB: Equatable, Sendable {
   public let a: Int32
   public let b: Int32
 
@@ -34,7 +34,7 @@ extension AnPlusB: ToCSS {
   }
 }
 
-public struct NthSelectorData: Equatable {
+public struct NthSelectorData: Equatable, Sendable {
   public let ty: NthType
   public let isFunction: Bool
   public let anPlusB: AnPlusB
@@ -88,7 +88,7 @@ public struct NthSelectorData: Equatable {
   }
 }
 
-public enum NthType {
+public enum NthType: Sendable {
   case child
   case lastChild
   case onlyChild
@@ -133,7 +133,7 @@ public enum NthType {
   }
 }
 
-public struct NthOfSelectorData<Impl: SelectorImpl>: Equatable {
+public struct NthOfSelectorData<Impl: SelectorImpl>: Equatable, Sendable {
   public let nthData: NthSelectorData
   public let selectors: [Selector<Impl>]
 }

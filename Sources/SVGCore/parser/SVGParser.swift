@@ -93,7 +93,7 @@ package final class SVGParser: NSObject {
     let css = Stylesheet(rules: rules, keyframes: keyframes)
     let element = root.flatMap { ElementCursor(root: $0).makeElement(with: css) as? SVGSVGElement }
     return SVGBaseContext(
-      document: document, root: element,
+      document: document, stylesheet: css, root: element,
       animations: DocumentAnimations(
         keyframes: keyframes, smil: SMILAnimation.animations(of: document), time: 0))
   }

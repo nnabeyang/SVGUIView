@@ -79,12 +79,12 @@ public struct SelectorFlags: OptionSet, Sendable, Default {
   public static func `default`() -> SelectorFlags { .empty }
 }
 
-public struct SpecificityAndFlags: Equatable {
+public struct SpecificityAndFlags: Equatable, Sendable {
   public let specificity: UInt32
   public var flags: SelectorFlags
 }
 
-public struct SelectorData<Impl: SelectorImpl>: Equatable {
+public struct SelectorData<Impl: SelectorImpl>: Equatable, Sendable {
   let slice: [Component<Impl>]
   let header: SpecificityAndFlags
 
@@ -101,7 +101,7 @@ public struct SelectorData<Impl: SelectorImpl>: Equatable {
   public var count: Int { slice.count }
 }
 
-public struct Selector<Impl: SelectorImpl>: Equatable {
+public struct Selector<Impl: SelectorImpl>: Equatable, Sendable {
   let data: SelectorData<Impl>
 
   public init(_ data: SelectorData<Impl>) {

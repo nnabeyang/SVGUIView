@@ -1,6 +1,6 @@
 import _CSSParser
 
-public enum Component<Impl: SelectorImpl>: Equatable {
+public enum Component<Impl: SelectorImpl>: Equatable, Sendable {
   case localName(LocalName<Impl>)
   case id(Impl.Identifier)
   case `class`(Impl.Identifier)
@@ -274,7 +274,7 @@ extension Component: ToCSS {
   }
 }
 
-public struct LocalName<Impl: SelectorImpl>: Equatable {
+public struct LocalName<Impl: SelectorImpl>: Equatable, Sendable {
   public let name: Impl.LocalName
   public let lowerName: Impl.LocalName
 

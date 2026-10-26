@@ -1,6 +1,6 @@
 import _CSSParser
 
-public enum Combinator {
+public enum Combinator: Sendable {
   case child  // >
   case descendant  // space
   case nextSibling  // +

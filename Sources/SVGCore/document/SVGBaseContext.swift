@@ -17,6 +17,8 @@ struct DocumentAnimations: Sendable {
 package struct SVGBaseContext: Sendable {
   /// The parsed document, which the elements to render are made from.
   let document: SVGDocument
+  /// The style sheets of the document, which the cascade of the elements uses.
+  let stylesheet: Stylesheet
   package let root: SVGSVGElement?
   let animations: DocumentAnimations
   /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
@@ -33,8 +35,9 @@ package struct SVGBaseContext: Sendable {
 
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.
-  init(document: SVGDocument, root: SVGSVGElement?, animations: DocumentAnimations) {
+  init(document: SVGDocument, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations) {
     self.document = document
+    self.stylesheet = stylesheet
     self.root = root
     self.animations = animations
     isAnimated =
@@ -78,7 +81,7 @@ package struct SVGBaseContext: Sendable {
     animations.time = time
     animations.smilEffects = SMILEffect.effects(of: animations.smil, at: time)
     let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
-    return SVGBaseContext(document: document, root: animated, animations: animations)
+    return SVGBaseContext(document: document, stylesheet: stylesheet, root: animated, animations: animations)
   }
 
   mutating func setClipPath(id: String, value: SVGClipPathElement) {
