@@ -27,6 +27,8 @@ struct ComparisonView: View {
   @State private var contentMode = ContentMode.fit
   /// The time of the animations, in seconds.
   @State private var time = 0.0
+  /// Whether the snapshot at the time shows the file, so that SVGView, which shows the start, can be hidden.
+  @State private var showsSnapshot = false
   /// The rendering timeout of SVGView, kept across files and launches.
   @AppStorage("timeoutMilliseconds") private var timeoutMilliseconds = 1000
 
@@ -78,11 +80,14 @@ struct ComparisonView: View {
       let layout = mode == .sideBySide ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(ZStackLayout())
       layout {
         ZStack {
+          // SVGView stays until the snapshot of the file is rendered, so that the pane isn't empty in between.
           SVGView(contentsOf: document.url, contentMode: contentMode)
             .environment(\.svgViewConfiguration, configuration)
-            .opacity(time == 0 ? 1 : 0)
+            .opacity(time == 0 || !showsSnapshot ? 1 : 0)
           if time != 0 {
-            SnapshotAtTime(url: document.url, time: time, contentMode: contentMode, configuration: configuration)
+            SnapshotAtTime(
+              url: document.url, time: time, contentMode: contentMode, configuration: configuration,
+              showsImage: $showsSnapshot)
           }
         }
         .modifier(
@@ -169,7 +174,15 @@ private struct SnapshotAtTime: View {
   let time: Double
   let contentMode: ContentMode
   let configuration: SVGUIViewConfiguration
-  @State private var image: UIImage?
+  /// Whether the view shows a snapshot of the file at `url`.
+  @Binding var showsImage: Bool
+  @State private var snapshot: Snapshot?
+
+  /// A snapshot and the file that it shows.
+  private struct Snapshot: Equatable {
+    let url: URL
+    let image: UIImage
+  }
 
   /// What the snapshot depends on, which renders it again when it changes.
   private struct Input: Equatable {
@@ -182,17 +195,26 @@ private struct SnapshotAtTime: View {
   var body: some View {
     GeometryReader { proxy in
       ZStack {
-        if let image {
-          Image(uiImage: image).resizable()
+        if let snapshot, snapshot.url == url {
+          Image(uiImage: snapshot.image).resizable()
         }
       }
       .task(id: Input(url: url, time: time, size: proxy.size, contentMode: contentMode)) {
-        image = await snapshot(size: proxy.size)
+        // A rendering that a newer time cancels keeps the previous image instead of clearing it.
+        if let image = await render(size: proxy.size) {
+          snapshot = Snapshot(url: url, image: image)
+        }
+      }
+      .onChange(of: snapshot?.url == url, initial: true) { _, shows in
+        showsImage = shows
+      }
+      .onDisappear {
+        showsImage = false
       }
     }
   }
 
-  private func snapshot(size: CGSize) async -> UIImage? {
+  private func render(size: CGSize) async -> UIImage? {
     guard let data = try? Data(contentsOf: url) else { return nil }
     let view = SVGUIView(frame: CGRect(origin: .zero, size: size), data: data)
     view.contentMode = contentMode.asUIView()

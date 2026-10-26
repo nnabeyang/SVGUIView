@@ -58,6 +58,30 @@ extension TransformList {
   func matrix(box: CGSize, context: any SVGLengthContext) -> CGAffineTransform {
     functions.reduce(.identity) { $1.applied(to: $0, box: box, context: context) }
   }
+
+  /// The list as the text of an attribute that isn't a presentation attribute, such as `gradientTransform`, which
+  /// ``init(attribute:)`` reads back as the same list.
+  var attributeText: String {
+    functions.isEmpty ? "none" : functions.map(\.attributeText).joined(separator: " ")
+  }
+}
+
+extension TransformFunction {
+  /// The function as SVG 1.1 writes it in an attribute. A skew along both axes is a matrix, since `skew()` isn't a
+  /// function of SVG 1.1.
+  fileprivate var attributeText: String {
+    switch self {
+    case .translate(let x, let y): "translate(\(x) \(y))"
+    case .scale(let x, let y): "scale(\(x) \(y))"
+    case .rotate(let angle): "rotate(\(angle))"
+    case .skew(let x, let y) where y == 0: "skewX(\(x))"
+    case .skew(let x, let y) where x == 0: "skewY(\(y))"
+    case .skew(let x, let y):
+      TransformFunction.matrix(CGAffineTransform.identity.shear(shx: tan(x * .pi / 180), shy: tan(y * .pi / 180)))
+        .attributeText
+    case .matrix(let m): "matrix(\(m.a) \(m.b) \(m.c) \(m.d) \(m.tx) \(m.ty))"
+    }
+  }
 }
 
 extension TransformFunction {
