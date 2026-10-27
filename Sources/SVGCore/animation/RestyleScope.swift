@@ -9,6 +9,11 @@ struct RestyleScope: Sendable {
   let changing: Set<ElementID>
   /// The elements in `changing` and their ancestors.
   let containing: Set<ElementID>
+  /// The elements whose render nodes can change: the ones in `containing`, the ones that reference an element whose
+  /// render node can change, such as a `<use>` element, an element with a clip path, a mask or a filter, or one
+  /// painted with a gradient or a pattern, and their ancestors. Every other element makes the same render node at
+  /// every time, which a renderer can reuse.
+  let unstable: Set<ElementID>
 
   /// The elements of a tree whose computed values animations can change.
   ///
@@ -35,6 +40,65 @@ struct RestyleScope: Sendable {
     _ = visit(root, isInChangingElement: false)
     self.changing = changing
     self.containing = containing
+    unstable = Self.unstableElements(of: root, containing: containing)
+  }
+
+  /// The elements whose render nodes can change because they contain an element whose computed values change, or
+  /// because they reference such an element directly or through other references.
+  private static func unstableElements(of root: some SVGElement, containing: Set<ElementID>) -> Set<ElementID> {
+    // The elements with each ID. A reference finds the first one of a kind, so every one of them counts.
+    var elementsByID = [String: [ElementID]]()
+    var references = [ElementID: [String]]()
+    var parents = [ElementID: ElementID]()
+    func collect(_ element: any SVGElement, parent: ElementID?) {
+      let id = element.base.elementID
+      if let parent { parents[id] = parent }
+      if let name = element.base.id { elementsByID[name, default: []].append(id) }
+      let referenced = Self.references(of: element)
+      if !referenced.isEmpty { references[id] = referenced }
+      for child in element.children {
+        collect(child, parent: id)
+      }
+    }
+    collect(root, parent: nil)
+    var unstable = containing
+    // Marking an element marks its ancestors, since their nodes contain its node, and the elements that reference
+    // them, until nothing more is marked.
+    var changed = true
+    while changed {
+      changed = false
+      for (element, names) in references where !unstable.contains(element) {
+        guard names.contains(where: { elementsByID[$0]?.contains(where: unstable.contains) ?? false }) else { continue }
+        var current: ElementID? = element
+        while let id = current, unstable.insert(id).inserted {
+          current = parents[id]
+        }
+        changed = true
+      }
+    }
+    return unstable
+  }
+
+  /// The IDs of the elements that an element references to make its render node.
+  private static func references(of element: any SVGElement) -> [String] {
+    let style = element.style
+    var names = [String]()
+    if case .url(let name) = style.clipPath { names.append(name) }
+    if case .url(let name) = style.mask { names.append(name) }
+    if case .url(let name) = style.filter { names.append(name) }
+    if case .url(let name) = style.fill { names.append(name) }
+    if case .url(let name) = style.stroke { names.append(name) }
+    switch element {
+    case let use as SVGUseElement:
+      if let name = use.parentId { names.append(name) }
+    case let pattern as SVGPatternElement:
+      if let name = pattern.parentId { names.append(name) }
+    case let gradient as any SVGGradientServer:
+      names.append(contentsOf: gradient.parentIds)
+    default:
+      break
+    }
+    return names
   }
 }
 
