@@ -36,6 +36,22 @@ package struct PaintedContents: Sendable {
 }
 
 extension RenderedContainer {
+  /// The contents of the painted layers in the container, at every depth, in order.
+  package var paintedContents: [PaintedContents] {
+    children.flatMap { child -> [PaintedContents] in
+      switch child {
+      case .container(let container): container.paintedContents
+      case .painted(let contents): [contents]
+      }
+    }
+  }
+
+  /// How many painted layers were painted for these layers, instead of showing an image of the previous layers.
+  package func paintedCount(since previous: RenderedContainer?) -> Int {
+    let images = Set((previous?.paintedContents ?? []).compactMap(\.image).map(ObjectIdentifier.init))
+    return paintedContents.count { contents in contents.image.map { !images.contains(ObjectIdentifier($0)) } ?? true }
+  }
+
   /// The contents of the painted layers in the container, at every depth, by their keys.
   fileprivate var contentsByKey: [LayerKey: PaintedContents] {
     var contents = [LayerKey: PaintedContents]()
