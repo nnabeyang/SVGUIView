@@ -71,7 +71,11 @@ parsed. This section records its limits, and which of them phase 0 removed.
   `@keyframes` rules are lost. Selector matching supports type, class and ID
   selectors and combinators, but not pseudo-classes. Phase 1 removed this limit
   for `@keyframes`: the rules are parsed and kept with the document. Other
-  at-rules are still dropped, and pseudo-classes still aren't supported.
+  at-rules are still dropped. Since 0.28.2, selector matching also supports
+  attribute selectors, the pseudo-classes of the structure of the tree, such as
+  `:root` and `:nth-child()`, and `:not()`, `:is()` and `:where()`. A selector
+  with a pseudo-class that depends on user actions or the language, such as
+  `:hover` or `:lang()`, matches no element.
 - **Every update redraws the whole document.** Drawing renders the entire
   tree into one bitmap, which becomes the contents of the view's layer. Nothing
   is cached between renderings, and a rendering that takes longer than

@@ -151,4 +151,88 @@ struct MatchingTests {
     #expect(matchesSelector(element: rect, css: "a > rect"))
     #expect(matchesSelector(element: rect, css: "svg rect"))
   }
+
+  /// The tree that the tables of selectors match:
+  ///
+  /// ```
+  /// <svg id="0">
+  ///   <g id="1" class="a">
+  ///     <rect id="2" x="1" class="p q" lang="en-US"/>
+  ///     <circle id="3"/>
+  ///     <rect id="4" x="10"/>
+  ///   </g>
+  ///   <g id="5"/>
+  ///   <text id="6">hi</text>
+  /// </svg>
+  /// ```
+  private static let tree = DocumentElement(
+    id: ElementID(rawValue: 0), name: .svg, localName: "svg", attributes: [:], text: "",
+    children: [
+      documentElement(
+        1, "g", ["class": "a"],
+        [
+          documentElement(2, "rect", ["x": "1", "class": "p q", "lang": "en-US"]),
+          documentElement(3, "circle"),
+          documentElement(4, "rect", ["x": "10"]),
+        ]),
+      documentElement(5, "g"),
+      DocumentElement(
+        id: ElementID(rawValue: 6), name: .text, localName: "text", attributes: [:], text: "hi", children: []),
+    ])
+
+  /// The identifiers of the elements of the tree that a selector matches.
+  private static func matches(_ css: String) -> Set<Int> {
+    func visit(_ cursor: ElementCursor) -> [Int] {
+      (matchesSelector(element: cursor, css: css) ? [cursor.element.id.rawValue] : [])
+        + cursor.children.flatMap(visit)
+    }
+    return Set(visit(ElementCursor(root: tree)))
+  }
+
+  @Test(
+    "attribute selectors",
+    arguments: [
+      ("rect[x]", [2, 4]), (#"rect[x="1"]"#, [2]), (#"[x^="1"]"#, [2, 4]), (#"[x$="0"]"#, [4]),
+      (#"[x*="0"]"#, [4]), (#"[class~="q"]"#, [2]), (#"[class~="p q"]"#, []), (#"[class~=""]"#, []),
+      (#"[lang|="en"]"#, [2]), (#"[lang|="en-U"]"#, []), (#"[x="1" i]"#, [2]), (#"[X="1"]"#, []),
+      ("g > rect[x] + circle", [3]),
+    ] as [(String, Set<Int>)])
+  func attributeSelectors(css: String, expected: Set<Int>) {
+    #expect(Self.matches(css) == expected)
+  }
+
+  @Test(
+    "pseudo-classes of the structure of the tree",
+    arguments: [
+      (":root", [0]), ("rect:first-child", [2]), (":last-child", [0, 4, 6]), ("g > :nth-child(2)", [3]),
+      ("g > :nth-child(odd)", [2, 4]), ("g > :nth-last-child(1)", [4]), ("rect:nth-of-type(2)", [4]),
+      ("rect:last-of-type", [4]), ("circle:only-of-type", [3]), ("g :only-child", []), ("g:empty", [5]),
+      ("text:empty", []),
+    ] as [(String, Set<Int>)])
+  func structuralPseudoClasses(css: String, expected: Set<Int>) {
+    #expect(Self.matches(css) == expected)
+  }
+
+  @Test(
+    "selectors in :not(), :is() and :where()",
+    arguments: [
+      (#"rect:not([x="1"])"#, [4]), ("g > :not(rect, circle)", []), (#":is(circle, [x="10"])"#, [3, 4]),
+      (":where(.a) rect", [2, 4]), ("rect:not(:first-child)", [4]),
+    ] as [(String, Set<Int>)])
+  func nestedSelectors(css: String, expected: Set<Int>) {
+    #expect(Self.matches(css) == expected)
+  }
+
+  @Test(
+    "a selector with a part that matching doesn't support matches no element",
+    arguments: ["rect:hover", ":focus", "g:active rect", ":lang(en)", "rect:hover + circle"])
+  func unsupportedSelector(css: String) {
+    #expect(Self.matches(css).isEmpty)
+  }
+
+  @Test("a selector list matches with the selectors that matching supports")
+  func listWithUnsupportedSelector() {
+    let rect = ElementCursor(root: documentElement(0, "rect", ["x": "1"]))
+    #expect(matchesSelector(element: rect, css: "rect:hover, rect"))
+  }
 }
