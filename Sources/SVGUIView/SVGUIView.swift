@@ -75,6 +75,8 @@ public class SVGUIView: UIView {
     layer.anchorPoint = .zero
     return layer
   }()
+  /// The layers in the host.
+  private lazy var layerTree = LayerTree(host: layerTreeHost)
 
   /// The time of the animations.
   ///
@@ -394,7 +396,7 @@ public class SVGUIView: UIView {
     switch result {
     case .success(let image):
       layerTreeHost.removeFromSuperlayer()
-      layerTreeHost.sublayers = nil
+      layerTree.clear()
       layer.contents = image
     case .failure(let error):
       show(error)
@@ -414,7 +416,7 @@ public class SVGUIView: UIView {
       layerTreeHost.bounds = layer.bounds
       layerTreeHost.position = layer.bounds.origin
       CATransaction.commit()
-      layers.show(in: layerTreeHost)
+      layerTree.show(layers)
     case .failure(let error):
       show(error)
     }
@@ -426,7 +428,7 @@ public class SVGUIView: UIView {
     switch error {
     case .missingRootElement, .zeroSizedRect:
       layer.contents = nil
-      layerTreeHost.sublayers = nil
+      layerTree.clear()
     case .cancelled:
       // A newer rendering cancels the one before it, so this is not worth a warning.
       break

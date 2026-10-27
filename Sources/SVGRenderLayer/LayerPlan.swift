@@ -23,6 +23,8 @@ package struct ContainerLayer: Sendable {
   /// The rectangle in the coordinates of the layer outside which nothing is shown, or `nil` to show everything.
   package let clip: CGRect?
   package let children: [PlannedLayer]
+  /// What the layer is in the plans of all times.
+  package let key: LayerKey
 }
 
 /// Render nodes that are painted together into the contents of a layer.
@@ -35,4 +37,28 @@ package struct PaintedLayer: Sendable {
   /// The pixels of the contents for each unit of the coordinates, which is the scale of the screen times the scale of
   /// the transforms around the layer, so that the contents are as sharp as a rendering into one bitmap.
   package let rasterScale: CGFloat
+  /// Whether what the nodes paint can change with the time, so that the contents of another time can't be shown.
+  package let changes: Bool
+  /// What the layer is in the plans of all times, which the layers of one time are matched with the layers of
+  /// another by.
+  package let key: LayerKey
+}
+
+/// What a layer is in the plans of a render tree at all times: the containers around it, and for a painted layer, the
+/// nodes that it paints.
+package struct LayerKey: Hashable, Sendable {
+  package enum Component: Hashable, Sendable {
+    /// A container of a node.
+    case node(RenderID)
+    /// A container that doesn't come from a node, at an index of the layers around it.
+    case index(Int)
+    /// The nodes of a painted layer.
+    case nodes([RenderID])
+  }
+
+  package let components: [Component]
+
+  func appending(_ component: Component) -> LayerKey {
+    LayerKey(components: components + [component])
+  }
 }

@@ -15,12 +15,15 @@ private func plan(
   let fit = ContentFit(
     preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
   let tree = try #require(await RenderTreeBuilder(base: base.at(time: 0), viewPort: rect, scale: scale).build(fit: fit))
-  return (LayerPlanner(promoted: base.elementsWithAnimatedCompositing(), scale: scale).plan(tree, in: rect), base)
+  let planner = LayerPlanner(
+    promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: scale)
+  return (planner.plan(tree, in: rect), base)
 }
 
 /// The layers as text: a container is the ID or the name of its element, or `clip`, with its opacity if it isn't 1
-/// and its layers in parentheses, and a painted layer is the IDs or the names of its nodes in brackets.
-private func describe(_ layer: PlannedLayer, in base: SVGBaseContext) -> String {
+/// and its layers in parentheses, and a painted layer is the IDs or the names of its nodes in brackets, followed by
+/// `*` if it changes and `marksChanges` is `true`.
+private func describe(_ layer: PlannedLayer, in base: SVGBaseContext, marksChanges: Bool = false) -> String {
   let elements = base.root?.elements ?? []
   func name(_ id: ElementID) -> String {
     guard let element = elements.first(where: { $0.base.elementID == id }) else { return "?" }
@@ -30,9 +33,11 @@ private func describe(_ layer: PlannedLayer, in base: SVGBaseContext) -> String 
   case .container(let container):
     let label = container.id.map { name($0.element) } ?? (container.clip == nil ? "-" : "clip")
     let opacity = container.opacity == 1 ? "" : "@\(container.opacity)"
-    return label + opacity + "(" + container.children.map { describe($0, in: base) }.joined(separator: " ") + ")"
+    let children = container.children.map { describe($0, in: base, marksChanges: marksChanges) }
+    return label + opacity + "(" + children.joined(separator: " ") + ")"
   case .painted(let painted):
-    return "[" + painted.nodes.map { name($0.id.element) }.joined(separator: " ") + "]"
+    let mark = marksChanges && painted.changes ? "*" : ""
+    return "[" + painted.nodes.map { name($0.id.element) }.joined(separator: " ") + "]" + mark
   }
 }
 
@@ -140,5 +145,50 @@ struct LayerPlannerTests {
     let bounds = paintedLayers(of: .container(layer)).map(\.bounds)
     // The margin is two pixels for the antialiased edges.
     #expect(bounds == [CGRect(x: -2, y: -2, width: 104, height: 104), CGRect(x: -52, y: -2, width: 204, height: 14)])
+  }
+
+  /// Documents, and their layers as text with the painted layers that change marked.
+  private static let changes: [(String, String)] = [
+    // The layers around a moving element, and the element in its layer, don't change.
+    (
+      spin + #"<rect id="a" width="10" height="10"/>"# + spinning("r") + #"<rect id="b" width="10" height="10"/>"#,
+      "clip(-(svg([a] r([r]) [b])))"
+    ),
+    // A layer with an element whose fill changes does.
+    (
+      spin + "<style>@keyframes c { to { fill: lime } }</style>"
+        + #"<rect id="a" width="10" height="10" style="animation: c 1s"/>"# + spinning("r"),
+      "clip(-(svg([a]* r([r]))))"
+    ),
+    (
+      spin + "<style>@keyframes c { to { fill: lime } }</style>"
+        + #"<rect id="r" width="10" height="10" style="animation: s 1s, c 1s"/>"#,
+      "clip(-(svg(r([r]*))))"
+    ),
+    // The fill of a group changes the elements in it.
+    (
+      spin + "<style>@keyframes c { to { fill: lime } }</style>"
+        + #"<g id="g" style="animation: c 1s"><rect id="a" width="10" height="10"/>"# + spinning("r") + "</g>",
+      "clip(-(svg(g([a]* r([r]*)))))"
+    ),
+    // A moving element that doesn't get a layer of its own changes the layer that it's painted in.
+    (
+      spin + ##"<clipPath id="c"><rect width="5" height="5"/></clipPath><g id="g" clip-path="url(#c)">"##
+        + spinning("r") + "</g>",
+      "clip(-([svg]*))"
+    ),
+    // When an animation in a gradient changes the elements that use it, every layer changes.
+    (
+      spin + #"<linearGradient id="l"><stop offset="0" stop-color="red">"#
+        + #"<animate attributeName="stop-color" to="lime" dur="1s"/></stop></linearGradient>"#
+        + #"<rect id="a" width="10" height="10"/>"# + spinning("r"),
+      "clip(-(svg([a]* r([r]*))))"
+    ),
+  ]
+
+  @Test("the painted layers that change", arguments: changes)
+  func changingLayers(content: String, expected: String) async throws {
+    let (layer, base) = try await plan(content)
+    #expect(describe(.container(layer), in: base, marksChanges: true) == expected)
   }
 }

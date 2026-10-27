@@ -18,6 +18,8 @@ package struct RenderedContainer: Sendable {
   package let opacity: CGFloat
   package let clip: CGRect?
   package let children: [RenderedLayer]
+  /// What the container is in the plans of all times.
+  package let key: LayerKey
 }
 
 /// The contents of a painted layer.
@@ -29,27 +31,57 @@ package struct PaintedContents: Sendable {
   package let bounds: CGRect
   /// The pixels of the image for each unit of the coordinates.
   package let rasterScale: CGFloat
+  /// What the painted layer is in the plans of all times.
+  package let key: LayerKey
+}
+
+extension RenderedContainer {
+  /// The contents of the painted layers in the container, at every depth, by their keys.
+  fileprivate var contentsByKey: [LayerKey: PaintedContents] {
+    var contents = [LayerKey: PaintedContents]()
+    for child in children {
+      switch child {
+      case .container(let container): contents.merge(container.contentsByKey) { $1 }
+      case .painted(let painted): contents[painted.key] = painted
+      }
+    }
+    return contents
+  }
 }
 
 extension ContainerLayer {
   /// The container layer with its painted layers painted, in order, or `nil` if the task is cancelled.
   ///
-  /// - Parameter scale: The scale of the screen, which the bitmaps of clip paths, masks, filters and patterns are
-  ///   made at, as in a rendering into one bitmap.
-  package func painted(scale: CGFloat) async -> RenderedContainer? {
+  /// - Parameters:
+  ///   - scale: The scale of the screen, which the bitmaps of clip paths, masks, filters and patterns are made at,
+  ///     as in a rendering into one bitmap.
+  ///   - previous: The layers of another time, whose contents the painted layers that don't change show instead of
+  ///     being painted again.
+  package func painted(scale: CGFloat, reusing previous: RenderedContainer? = nil) async -> RenderedContainer? {
+    await painted(scale: scale, reusing: previous?.contentsByKey ?? [:])
+  }
+
+  private func painted(scale: CGFloat, reusing previous: [LayerKey: PaintedContents]) async -> RenderedContainer? {
     var children = [RenderedLayer]()
     for child in self.children {
       guard !Task.isCancelled else { return nil }
       switch child {
       case .container(let container):
-        guard let painted = await container.painted(scale: scale) else { return nil }
+        guard let painted = await container.painted(scale: scale, reusing: previous) else { return nil }
         children.append(.container(painted))
       case .painted(let layer):
-        children.append(.painted(await layer.painted(scale: scale)))
+        if !layer.changes, let contents = previous[layer.key], contents.bounds == layer.bounds,
+          contents.rasterScale == layer.rasterScale
+        {
+          children.append(.painted(contents))
+        } else {
+          children.append(.painted(await layer.painted(scale: scale)))
+        }
       }
     }
     guard !Task.isCancelled else { return nil }
-    return RenderedContainer(id: id, transform: transform, opacity: opacity, clip: clip, children: children)
+    return RenderedContainer(
+      id: id, transform: transform, opacity: opacity, clip: clip, children: children, key: key)
   }
 }
 
@@ -65,13 +97,13 @@ extension PaintedLayer {
     // A bitmap that can't be made, such as one too large, shows nothing, as an element whose filter, mask, clip
     // path or pattern can't be allocated is left out of a rendering into one bitmap.
     guard let graphics = CGContext.bitmap(size: size, scale: 1, space: CGColorSpaceCreateDeviceRGB()) else {
-      return PaintedContents(image: nil, bounds: bounds, rasterScale: rasterScale)
+      return PaintedContents(image: nil, bounds: bounds, rasterScale: rasterScale, key: key)
     }
     // The first row of the bitmap is the top of the image, as in the contents of a layer.
     graphics.concatenate(
       CGAffineTransform(size.width / bounds.width, 0, 0, -size.height / bounds.height, 0, size.height))
     graphics.translateBy(x: -bounds.minX, y: -bounds.minY)
     await CGPainter(scale: scale).paint(nodes, into: graphics)
-    return PaintedContents(image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale)
+    return PaintedContents(image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key)
   }
 }
