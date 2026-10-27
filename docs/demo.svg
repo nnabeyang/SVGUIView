@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+  <title>SVGUIView playing animations</title>
+  <style>
+    @keyframes sky { from { fill: #9fd3f5 } to { fill: #ffd9a8 } }
+    @keyframes glow { from { transform: scale(1); opacity: 1 } to { transform: scale(1.15); opacity: 0.75 } }
+    @keyframes spin { to { transform: rotate(-360deg) } }
+    @keyframes trail { from { stroke-dashoffset: 520 } to { stroke-dashoffset: 0 } }
+    .sky { animation: sky 3s ease-in-out infinite alternate }
+    .sun { transform-box: fill-box; transform-origin: center; animation: glow 1.5s ease-in-out infinite alternate }
+    .small-gear { transform-box: fill-box; transform-origin: center; animation: spin 1.5s linear infinite }
+    .trail { stroke-dasharray: 520; animation: trail 6s linear infinite }
+  </style>
+  <rect class="sky" width="400" height="240"/>
+  <circle class="sun" cx="340" cy="52" r="24" fill="#ffb02e"/>
+  <path fill="#ffffff" d="M60 80 C55 62 80 52 92 62 C100 44 130 44 136 62 C152 58 162 72 154 84 Z">
+    <animate attributeName="d" values="M60 80 C55 62 80 52 92 62 C100 44 130 44 136 62 C152 58 162 72 154 84 Z; M62 80 C52 66 78 50 94 60 C104 38 134 40 138 60 C156 54 166 74 152 84 Z; M60 80 C55 62 80 52 92 62 C100 44 130 44 136 62 C152 58 162 72 154 84 Z" dur="6s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="translate" values="0 0; 20 0; 0 0" dur="6s" repeatCount="indefinite"/>
+  </path>
+  <path fill="#ffffff" opacity="0.85" d="M230 54 C226 42 244 34 254 42 C262 30 284 32 288 44 C300 42 306 52 300 60 Z">
+    <animate attributeName="d" values="M230 54 C226 42 244 34 254 42 C262 30 284 32 288 44 C300 42 306 52 300 60 Z; M228 54 C224 40 246 30 256 40 C266 26 290 30 290 44 C304 40 310 54 302 60 Z; M230 54 C226 42 244 34 254 42 C262 30 284 32 288 44 C300 42 306 52 300 60 Z" dur="3s" repeatCount="indefinite"/>
+  </path>
+  <path d="M0 210 C80 180 160 230 240 205 S360 190 400 200 L400 240 L0 240 Z" fill="#5fb36b"/>
+  <path class="trail" d="M20 170 C80 60 160 230 220 120 S340 40 390 110" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M-12 -7 L14 0 L-12 7 L-6 0 Z" fill="#e8533f" stroke="#7a2318" stroke-width="1">
+    <animateMotion path="M20 170 C80 60 160 230 220 120 S340 40 390 110" dur="6s" rotate="auto" repeatCount="indefinite"/>
+  </path>
+  <path d="M337.00 190.00 L343.71 194.44 L342.84 198.80 L334.94 200.33 L333.38 203.50 L336.97 210.70 L334.04 214.04 L326.44 211.42 L323.50 213.38 L323.01 221.41 L318.80 222.84 L313.52 216.77 L310.00 217.00 L305.56 223.71 L301.20 222.84 L299.67 214.94 L296.50 213.38 L289.30 216.97 L285.96 214.04 L288.58 206.44 L286.62 203.50 L278.59 203.01 L277.16 198.80 L283.23 193.52 L283.00 190.00 L276.29 185.56 L277.16 181.20 L285.06 179.67 L286.62 176.50 L283.03 169.30 L285.96 165.96 L293.56 168.58 L296.50 166.62 L296.99 158.59 L301.20 157.16 L306.48 163.23 L310.00 163.00 L314.44 156.29 L318.80 157.16 L320.33 165.06 L323.50 166.62 L330.70 163.03 L334.04 165.96 L331.42 173.56 L333.38 176.50 L341.41 176.99 L342.84 181.20 L336.77 186.48 Z M319.00 190.00 A9 9 0 1 0 301.00 190.00 A9 9 0 1 0 319.00 190.00 Z" fill="#4a5568" fill-rule="evenodd">
+    <animateTransform attributeName="transform" type="rotate" from="0 310 190" to="360 310 190" dur="3s" repeatCount="indefinite"/>
+  </path>
+  <path class="small-gear" d="M359.48 163.76 L365.83 168.68 L363.93 173.26 L355.97 172.25 L353.48 174.15 L352.40 182.11 L347.48 182.76 L344.37 175.35 L341.48 174.15 L334.04 177.20 L331.03 173.26 L335.89 166.87 L335.48 163.76 L329.13 158.84 L331.03 154.26 L338.99 155.27 L341.48 153.37 L342.56 145.41 L347.48 144.76 L350.59 152.17 L353.48 153.37 L360.92 150.32 L363.93 154.26 L359.07 160.65 Z M352.48 163.76 A5 5 0 1 0 342.48 163.76 A5 5 0 1 0 352.48 163.76 Z" fill="#718096" fill-rule="evenodd"/>
+</svg>

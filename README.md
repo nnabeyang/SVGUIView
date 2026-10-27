@@ -9,6 +9,16 @@ An UIView that displays a single SVG image in your interface.
 
 The documentation is hosted on the [Swift Package Index](https://swiftpackageindex.com/nnabeyang/SVGUIView/documentation/svguiview).
 
+## Demo
+
+SVGUIView plays the CSS and SMIL animations of an SVG document. The recording
+shows [docs/demo.svg](docs/demo.svg) played by SVGView (top) and by WebKit
+(bottom) at the same time in the simulator.
+
+| SVG (in your browser) | SVGUIView and WebKit |
+|---|---|
+| <img src="docs/demo.svg" width="360"> | <img src="docs/demo.gif" width="360"> |
+
 ## Usage
 
 Creating a SVGUIView:
@@ -16,6 +26,11 @@ Creating a SVGUIView:
 let data = Bundle.main.url(forResource: "example", withExtension: "svg")!
 let svgView = SVGUIView(contentsOf: data)!
 view.addSubView(svgView)
+```
+
+Playing the animations of the document:
+```swift
+svgView.configuration = SVGUIViewConfiguration(animation: .play)
 ```
 
 ## Installation
