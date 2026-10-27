@@ -21,24 +21,33 @@ struct ElementAnimation {
       guard case .keyframes(let name) = style.animationName[index], let rule = animations.keyframes[name] else {
         return nil
       }
-      func value<T>(_ list: [T], _ initial: T) -> T {
-        list.isEmpty ? initial : list[index % list.count]
-      }
-      let timing = AnimationTiming(
-        delay: value(style.animationDelay, 0), duration: value(style.animationDuration, 0),
-        iterations: value(style.animationIterationCount, .count(1)),
-        direction: value(style.animationDirection, .normal), fillMode: value(style.animationFillMode, .none))
+      let (timing, isPaused) = Self.timing(of: style, at: index)
       // A paused animation has been paused since the document was loaded, so it stays at the start.
-      let time = value(style.animationPlayState, .running) == .paused ? 0 : animations.time
-      guard let sample = timing.sample(at: time) else { return nil }
+      guard let sample = timing.sample(at: isPaused ? 0 : animations.time) else { return nil }
       let keyframes = rule.keyframes.flatMap { keyframe in keyframe.offsets.map { (offset: $0, keyframe: keyframe) } }
         .enumerated()
         .sorted { $0.element.offset == $1.element.offset ? $0.offset < $1.offset : $0.element.offset < $1.element.offset }
         .map(\.element)
       return ElementAnimation(
         keyframes: keyframes, progress: sample.progress, isBefore: sample.phase == .before,
-        easing: value(style.animationTimingFunction, .ease))
+        easing: Self.value(style.animationTimingFunction, .ease, at: index))
     }
+  }
+
+  /// The timing of the animation at an index of `animation-name`, and whether it's paused.
+  static func timing(of style: ComputedStyle, at index: Int) -> (timing: AnimationTiming, isPaused: Bool) {
+    let timing = AnimationTiming(
+      delay: value(style.animationDelay, 0, at: index), duration: value(style.animationDuration, 0, at: index),
+      iterations: value(style.animationIterationCount, .count(1), at: index),
+      direction: value(style.animationDirection, .normal, at: index),
+      fillMode: value(style.animationFillMode, .none, at: index))
+    return (timing, value(style.animationPlayState, .running, at: index) == .paused)
+  }
+
+  /// The value of a list of `animation-*` for the index of `animation-name`, which repeats the list, or the initial
+  /// value for an empty list.
+  private static func value<T>(_ list: [T], _ initial: T, at index: Int) -> T {
+    list.isEmpty ? initial : list[index % list.count]
   }
 
   /// The value of the property at the time, or `nil` if no keyframe sets it.
