@@ -89,7 +89,7 @@ package final class SVGParser: NSObject {
   private func parse(parser: XMLParser) -> SVGBaseContext {
     parser.delegate = self
     parser.parse()
-    let document = SVGDocument(root: root)
+    let document = DocumentTree(root: root)
     let css = Stylesheet(rules: rules, keyframes: keyframes)
     let element = root.flatMap { ElementCursor(root: $0).makeElement(with: css) as? SVGSVGElement }
     return SVGBaseContext(

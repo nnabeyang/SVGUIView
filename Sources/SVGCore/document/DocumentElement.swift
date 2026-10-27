@@ -67,20 +67,20 @@ final class DocumentElement: Sendable {
 ///
 /// A document is a value: background work reads a document, and it stays the same however the document changes
 /// later.
-struct SVGDocument: Sendable {
+struct DocumentTree: Sendable {
   /// The root element, or `nil` for data without an element.
   let root: DocumentElement?
 
   /// The document with the given attributes of its elements replaced.
   ///
   /// - Parameter replacements: The attributes to set by the elements that they're set on.
-  func replacingAttributes(_ replacements: [ElementID: [String: String]]) -> SVGDocument {
+  func replacingAttributes(_ replacements: [ElementID: [String: String]]) -> DocumentTree {
     guard !replacements.isEmpty else { return self }
-    return SVGDocument(root: root?.replacingAttributes(replacements))
+    return DocumentTree(root: root?.replacingAttributes(replacements))
   }
 
   /// The document with the element at `path`, a list of child positions from the root, replaced.
-  func replacingElement(at path: [Int], with replacement: DocumentElement) -> SVGDocument {
-    SVGDocument(root: root?.replacingDescendant(at: path[...], with: replacement))
+  func replacingElement(at path: [Int], with replacement: DocumentElement) -> DocumentTree {
+    DocumentTree(root: root?.replacingDescendant(at: path[...], with: replacement))
   }
 }

@@ -265,7 +265,7 @@ extension SMILAnimation {
 extension SMILAnimation {
   /// The animations of a document in document order. An animation changes the element that its `href` references,
   /// or its parent.
-  static func animations(of document: SVGDocument) -> [SMILAnimation] {
+  static func animations(of document: DocumentTree) -> [SMILAnimation] {
     guard let root = document.root else { return [] }
     // Of elements with the same ID, the first one in the document is the one that `href` finds.
     var elements = [String: DocumentElement]()

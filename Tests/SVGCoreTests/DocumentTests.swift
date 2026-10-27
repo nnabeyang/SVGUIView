@@ -17,7 +17,7 @@ func documentElement(
 struct DocumentTests {
   @Test("replacing an element copies only its ancestors and keeps their identifiers")
   func replacingCopiesPath() throws {
-    let document = SVGDocument(
+    let document = DocumentTree(
       root: documentElement(
         0, "svg", [:],
         [

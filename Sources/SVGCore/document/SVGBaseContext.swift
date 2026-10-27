@@ -16,7 +16,7 @@ struct DocumentAnimations: Sendable {
 
 package struct SVGBaseContext: Sendable {
   /// The parsed document, which the elements to render are made from.
-  let document: SVGDocument
+  let document: DocumentTree
   /// The style sheets of the document, which the cascade of the elements uses.
   let stylesheet: Stylesheet
   package let root: SVGSVGElement?
@@ -41,7 +41,7 @@ package struct SVGBaseContext: Sendable {
   /// - Parameter restyleScope: The elements whose computed values animations can change, which the context of the
   ///   document at a time keeps from the context that it comes from, or `nil` to find them.
   init(
-    document: SVGDocument, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
+    document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
     restyleScope: RestyleScope? = nil
   ) {
     self.document = document
