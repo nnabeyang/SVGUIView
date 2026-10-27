@@ -11,17 +11,25 @@ import SVGCore
 ///
 /// A node with a clip path, a mask or a filter composites what it paints as one image, so the nodes in it are painted
 /// with it, and none of them gets a layer of its own.
+///
+/// A painted layer whose nodes don't change with the time can show the contents of another time.
 package struct LayerPlanner: Sendable {
-  /// The elements whose nodes get layers of their own.
+  /// The elements whose nodes get layers of their own, which are the ones whose compositing is animated.
   let promoted: Set<ElementID>
+  /// The elements whose painting changes in other ways, or `nil` if any painting can change.
+  let painting: Set<ElementID>?
   /// The scale of the screen.
   let scale: CGFloat
 
   /// The width in pixels of the margin around what a layer paints, for the antialiased edges of the shapes.
   private static let margin: CGFloat = 2
 
-  package init(promoted: Set<ElementID>, scale: CGFloat) {
+  /// - Parameters:
+  ///   - promoted: The elements whose compositing is animated, which get layers of their own.
+  ///   - painting: The elements whose painting changes in other ways, or `nil` if any painting can change.
+  package init(promoted: Set<ElementID>, painting: Set<ElementID>? = nil, scale: CGFloat) {
     self.promoted = promoted
+    self.painting = painting
     self.scale = scale
   }
 
@@ -32,11 +40,15 @@ package struct LayerPlanner: Sendable {
   package func plan(_ tree: RenderTree, in rect: CGRect) -> ContainerLayer {
     // The root transforms apply one after another, so the last one maps to the rectangle.
     let fit = tree.rootTransforms.reversed().reduce(CGAffineTransform.identity) { $0.concatenating($1) }
-    let context = Context(transform: fit, view: rect, isFixed: true)
+    let context = Context(
+      transform: fit, view: rect, isFixed: true, isChanging: false,
+      key: LayerKey(components: [.index(0), .index(0)]))
     let content = ContainerLayer(
       id: nil, transform: fit, opacity: 1, clip: nil,
-      children: tree.root.map { layers(of: [$0], in: context) } ?? [])
-    return ContainerLayer(id: nil, transform: .identity, opacity: 1, clip: rect, children: [.container(content)])
+      children: tree.root.map { layers(of: [$0], in: context) } ?? [], key: context.key)
+    return ContainerLayer(
+      id: nil, transform: .identity, opacity: 1, clip: rect, children: [.container(content)],
+      key: LayerKey(components: [.index(0)]))
   }
 
   /// Where the layers of some nodes are.
@@ -47,9 +59,17 @@ package struct LayerPlanner: Sendable {
     let view: CGRect
     /// Whether no animation moves the nodes in the view, so that what's outside the view never shows.
     let isFixed: Bool
+    /// Whether an animation changes the painting of a node around the nodes, which the nodes may inherit.
+    let isChanging: Bool
+    /// The key of the layer around the layers of the nodes.
+    let key: LayerKey
 
-    func inside(_ transform: CGAffineTransform, isFixed: Bool = true) -> Context {
-      Context(transform: transform.concatenating(self.transform), view: view, isFixed: self.isFixed && isFixed)
+    func inside(
+      _ transform: CGAffineTransform, isFixed: Bool = true, isChanging: Bool = false, key: LayerKey.Component
+    ) -> Context {
+      Context(
+        transform: transform.concatenating(self.transform), view: view, isFixed: self.isFixed && isFixed,
+        isChanging: self.isChanging || isChanging, key: self.key.appending(key))
     }
   }
 
@@ -59,7 +79,7 @@ package struct LayerPlanner: Sendable {
     var layers = [PlannedLayer]()
     var run = [RenderNode]()
     func paintRun() {
-      if let layer = painted(run, in: context) {
+      if let layer = painted(run, in: context, changes: run.contains(where: changes)) {
         layers.append(.painted(layer))
       }
       run = []
@@ -83,35 +103,47 @@ package struct LayerPlanner: Sendable {
     guard isPromoted || containsPromoted(node) else { return nil }
     // An animation moves what the layer of a promoted node shows.
     let isFixed = !isPromoted
+    let isChanging = painting?.contains(node.id.element) ?? true
+    let key = LayerKey.Component.node(node.id)
     switch node {
     case .group(let group) where group.clip == nil && group.mask == nil:
-      let inner = context.inside(group.transform, isFixed: isFixed)
+      let inner = context.inside(group.transform, isFixed: isFixed, isChanging: isChanging, key: key)
       return ContainerLayer(
         id: group.id, transform: group.transform, opacity: group.opacity, clip: nil,
-        children: layers(of: group.children, in: inner))
+        children: layers(of: group.children, in: inner), key: inner.key)
     case .use(let use) where use.clip == nil && use.mask == nil:
       let transform = (use.instance?.translation ?? .identity).concatenating(use.transform)
-      let inner = context.inside(transform, isFixed: isFixed)
+      let inner = context.inside(transform, isFixed: isFixed, isChanging: isChanging, key: key)
       return ContainerLayer(
         id: use.id, transform: transform, opacity: use.instance?.opacity ?? 1, clip: nil,
-        children: use.instance?.content.map { layers(of: [$0], in: inner) } ?? [])
+        children: use.instance?.content.map { layers(of: [$0], in: inner) } ?? [], key: inner.key)
     case .viewport(let viewport) where viewport.content.map({ $0.clip == nil && $0.mask == nil }) ?? true:
       guard let content = viewport.content else { return nil }
       let transform = content.viewBoxTransform.concatenating(viewport.translation).concatenating(viewport.transform)
-      let inner = context.inside(transform, isFixed: isFixed)
-      let children = layers(of: content.children, in: inner)
+      let inner = context.inside(transform, isFixed: isFixed, isChanging: isChanging, key: key)
       // The overflow of a viewport is clipped in the coordinates of its content.
       let clipped =
-        content.overflowClip.map {
-          [PlannedLayer.container(ContainerLayer(id: nil, transform: .identity, opacity: 1, clip: $0, children: children))]
-        } ?? children
-      return ContainerLayer(id: viewport.id, transform: transform, opacity: 1, clip: nil, children: clipped)
+        content.overflowClip.map { clip in
+          let clipped = inner.inside(.identity, key: .index(0))
+          return [
+            PlannedLayer.container(
+              ContainerLayer(
+                id: nil, transform: .identity, opacity: 1, clip: clip,
+                children: layers(of: content.children, in: clipped), key: clipped.key))
+          ]
+        } ?? layers(of: content.children, in: inner)
+      return ContainerLayer(
+        id: viewport.id, transform: transform, opacity: 1, clip: nil, children: clipped, key: inner.key)
     default:
       // A promoted node that paints as one image, or a shape, is painted in its own coordinates in its layer.
-      let inner = context.inside(node.transform, isFixed: false)
+      let inner = context.inside(node.transform, isFixed: false, key: key)
+      // The container composites the node, so only the painting of the node and of the nodes in it changes the
+      // contents.
+      let contentChanges = isChanging || node.descendants.contains(where: changes)
       return ContainerLayer(
         id: node.id, transform: node.transform, opacity: node.groupOpacity, clip: nil,
-        children: painted([node.withoutCompositing], in: inner).map { [.painted($0)] } ?? [])
+        children: painted([node.withoutCompositing], in: inner, changes: contentChanges).map { [.painted($0)] } ?? [],
+        key: inner.key)
     }
   }
 
@@ -135,8 +167,16 @@ package struct LayerPlanner: Sendable {
     }
   }
 
+  /// Whether what a node paints can change with the time: the painting or the compositing of it or of a node in it.
+  private func changes(_ node: RenderNode) -> Bool {
+    guard let painting else { return true }
+    return ([node] + node.descendants).contains { painting.contains($0.id.element) || promoted.contains($0.id.element) }
+  }
+
   /// The painted layer of nodes, or `nil` if they paint nothing that can show.
-  private func painted(_ nodes: [RenderNode], in context: Context) -> PaintedLayer? {
+  ///
+  /// - Parameter changes: Whether what the nodes paint can change with the time.
+  private func painted(_ nodes: [RenderNode], in context: Context, changes: Bool) -> PaintedLayer? {
     guard !nodes.isEmpty else { return nil }
     let transform = context.transform
     let rasterScale = scale * max(hypot(transform.a, transform.b), hypot(transform.c, transform.d))
@@ -157,6 +197,23 @@ package struct LayerPlanner: Sendable {
       let device = bounds.applying(transform.concatenating(pixels)).integral
       bounds = device.applying(transform.concatenating(pixels).inverted())
     }
-    return PaintedLayer(nodes: nodes, bounds: bounds, rasterScale: rasterScale)
+    return PaintedLayer(
+      nodes: nodes, bounds: bounds, rasterScale: rasterScale, changes: changes || context.isChanging,
+      key: context.key.appending(.nodes(nodes.map(\.id))))
+  }
+}
+
+extension RenderNode {
+  /// The nodes in the node, at every depth, including the source of a filtered node and the content of a `<use>`.
+  var descendants: [RenderNode] {
+    let children: [RenderNode] =
+      switch self {
+      case .shape: []
+      case .group(let group): group.children
+      case .viewport(let viewport): viewport.content?.children ?? []
+      case .use(let use): use.instance?.content.map { [$0] } ?? []
+      case .filtered(let filtered): filtered.source.map { [$0] } ?? []
+      }
+    return children.flatMap { [$0] + $0.descendants }
   }
 }

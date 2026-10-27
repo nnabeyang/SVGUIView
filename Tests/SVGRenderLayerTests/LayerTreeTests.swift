@@ -26,30 +26,37 @@ private func pixels(of context: CGContext) -> [UInt8] {
   return Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self), count: context.bytesPerRow * context.height))
 }
 
-/// A document with the content at the time, rendered into one bitmap and into layers.
+/// A document with the content at the times, rendered into one bitmap and into layers, one time after another, where
+/// the layers of a time reuse the ones of the time before.
 @MainActor
-private func renderings(_ content: String, at time: Double, scale: CGFloat) async throws -> (
+private func renderings(_ content: String, at times: [Double], scale: CGFloat) async throws -> [(
   bitmap: [UInt8], layers: [UInt8]
-) {
+)] {
   let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"# + content + "</svg>"
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(origin: .zero, size: size)
   let fit = ContentFit(
     preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
-  let tree = try #require(
-    await RenderTreeBuilder(base: base.at(time: time), viewPort: rect, scale: scale).build(fit: fit))
-
-  let single = try bitmap(scale: scale)
-  await CGPainter(scale: scale).paint(tree, into: single)
-
-  let plan = LayerPlanner(promoted: base.elementsWithAnimatedCompositing(), scale: scale).plan(tree, in: rect)
-  let contents = try #require(await plan.painted(scale: scale))
+  let planner = LayerPlanner(
+    promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: scale)
   let host = CALayer()
   host.bounds = rect
-  contents.show(in: host)
-  let layered = try bitmap(scale: scale)
-  host.render(in: layered)
-  return (pixels(of: single), pixels(of: layered))
+  let layerTree = LayerTree(host: host)
+  var previous: RenderedContainer?
+  var renderings = [(bitmap: [UInt8], layers: [UInt8])]()
+  for time in times {
+    let tree = try #require(
+      await RenderTreeBuilder(base: base.at(time: time), viewPort: rect, scale: scale).build(fit: fit))
+    let single = try bitmap(scale: scale)
+    await CGPainter(scale: scale).paint(tree, into: single)
+    let contents = try #require(await planner.plan(tree, in: rect).painted(scale: scale, reusing: previous))
+    layerTree.show(contents)
+    previous = contents
+    let layered = try bitmap(scale: scale)
+    host.render(in: layered)
+    renderings.append((pixels(of: single), pixels(of: layered)))
+  }
+  return renderings
 }
 
 /// How many pixels differ by more than a tolerance in a component, and the largest difference.
@@ -105,6 +112,15 @@ struct LayerTreeTests {
         + #"<defs><rect id="d" width="20" height="20" fill="green" stroke="black" style="animation: s 1s linear"/></defs>"#
         + ##"<use href="#d" x="40" y="40" opacity="0.5"/>"##, true
     ),
+    // Layers whose elements change their fill are painted again, and the others are reused.
+    (
+      keyframes + "<style>@keyframes c { from { fill: red } to { fill: lime } }</style>"
+        + #"<rect width="40" height="40" fill="blue"/>"#
+        + #"<rect x="20" y="20" width="40" height="40" style="animation: c 1s linear"/>"#
+        + #"<rect x="40" y="40" width="40" height="40" fill="green" style="animation: m 1s linear"/>"#
+        + #"<g style="animation: c 1s linear"><rect x="60" y="0" width="20" height="20"/>"#
+        + #"<rect x="70" y="70" width="20" height="20" style="animation: m 1s linear"/></g>"#, false
+    ),
     // Elements with a clip path, a mask and a filter are painted with them in their layers.
     (
       keyframes + #"<clipPath id="c"><circle cx="20" cy="20" r="20"/></clipPath>"#
@@ -117,16 +133,19 @@ struct LayerTreeTests {
     ),
   ]
 
-  @Test("layers show what a rendering into one bitmap shows", arguments: documents, [0, 0.5])
-  func agreement(document: (content: String, rotates: Bool), time: Double) async throws {
+  @Test("layers show what a rendering into one bitmap shows, at one time after another", arguments: documents)
+  func agreement(document: (content: String, rotates: Bool)) async throws {
+    let times = [0, 0.25, 0.5, 0.75]
     for scale in [1.0, 2.0] {
-      let (single, layers) = try await renderings(document.content, at: time, scale: scale)
-      let (count, largest) = differences(single, layers)
-      if document.rotates {
-        // The screen resamples a rotated layer, which changes the antialiased edges.
-        #expect(count <= single.count / 4 / 30, "\(count) pixels differ by up to \(largest) at the scale \(scale)")
-      } else {
-        #expect(count == 0, "\(count) pixels differ by up to \(largest) at the scale \(scale)")
+      for (time, (single, layers)) in zip(times, try await renderings(document.content, at: times, scale: scale)) {
+        let (count, largest) = differences(single, layers)
+        let description = "\(count) pixels differ by up to \(largest) at the time \(time) and the scale \(scale)"
+        if document.rotates {
+          // The screen resamples a rotated layer, which changes the antialiased edges.
+          #expect(count <= single.count / 4 / 30, "\(description)")
+        } else {
+          #expect(count == 0, "\(description)")
+        }
       }
     }
   }

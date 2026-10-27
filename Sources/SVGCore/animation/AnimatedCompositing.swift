@@ -13,32 +13,43 @@ extension SVGBaseContext {
     guard isAnimated, let root else { return [] }
     var elements = Set<ElementID>()
     for element in root.elements {
-      let changesCompositing = element.style.animationName.contains { name in
-        guard case .keyframes(let name) = name, let rule = animations.keyframes[name] else { return false }
-        return rule.keyframes.contains { keyframe in
-          let declarations = keyframe.declarations
-          return declarations[TransformProperty.self] != nil || declarations[TransformOriginProperty.self] != nil
-            || declarations[TransformBoxProperty.self] != nil || declarations[OpacityProperty.self] != nil
-        }
-      }
+      let changesCompositing = animatedProperties(of: element).contains(where: Self.compositingProperties.contains)
       if changesCompositing {
         elements.insert(element.base.elementID)
       }
     }
     for animation in animations.smil {
-      let changesCompositing =
-        switch animation.kind {
-        case .animateMotion: true
-        case .animateTransform: animation.attributeName == "transform"
-        case .animate, .set: animation.attributeName.map(Self.compositingAttributes.contains) ?? false
-        }
-      if changesCompositing {
+      if animation.changesCompositing {
         elements.insert(animation.target)
       }
     }
     return elements
   }
 
-  /// The properties other than `transform` that `<animate>` and `<set>` change the compositing of an element with.
-  private static let compositingAttributes: Set<String> = ["opacity", "transform-origin", "transform-box"]
+  /// The properties that a layer composites an element with.
+  static let compositingProperties: Set<PropertyID> = [.transform, .transformOrigin, .transformBox, .opacity]
+
+  /// The properties that the keyframes of the CSS animations of an element set.
+  func animatedProperties(of element: any SVGElement) -> Set<PropertyID> {
+    var properties = Set<PropertyID>()
+    for name in element.style.animationName {
+      guard case .keyframes(let name) = name, let rule = animations.keyframes[name] else { continue }
+      for keyframe in rule.keyframes {
+        properties.formUnion(keyframe.declarations.properties)
+      }
+    }
+    return properties
+  }
+}
+
+extension SMILAnimation {
+  /// Whether the animation changes how a layer composites its target: its transform, its motion or its opacity.
+  var changesCompositing: Bool {
+    switch kind {
+    case .animateMotion: true
+    case .animateTransform: attributeName == "transform"
+    case .animate, .set:
+      attributeName.flatMap(PropertyID.init(rawValue:)).map(SVGBaseContext.compositingProperties.contains) ?? false
+    }
+  }
 }
