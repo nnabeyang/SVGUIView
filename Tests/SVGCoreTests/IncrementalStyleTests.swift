@@ -157,4 +157,39 @@ struct IncrementalStyleTests {
       #expect(try await pixels(of: base.at(time: time)) == pixels(of: base.restyledFully(at: time)), "at \(time)")
     }
   }
+
+  @Test("a document at a time finds the same elements by their IDs as with every element made again")
+  func sameReferences() throws {
+    let base = parse(
+      #"<style>@keyframes k { to { fill: lime } }</style>"#
+        + #"<defs><linearGradient id="l"><stop offset="0" stop-color="red"/></linearGradient>"#
+        + #"<clipPath id="c"><rect id="cr" width="5" height="5" style="animation: k 1s"/></clipPath>"#
+        + #"<mask id="m"><rect width="5" height="5" fill="white"/></mask>"#
+        + #"<pattern id="p" width="4" height="4"><rect id="pr" width="2" height="2" style="animation: k 1s"/></pattern>"#
+        + #"<filter id="f"><feFlood flood-color="red"/></filter></defs>"#
+        + #"<g id="g" style="animation: k 1s"><rect id="a" width="10" height="10"/></g><rect id="b" width="10" height="10"/>"#
+    )
+    let next = base.at(time: 0.5)
+    let full = base.restyledFully(at: 0.5)
+    for id in ["g", "a", "b"] {
+      let found = try #require(next[id])
+      #expect(found.base.elementID == full[id]?.base.elementID, "\(id)")
+      // The element that the context finds is the one in its tree.
+      #expect(next.root?.elements.contains { $0 === found } == true, "\(id)")
+    }
+    #expect(next.pservers["l"]?.base.elementID == full.pservers["l"]?.base.elementID)
+    for (map, fullMap) in [
+      (next.clipPaths.mapValues(\.index), full.clipPaths.mapValues(\.index)),
+      (next.masks.mapValues(\.index), full.masks.mapValues(\.index)),
+      (next.patterns.mapValues(\.index), full.patterns.mapValues(\.index)),
+      (next.filters.mapValues(\.index), full.filters.mapValues(\.index)),
+    ] {
+      #expect(Set(map.keys) == Set(fullMap.keys))
+      // The elements that the maps hold are the ones in the tree of the context.
+      for value in map.values {
+        #expect(next.root?.elements.contains { $0.index == value } == true)
+      }
+    }
+    #expect(next.contents.count == full.contents.count)
+  }
 }

@@ -27,6 +27,26 @@ package struct RenderTree: Sendable {
   /// another.
   package let rootTransforms: [CGAffineTransform]
   package let root: RenderNode?
+  /// The nodes of elements that make the same nodes at every time, which the render tree of the document at another
+  /// time can reuse.
+  package var reusableNodes = RenderNodeCache()
+}
+
+/// Nodes of a render tree by the elements and the modes that they're made for.
+package struct RenderNodeCache: Sendable {
+  struct Key: Hashable, Sendable {
+    let id: RenderID
+    let mode: DrawMode
+  }
+
+  var nodes = [Key: RenderNode]()
+
+  package init() {}
+}
+
+/// Collects the nodes that a render tree reuses or makes, while a builder makes it in one task.
+final class RenderNodeCollector {
+  var cache = RenderNodeCache()
 }
 
 package indirect enum RenderNode: Sendable {

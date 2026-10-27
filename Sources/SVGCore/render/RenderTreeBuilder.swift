@@ -12,11 +12,18 @@ package struct RenderTreeBuilder {
   let viewPort: CGRect
   /// The scale of the image being rendered.
   let scale: CGFloat
+  /// The nodes of the render tree of another time that the tree can reuse.
+  private let previous: RenderNodeCache
+  /// The nodes that the tree makes or reuses that the tree of another time can reuse.
+  private let reused = RenderNodeCollector()
 
-  package init(base: SVGBaseContext, viewPort: CGRect, scale: CGFloat) {
+  /// - Parameter previous: The nodes of the render tree of the document at another time, for the same rectangle,
+  ///   scale and fit, which the nodes of elements that make the same nodes at every time reuse.
+  package init(base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache = .init()) {
     self.base = base
     self.viewPort = viewPort
     self.scale = scale
+    self.previous = previous
   }
 
   /// The render tree, or `nil` if building it is cancelled.
@@ -37,13 +44,39 @@ package struct RenderTreeBuilder {
     }
     let root = await node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
     guard !Task.isCancelled else { return nil }
-    return RenderTree(rootTransforms: transforms, root: root)
+    return RenderTree(rootTransforms: transforms, root: root, reusableNodes: reused.cache)
   }
 
   // MARK: - Nodes
 
   /// The node of an element, or `nil` if it draws nothing.
+  ///
+  /// An element whose node is the same at every time reuses its node of another time, which keeps the nodes in it.
+  /// The content of a `<use>` element is styled by it, so it's the same only where the `<use>` elements that show it
+  /// are the same too.
   func node(
+    of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
+    instance: [ElementID]
+  ) async -> RenderNode? {
+    guard let scope = base.restyleScope, !scope.unstable.contains(element.base.elementID),
+      !instance.contains(where: scope.unstable.contains)
+    else {
+      return await makeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
+    }
+    let key = RenderNodeCache.Key(id: renderID(of: element, instance: instance), mode: mode)
+    let node: RenderNode?
+    if let previous = previous.nodes[key] {
+      node = previous
+    } else {
+      node = await makeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
+    }
+    if let node, !Task.isCancelled {
+      reused.cache.nodes[key] = node
+    }
+    return node
+  }
+
+  private func makeNode(
     of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
     instance: [ElementID]
   ) async -> RenderNode? {

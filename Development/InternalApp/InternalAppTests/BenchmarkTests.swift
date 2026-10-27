@@ -8,6 +8,8 @@ import XCTest
 ///
 /// The times depend on the machine, so the tests run only when `TEST_RUNNER_RUN_BENCHMARKS` is `1`, and are skipped
 /// in the snapshot tests and in CI. Devices give the times that matter: simulators don't reflect their performance.
+/// Run them in the Release configuration, as apps are built, with `-configuration Release ENABLE_TESTABILITY=YES`:
+/// the Debug configuration doesn't specialize the generic code of the styles, and takes many times longer.
 final class BenchmarkTests: XCTestCase {
   /// The frames that each measurement renders, at 60 frames per second.
   private static let frames = 120

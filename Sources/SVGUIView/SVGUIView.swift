@@ -88,6 +88,9 @@ public class SVGUIView: UIView {
   private lazy var layerTree = LayerTree(host: layerTreeHost)
   /// The layers that the view shows, whose contents the next frame shows where they don't change.
   private var shownLayers: RenderedContainer?
+  /// The render nodes of the elements that make the same nodes at every time, of the frame that the view shows,
+  /// which the next frame reuses.
+  private var shownNodes = RenderNodeCache()
 
   /// The time of the animations.
   ///
@@ -248,15 +251,17 @@ public class SVGUIView: UIView {
     let promoted = configuration.animation == .none ? nil : promoted
     let painting = painting
     let previous = reusesLayers ? shownLayers : nil
+    let previousNodes = reusesLayers ? shownNodes : RenderNodeCache()
     isRendering = true
     let signpost = Self.signposter.beginInterval(
       "Render", id: Self.signposter.makeSignpostID(),
       "\(time.seconds, format: .fixed(precision: 3)) s into \(promoted == nil ? "an image" : "layers")")
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       if let promoted {
-        let result = await SVGUIView.makeLayers(
+        let rendered = await SVGUIView.makeLayers(
           rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, previous: previous,
-          time: time, fit: fit, timeoutDuration: timeoutDuration)
+          previousNodes: previousNodes, time: time, fit: fit, timeoutDuration: timeoutDuration)
+        let result = rendered.map(\.layers)
         switch result {
         case .success(let layers) where Self.signposter.isEnabled:
           // Counting the layers that were painted takes time, so it's done only while the intervals are recorded.
@@ -268,7 +273,12 @@ public class SVGUIView: UIView {
         case .failure(let error):
           Self.signposter.endInterval("Render", signpost, "\(String(describing: error))")
         }
-        self?.finishRendering(ofRendering: generation) { $0.showLayers(result) }
+        self?.finishRendering(ofRendering: generation) { view in
+          view.showLayers(result)
+          if case .success(let frame) = rendered {
+            view.shownNodes = frame.nodes
+          }
+        }
       } else {
         let result = await SVGUIView.makeImage(
           rect: rect, scale: scale, base: capturedBase, time: time,
@@ -436,6 +446,7 @@ public class SVGUIView: UIView {
       layerTreeHost.removeFromSuperlayer()
       layerTree.clear()
       shownLayers = nil
+      shownNodes = RenderNodeCache()
       layer.contents = image
     case .failure(let error):
       show(error)
@@ -470,6 +481,7 @@ public class SVGUIView: UIView {
       layer.contents = nil
       layerTree.clear()
       shownLayers = nil
+      shownNodes = RenderNodeCache()
     case .cancelled:
       // A newer rendering cancels the one before it, so this is not worth a warning.
       break
@@ -553,7 +565,7 @@ public class SVGUIView: UIView {
 
   /// Renders the document at a time into layers: the layers of the elements whose transform or opacity changes, and
   /// the contents of the layers between them, which show the contents of the previous layers where they don't
-  /// change.
+  /// change, and the render nodes that the next frame can reuse.
   @concurrent
   private static func makeLayers(
     rect: CGRect,
@@ -562,10 +574,11 @@ public class SVGUIView: UIView {
     promoted: Set<ElementID>,
     painting: Set<ElementID>?,
     previous: RenderedContainer?,
+    previousNodes: RenderNodeCache,
     time: Duration,
     fit: ContentFit,
     timeoutDuration: Duration
-  ) async -> Result<RenderedContainer, SVGRenderingError> {
+  ) async -> Result<(layers: RenderedContainer, nodes: RenderNodeCache), SVGRenderingError> {
     guard base.root != nil else { return .failure(.missingRootElement) }
     guard (rect.width * scale).rounded(.up) > 0, (rect.height * scale).rounded(.up) > 0 else {
       return .failure(.zeroSizedRect)
@@ -574,7 +587,7 @@ public class SVGUIView: UIView {
       let signposter = Self.signposter
       let base = signposter.withIntervalSignpost("Style") { base.at(time: time.seconds) }
       let buildInterval = signposter.beginInterval("Build")
-      let tree = await RenderTreeBuilder(base: base, viewPort: rect, scale: scale).build(fit: fit)
+      let tree = await RenderTreeBuilder(base: base, viewPort: rect, scale: scale, reusing: previousNodes).build(fit: fit)
       signposter.endInterval("Build", buildInterval)
       guard let tree else { return nil }
       let plan = signposter.withIntervalSignpost("Plan") {
@@ -582,7 +595,8 @@ public class SVGUIView: UIView {
       }
       let paintInterval = signposter.beginInterval("Paint")
       defer { signposter.endInterval("Paint", paintInterval) }
-      return await plan.painted(scale: scale, reusing: previous)
+      guard let layers = await plan.painted(scale: scale, reusing: previous) else { return nil }
+      return (layers, tree.reusableNodes)
     }
   }
 }

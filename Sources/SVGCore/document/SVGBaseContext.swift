@@ -92,12 +92,15 @@ package struct SVGBaseContext: Sendable {
     let attributes = SMILEffect.attributes(of: animations.smilEffects, in: document)
     let animated: SVGSVGElement?
     if attributes.isEmpty {
+      guard let restyleScope else {
+        let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
+        return SVGBaseContext(document: document, stylesheet: stylesheet, root: animated, animations: animations)
+      }
+      var replacements = [ObjectIdentifier: any SVGElement]()
       animated =
-        if let restyleScope {
-          root.restyled(parent: nil, root: nil, animations: animations, in: restyleScope) as? SVGSVGElement
-        } else {
-          root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
-        }
+        root.restyled(parent: nil, root: nil, animations: animations, in: restyleScope, replacements: &replacements)
+        as? SVGSVGElement
+      return SVGBaseContext(updating: self, root: animated, animations: animations, replacements: replacements)
     } else {
       // Animations of attributes that aren't properties change the attributes before the cascade, so the elements
       // are made again from the document with the animated attributes.
@@ -108,6 +111,37 @@ package struct SVGBaseContext: Sendable {
     }
     return SVGBaseContext(
       document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope)
+  }
+
+  /// The context of the elements of this context with some of them made again, which keeps the elements that
+  /// references find, with the replaced ones replaced, instead of finding them in the whole tree again.
+  ///
+  /// - Parameter replacements: The elements that are made again, by the identities of the elements that they
+  ///   replace.
+  private init(
+    updating context: SVGBaseContext, root: SVGSVGElement?, animations: DocumentAnimations,
+    replacements: [ObjectIdentifier: any SVGElement]
+  ) {
+    document = context.document
+    stylesheet = context.stylesheet
+    self.root = root
+    self.animations = animations
+    isAnimated = context.isAnimated
+    restyleScope = context.restyleScope
+    func replaced<T>(_ element: T) -> T where T: SVGElement {
+      replacements[element.index] as? T ?? element
+    }
+    contents = context.contents
+    for (old, new) in replacements {
+      contents[old] = nil
+      contents[new.index] = new
+    }
+    contentIdMap = context.contentIdMap.mapValues { replacements[$0]?.index ?? $0 }
+    pservers = context.pservers.mapValues { replacements[$0.index] as? any SVGGradientServer ?? $0 }
+    clipPaths = context.clipPaths.mapValues(replaced)
+    masks = context.masks.mapValues(replaced)
+    patterns = context.patterns.mapValues(replaced)
+    filters = context.filters.mapValues(replaced)
   }
 
   /// The context with the computed values of every element computed again at the given time, which `at(time:)` does
