@@ -442,7 +442,7 @@ public class SVGUIView: UIView {
     }
     graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
 
-    let drawTask = Task<CGImage?, Never> {
+    return await withRenderingTimeout(timeoutDuration) {
       // The computed values at the time are computed in the task, so that the timeout stops them too.
       let builder = RenderTreeBuilder(base: base.at(time: time.seconds), viewPort: rect, scale: scale)
       guard let tree = await builder.build(fit: fit) else { return nil }
@@ -452,26 +452,6 @@ public class SVGUIView: UIView {
       }
       return graphics.makeImage()
     }
-
-    // Time out on a dispatch queue rather than in a task, so that the timeout fires even while renderings
-    // occupy every thread of the cooperative thread pool. Those threads also count against dispatch queues of
-    // the same quality of service, so the queue is above the highest task priority that renderings can have.
-    // A timer source releases its handler, and with it `drawTask` and the image, as soon as it is cancelled,
-    // whereas a cancelled work item stays on the queue until its deadline.
-    let timeout = DispatchSource.makeTimerSource(queue: .global(qos: .userInteractive))
-    timeout.setEventHandler { drawTask.cancel() }
-    timeout.schedule(deadline: .now() + timeoutDuration.dispatchTimeInterval)
-    timeout.activate()
-    let value = await withTaskCancellationHandler {
-      await drawTask.value
-    } onCancel: {
-      drawTask.cancel()
-    }
-    timeout.cancel()
-    // Only the timeout and the cancellation of the caller cancel `drawTask`, and `makeImage()` of a bitmap
-    // context returns an image otherwise, so `nil` means that rendering was cancelled or timed out.
-    guard let value else { return .failure(Task.isCancelled ? .cancelled : .timedOut) }
-    return .success(value)
   }
 }
 
