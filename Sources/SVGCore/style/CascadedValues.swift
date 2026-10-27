@@ -38,6 +38,11 @@ struct CascadedValues: Sendable {
     }
   }
 
+  /// The properties that have declarations.
+  var properties: [PropertyID] {
+    values.map(\.id)
+  }
+
   subscript<P: StyleProperty>(_: P.Type) -> Declared<P.Specified>? {
     values.first { $0.id == P.id }?.value as? Declared<P.Specified>
   }
