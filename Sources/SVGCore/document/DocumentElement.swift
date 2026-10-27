@@ -49,19 +49,6 @@ final class DocumentElement: Sendable {
     return DocumentElement(
       id: id, name: name, localName: localName, attributes: attributes, text: text, children: children)
   }
-
-  /// The element with the given attributes of it and of its descendants replaced. The elements that change, and
-  /// their ancestors, are copied with their identifiers, and every other subtree is shared.
-  ///
-  /// - Parameter replacements: The attributes to set by the elements that they're set on.
-  func replacingAttributes(_ replacements: [ElementID: [String: String]]) -> DocumentElement {
-    let children = children.map { $0.replacingAttributes(replacements) }
-    let replaced = replacements[id]
-    if replaced == nil, zip(children, self.children).allSatisfy({ $0 === $1 }) { return self }
-    return DocumentElement(
-      id: id, name: name, localName: localName,
-      attributes: attributes.merging(replaced ?? [:]) { $1 }, text: text, children: children)
-  }
 }
 
 /// A parsed SVG document.
@@ -97,8 +84,30 @@ package struct DocumentTree: Sendable {
   ///
   /// - Parameter replacements: The attributes to set by the elements that they're set on.
   func replacingAttributes(_ replacements: [ElementID: [String: String]]) -> DocumentTree {
-    guard !replacements.isEmpty else { return self }
-    return DocumentTree(root: root?.replacingAttributes(replacements))
+    changingAttributes(replacements.mapValues { $0.mapValues { Optional($0) } })
+  }
+
+  /// The document with attributes of its elements set or removed. The elements that change, and their ancestors,
+  /// are copied with their identifiers, and every other subtree is shared.
+  ///
+  /// - Parameter changes: The values to set by the elements and the names of the attributes, with `nil` to remove an
+  ///   attribute.
+  package func changingAttributes(_ changes: [ElementID: [String: String?]]) -> DocumentTree {
+    guard var root, !changes.isEmpty else { return self }
+    for (id, values) in changes {
+      guard let path = paths[id] else { continue }
+      let element = path.reduce(root) { $0.children[$1] }
+      var attributes = element.attributes
+      for (name, value) in values {
+        attributes[name] = value
+      }
+      root = root.replacingDescendant(
+        at: path[...],
+        with: DocumentElement(
+          id: id, name: element.name, localName: element.localName, attributes: attributes, text: element.text,
+          children: element.children))
+    }
+    return DocumentTree(root: root, paths: paths)
   }
 
   /// The document with the element at `path`, a list of child positions from the root, replaced.

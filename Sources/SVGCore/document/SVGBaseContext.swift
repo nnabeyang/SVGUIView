@@ -80,6 +80,15 @@ package struct SVGBaseContext: Sendable {
     root.filter(context: &self)
   }
 
+  /// The context of the elements made from a document and its style sheets, with the animations at time zero.
+  init(document: DocumentTree, stylesheet: Stylesheet) {
+    self.init(
+      document: document, stylesheet: stylesheet,
+      root: document.root.flatMap { ElementCursor(root: $0).makeElement(with: stylesheet) as? SVGSVGElement },
+      animations: DocumentAnimations(
+        keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0))
+  }
+
   /// The context with the computed values at the given time, or the context itself if they don't change with the
   /// time.
   ///
