@@ -55,19 +55,18 @@ struct PlaybackTests {
     return (view, clock)
   }
 
-  /// The green component of the pixel at the center of the image that the view shows.
+  /// The green component of the pixel at the center of what the view shows, in its image or in its layers, or `nil`
+  /// if it shows nothing there.
   private func green(in view: SVGUIView) -> UInt8? {
-    guard let contents = view.layer.contents, CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else { return nil }
-    let image = contents as! CGImage
     var components = [UInt8](repeating: 0, count: 4)
     guard
       let context = CGContext(
         data: &components, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
         space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
     else { return nil }
-    context.draw(
-      image, in: CGRect(x: -image.width / 2, y: -image.height / 2, width: image.width, height: image.height))
-    return components[1]
+    context.translateBy(x: -view.bounds.midX, y: -view.bounds.midY)
+    view.layer.render(in: context)
+    return components[3] == 0 ? nil : components[1]
   }
 
   /// Waits until the green component at the center of the image that the view shows passes the check.
@@ -236,5 +235,32 @@ struct PlaybackTests {
   func pausedAnimation() async throws {
     let (_, clock) = try await makeView(Self.document.replacingOccurrences(of: "forwards", with: "paused"))
     #expect(!clock.isRunning)
+  }
+
+  @Test("a view that can play animations shows its document in layers, and one that can't in an image")
+  func showsLayers() async throws {
+    let (view, _) = try await makeView()
+    #expect(view.layer.contents == nil)
+    #expect(view.layer.sublayers?.isEmpty == false)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: Self.patience)
+    let deadline = ContinuousClock.now + Self.patience
+    while view.layer.contents == nil, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(view.layer.contents != nil)
+    #expect(view.layer.sublayers?.isEmpty ?? true)
+    #expect(green(in: view) == 0)
+  }
+
+  @Test("a rendering into layers that fails keeps what the view shows, unless there's nothing to show")
+  func failedLayers() async throws {
+    let (view, clock) = try await makeView()
+    clock.advance(by: .seconds(2))
+    try await waitForGreen(in: view) { $0 == 255 }
+    view.showLayers(.failure(.timedOut))
+    view.showLayers(.failure(.allocationFailed))
+    #expect(green(in: view) == 255)
+    view.showLayers(.failure(.missingRootElement))
+    #expect(green(in: view) == nil)
   }
 }
