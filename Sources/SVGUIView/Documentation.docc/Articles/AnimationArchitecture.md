@@ -589,7 +589,8 @@ documents instead.
   its stages as "Style", "Build", "Plan" and "Paint" intervals in it, and a frame
   that a slower rendering skips is a "Skipped frame" event. The benchmarks of
   the test app measure them with XCTest metrics, only when
-  `TEST_RUNNER_RUN_BENCHMARKS` is `1`.
+  `TEST_RUNNER_RUN_BENCHMARKS` is `1`. They run in the Release configuration,
+  as apps are built, since the Debug configuration takes many times longer.
 - Performance is measured on devices. Simulators and Xcode Cloud, which only
   runs simulators, don't reflect device performance, so performance isn't a
   pass-or-fail check in CI. Instruments' animation hitches template is used to
