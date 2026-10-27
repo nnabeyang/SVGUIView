@@ -322,12 +322,89 @@ public func matchesSimpleSelector<E: Element>(
     value = true
   case .combinator:
     fatalError("Shouldn't try to selector-match combinators")
-  case .invalid:
-    value = false
+  case .attributeInNoNamespaceExists(let localName, _):
+    value = element.attributeMatches(localName: localName, operation: .exists)
+  case .attributeInNoNamespace(let localName, let op, let attributeValue, let caseSensitivity):
+    value = element.attributeMatches(
+      localName: localName,
+      operation: .withValue(operator: op, CaseSensitivity: caseSensitivity.toUnconditional, value: attributeValue))
+  case .attributeOther(let selector):
+    // Attributes of SVG elements are in no namespace, which a selector without a namespace or with any namespace
+    // finds.
+    switch selector.namespace {
+    case .none, .any:
+      switch selector.operation {
+      case .exists:
+        value = element.attributeMatches(localName: selector.localName, operation: .exists)
+      case .withValue(let op, let caseSensitivity, let attributeValue):
+        value = element.attributeMatches(
+          localName: selector.localName,
+          operation: .withValue(operator: op, CaseSensitivity: caseSensitivity.toUnconditional, value: attributeValue))
+      }
+    case .specific:
+      value = false
+    }
+  case .root, .scope:
+    // Without a scope element, `:scope` is the root element.
+    value = element.parent == nil
+  case .empty:
+    value = element.isEmpty
+  case .nth(let data):
+    value = matchesNth(element: element, data: data)
+  case .negation(let list):
+    value = !matchesNested(list: list, element: element, context: context, inNegation: true)
+  case .is(let list), .where(let list):
+    value = matchesNested(list: list, element: element, context: context, inNegation: context.shared.inNegation)
   default:
     return .unknown
   }
   return .from(value)
+}
+
+/// Whether an element matches any selector of a list in a selector, such as the argument of `:not()` or `:is()`.
+private func matchesNested<E: Element>(
+  list: SelectorList<E.Impl>,
+  element: E,
+  context: LocalMatchingContext<E.Impl>,
+  inNegation: Bool
+) -> Bool {
+  var nested = context.shared
+  nested.nestingLevel += 1
+  nested.inNegation = inNegation
+  return list.slice.contains { selector in
+    matchesSelectorKleene(selector: selector, offset: 0, element: element, context: &nested).toBool(unknown: false)
+  }
+}
+
+/// Whether the position of an element among its siblings, or among the siblings of its type, matches `An+B`.
+private func matchesNth<E: Element>(element: E, data: NthSelectorData) -> Bool {
+  // The siblings that count, before or after the element.
+  func count(from element: E, next: (E) -> E?) -> Int32 {
+    var count: Int32 = 0
+    var sibling = next(element)
+    while let current = sibling {
+      if !data.ty.isOfType || current.isSameType(as: element) {
+        count += 1
+      }
+      sibling = next(current)
+    }
+    return count
+  }
+  if data.ty.isOnly {
+    return count(from: element, next: \.prevSibling) == 0 && count(from: element, next: \.nextSibling) == 0
+  }
+  let index = count(from: element, next: data.ty.isFromEnd ? \.nextSibling : \.prevSibling) + 1
+  return data.anPlusB.matchesIndex(i: index)
+}
+
+extension ParsedCaseSensitivity {
+  /// The case sensitivity in an SVG document, where no element is an HTML element.
+  fileprivate var toUnconditional: CaseSensitivity {
+    switch self {
+    case .asciiCaseInsensitive: .asciiCaseInsensitive
+    case .explicitCaseSensitive, .caseSensitive, .asciiCaseInsensitiveIfInHtmlElementInHtmlDocument: .caseSensitive
+    }
+  }
 }
 
 public func selectName<E: Element>(

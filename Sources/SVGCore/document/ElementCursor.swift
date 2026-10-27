@@ -75,4 +75,22 @@ extension ElementCursor: Element {
     guard let classes = element.attributes["class"] else { return false }
     return classes.split(whereSeparator: { " \t\n\r\u{0C}".contains($0) }).contains { $0 == name.rawValue }
   }
+
+  func attributeMatches(localName: Impl.LocalName, operation: AttrSelectorOperation<Impl.AttrValue>) -> Bool {
+    guard let attribute = element.attributes[localName.rawValue] else { return false }
+    switch operation {
+    case .exists:
+      return true
+    case .withValue(let op, let caseSensitivity, let value):
+      return op.evalString(elementAttrValue: attribute, attrSelectorValue: value.rawValue, caseSensitivity: caseSensitivity)
+    }
+  }
+
+  var isEmpty: Bool {
+    element.children.isEmpty && element.text.isEmpty
+  }
+
+  func isSameType(as other: ElementCursor) -> Bool {
+    element.localName == other.element.localName
+  }
 }

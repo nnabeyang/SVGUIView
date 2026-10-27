@@ -106,13 +106,14 @@ public enum AttrSelectorOperator: Equatable, Sendable {
     case .substring:
       !s.isEmpty && caseSensitivity.contains(haystack: elementAttrValue, needle: attrSelectorValue)
     case .includes:
-      !s.isEmpty
-        && !elementAttrValue.split(
-          omittingEmptySubsequences: false,
-          whereSeparator: { SELECTOR_WHITESPACE.contains($0) }
-        ).contains(where: { !caseSensitivity.equals(Data($0.utf8), s) })
+      // One of the words separated by whitespace is the value, which can't be empty or contain whitespace.
+      !s.isEmpty && !attrSelectorValue.contains(where: { SELECTOR_WHITESPACE.contains($0) })
+        && elementAttrValue.split(whereSeparator: { SELECTOR_WHITESPACE.contains($0) })
+          .contains(where: { caseSensitivity.equals(Data($0.utf8), s) })
     case .dashMatch:
-      caseSensitivity.equals(e, s) || (e.last == UInt8(ascii: "-") && caseSensitivity.equals(e[..<s.count], s))
+      // The value, or the value followed by "-".
+      caseSensitivity.equals(e, s)
+        || (e.count > s.count && e[s.count] == UInt8(ascii: "-") && caseSensitivity.equals(e[..<s.count], s))
     }
   }
 }
