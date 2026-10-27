@@ -16,7 +16,7 @@ struct DocumentAnimations: Sendable {
 
 package struct SVGBaseContext: Sendable {
   /// The parsed document, which the elements to render are made from.
-  let document: DocumentTree
+  package let document: DocumentTree
   /// The style sheets of the document, which the cascade of the elements uses.
   let stylesheet: Stylesheet
   package let root: SVGSVGElement?
