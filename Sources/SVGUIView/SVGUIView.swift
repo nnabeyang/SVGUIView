@@ -15,7 +15,8 @@ import os
 /// ``SVGUIViewConfiguration/AnimationMode/none``, the view plays the animations
 /// of its document, and ``play()``, ``pause()`` and ``seek(to:)`` control
 /// them. The animations don't advance while the view isn't in a window, is
-/// hidden or has no size, or while the app is in the background. While it can
+/// hidden or has no size, or while the app is in the background, and they stop
+/// after the time at which the document doesn't change any more. While it can
 /// play animations, the view shows its document in layers of its layer,
 /// instead of in one image.
 public class SVGUIView: UIView {
@@ -485,8 +486,9 @@ public class SVGUIView: UIView {
   /// The image is rendered at the main screen's scale with the view's current
   /// `contentMode`. The view's displayed contents do not change.
   ///
-  /// The time starts at zero when the document is loaded, which is the time
-  /// that the view displays. A document without animations looks the same at
+  /// The time starts at zero when the document is loaded. A view that doesn't
+  /// play its animations displays time zero, and a view that plays them
+  /// displays ``currentTime``. A document without animations looks the same at
   /// any time.
   ///
   /// - Parameters:
