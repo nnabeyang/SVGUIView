@@ -9,7 +9,8 @@ import SwiftUI
 /// Stepping to the previous or next file keeps the same views and only changes what they load, as an app does.
 /// The size of the views and the content mode of SVGView can be changed, to check that SVGView renders again
 /// for them. The time sets where the animations of the file are: SVGView shows the start, and a snapshot of
-/// SVGUIView shows the other times, while the web view pauses its animations at the time.
+/// SVGUIView shows the other times, while the web view pauses its animations at the time. Playing starts the
+/// animations of both from the start.
 struct ComparisonView: View {
   enum Mode: String, CaseIterable, Identifiable {
     case svgView = "SVGView"
@@ -29,6 +30,8 @@ struct ComparisonView: View {
   @State private var time = 0.0
   /// Whether the snapshot at the time shows the file, so that SVGView, which shows the start, can be hidden.
   @State private var showsSnapshot = false
+  /// Whether SVGView and the web view play the animations from the start, instead of showing the time.
+  @State private var isPlaying = false
   /// The rendering timeout of SVGView, kept across files and launches.
   @AppStorage("timeoutMilliseconds") private var timeoutMilliseconds = 1000
 
@@ -42,7 +45,8 @@ struct ComparisonView: View {
   private var document: SVGDocument { comparison.documents[index] }
 
   private var configuration: SVGUIViewConfiguration {
-    SVGUIViewConfiguration(timeoutDuration: .milliseconds(timeoutMilliseconds))
+    // A view that starts playing plays from the start.
+    SVGUIViewConfiguration(timeoutDuration: .milliseconds(timeoutMilliseconds), animation: isPlaying ? .play : .none)
   }
 
   var body: some View {
@@ -65,13 +69,20 @@ struct ComparisonView: View {
       .padding(.horizontal)
 
       HStack {
+        Button(isPlaying ? "Stop" : "Play", systemImage: isPlaying ? "stop.fill" : "play.fill") {
+          isPlaying.toggle()
+        }
+        .labelStyle(.iconOnly)
         Text("Time")
+        // The time doesn't change what's shown while the animations play.
         Slider(value: $time, in: 0...10)
+          .disabled(isPlaying)
         TextField("Time", value: $time, format: .number.precision(.fractionLength(0...3)))
           .keyboardType(.decimalPad)
           .multilineTextAlignment(.trailing)
           .monospacedDigit()
           .frame(width: 64)
+          .disabled(isPlaying)
         Text("s")
       }
       .padding(.horizontal)
@@ -83,8 +94,8 @@ struct ComparisonView: View {
           // SVGView stays until the snapshot of the file is rendered, so that the pane isn't empty in between.
           SVGView(contentsOf: document.url, contentMode: contentMode)
             .environment(\.svgViewConfiguration, configuration)
-            .opacity(time == 0 || !showsSnapshot ? 1 : 0)
-          if time != 0 {
+            .opacity(isPlaying || time == 0 || !showsSnapshot ? 1 : 0)
+          if time != 0, !isPlaying {
             SnapshotAtTime(
               url: document.url, time: time, contentMode: contentMode, configuration: configuration,
               showsImage: $showsSnapshot)
@@ -95,7 +106,7 @@ struct ComparisonView: View {
             title: contentMode == .fill ? "\(Mode.svgView.rawValue) (Fill)" : Mode.svgView.rawValue,
             size: size, isVisible: mode != .webView))
         // The web view always fits the file in.
-        SVGWebView(url: document.url, time: time)
+        SVGWebView(url: document.url, time: time, isPlaying: isPlaying)
           .modifier(Pane(title: Mode.webView.rawValue, size: size, isVisible: mode != .svgView))
       }
 
@@ -111,6 +122,8 @@ struct ComparisonView: View {
       }
       .padding(.horizontal)
     }
+    // Another file starts paused at the time.
+    .onChange(of: index) { isPlaying = false }
     .navigationTitle(document.name)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {

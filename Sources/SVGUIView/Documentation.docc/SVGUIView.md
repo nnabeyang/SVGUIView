@@ -71,14 +71,44 @@ do {
 A snapshot can show a document at a time of its animations: CSS animations,
 which are the `@keyframes` rules and the `animation-*` properties, and the SMIL
 animation elements `<animate>`, `<set>`, `<animateTransform>` and
-`<animateMotion>`. The time starts at zero when the document is loaded, and the
-view displays the document at time zero. A document without animations looks
-the same at any time. SMIL begin and end times that depend on user events,
-access keys or the wall clock never come, and `<animateColor>` is ignored.
+`<animateMotion>`. The time starts at zero when the document is loaded, and a
+view that doesn't play its animations displays the document at time zero. A
+document without animations looks the same at any time. SMIL begin and end
+times that depend on user events, access keys or the wall clock never come, and
+`<animateColor>` is ignored.
 
 ```swift
 let image = try await svgView.takeSnapshot(at: .seconds(1.5))
 ```
+
+### Playing animations
+
+A view plays the animations of its document when its configuration's
+``SVGUIViewConfiguration/animation`` is
+``SVGUIViewConfiguration/AnimationMode/play``. With
+``SVGUIViewConfiguration/AnimationMode/paused``, it holds them at their current
+time until ``SVGUIView/SVGUIView/play()`` is called. The default,
+``SVGUIViewConfiguration/AnimationMode/none``, displays time zero, so updating
+the package doesn't start the animations in an app.
+
+```swift
+svgView.configuration = SVGUIViewConfiguration(animation: .play)
+svgView.pause()
+svgView.seek(to: .seconds(1.5))
+svgView.play()
+print(svgView.currentTime)
+```
+
+The animations don't advance while the view isn't in a window, is hidden or
+has no size, or while the app is in the background, and they stop after the
+time at which the document doesn't change any more. While Reduce Motion is on,
+the view displays time zero, unless
+``SVGUIViewConfiguration/playsWithReduceMotion`` is `true` for animations that
+are essential to the content.
+
+While it can play animations, the view shows its document in layers of its
+layer, so that a change of the transform or the opacity of an element only
+moves or fades its layer. Snapshots are still rendered into one image.
 
 ## Topics
 

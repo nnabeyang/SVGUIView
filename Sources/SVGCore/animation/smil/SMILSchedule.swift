@@ -32,18 +32,24 @@ struct SMILSchedule: Sendable {
   private let animations: [SMILAnimation]
   /// The intervals of each animation, in the order of `animations`.
   private(set) var intervals: [[SMILInterval]]
+  /// Whether the intervals are all the ones up to the time, which they aren't when the syncbase values keep adding
+  /// intervals for all the passes, or an animation has `maximumIntervals`.
+  private(set) var isComplete = false
 
   /// The most times that the intervals are found again with the times of the syncbase values. Each time can add an
   /// interval to an animation that depends on itself through other animations, so the limit stops a cycle of very
   /// short intervals.
-  private static let maximumPasses = 1000
+  static let maximumPasses = 1000
   /// The most intervals of one animation.
   private static let maximumIntervals = 1000
 
   /// The intervals of animations that begin at the time or before it.
   ///
-  /// - Parameter time: The time in seconds since the document began.
-  init(animations: [SMILAnimation], until time: Double) {
+  /// - Parameters:
+  ///   - time: The time in seconds since the document began.
+  ///   - passes: The most times that the intervals are found again with the times of the syncbase values. Each
+  ///     pass costs more as the intervals add up, so a schedule to an infinite time passes fewer times.
+  init(animations: [SMILAnimation], until time: Double, passes: Int = maximumPasses) {
     self.animations = animations
     // Of animations with the same ID, the first one in the document is the one that syncbase values find.
     var indices = [String: Int]()
@@ -53,13 +59,16 @@ struct SMILSchedule: Sendable {
       }
     }
     var intervals = animations.map { _ in [SMILInterval]() }
-    for _ in 0..<Self.maximumPasses {
+    for _ in 0..<passes {
       let next = animations.map { animation in
         Self.intervals(
           of: animation, begins: Self.times(of: animation.begin, indices: indices, intervals: intervals),
           ends: animation.end.map { Self.times(of: $0, indices: indices, intervals: intervals) }, until: time)
       }
-      if next == intervals { break }
+      if next == intervals {
+        isComplete = !intervals.contains { $0.count == Self.maximumIntervals }
+        break
+      }
       intervals = next
     }
     self.intervals = intervals

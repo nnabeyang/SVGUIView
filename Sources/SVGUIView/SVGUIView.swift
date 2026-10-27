@@ -1,5 +1,6 @@
 import SVGCore
 import SVGRenderCG
+import SVGRenderLayer
 public import UIKit
 import os
 
@@ -9,17 +10,108 @@ import os
 /// to ``data`` to change the displayed image. The view renders again when its
 /// size or its `contentMode` changes, and a new rendering stops the one in
 /// progress. Releasing the view stops its rendering too.
+///
+/// With a ``SVGUIViewConfiguration/animation`` other than
+/// ``SVGUIViewConfiguration/AnimationMode/none``, the view plays the animations
+/// of its document, and ``play()``, ``pause()`` and ``seek(to:)`` control
+/// them. The animations don't advance while the view isn't in a window, is
+/// hidden or has no size, or while the app is in the background, and they stop
+/// after the time at which the document doesn't change any more. While it can
+/// play animations, the view shows its document in layers of its layer,
+/// instead of in one image.
 public class SVGUIView: UIView {
-  private var baseContext: SVGBaseContext
+  private var baseContext: SVGBaseContext {
+    didSet {
+      animationEnd = baseContext.animationEnd()
+      promoted = baseContext.elementsWithAnimatedCompositing()
+      painting = baseContext.elementsWithAnimatedPainting()
+    }
+  }
+  /// The elements whose transform or opacity can change, which get layers of their own.
+  private var promoted: Set<ElementID>
+  /// The elements whose painting changes in other ways, or `nil` if any painting can change, which tells the layers
+  /// that frames paint again.
+  private var painting: Set<ElementID>?
+  /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
+  /// infinite for animations that don't end.
+  private var animationEnd: Double
   /// The rendering in progress, which a new rendering and the release of the view cancel.
   private(set) var renderingTask: Task<Void, Never>?
-  /// The settings that control background rendering.
-  public var configuration: SVGUIViewConfiguration = .init()
+  /// The settings that control background rendering and the animations.
+  ///
+  /// Changing the ``SVGUIViewConfiguration/animation`` mode plays or pauses
+  /// the animations. Changing it to ``SVGUIViewConfiguration/AnimationMode/none``
+  /// also moves them back to time zero.
+  public var configuration: SVGUIViewConfiguration = .init() {
+    didSet {
+      // A view that can play animations shows them in layers, so it renders again when it starts or stops.
+      if (configuration.animation == .none) != (oldValue.animation == .none) {
+        setNeedsDisplay()
+      }
+      if configuration.animation != oldValue.animation {
+        switch configuration.animation {
+        case .none:
+          isPlaying = false
+          currentTime = .zero
+        case .play:
+          isPlaying = true
+        case .paused:
+          isPlaying = false
+        }
+      }
+      updatePlayback()
+    }
+  }
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
+  /// Records each rendering as a "Render" interval, and each frame that a slower rendering skips as a "Skipped frame"
+  /// event, which Instruments and the metrics of XCTest measure. A rendering into layers records its stages as
+  /// "Style", "Build", "Plan" and "Paint" intervals in it.
+  nonisolated static let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering")
   /// The size that the view last rendered at, so that it renders again when its size changes.
   private var renderedSize: CGSize?
   /// Counts the renderings that the view starts, so that one that finishes after a newer one is not shown.
   private var renderingGeneration = 0
+  /// Whether the latest rendering hasn't finished yet.
+  private(set) var isRendering = false
+  /// Whether a frame of the animations waits for the rendering in progress, which shows the latest time when it
+  /// starts, so that frames that come while rendering is slower are skipped.
+  private var needsFrame = false
+  /// The time of the animations that the latest rendering shows.
+  private var renderedTime: Duration?
+  /// The layer that shows the layers of the document while the view can play animations.
+  private let layerTreeHost: CALayer = {
+    let layer = CALayer()
+    layer.anchorPoint = .zero
+    return layer
+  }()
+  /// The layers in the host, which the frames reuse.
+  private lazy var layerTree = LayerTree(host: layerTreeHost)
+  /// The layers that the view shows, whose contents the next frame shows where they don't change.
+  private var shownLayers: RenderedContainer?
+
+  /// The time of the animations.
+  ///
+  /// The time starts at zero when the document is loaded, and advances while
+  /// the view plays its animations. Assigning new ``data`` moves it back to
+  /// zero.
+  public private(set) var currentTime: Duration = .zero
+  /// Whether the animations advance when the view can be seen, which ``play()`` and ``pause()`` change.
+  private var isPlaying = false
+  /// Whether the app is in the background, where the animations don't advance.
+  private var isInBackground = false
+  /// The clock that advances the animations, which tests replace.
+  var clock: any AnimationClock = DisplayLinkClock() {
+    didSet {
+      oldValue.isRunning = false
+      oldValue.onFrame = nil
+      startObservingClock()
+      updatePlayback()
+    }
+  }
+  /// Whether Reduce Motion is on, which tests replace.
+  var isReduceMotionEnabled: () -> Bool = { UIAccessibility.isReduceMotionEnabled } {
+    didSet { updatePlayback() }
+  }
 
   /// Creates a view that displays the SVG file at the given URL.
   ///
@@ -35,8 +127,13 @@ public class SVGUIView: UIView {
   init(frame: CGRect, baseContext: SVGBaseContext, data: Data = Data()) {
     self.data = data
     self.baseContext = baseContext
+    animationEnd = baseContext.animationEnd()
+    promoted = baseContext.elementsWithAnimatedCompositing()
+    painting = baseContext.elementsWithAnimatedPainting()
     super.init(frame: frame)
     backgroundColor = .clear
+    startObservingClock()
+    observeNotifications()
     setNeedsDisplay()
   }
 
@@ -79,6 +176,8 @@ public class SVGUIView: UIView {
       // SVGView sets its data on every update of the SwiftUI view.
       guard data != oldValue else { return }
       baseContext = Self.parse(data)
+      currentTime = .zero
+      updatePlayback()
       setNeedsDisplay()
     }
   }
@@ -97,6 +196,16 @@ public class SVGUIView: UIView {
     if bounds.size != renderedSize {
       setNeedsDisplay()
     }
+    updatePlayback()
+  }
+
+  override public func didMoveToWindow() {
+    super.didMoveToWindow()
+    updatePlayback()
+  }
+
+  override public var isHidden: Bool {
+    didSet { updatePlayback() }
   }
 
   // UIKit marks the layer for display only for a view that implements `draw(_:)`. This view renders in
@@ -118,25 +227,184 @@ public class SVGUIView: UIView {
   /// empty one before drawing.
   override public func display(_: CALayer) {
     renderingTask?.cancel()
+    needsFrame = false
+    startRendering()
+  }
+
+  /// Starts rendering the document at the time that the view displays.
+  ///
+  /// - Parameter reusesLayers: Whether the rendering shows the contents of the layers that the view shows where they
+  ///   don't change, which a frame does. A new size, new data or a new content mode paints everything again.
+  private func startRendering(reusesLayers: Bool = false) {
     let rect = bounds
     renderedSize = rect.size
     let generation = nextRenderingGeneration()
     let scale = UIScreen.main.scale
     let capturedBase = baseContext
+    let time = displayedTime
+    renderedTime = time
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
+    let promoted = configuration.animation == .none ? nil : promoted
+    let painting = painting
+    let previous = reusesLayers ? shownLayers : nil
+    isRendering = true
+    let signpost = Self.signposter.beginInterval(
+      "Render", id: Self.signposter.makeSignpostID(),
+      "\(time.seconds, format: .fixed(precision: 3)) s into \(promoted == nil ? "an image" : "layers")")
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
-      let result = await SVGUIView.makeImage(
-        rect: rect, scale: scale, base: capturedBase, time: .zero,
-        fit: fit, timeoutDuration: timeoutDuration
-      )
-      self?.show(result, ofRendering: generation)
+      if let promoted {
+        let result = await SVGUIView.makeLayers(
+          rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, previous: previous,
+          time: time, fit: fit, timeoutDuration: timeoutDuration)
+        switch result {
+        case .success(let layers) where Self.signposter.isEnabled:
+          // Counting the layers that were painted takes time, so it's done only while the intervals are recorded.
+          let painted = layers.paintedCount(since: previous)
+          Self.signposter.endInterval(
+            "Render", signpost, "painted \(painted) of \(layers.paintedContents.count) layers")
+        case .success:
+          Self.signposter.endInterval("Render", signpost)
+        case .failure(let error):
+          Self.signposter.endInterval("Render", signpost, "\(String(describing: error))")
+        }
+        self?.finishRendering(ofRendering: generation) { $0.showLayers(result) }
+      } else {
+        let result = await SVGUIView.makeImage(
+          rect: rect, scale: scale, base: capturedBase, time: time,
+          fit: fit, timeoutDuration: timeoutDuration
+        )
+        switch result {
+        case .success: Self.signposter.endInterval("Render", signpost, "painted")
+        case .failure(let error): Self.signposter.endInterval("Render", signpost, "\(String(describing: error))")
+        }
+        self?.finishRendering(ofRendering: generation) { $0.show(result) }
+      }
+    }
+  }
+
+  /// Shows the result of a rendering, unless a newer rendering has started since, and starts the frame that waits
+  /// for it. A rendering for an old size or old data that finished before it was cancelled doesn't replace a newer
+  /// image.
+  private func finishRendering(ofRendering generation: Int, show: (SVGUIView) -> Void) {
+    guard generation == renderingGeneration else { return }
+    isRendering = false
+    show(self)
+    if needsFrame {
+      needsFrame = false
+      startRendering(reusesLayers: true)
+    }
+  }
+
+  /// Renders the frame at the time that the view displays, after the rendering in progress if there is one.
+  ///
+  /// A frame doesn't stop the rendering in progress, unlike a new size or new data, so that the view shows
+  /// frames even when rendering one takes longer than the display shows it.
+  private func renderFrame() {
+    if isRendering {
+      if needsFrame {
+        Self.signposter.emitEvent("Skipped frame")
+      }
+      needsFrame = true
+    } else {
+      startRendering(reusesLayers: true)
     }
   }
 
   deinit {
     // The rendering holds the view weakly, so without this it would go on until the timeout.
     renderingTask?.cancel()
+  }
+
+  /// Plays the animations of the document from the current time.
+  ///
+  /// This does nothing when the configuration's
+  /// ``SVGUIViewConfiguration/animation`` is
+  /// ``SVGUIViewConfiguration/AnimationMode/none``.
+  public func play() {
+    guard configuration.animation != .none else { return }
+    isPlaying = true
+    updatePlayback()
+  }
+
+  /// Holds the animations of the document at the current time.
+  public func pause() {
+    isPlaying = false
+    updatePlayback()
+  }
+
+  /// Moves the animations of the document to a time, and displays it.
+  ///
+  /// This does nothing when the configuration's
+  /// ``SVGUIViewConfiguration/animation`` is
+  /// ``SVGUIViewConfiguration/AnimationMode/none``.
+  ///
+  /// - Parameter time: The time to move to. A negative time moves to zero.
+  public func seek(to time: Duration) {
+    guard configuration.animation != .none else { return }
+    currentTime = max(time, .zero)
+    updatePlayback()
+  }
+
+  /// Whether Reduce Motion holds the animations at time zero.
+  private var isHeldByReduceMotion: Bool {
+    configuration.animation != .none && !configuration.playsWithReduceMotion && isReduceMotionEnabled()
+  }
+
+  /// The time of the animations that the view displays.
+  private var displayedTime: Duration {
+    configuration.animation == .none || isHeldByReduceMotion ? .zero : currentTime
+  }
+
+  /// Whether the animations advance: they play, they haven't ended, and the view can be seen.
+  private var advances: Bool {
+    configuration.animation != .none && isPlaying && currentTime.seconds < animationEnd && !isHeldByReduceMotion
+      && window != nil && !isHidden && bounds.width > 0 && bounds.height > 0 && !isInBackground
+  }
+
+  /// Starts or stops the clock, and renders the displayed time if it changed.
+  private func updatePlayback() {
+    clock.isRunning = advances
+    if let renderedTime, renderedTime != displayedTime {
+      renderFrame()
+    }
+  }
+
+  private func startObservingClock() {
+    clock.onFrame = { [weak self] elapsed in
+      guard let self else { return }
+      currentTime += elapsed
+      renderFrame()
+      // The clock stops after the frame that passes the end of the animations.
+      updatePlayback()
+    }
+  }
+
+  /// Observes the app moving to the background and back, and changes of Reduce Motion. The notification center
+  /// stops sending notifications to the view when it's released.
+  private func observeNotifications() {
+    let center = NotificationCenter.default
+    center.addObserver(
+      self, selector: #selector(didEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(reduceMotionStatusDidChange),
+      name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
+  }
+
+  @objc private func didEnterBackground() {
+    isInBackground = true
+    updatePlayback()
+  }
+
+  @objc private func willEnterForeground() {
+    isInBackground = false
+    updatePlayback()
+  }
+
+  @objc private func reduceMotionStatusDidChange() {
+    updatePlayback()
   }
 
   @available(*, unavailable)
@@ -152,17 +420,10 @@ public class SVGUIView: UIView {
     svg?.size ?? .zero
   }
 
-  /// Counts a rendering that starts, and returns the number to pass to `show(_:ofRendering:)`.
+  /// Counts a rendering that starts, and returns the number to pass to `finishRendering(ofRendering:show:)`.
   private func nextRenderingGeneration() -> Int {
     renderingGeneration += 1
     return renderingGeneration
-  }
-
-  /// Shows the result of a rendering, unless a newer rendering has started since, so that a rendering
-  /// for an old size or old data that finished before it was cancelled does not replace a newer image.
-  private func show(_ result: Result<CGImage, SVGRenderingError>, ofRendering generation: Int) {
-    guard generation == renderingGeneration else { return }
-    show(result)
   }
 
   /// Shows the result of a rendering.
@@ -172,15 +433,49 @@ public class SVGUIView: UIView {
   func show(_ result: Result<CGImage, SVGRenderingError>) {
     switch result {
     case .success(let image):
+      layerTreeHost.removeFromSuperlayer()
+      layerTree.clear()
+      shownLayers = nil
       layer.contents = image
-    case .failure(.missingRootElement), .failure(.zeroSizedRect):
+    case .failure(let error):
+      show(error)
+    }
+  }
+
+  /// Shows the result of a rendering into layers, in the layer that hosts them.
+  func showLayers(_ result: Result<RenderedContainer, SVGRenderingError>) {
+    switch result {
+    case .success(let layers):
       layer.contents = nil
-    case .failure(.cancelled):
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      if layerTreeHost.superlayer !== layer {
+        layer.addSublayer(layerTreeHost)
+      }
+      layerTreeHost.bounds = layer.bounds
+      layerTreeHost.position = layer.bounds.origin
+      CATransaction.commit()
+      layerTree.show(layers)
+      shownLayers = layers
+    case .failure(let error):
+      show(error)
+    }
+  }
+
+  /// Shows that a rendering failed. A rendering that timed out or couldn't allocate its image keeps what the view
+  /// shows.
+  private func show(_ error: SVGRenderingError) {
+    switch error {
+    case .missingRootElement, .zeroSizedRect:
+      layer.contents = nil
+      layerTree.clear()
+      shownLayers = nil
+    case .cancelled:
       // A newer rendering cancels the one before it, so this is not worth a warning.
       break
-    case .failure(.timedOut):
+    case .timedOut:
       Self.logger.warning("Rendering took longer than the timeout and was cancelled. The view keeps its current image.")
-    case .failure(.allocationFailed):
+    case .allocationFailed:
       Self.logger.warning("The memory for the image to render into couldn't be allocated. The view keeps its current image.")
     }
   }
@@ -191,8 +486,9 @@ public class SVGUIView: UIView {
   /// The image is rendered at the main screen's scale with the view's current
   /// `contentMode`. The view's displayed contents do not change.
   ///
-  /// The time starts at zero when the document is loaded, which is the time
-  /// that the view displays. A document without animations looks the same at
+  /// The time starts at zero when the document is loaded. A view that doesn't
+  /// play its animations displays time zero, and a view that plays them
+  /// displays ``currentTime``. A document without animations looks the same at
   /// any time.
   ///
   /// - Parameters:
@@ -243,7 +539,7 @@ public class SVGUIView: UIView {
     }
     graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
 
-    let drawTask = Task<CGImage?, Never> {
+    return await withRenderingTimeout(timeoutDuration) {
       // The computed values at the time are computed in the task, so that the timeout stops them too.
       let builder = RenderTreeBuilder(base: base.at(time: time.seconds), viewPort: rect, scale: scale)
       guard let tree = await builder.build(fit: fit) else { return nil }
@@ -253,26 +549,41 @@ public class SVGUIView: UIView {
       }
       return graphics.makeImage()
     }
+  }
 
-    // Time out on a dispatch queue rather than in a task, so that the timeout fires even while renderings
-    // occupy every thread of the cooperative thread pool. Those threads also count against dispatch queues of
-    // the same quality of service, so the queue is above the highest task priority that renderings can have.
-    // A timer source releases its handler, and with it `drawTask` and the image, as soon as it is cancelled,
-    // whereas a cancelled work item stays on the queue until its deadline.
-    let timeout = DispatchSource.makeTimerSource(queue: .global(qos: .userInteractive))
-    timeout.setEventHandler { drawTask.cancel() }
-    timeout.schedule(deadline: .now() + timeoutDuration.dispatchTimeInterval)
-    timeout.activate()
-    let value = await withTaskCancellationHandler {
-      await drawTask.value
-    } onCancel: {
-      drawTask.cancel()
+  /// Renders the document at a time into layers: the layers of the elements whose transform or opacity changes, and
+  /// the contents of the layers between them, which show the contents of the previous layers where they don't
+  /// change.
+  @concurrent
+  private static func makeLayers(
+    rect: CGRect,
+    scale: CGFloat,
+    base: SVGBaseContext,
+    promoted: Set<ElementID>,
+    painting: Set<ElementID>?,
+    previous: RenderedContainer?,
+    time: Duration,
+    fit: ContentFit,
+    timeoutDuration: Duration
+  ) async -> Result<RenderedContainer, SVGRenderingError> {
+    guard base.root != nil else { return .failure(.missingRootElement) }
+    guard (rect.width * scale).rounded(.up) > 0, (rect.height * scale).rounded(.up) > 0 else {
+      return .failure(.zeroSizedRect)
     }
-    timeout.cancel()
-    // Only the timeout and the cancellation of the caller cancel `drawTask`, and `makeImage()` of a bitmap
-    // context returns an image otherwise, so `nil` means that rendering was cancelled or timed out.
-    guard let value else { return .failure(Task.isCancelled ? .cancelled : .timedOut) }
-    return .success(value)
+    return await withRenderingTimeout(timeoutDuration) {
+      let signposter = Self.signposter
+      let base = signposter.withIntervalSignpost("Style") { base.at(time: time.seconds) }
+      let buildInterval = signposter.beginInterval("Build")
+      let tree = await RenderTreeBuilder(base: base, viewPort: rect, scale: scale).build(fit: fit)
+      signposter.endInterval("Build", buildInterval)
+      guard let tree else { return nil }
+      let plan = signposter.withIntervalSignpost("Plan") {
+        LayerPlanner(promoted: promoted, painting: painting, scale: scale).plan(tree, in: rect)
+      }
+      let paintInterval = signposter.beginInterval("Paint")
+      defer { signposter.endInterval("Paint", paintInterval) }
+      return await plan.painted(scale: scale, reusing: previous)
+    }
   }
 }
 

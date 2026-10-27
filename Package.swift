@@ -31,8 +31,12 @@ let package = Package(
       dependencies: ["SVGCore"],
     ),
     .target(
-      name: "SVGUIView",
+      name: "SVGRenderLayer",
       dependencies: ["SVGCore", "SVGRenderCG"],
+    ),
+    .target(
+      name: "SVGUIView",
+      dependencies: ["SVGCore", "SVGRenderCG", "SVGRenderLayer"],
     ),
     .target(
       name: "SVGView",
@@ -48,6 +52,10 @@ let package = Package(
     .testTarget(
       name: "SVGCoreTests",
       dependencies: ["SVGCore", "_CSSParser", "_SelectorParser"],
+    ),
+    .testTarget(
+      name: "SVGRenderLayerTests",
+      dependencies: ["SVGRenderLayer", "SVGRenderCG", "SVGCore"],
     ),
     .testTarget(
       name: "SVGUIViewTests",
