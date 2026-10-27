@@ -37,3 +37,25 @@ struct RestyleScope: Sendable {
     self.containing = containing
   }
 }
+
+extension SVGElement {
+  /// The element and its descendants with the computed values of the ones that animations can change computed again
+  /// for the animations at their time. A subtree without such an element is the same subtree, and an element that
+  /// doesn't change keeps its computed values.
+  ///
+  /// - Parameters:
+  ///   - root: The computed values of the root element, or `nil` for the root element itself.
+  func restyled(
+    parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations, in scope: RestyleScope
+  ) -> any SVGElement {
+    let id = base.elementID
+    guard scope.containing.contains(id) else { return self }
+    // An element that doesn't change has a parent that doesn't change either, so its computed values stay valid.
+    let base = scope.changing.contains(id) ? base.restyled(parent: parent, root: root, animations: animations) : base
+    return Self(
+      base: base,
+      contents: children.map {
+        $0.restyled(parent: base.style, root: root ?? base.style, animations: animations, in: scope)
+      })
+  }
+}
