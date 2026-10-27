@@ -71,7 +71,7 @@ public class SVGUIView: UIView {
   /// Counts the renderings that the view starts, so that one that finishes after a newer one is not shown.
   private var renderingGeneration = 0
   /// Whether the latest rendering hasn't finished yet.
-  private var isRendering = false
+  private(set) var isRendering = false
   /// Whether a frame of the animations waits for the rendering in progress, which shows the latest time when it
   /// starts, so that frames that come while rendering is slower are skipped.
   private var needsFrame = false

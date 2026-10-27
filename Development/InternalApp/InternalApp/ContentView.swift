@@ -38,9 +38,10 @@ struct Folder: Hashable {
     Folder(url: TestSuite.bundle.bundleURL, title: "Test Suite")
   }
 
-  /// The folders at the top of the test suite: `w3c` for the tests from other projects, and `custom` for the
-  /// ones written for SVGUIView. The bundle has other files beside them.
-  private static let topLevelFolders = ["w3c", "custom"]
+  /// The folders at the top of the test suite: `w3c` for the tests from other projects, `custom` for the ones
+  /// written for SVGUIView, and `benchmark` for the documents that measure playback. The bundle has other files
+  /// beside them.
+  private static let topLevelFolders = ["w3c", "custom", "benchmark"]
 
   /// The subfolders and SVG files directly in the folder, sorted by name.
   func contents() -> (folders: [Folder], documents: [SVGDocument]) {
