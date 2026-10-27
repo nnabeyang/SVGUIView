@@ -613,7 +613,7 @@ before it is merged.
 | 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. | Done in 0.25.0 |
 | 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done in 0.26.0 |
 | 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Done in 0.27.0 |
-| 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Done |
+| 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Done in 0.28.0 |
 | 2.5 | The document API and CSS Transitions, which need the document API to start. | Planned |
 | 3 | Filters on Metal. | Planned |
 
