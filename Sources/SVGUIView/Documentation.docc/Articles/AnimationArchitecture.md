@@ -11,9 +11,10 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders that time. Phase 1.5
 > is done as well: the `<animate>`, `<set>`, `<animateTransform>` and
 > `<animateMotion>` elements apply to properties and attributes at the same
-> times. Playback, the document API, `SVGRenderLayer` and filters on Metal are
-> planned: the types, properties and methods proposed for them don't exist yet,
-> and their names may change while the work goes on.
+> times. Phase 2 is done too: a view plays animations in a tree of layers that
+> `SVGRenderLayer` makes. The document API, CSS Transitions and filters on Metal
+> are planned: the types, properties and methods proposed for them don't exist
+> yet, and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -76,7 +77,9 @@ parsed. This section records its limits, and which of them phase 0 removed.
   is cached between renderings, and a rendering that takes longer than
   ``SVGUIViewConfiguration/timeoutDuration`` (10 seconds by default) is
   cancelled. A frame of an animation has to be ready in about 16 milliseconds,
-  or 8 milliseconds at 120 Hz. This remains until phase 2.
+  or 8 milliseconds at 120 Hz. Phase 2 removed this limit for playback: a view
+  that plays animations shows them in layers, and paints again only the layers
+  that change. Still images and snapshots are still rendered into one bitmap.
 - **Filters run on the CPU.** Filter primitives are implemented with Core
   Graphics and vImage. This remains until phase 3.
 
@@ -106,12 +109,12 @@ computing what to draw is separate from the two ways of drawing it.
 | Target | Role |
 |---|---|
 | `SVGCore` | Parsing, the document tree, the cascade and computed values, and the render tree. From phase 1, also the timeline, timing and interpolation. It uses Core Graphics and Core Text for geometry and text layout, but not UIKit. |
-| `SVGRenderCG` | Paints a render tree into a `CGContext`. It produces still images, and from phase 2 the contents of individual layers for `SVGRenderLayer`. Filters keep their Core Graphics and vImage implementations. |
-| `SVGRenderLayer` | Planned for phase 2. Builds and updates a tree of `CALayer` objects from a render tree, and plays animations. Filters that run on Metal live here. |
-| `SVGUIView` | The public `UIView`. It draws still images with `SVGRenderCG`. From phase 2, it picks one of the two renderers and owns the document and its clock. |
+| `SVGRenderCG` | Paints a render tree into a `CGContext`. It produces still images, and the contents of individual layers for `SVGRenderLayer`. Filters keep their Core Graphics and vImage implementations. |
+| `SVGRenderLayer` | Plans the layers that show a render tree and the bounds that their contents cover, paints their contents with `SVGRenderCG`, and updates a tree of `CALayer` objects with them. From phase 3, filters that run on Metal live here. |
+| `SVGUIView` | The public `UIView`. It draws still images with `SVGRenderCG`, and plays animations with `SVGRenderLayer`. It owns the document and the clock of its animations. |
 | `SVGView` | The SwiftUI wrapper of ``SVGUIView/SVGUIView``. |
 
-Phase 0 added `SVGCore` and `SVGRenderCG`. `SVGRenderLayer` doesn't exist yet.
+Phase 0 added `SVGCore` and `SVGRenderCG`, and phase 2 added `SVGRenderLayer`.
 
 Decisions:
 
@@ -190,15 +193,27 @@ the previous one.
 ### Painting
 
 Painting is done by one of the two renderers. See <doc:#Rendering-strategies>.
-Until phase 2, `SVGRenderCG` is the only one.
 
 ### Invalidation
 
-Invalidation is planned for phase 2. Until then, every rendering runs all four
-stages.
+A new animation frame redoes only part of the work of the frame before it:
 
-A change to the document, or a new animation frame, marks what has to be
-recomputed. The amount of work depends on what changed:
+- **Styles:** Only the elements that animations can change, which are the
+  ones that run CSS animations or that SMIL animations change, and their
+  descendants, get their computed values computed again. Every other subtree is
+  the same as in the frame before. A document whose SMIL animations change
+  attributes that aren't properties makes every element again from the cascade.
+- **Render tree and layers:** The render tree and the plan of its layers are
+  made again for every frame.
+- **Painting:** Only the layers that contain an element whose painting changes
+  are painted again. An element whose `transform` or `opacity` is the only thing
+  that changes keeps its contents, and only the properties of its layer change.
+  An animation inside a clip path, a mask, a pattern, a gradient or a filter
+  changes the elements that use it, which can't be told, so every layer is
+  painted again then.
+
+Phase 2.5 adds changes made through the document API. Such a change marks what
+has to be recomputed, and the amount of work depends on what changed:
 
 | What changed | Recomputed |
 |---|---|
@@ -371,19 +386,25 @@ svgView.seek(to: .seconds(1.5))
 let frame = try await svgView.takeSnapshot(at: .seconds(2))
 ```
 
-- **Animation mode:** ``SVGUIViewConfiguration`` gains an `animation` value
-  with three cases. `.none` draws a still image with the existing renderer.
-  `.play` plays animations with the layer renderer. `.paused` uses the layer
-  renderer but holds the timeline at its current time.
-- **Controlling the timeline:** ``SVGUIView/SVGUIView`` gains `play()`,
-  `pause()`, `seek(to:)` and `currentTime`. Times are `Duration` values, like
+- **Animation mode:** ``SVGUIViewConfiguration/animation`` has three cases.
+  ``SVGUIViewConfiguration/AnimationMode/none`` draws a still image with the
+  existing renderer. ``SVGUIViewConfiguration/AnimationMode/play`` plays
+  animations with the layer renderer.
+  ``SVGUIViewConfiguration/AnimationMode/paused`` uses the layer renderer but
+  holds the timeline at its current time.
+- **Controlling the timeline:** ``SVGUIView/SVGUIView/play()``,
+  ``SVGUIView/SVGUIView/pause()``, ``SVGUIView/SVGUIView/seek(to:)`` and
+  ``SVGUIView/SVGUIView/currentTime``. Times are `Duration` values, like
   ``SVGUIViewConfiguration/timeoutDuration``.
+- **Reduce Motion:** ``SVGUIViewConfiguration/playsWithReduceMotion`` lets an
+  app play animations that are essential to its content while Reduce Motion is
+  on. See <doc:#Pausing-playback>.
 - **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)``
   takes a time, so that any frame can be rendered as an image. This is what the
   planned `render(at:)` API became, because it keeps one method for snapshots.
-- **Reaching the document:** ``SVGUIView/SVGUIView`` gains a `document`
-  property for the document API. Assigning new ``SVGUIView/SVGUIView/data``
-  replaces the document.
+- **Reaching the document:** In phase 2.5, ``SVGUIView/SVGUIView`` gains a
+  `document` property for the document API. Assigning new
+  ``SVGUIView/SVGUIView/data`` replaces the document.
 - **SwiftUI:** `SVGView` reads the animation mode from the same
   configuration in the environment.
 
@@ -409,36 +430,52 @@ means apps that don't play animations see no change in output or performance.
 `.play` and `.paused` render into a tree of `CALayer` objects under the view's
 layer. The tree is built so that the common animations don't repaint anything:
 
-- An element gets its own layer when its `transform` or `opacity` is animated,
-  or when it needs an isolated group: group opacity, a mask, a clip path or a
-  filter.
+- An element gets its own layer when its `transform` or `opacity` is
+  animated. The layer has the transform and the opacity, and its contents are
+  the element painted without them.
+- The elements around such an element that contain it, such as groups, viewports
+  and `<use>` elements, become layers too, with their transforms and opacities,
+  so that the layers are composited as the elements are.
+- An element with a clip path, a mask or a filter composites what it paints as
+  one image, so the elements in it are painted with it into one layer, and none
+  of them gets a layer of its own, even when it's animated. The design first
+  gave such an element a layer of its own whether or not it's animated, but a
+  layer would only clip, mask or filter what's in it, which painting it whole
+  does as well.
 - Neighboring content that doesn't need a layer is painted together into one
   layer by `SVGRenderCG`. A document without animations becomes a single layer.
 - A change of `transform` or `opacity` only sets the layer's property. Nothing
   is repainted, the same way browsers run such animations on the compositor.
-- Any other change marks only the layers that contain the changed elements.
-  Those layers are repainted in the background, and the new contents are set on
-  the main actor.
+- Any other change paints again only the layers that contain the changed
+  elements. See <doc:#Invalidation>.
+- The pixels of the contents of a layer lie on the pixels of the screen as the
+  layer is without the transforms that animations change. A layer that doesn't
+  move shows the same pixels as a still image. Where an animation rotates a
+  layer, or moves it between the pixels of the screen, the screen resamples its
+  contents, which changes the antialiased edges.
 
-The clock is a `CADisplayLink`. Each frame samples the animations at the link's
-target timestamp, and sets layer properties inside a `CATransaction` with
-actions disabled, so that Core Animation's implicit animations don't interfere.
+The clock is a `CADisplayLink`. Each frame advances the timeline to the link's
+target timestamp, and the layers of that time are set inside a `CATransaction`
+with actions disabled, so that Core Animation's implicit animations don't
+interfere. The clock stops after the frame that passes the time after which the
+document doesn't change, so a view whose animations have ended does no work.
 Converting animations to `CAKeyframeAnimation` objects was considered and
 rejected: it can't express every timing function, SMIL timing or animations
 that depend on other animations, and it would make the visible frame hard to
 reproduce in a snapshot.
 
 When only discrete animations are running, such as `steps()` or `<set>`, the
-display link's preferred frame rate is lowered to what the animations need.
+display link's preferred frame rate is to be lowered to what the animations
+need. This isn't done yet: such a view renders every frame.
 
 ## Concurrency
 
 - **Main actor:** the document, the document API, the timeline and the
-  display link. Each frame samples the animations on the main actor, which is
-  cheap, and applies `transform` and `opacity` changes in the same frame.
-- **Background tasks:** style resolution, building the render tree and
-  painting. They read a document snapshot and the sampled animation values,
-  which are all `Sendable` values.
+  display link. Each frame advances the timeline on the main actor and starts
+  the background work for its time.
+- **Background tasks:** the computed values at the time, the render tree, the
+  plan of the layers and the painting of their contents. They read a document
+  snapshot and the time, which are `Sendable` values.
 - **Back on the main actor:** new layer contents and changes to the layer
   tree are applied together in one transaction.
 
@@ -456,9 +493,12 @@ rendering when playback starts.
 During playback, nothing is cancelled. When the background work for a frame
 isn't finished by the next frame, the view keeps showing the previous frame and
 starts the next work from the latest time, skipping the frames in between.
-`transform` and `opacity` changes don't wait for background work, so they keep
-moving even when repainting falls behind. When frames are skipped repeatedly,
-the display link's frame rate is lowered.
+
+Two parts of the design aren't done yet. `transform` and `opacity` changes are
+to be applied without waiting for background work, so that they keep moving even
+when repainting falls behind. Today they're computed with the rest of a frame,
+in the background. And when frames are skipped repeatedly, the display link's
+frame rate is to be lowered.
 
 ## Pausing playback
 
@@ -466,9 +506,10 @@ Playback stops in these cases, and the timeline doesn't advance while it's
 stopped:
 
 - **Reduce Motion:** When `UIAccessibility.isReduceMotionEnabled` is on, a
-  view in `.play` mode shows the frame at time zero and doesn't start. An app
-  can opt out for animations that are essential to its content. The view
-  observes the setting and reacts when it changes.
+  view that plays animations shows the frame at time zero and doesn't start. An
+  app can opt out with ``SVGUIViewConfiguration/playsWithReduceMotion`` for
+  animations that are essential to its content. The view observes the setting
+  and reacts when it changes.
 - **Background:** When the app moves to the background, the display link
   is stopped. Playback resumes where it stopped when the app returns.
 - **Not visible:** When the view isn't in a window, is hidden, or has a
@@ -476,6 +517,8 @@ stopped:
 
 Stopping the timeline, instead of letting it run, keeps the animation from
 jumping when it resumes, and keeps a view that nobody can see from doing work.
+The clock also stops when the animations have ended, and runs again when the
+view seeks back before their end.
 
 ## Filters on Metal
 
@@ -521,7 +564,10 @@ playback is smooth.
   app, never in the package.
 - **Agreement between renderers:** For the same time, the image from
   `SVGRenderCG` and the image of the layer tree from `SVGRenderLayer` must
-  match. This keeps playback from looking different from snapshots.
+  match. This keeps playback from looking different from snapshots. Layers that
+  don't move show the same pixels as the image. Moving layers differ only at
+  their antialiased edges, where the screen resamples them. Layers that frames
+  reuse show the same pixels as layers painted again.
 - **Playback with a test clock:** The renderer takes its clock as a
   dependency. Tests replace the display link with a clock they advance by hand,
   then check layer properties. Playing, pausing, seeking and the conditions in
@@ -539,8 +585,11 @@ documents instead.
 
 - A set of benchmark documents covers different kinds of work: transforms only,
   changing path shapes, many elements, and filters.
-- The time spent sampling animations and repainting in each frame is recorded
-  with signposts and measured with XCTest metrics.
+- The time of each rendering is recorded as a "Render" signpost interval, with
+  its stages as "Style", "Build", "Plan" and "Paint" intervals in it, and a frame
+  that a slower rendering skips is a "Skipped frame" event. The benchmarks of
+  the test app measure them with XCTest metrics, only when
+  `TEST_RUNNER_RUN_BENCHMARKS` is `1`.
 - Performance is measured on devices. Simulators and Xcode Cloud, which only
   runs simulators, don't reflect device performance, so performance isn't a
   pass-or-fail check in CI. Instruments' animation hitches template is used to
@@ -550,9 +599,9 @@ documents instead.
 
 ### Visual review
 
-The snapshot test app gets a screen that plays a document in SVGUIView and in a
-`WKWebView` side by side, to catch stutter and flicker that numbers and
-snapshots miss.
+The viewer of the snapshot test app plays a document in SVGUIView and in a
+`WKWebView` from the start, side by side or in the same place, to catch stutter
+and flicker that numbers and snapshots miss.
 
 ## Implementation phases
 
@@ -564,7 +613,7 @@ before it is merged.
 | 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. | Done in 0.25.0 |
 | 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done in 0.26.0 |
 | 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Done in 0.27.0 |
-| 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Planned |
+| 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Done |
 | 2.5 | The document API and CSS Transitions, which need the document API to start. | Planned |
 | 3 | Filters on Metal. | Planned |
 
@@ -580,13 +629,18 @@ changes the output of the documents that those bugs affected.
   filters with vImage. A filtered element that only moves by `transform` or
   `opacity` isn't filtered again, but a filter whose parameters or input content
   change is run again on the CPU in every frame, and a slow one skips frames in
-  that layer. Phase 2 measures this with the benchmark documents that contain
-  filters. If such animations don't fit the frame budget on devices and are
+  that layer. In the benchmark document with filters, whose blurs change, running
+  the filters takes most of each frame in a simulator. Devices haven't been
+  measured yet. If such animations don't fit the frame budget on devices and are
   common in the documents to support, phase 3 moves ahead of phase 2.5. The
-  cache of filter results is keyed by layer, so it can be used with vImage in
-  phase 2 as well.
+  cache of filter results is keyed by layer, so it can be used with vImage as
+  well.
 - Whether `.play` should become the default animation mode once animation
   support is stable.
 - Whether the timeline should keep running while playback is stopped for being
   off screen, for apps that expect wall-clock behavior.
-- How finely to invalidate styles after the first version.
+- How much of the render tree and the plan of the layers to make again for a
+  frame. Styles are computed again only for the elements that animations
+  change, but the render tree and the plan are made again for the whole
+  document, which takes most of a frame of a document with many elements that
+  don't move.

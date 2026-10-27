@@ -29,6 +29,13 @@ ContentView()
   )
 ```
 
+The configuration also plays the animations of the documents:
+
+```swift
+ContentView()
+  .environment(\.svgViewConfiguration, SVGUIViewConfiguration(animation: .play))
+```
+
 ## Topics
 
 ### Displaying SVG
