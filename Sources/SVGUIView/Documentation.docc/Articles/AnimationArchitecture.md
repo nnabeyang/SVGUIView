@@ -8,10 +8,12 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > which splits the code into `SVGCore` and `SVGRenderCG` and into the stages of
 > the rendering pipeline, is done. Phase 1 is done too: CSS Animations are
 > parsed and applied to the computed values at a time, and
-> ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders that time. SMIL
-> animation, playback, the document API, `SVGRenderLayer` and filters on Metal
-> are planned: the types, properties and methods proposed for them don't exist
-> yet, and their names may change while the work goes on.
+> ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders that time. Phase 1.5
+> is done as well: the `<animate>`, `<set>`, `<animateTransform>` and
+> `<animateMotion>` elements apply to properties and attributes at the same
+> times. Playback, the document API, `SVGRenderLayer` and filters on Metal are
+> planned: the types, properties and methods proposed for them don't exist yet,
+> and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -227,7 +229,8 @@ each kind of animation translates into it.
   target (`href` or the parent element), `attributeName`, `from`, `to`, `by`,
   `values`, `keyTimes`, `keySplines`, `keyPoints`, `calcMode`, `additive`,
   `accumulate`, `begin`, `end`, `dur`, `repeatCount`, `repeatDur`, `min`, `max`,
-  `restart` and `fill`.
+  `restart` and `fill`. `<animateColor>`, which SVG 2 removed, is ignored, and
+  `<animate>` animates colors instead.
 
 ### Timing model
 
@@ -250,9 +253,11 @@ step, because an element's timing can depend on other elements:
   way as in CSS.
 - `fill="freeze"` maps to a forwards fill. `repeatCount` maps to the iteration
   count, and `repeatDur`, `min` and `max` limit the active duration.
-- Event-based begin values, such as `click`, never resolve, because there are no
-  user events without JavaScript. They resolve when the app begins the animation
-  through the Swift API.
+- Begin and end values that depend on what SVGUIView doesn't have never
+  resolve, the same as `indefinite`: user events such as `click`, because there
+  are no user events without JavaScript, `accessKey()`, `wallclock()`, and the
+  repeats of other animations, such as `a.repeat(2)`. From phase 2.5, the app
+  can begin and end an animation through the Swift API instead.
 
 Easing functions include `linear`, the `ease` keywords, `cubic-bezier()`,
 `steps()` and `linear()`. SMIL's `calcMode="spline"` uses the same Bézier curve
@@ -311,8 +316,8 @@ protocol Animatable: Sendable {
 Decisions:
 
 - One timing model is shared by all three kinds of animation.
-- The priority order above applies. See <doc:#Open-questions> for the
-  position of SMIL relative to CSS Animations.
+- The priority order above applies. SMIL animations are below CSS Animations,
+  as in WebKit, Chrome and Firefox, which were checked with test documents.
 
 ## Document API
 
@@ -508,10 +513,12 @@ playback is smooth.
 - **Checking against a browser:** Reference images are recorded from
   SVGUIView, after its renderings are compared with WebKit holding the same
   document at the same time. The viewer of the test app holds CSS animations
-  with `document.getAnimations()` and their `currentTime`, and will hold SMIL
-  animations with `pauseAnimations()` and `setCurrentTime()`. WebKit is a
-  reference, not a target: a difference is decided by the specifications. The
-  script runs only in the test app, never in the package.
+  with `document.getAnimations()` and their `currentTime`, and SMIL animations
+  with `pauseAnimations()` and `setCurrentTime()`. The times are chosen away
+  from the times where a value changes, because `setCurrentTime()` can land a
+  little before or after them. WebKit is a reference, not a target: a
+  difference is decided by the specifications. The script runs only in the test
+  app, never in the package.
 - **Agreement between renderers:** For the same time, the image from
   `SVGRenderCG` and the image of the layer tree from `SVGRenderLayer` must
   match. This keeps playback from looking different from snapshots.
@@ -520,8 +527,10 @@ playback is smooth.
   then check layer properties. Playing, pausing, seeking and the conditions in
   <doc:#Pausing-playback> are tested this way without depending on real time.
 
-The W3C SVG 1.1 test suite contains SMIL tests (`animate-elem-*`) that aren't
-part of the snapshot tests yet. They're added with the SMIL work. The official
+The W3C SVG 1.1 test suite contains SMIL tests (`animate-elem-*`). The ones
+that SVGUIView renders correctly are part of the snapshot tests, each captured
+at times chosen for that document. The others are left out until what they
+also depend on, such as text or `<animateColor>`, renders correctly. The official
 tests for CSS Animations and CSS Transitions in web-platform-tests mostly check
 results with JavaScript, so they're used as a guide for writing new test
 documents instead.
@@ -553,8 +562,8 @@ before it is merged.
 | Phase | Work | Status |
 |---|---|---|
 | 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. | Done in 0.25.0 |
-| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done |
-| 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Planned |
+| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done in 0.26.0 |
+| 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Done |
 | 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Planned |
 | 2.5 | The document API and CSS Transitions, which need the document API to start. | Planned |
 | 3 | Filters on Metal. | Planned |
@@ -565,10 +574,6 @@ changes the output of the documents that those bugs affected.
 
 ## Open questions
 
-- The position of SMIL animations relative to CSS Animations in
-  <doc:#Combining-animations>. SVG 1.1 applied SMIL animations of properties as
-  an override style sheet, and browsers differ in details. The order above is a
-  starting point, to be checked against WebKit with test documents.
 - Whether still images should use the Metal filters once they produce the same
   results as the vImage implementation.
 - Whether filters should move to Metal before phase 3. Until then, playback runs
