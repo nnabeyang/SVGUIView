@@ -22,6 +22,16 @@ package struct CGPainter {
     graphics.restoreGState()
   }
 
+  /// Paints nodes in order, in the coordinates that the context has, as the parent of the nodes paints them where
+  /// no clip or mask applies.
+  ///
+  /// A renderer that paints the nodes of a render tree into separate layers paints the nodes of each layer this way.
+  package func paint(_ nodes: [RenderNode], into graphics: CGContext) async {
+    for node in nodes {
+      await paint(node, into: graphics)
+    }
+  }
+
   /// Paints a node.
   ///
   /// A clip or a mask that has been applied to the context since the last transparency layer applies to each
