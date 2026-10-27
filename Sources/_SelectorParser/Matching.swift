@@ -356,7 +356,9 @@ public func matchesSimpleSelector<E: Element>(
   case .is(let list), .where(let list):
     value = matchesNested(list: list, element: element, context: context, inNegation: context.shared.inNegation)
   default:
-    return .unknown
+    // Matching doesn't support the other components, such as pseudo-classes of user actions, so a selector with one
+    // of them matches no element, instead of every element.
+    value = false
   }
   return .from(value)
 }

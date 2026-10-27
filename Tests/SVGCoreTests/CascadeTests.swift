@@ -84,6 +84,14 @@ struct CascadeTests {
     #expect(fill(cascade(element: element, stylesheet: stylesheet("circle { fill: blue; }"))) == "red")
   }
 
+  @Test("a rule whose selector has a part that matching doesn't support applies to no element")
+  func unsupportedSelector() {
+    let element = ElementCursor(root: documentElement(0, "rect", ["x": "1", "fill": "red"]))
+    #expect(fill(cascade(element: element, stylesheet: stylesheet("rect:focus { fill: blue; }"))) == "red")
+    #expect(fill(cascade(element: element, stylesheet: stylesheet("rect:hover, rect.b { fill: blue; }"))) == "red")
+    #expect(fill(cascade(element: element, stylesheet: stylesheet("rect:focus, rect { fill: blue; }"))) == "blue")
+  }
+
   @Test("the style attribute overrides style sheets, and important declarations override it")
   func inlineStyle() {
     let element = ElementCursor(root: documentElement(0, "rect", ["id": "a", "style": "fill: green"]))

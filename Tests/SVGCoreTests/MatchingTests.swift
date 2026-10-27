@@ -222,4 +222,17 @@ struct MatchingTests {
   func nestedSelectors(css: String, expected: Set<Int>) {
     #expect(Self.matches(css) == expected)
   }
+
+  @Test(
+    "a selector with a part that matching doesn't support matches no element",
+    arguments: ["rect:hover", ":focus", "g:active rect", ":lang(en)", "rect:hover + circle"])
+  func unsupportedSelector(css: String) {
+    #expect(Self.matches(css).isEmpty)
+  }
+
+  @Test("a selector list matches with the selectors that matching supports")
+  func listWithUnsupportedSelector() {
+    let rect = ElementCursor(root: documentElement(0, "rect", ["x": "1"]))
+    #expect(matchesSelector(element: rect, css: "rect:hover, rect"))
+  }
 }
