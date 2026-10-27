@@ -24,6 +24,8 @@ package struct SVGBaseContext: Sendable {
   /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
   /// values change with the time.
   package let isAnimated: Bool
+  /// The elements whose computed values animations can change, or `nil` for a document without animations.
+  let restyleScope: RestyleScope?
   private(set) var pservers = [String: any SVGGradientServer]()
   private(set) var contentIdMap = [String: ObjectIdentifier]()
   private(set) var contents = [ObjectIdentifier: any SVGElement]()
@@ -35,7 +37,13 @@ package struct SVGBaseContext: Sendable {
 
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.
-  init(document: SVGDocument, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations) {
+  ///
+  /// - Parameter restyleScope: The elements whose computed values animations can change, which the context of the
+  ///   document at a time keeps from the context that it comes from, or `nil` to find them.
+  init(
+    document: SVGDocument, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
+    restyleScope: RestyleScope? = nil
+  ) {
     self.document = document
     self.stylesheet = stylesheet
     self.root = root
@@ -48,6 +56,7 @@ package struct SVGBaseContext: Sendable {
             if case .keyframes(let name) = $0 { animations.keyframes[name] != nil } else { false }
           }
         }
+    self.restyleScope = restyleScope ?? (isAnimated ? root.map { RestyleScope(root: $0, animations: animations) } : nil)
     guard let root else { return }
     for content in root.elements {
       let identifier = content.index
@@ -92,7 +101,8 @@ package struct SVGBaseContext: Sendable {
           ElementCursor(root: $0).makeElement(with: stylesheet, animations: animations)
         } as? SVGSVGElement
     }
-    return SVGBaseContext(document: document, stylesheet: stylesheet, root: animated, animations: animations)
+    return SVGBaseContext(
+      document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope)
   }
 
   mutating func setClipPath(id: String, value: SVGClipPathElement) {
