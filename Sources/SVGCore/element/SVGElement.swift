@@ -54,7 +54,7 @@ enum WritingMode: String, CaseIterable {
   case verticalLR = "vertical-lr"
 }
 
-enum DrawMode: Equatable {
+enum DrawMode: Hashable, Sendable {
   case normal
   case root
   case filter(isRoot: Bool)
