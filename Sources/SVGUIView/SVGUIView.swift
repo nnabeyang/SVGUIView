@@ -9,17 +9,66 @@ import os
 /// to ``data`` to change the displayed image. The view renders again when its
 /// size or its `contentMode` changes, and a new rendering stops the one in
 /// progress. Releasing the view stops its rendering too.
+///
+/// With a ``SVGUIViewConfiguration/animation`` other than
+/// ``SVGUIViewConfiguration/AnimationMode/none``, the view plays the animations
+/// of its document, and ``play()``, ``pause()`` and ``seek(to:)`` control
+/// them.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext
   /// The rendering in progress, which a new rendering and the release of the view cancel.
   private(set) var renderingTask: Task<Void, Never>?
-  /// The settings that control background rendering.
-  public var configuration: SVGUIViewConfiguration = .init()
+  /// The settings that control background rendering and the animations.
+  ///
+  /// Changing the ``SVGUIViewConfiguration/animation`` mode plays or pauses
+  /// the animations. Changing it to ``SVGUIViewConfiguration/AnimationMode/none``
+  /// also moves them back to time zero.
+  public var configuration: SVGUIViewConfiguration = .init() {
+    didSet {
+      if configuration.animation != oldValue.animation {
+        switch configuration.animation {
+        case .none:
+          isPlaying = false
+          currentTime = .zero
+        case .play:
+          isPlaying = true
+        case .paused:
+          isPlaying = false
+        }
+      }
+      updatePlayback()
+    }
+  }
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
   /// The size that the view last rendered at, so that it renders again when its size changes.
   private var renderedSize: CGSize?
   /// Counts the renderings that the view starts, so that one that finishes after a newer one is not shown.
   private var renderingGeneration = 0
+  /// Whether the latest rendering hasn't finished yet.
+  private var isRendering = false
+  /// Whether a frame of the animations waits for the rendering in progress, which shows the latest time when it
+  /// starts, so that frames that come while rendering is slower are skipped.
+  private var needsFrame = false
+  /// The time of the animations that the latest rendering shows.
+  private var renderedTime: Duration?
+
+  /// The time of the animations.
+  ///
+  /// The time starts at zero when the document is loaded, and advances while
+  /// the view plays its animations. Assigning new ``data`` moves it back to
+  /// zero.
+  public private(set) var currentTime: Duration = .zero
+  /// Whether the animations advance when the view can be seen, which ``play()`` and ``pause()`` change.
+  private var isPlaying = false
+  /// The clock that advances the animations, which tests replace.
+  var clock: any AnimationClock = DisplayLinkClock() {
+    didSet {
+      oldValue.isRunning = false
+      oldValue.onFrame = nil
+      startObservingClock()
+      updatePlayback()
+    }
+  }
 
   /// Creates a view that displays the SVG file at the given URL.
   ///
@@ -37,6 +86,7 @@ public class SVGUIView: UIView {
     self.baseContext = baseContext
     super.init(frame: frame)
     backgroundColor = .clear
+    startObservingClock()
     setNeedsDisplay()
   }
 
@@ -79,6 +129,8 @@ public class SVGUIView: UIView {
       // SVGView sets its data on every update of the SwiftUI view.
       guard data != oldValue else { return }
       baseContext = Self.parse(data)
+      currentTime = .zero
+      updatePlayback()
       setNeedsDisplay()
     }
   }
@@ -118,25 +170,113 @@ public class SVGUIView: UIView {
   /// empty one before drawing.
   override public func display(_: CALayer) {
     renderingTask?.cancel()
+    needsFrame = false
+    startRendering()
+  }
+
+  /// Starts rendering the document at the time that the view displays.
+  private func startRendering() {
     let rect = bounds
     renderedSize = rect.size
     let generation = nextRenderingGeneration()
     let scale = UIScreen.main.scale
     let capturedBase = baseContext
+    let time = displayedTime
+    renderedTime = time
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
+    isRendering = true
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       let result = await SVGUIView.makeImage(
-        rect: rect, scale: scale, base: capturedBase, time: .zero,
+        rect: rect, scale: scale, base: capturedBase, time: time,
         fit: fit, timeoutDuration: timeoutDuration
       )
-      self?.show(result, ofRendering: generation)
+      self?.finishRendering(result, ofRendering: generation)
+    }
+  }
+
+  /// Shows the result of a rendering, and starts the frame that waits for it.
+  private func finishRendering(_ result: Result<CGImage, SVGRenderingError>, ofRendering generation: Int) {
+    guard generation == renderingGeneration else { return }
+    isRendering = false
+    show(result)
+    if needsFrame {
+      needsFrame = false
+      startRendering()
+    }
+  }
+
+  /// Renders the frame at the time that the view displays, after the rendering in progress if there is one.
+  ///
+  /// A frame doesn't stop the rendering in progress, unlike a new size or new data, so that the view shows
+  /// frames even when rendering one takes longer than the display shows it.
+  private func renderFrame() {
+    if isRendering {
+      needsFrame = true
+    } else {
+      startRendering()
     }
   }
 
   deinit {
     // The rendering holds the view weakly, so without this it would go on until the timeout.
     renderingTask?.cancel()
+  }
+
+  /// Plays the animations of the document from the current time.
+  ///
+  /// This does nothing when the configuration's
+  /// ``SVGUIViewConfiguration/animation`` is
+  /// ``SVGUIViewConfiguration/AnimationMode/none``.
+  public func play() {
+    guard configuration.animation != .none else { return }
+    isPlaying = true
+    updatePlayback()
+  }
+
+  /// Holds the animations of the document at the current time.
+  public func pause() {
+    isPlaying = false
+    updatePlayback()
+  }
+
+  /// Moves the animations of the document to a time, and displays it.
+  ///
+  /// This does nothing when the configuration's
+  /// ``SVGUIViewConfiguration/animation`` is
+  /// ``SVGUIViewConfiguration/AnimationMode/none``.
+  ///
+  /// - Parameter time: The time to move to. A negative time moves to zero.
+  public func seek(to time: Duration) {
+    guard configuration.animation != .none else { return }
+    currentTime = max(time, .zero)
+    updatePlayback()
+  }
+
+  /// The time of the animations that the view displays.
+  private var displayedTime: Duration {
+    configuration.animation == .none ? .zero : currentTime
+  }
+
+  /// Whether the animations advance: they play, and the document has animations.
+  private var advances: Bool {
+    configuration.animation != .none && isPlaying && baseContext.isAnimated
+  }
+
+  /// Starts or stops the clock, and renders the displayed time if it changed.
+  private func updatePlayback() {
+    clock.isRunning = advances
+    if let renderedTime, renderedTime != displayedTime {
+      renderFrame()
+    }
+  }
+
+  private func startObservingClock() {
+    clock.onFrame = { [weak self] elapsed in
+      guard let self else { return }
+      currentTime += elapsed
+      renderFrame()
+    }
   }
 
   @available(*, unavailable)

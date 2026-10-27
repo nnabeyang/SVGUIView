@@ -23,7 +23,7 @@ package struct SVGBaseContext: Sendable {
   let animations: DocumentAnimations
   /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
   /// values change with the time.
-  let isAnimated: Bool
+  package let isAnimated: Bool
   private(set) var pservers = [String: any SVGGradientServer]()
   private(set) var contentIdMap = [String: ObjectIdentifier]()
   private(set) var contents = [ObjectIdentifier: any SVGElement]()
