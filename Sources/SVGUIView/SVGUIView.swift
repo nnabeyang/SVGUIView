@@ -16,7 +16,12 @@ import os
 /// them. The animations don't advance while the view isn't in a window, is
 /// hidden or has no size, or while the app is in the background.
 public class SVGUIView: UIView {
-  private var baseContext: SVGBaseContext
+  private var baseContext: SVGBaseContext {
+    didSet { animationEnd = baseContext.animationEnd() }
+  }
+  /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
+  /// infinite for animations that don't end.
+  private var animationEnd: Double
   /// The rendering in progress, which a new rendering and the release of the view cancel.
   private(set) var renderingTask: Task<Void, Never>?
   /// The settings that control background rendering and the animations.
@@ -91,6 +96,7 @@ public class SVGUIView: UIView {
   init(frame: CGRect, baseContext: SVGBaseContext, data: Data = Data()) {
     self.data = data
     self.baseContext = baseContext
+    animationEnd = baseContext.animationEnd()
     super.init(frame: frame)
     backgroundColor = .clear
     startObservingClock()
@@ -281,9 +287,9 @@ public class SVGUIView: UIView {
     configuration.animation == .none || isHeldByReduceMotion ? .zero : currentTime
   }
 
-  /// Whether the animations advance: they play, the document has animations, and the view can be seen.
+  /// Whether the animations advance: they play, they haven't ended, and the view can be seen.
   private var advances: Bool {
-    configuration.animation != .none && isPlaying && baseContext.isAnimated && !isHeldByReduceMotion
+    configuration.animation != .none && isPlaying && currentTime.seconds < animationEnd && !isHeldByReduceMotion
       && window != nil && !isHidden && bounds.width > 0 && bounds.height > 0 && !isInBackground
   }
 
@@ -300,6 +306,8 @@ public class SVGUIView: UIView {
       guard let self else { return }
       currentTime += elapsed
       renderFrame()
+      // The clock stops after the frame that passes the end of the animations.
+      updatePlayback()
     }
   }
 
