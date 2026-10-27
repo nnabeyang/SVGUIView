@@ -13,7 +13,8 @@ import os
 /// With a ``SVGUIViewConfiguration/animation`` other than
 /// ``SVGUIViewConfiguration/AnimationMode/none``, the view plays the animations
 /// of its document, and ``play()``, ``pause()`` and ``seek(to:)`` control
-/// them.
+/// them. The animations don't advance while the view isn't in a window, is
+/// hidden or has no size, or while the app is in the background.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext
   /// The rendering in progress, which a new rendering and the release of the view cancel.
@@ -60,6 +61,8 @@ public class SVGUIView: UIView {
   public private(set) var currentTime: Duration = .zero
   /// Whether the animations advance when the view can be seen, which ``play()`` and ``pause()`` change.
   private var isPlaying = false
+  /// Whether the app is in the background, where the animations don't advance.
+  private var isInBackground = false
   /// The clock that advances the animations, which tests replace.
   var clock: any AnimationClock = DisplayLinkClock() {
     didSet {
@@ -68,6 +71,10 @@ public class SVGUIView: UIView {
       startObservingClock()
       updatePlayback()
     }
+  }
+  /// Whether Reduce Motion is on, which tests replace.
+  var isReduceMotionEnabled: () -> Bool = { UIAccessibility.isReduceMotionEnabled } {
+    didSet { updatePlayback() }
   }
 
   /// Creates a view that displays the SVG file at the given URL.
@@ -87,6 +94,7 @@ public class SVGUIView: UIView {
     super.init(frame: frame)
     backgroundColor = .clear
     startObservingClock()
+    observeNotifications()
     setNeedsDisplay()
   }
 
@@ -149,6 +157,16 @@ public class SVGUIView: UIView {
     if bounds.size != renderedSize {
       setNeedsDisplay()
     }
+    updatePlayback()
+  }
+
+  override public func didMoveToWindow() {
+    super.didMoveToWindow()
+    updatePlayback()
+  }
+
+  override public var isHidden: Bool {
+    didSet { updatePlayback() }
   }
 
   // UIKit marks the layer for display only for a view that implements `draw(_:)`. This view renders in
@@ -253,14 +271,20 @@ public class SVGUIView: UIView {
     updatePlayback()
   }
 
-  /// The time of the animations that the view displays.
-  private var displayedTime: Duration {
-    configuration.animation == .none ? .zero : currentTime
+  /// Whether Reduce Motion holds the animations at time zero.
+  private var isHeldByReduceMotion: Bool {
+    configuration.animation != .none && !configuration.playsWithReduceMotion && isReduceMotionEnabled()
   }
 
-  /// Whether the animations advance: they play, and the document has animations.
+  /// The time of the animations that the view displays.
+  private var displayedTime: Duration {
+    configuration.animation == .none || isHeldByReduceMotion ? .zero : currentTime
+  }
+
+  /// Whether the animations advance: they play, the document has animations, and the view can be seen.
   private var advances: Bool {
-    configuration.animation != .none && isPlaying && baseContext.isAnimated
+    configuration.animation != .none && isPlaying && baseContext.isAnimated && !isHeldByReduceMotion
+      && window != nil && !isHidden && bounds.width > 0 && bounds.height > 0 && !isInBackground
   }
 
   /// Starts or stops the clock, and renders the displayed time if it changed.
@@ -277,6 +301,33 @@ public class SVGUIView: UIView {
       currentTime += elapsed
       renderFrame()
     }
+  }
+
+  /// Observes the app moving to the background and back, and changes of Reduce Motion. The notification center
+  /// stops sending notifications to the view when it's released.
+  private func observeNotifications() {
+    let center = NotificationCenter.default
+    center.addObserver(
+      self, selector: #selector(didEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(reduceMotionStatusDidChange),
+      name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
+  }
+
+  @objc private func didEnterBackground() {
+    isInBackground = true
+    updatePlayback()
+  }
+
+  @objc private func willEnterForeground() {
+    isInBackground = false
+    updatePlayback()
+  }
+
+  @objc private func reduceMotionStatusDidChange() {
+    updatePlayback()
   }
 
   @available(*, unavailable)

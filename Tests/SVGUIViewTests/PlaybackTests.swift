@@ -34,17 +34,20 @@ struct PlaybackTests {
 
   /// How long a test waits for a rendering, which only catches a rendering that never ends.
   private static let patience: Duration = .seconds(60)
-  /// The window of the views, which the suite keeps for the test, as an app keeps its views in one.
+  /// The window of the views, which the suite keeps for the test, since a view only plays in a window.
   private let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 20, height: 20))
 
   /// A view in a window, with a clock that the test advances, that has rendered its first image.
   private func makeView(
-    _ svg: String = document, animation: SVGUIViewConfiguration.AnimationMode = .play
+    _ svg: String = document, animation: SVGUIViewConfiguration.AnimationMode = .play,
+    playsWithReduceMotion: Bool = false, isReduceMotionEnabled: Bool = false
   ) async throws -> (SVGUIView, ManualClock) {
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
     let clock = ManualClock()
     view.clock = clock
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: Self.patience, animation: animation)
+    view.isReduceMotionEnabled = { isReduceMotionEnabled }
+    view.configuration = SVGUIViewConfiguration(
+      timeoutDuration: Self.patience, animation: animation, playsWithReduceMotion: playsWithReduceMotion)
     window.addSubview(view)
     view.layoutIfNeeded()
     view.layer.displayIfNeeded()
@@ -166,5 +169,45 @@ struct PlaybackTests {
     view.data = Data(Self.document.replacingOccurrences(of: "1s", with: "2s").utf8)
     #expect(view.currentTime == .zero)
     try await waitForGreen(in: view) { $0 == 0 }
+  }
+
+  @Test("the animations don't advance while the view can't be seen")
+  func stopsWhileHidden() async throws {
+    let (view, clock) = try await makeView()
+    view.isHidden = true
+    #expect(!clock.isRunning)
+    view.isHidden = false
+    #expect(clock.isRunning)
+    view.removeFromSuperview()
+    #expect(!clock.isRunning)
+    window.addSubview(view)
+    #expect(clock.isRunning)
+    view.frame.size = .zero
+    view.layoutIfNeeded()
+    #expect(!clock.isRunning)
+  }
+
+  @Test("the animations don't advance while the app is in the background")
+  func stopsInBackground() async throws {
+    let (_, clock) = try await makeView()
+    NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+    #expect(!clock.isRunning)
+    NotificationCenter.default.post(name: UIApplication.willEnterForegroundNotification, object: nil)
+    #expect(clock.isRunning)
+  }
+
+  @Test("Reduce Motion holds the animations at time zero, unless the configuration plays them anyway")
+  func reduceMotion() async throws {
+    let (view, clock) = try await makeView(isReduceMotionEnabled: true)
+    #expect(!clock.isRunning)
+    view.seek(to: .seconds(2))
+    #expect(green(in: view) == 0)
+    // The view follows the setting when it changes.
+    view.isReduceMotionEnabled = { false }
+    #expect(clock.isRunning)
+    try await waitForGreen(in: view) { $0 == 255 }
+
+    let (_, anywayClock) = try await makeView(playsWithReduceMotion: true, isReduceMotionEnabled: true)
+    #expect(anywayClock.isRunning)
   }
 }

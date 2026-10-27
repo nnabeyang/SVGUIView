@@ -28,6 +28,12 @@ public struct SVGUIViewConfiguration: Sendable {
   /// The default is ``AnimationMode/none``, which displays the document at
   /// time zero.
   public let animation: AnimationMode
+  /// Whether the view plays animations while Reduce Motion is on.
+  ///
+  /// By default, a view that plays animations displays its document at time
+  /// zero while Reduce Motion is on. Set this to `true` only for animations
+  /// that are essential to the content.
+  public let playsWithReduceMotion: Bool
 
   /// Creates a configuration.
   ///
@@ -37,11 +43,15 @@ public struct SVGUIViewConfiguration: Sendable {
   ///     default is 10 seconds.
   ///   - animation: Whether the view plays the animations of its document.
   ///     The default is ``AnimationMode/none``.
+  ///   - playsWithReduceMotion: Whether the view plays animations while
+  ///     Reduce Motion is on. The default is `false`.
   public init(
-    taskPriority: TaskPriority = .medium, timeoutDuration: Duration = .seconds(10), animation: AnimationMode = .none
+    taskPriority: TaskPriority = .medium, timeoutDuration: Duration = .seconds(10), animation: AnimationMode = .none,
+    playsWithReduceMotion: Bool = false
   ) {
     self.taskPriority = taskPriority
     self.timeoutDuration = timeoutDuration
     self.animation = animation
+    self.playsWithReduceMotion = playsWithReduceMotion
   }
 }
