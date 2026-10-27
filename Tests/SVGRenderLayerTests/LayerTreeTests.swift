@@ -79,7 +79,7 @@ private let keyframes =
 @MainActor
 @Suite("Layer trees")
 struct LayerTreeTests {
-  /// Documents, and whether they rotate an element.
+  /// Documents, and whether they move an element.
   nonisolated private static let documents: [(String, Bool)] = [
     (
       #"<rect x="10" y="10" width="50" height="30" fill="red"/>"#
@@ -93,7 +93,7 @@ struct LayerTreeTests {
     (
       keyframes + #"<rect width="40" height="40" fill="red"/>"#
         + #"<rect x="20" y="20" width="40" height="40" fill="green" style="animation: m 1s linear"/>"#
-        + #"<rect x="40" y="40" width="40" height="40" fill="blue"/>"#, false
+        + #"<rect x="40" y="40" width="40" height="40" fill="blue"/>"#, true
     ),
     (
       keyframes + #"<rect x="20" y="20" width="40" height="40" fill="green" style="animation: f 1s linear"/>"#, false
@@ -105,7 +105,7 @@ struct LayerTreeTests {
     ),
     (
       keyframes + #"<svg x="10" y="10" width="50" height="50" viewBox="0 0 10 10">"#
-        + #"<rect width="20" height="20" fill="green" style="animation: m 1s linear"/></svg>"#, false
+        + #"<rect width="20" height="20" fill="green" style="animation: m 1s linear"/></svg>"#, true
     ),
     (
       keyframes
@@ -119,7 +119,7 @@ struct LayerTreeTests {
         + #"<rect x="20" y="20" width="40" height="40" style="animation: c 1s linear"/>"#
         + #"<rect x="40" y="40" width="40" height="40" fill="green" style="animation: m 1s linear"/>"#
         + #"<g style="animation: c 1s linear"><rect x="60" y="0" width="20" height="20"/>"#
-        + #"<rect x="70" y="70" width="20" height="20" style="animation: m 1s linear"/></g>"#, false
+        + #"<rect x="70" y="70" width="20" height="20" style="animation: m 1s linear"/></g>"#, true
     ),
     // Elements with a clip path, a mask and a filter are painted with them in their layers.
     (
@@ -129,19 +129,20 @@ struct LayerTreeTests {
         + ##"<rect x="10" y="10" width="40" height="40" fill="green" clip-path="url(#c)" style="animation: m 1s linear"/>"##
         + ##"<rect x="50" y="10" width="40" height="40" fill="blue" mask="url(#k)" style="animation: f 1s linear"/>"##
         + ##"<rect x="20" y="60" width="30" height="30" fill="red" filter="url(#b)" style="animation: m 1s linear"/>"##,
-      false
+      true
     ),
   ]
 
   @Test("layers show what a rendering into one bitmap shows, at one time after another", arguments: documents)
-  func agreement(document: (content: String, rotates: Bool)) async throws {
+  func agreement(document: (content: String, moves: Bool)) async throws {
     let times = [0, 0.25, 0.5, 0.75]
     for scale in [1.0, 2.0] {
       for (time, (single, layers)) in zip(times, try await renderings(document.content, at: times, scale: scale)) {
         let (count, largest) = differences(single, layers)
         let description = "\(count) pixels differ by up to \(largest) at the time \(time) and the scale \(scale)"
-        if document.rotates {
-          // The screen resamples a rotated layer, which changes the antialiased edges.
+        if document.moves {
+          // A moving layer keeps its pixels, which the screen resamples where it rotates them or moves them between
+          // the pixels of the screen, which changes the antialiased edges.
           #expect(count <= single.count / 4 / 30, "\(description)")
         } else {
           #expect(count == 0, "\(description)")
