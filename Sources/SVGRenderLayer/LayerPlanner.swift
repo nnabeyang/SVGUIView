@@ -148,6 +148,15 @@ package struct LayerPlanner: Sendable {
     }
     guard !bounds.isNull, !bounds.isEmpty else { return nil }
     let margin = Self.margin / rasterScale
-    return PaintedLayer(nodes: nodes, bounds: bounds.insetBy(dx: -margin, dy: -margin), rasterScale: rasterScale)
+    bounds = bounds.insetBy(dx: -margin, dy: -margin)
+    if transform.b == 0, transform.c == 0, abs(transform.a) == abs(transform.d) {
+      // Without a rotation, a skew or a scale that differs between the axes, the pixels of the contents can lie on
+      // the pixels of the screen, so that the layer shows the same pixels as a rendering into one bitmap. A flip
+      // keeps them there.
+      let pixels = CGAffineTransform(scaleX: scale, y: scale)
+      let device = bounds.applying(transform.concatenating(pixels)).integral
+      bounds = device.applying(transform.concatenating(pixels).inverted())
+    }
+    return PaintedLayer(nodes: nodes, bounds: bounds, rasterScale: rasterScale)
   }
 }

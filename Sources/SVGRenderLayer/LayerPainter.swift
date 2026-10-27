@@ -1,0 +1,77 @@
+import CoreGraphics
+import Foundation
+import SVGCore
+import SVGRenderCG
+
+/// A layer of planned layers whose painted layers have been painted.
+package indirect enum RenderedLayer: Sendable {
+  case container(RenderedContainer)
+  /// The contents of a painted layer, and the rectangle and the scale of the plan that they cover.
+  case painted(PaintedContents)
+}
+
+/// A container layer whose painted layers have been painted.
+package struct RenderedContainer: Sendable {
+  /// The container layer, without the layers in it.
+  package let id: RenderID?
+  package let transform: CGAffineTransform
+  package let opacity: CGFloat
+  package let clip: CGRect?
+  package let children: [RenderedLayer]
+}
+
+/// The contents of a painted layer.
+package struct PaintedContents: Sendable {
+  /// The image of what the nodes paint, or `nil` if its bitmap couldn't be allocated, in which case the layer shows
+  /// nothing.
+  package let image: CGImage?
+  /// The rectangle that the image covers, in the coordinates of the layer around this one.
+  package let bounds: CGRect
+  /// The pixels of the image for each unit of the coordinates.
+  package let rasterScale: CGFloat
+}
+
+extension ContainerLayer {
+  /// The container layer with its painted layers painted, in order, or `nil` if the task is cancelled.
+  ///
+  /// - Parameter scale: The scale of the screen, which the bitmaps of clip paths, masks, filters and patterns are
+  ///   made at, as in a rendering into one bitmap.
+  package func painted(scale: CGFloat) async -> RenderedContainer? {
+    var children = [RenderedLayer]()
+    for child in self.children {
+      guard !Task.isCancelled else { return nil }
+      switch child {
+      case .container(let container):
+        guard let painted = await container.painted(scale: scale) else { return nil }
+        children.append(.container(painted))
+      case .painted(let layer):
+        children.append(.painted(await layer.painted(scale: scale)))
+      }
+    }
+    guard !Task.isCancelled else { return nil }
+    return RenderedContainer(id: id, transform: transform, opacity: opacity, clip: clip, children: children)
+  }
+}
+
+extension PaintedLayer {
+  /// What the nodes paint, as an image of the bounds at the raster scale.
+  fileprivate func painted(scale: CGFloat) async -> PaintedContents {
+    // Bounds on the pixels of the screen cover whole pixels, up to the error of the arithmetic that put them there.
+    func pixels(_ length: CGFloat) -> CGFloat {
+      let pixels = length * rasterScale
+      return abs(pixels - pixels.rounded()) < 0.01 ? pixels.rounded() : pixels.rounded(.up)
+    }
+    let size = CGSize(width: pixels(bounds.width), height: pixels(bounds.height))
+    // A bitmap that can't be made, such as one too large, shows nothing, as an element whose filter, mask, clip
+    // path or pattern can't be allocated is left out of a rendering into one bitmap.
+    guard let graphics = CGContext.bitmap(size: size, scale: 1, space: CGColorSpaceCreateDeviceRGB()) else {
+      return PaintedContents(image: nil, bounds: bounds, rasterScale: rasterScale)
+    }
+    // The first row of the bitmap is the top of the image, as in the contents of a layer.
+    graphics.concatenate(
+      CGAffineTransform(size.width / bounds.width, 0, 0, -size.height / bounds.height, 0, size.height))
+    graphics.translateBy(x: -bounds.minX, y: -bounds.minY)
+    await CGPainter(scale: scale).paint(nodes, into: graphics)
+    return PaintedContents(image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale)
+  }
+}
