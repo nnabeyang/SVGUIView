@@ -174,6 +174,8 @@ struct ComputedStyle: Sendable {
   var animationDirection: [AnimationDirection]
   var animationFillMode: [AnimationFillMode]
   var animationPlayState: [AnimationPlayState]
+  /// The transform that SMIL `<animateMotion>` elements add after `transform`, which isn't a property.
+  var motion = CGAffineTransform.identity
 
   /// The initial value of every property, which is the style of the parent of the root element.
   static let initial = ComputedStyle(
@@ -206,11 +208,15 @@ struct ComputedStyle: Sendable {
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
   ///   - animations: The keyframes of the document and the time of the animations that the element runs, which
   ///     override its values except for important declarations, or `nil` for no animations.
+  ///   - smil: The effects of the SMIL animations of the element at the time, in the order that they apply in, which
+  ///     CSS animations override.
   init(
-    cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations? = nil
+    cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations? = nil,
+    smil: [SMILEffect] = []
   ) {
     var computer = Computer(
-      cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial))
+      cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial),
+      smil: smil.compactMap { effect in effect.property.map { (property: $0, effect: effect) } })
     if let animations, !animations.keyframes.isEmpty {
       // The properties of CSS Animations come last in the order, and are computed first to find the animations.
       for id in PropertyID.allCases where id.isAnimation {
@@ -221,6 +227,12 @@ struct ComputedStyle: Sendable {
     for id in PropertyID.allCases {
       id.visit(&computer)
     }
+    // Motions apply in the order of the sandwich model, each over the ones under it.
+    for effect in smil where effect.animation.kind == .animateMotion {
+      if let motion = effect.motion(over: computer.resolver.style.motion) {
+        computer.resolver.style.motion = motion
+      }
+    }
     self = computer.resolver.style
   }
 
@@ -229,14 +241,22 @@ struct ComputedStyle: Sendable {
   private struct Computer: StylePropertyVisitor {
     let cascaded: CascadedValues
     var resolver: StyleResolver
+    /// The SMIL animations of the element's properties, in the order that they apply in.
+    let smil: [(property: PropertyID, effect: SMILEffect)]
     /// The animations that the element runs, in the order of `animation-name`.
     var animations = [ElementAnimation]()
 
     mutating func visit<P: StyleProperty>(_: P.Type) {
       var value = resolver.computed(cascaded[P.self], of: P.self)
-      // Animations override the cascaded values except for important declarations, and a later animation
-      // overrides an earlier one, with the value under it as the value of its missing keyframes.
-      if !animations.isEmpty, !P.id.isAnimation, !cascaded.important.contains(P.id) {
+      // Animations override the cascaded values except for important declarations. SMIL animations come first, and
+      // CSS animations override them. A later animation overrides an earlier one, with the value under it as the
+      // value that it starts from.
+      if !P.id.isAnimation, !cascaded.important.contains(P.id) {
+        for (property, effect) in smil where property == P.id {
+          if let animated = effect.value(of: P.self, over: value, in: resolver) {
+            value = animated
+          }
+        }
         for animation in animations {
           if let animated = animation.value(of: P.self, over: value, in: resolver) {
             value = animated

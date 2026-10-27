@@ -85,6 +85,26 @@ struct TransformListTests {
     let expected = [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty]
     #expect(zip(values, expected).allSatisfy { abs($0 - $1) < 1e-9 }, "\(transform)")
   }
+
+  @Test(
+    "a transform list written as attribute text is read back as the same list",
+    arguments: [
+      "translate(10 5%)", "scale(2, 3) rotate(45 10 20)", "skewX(30) skewY(-10)", "matrix(1 2 3 4 5 6)", "none",
+      "translateX(2px) scaleY(0.5)",
+    ])
+  func attributeText(text: String) throws {
+    let list = try #require(TransformList(attribute: text))
+    #expect(TransformList(attribute: list.attributeText) == list)
+  }
+
+  @Test("a skew along both axes is written as a matrix")
+  func skewAttributeText() throws {
+    let list = TransformList(functions: [.skew(30, 10)])
+    let matrix = try #require(TransformList(attribute: list.attributeText))
+    let expected = list.matrix(box: .zero, context: LengthContextStub())
+    let actual = matrix.matrix(box: .zero, context: LengthContextStub())
+    #expect(abs(expected.b - actual.b) < 1e-9 && abs(expected.c - actual.c) < 1e-9)
+  }
 }
 
 private struct LengthContextStub: SVGLengthContext {

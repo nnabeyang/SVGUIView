@@ -98,7 +98,9 @@ final class SVGBaseElement: Sendable {
   func restyled(parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?) -> SVGBaseElement {
     SVGBaseElement(
       elementID: elementID, name: name, text: text, attributes: attributes, cascaded: cascaded,
-      style: ComputedStyle(cascaded: cascaded, parent: parent, root: root, animations: animations))
+      style: ComputedStyle(
+        cascaded: cascaded, parent: parent, root: root, animations: animations,
+        smil: animations?.smilEffects[elementID] ?? []))
   }
 }
 
@@ -185,18 +187,25 @@ extension SVGDrawableElement {
 
 extension ElementCursor {
   /// Makes the element to render, with the values of the cascade applied, or `nil` for an element that isn't
-  /// rendered, such as `<style>` or an unknown element, whose descendants aren't rendered either.
+  /// rendered, such as `<style>`, an unknown element or an animation element, whose descendants aren't rendered
+  /// either.
   ///
   /// - Parameters:
   ///   - parent: The computed values of the parent element, or `nil` for the root element.
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
-  func makeElement(with css: Stylesheet, parent: ComputedStyle? = nil, root: ComputedStyle? = nil) -> (any SVGElement)? {
+  ///   - animations: The animations of the document at its time, or `nil` for no animations.
+  func makeElement(
+    with css: Stylesheet, parent: ComputedStyle? = nil, root: ComputedStyle? = nil,
+    animations: DocumentAnimations? = nil
+  ) -> (any SVGElement)? {
     let name = element.name
-    if name == .style || name == .unknown { return nil }
+    if !name.isRendered { return nil }
     let cascaded = cascade(element: self, stylesheet: css)
-    let style = ComputedStyle(cascaded: cascaded, parent: parent, root: root)
+    let style = ComputedStyle(
+      cascaded: cascaded, parent: parent, root: root, animations: animations,
+      smil: animations?.smilEffects[element.id] ?? [])
     let contents = element.children.indices.compactMap {
-      child(at: $0).makeElement(with: css, parent: style, root: root ?? style)
+      child(at: $0).makeElement(with: css, parent: style, root: root ?? style, animations: animations)
     }
     let base = SVGBaseElement(
       elementID: element.id, name: name, text: element.text, attributes: element.attributes, cascaded: cascaded, style: style)
@@ -254,7 +263,7 @@ extension ElementCursor {
         SVGRadialGradientServer(base: base, contents: contents)
       case .defs:
         SVGDefsElement(base: base, contents: contents)
-      case .style, .unknown:
+      case .style, .unknown, .animate, .set, .animateTransform, .animateMotion, .mpath:
         preconditionFailure("\(name.rawValue) isn't rendered")
       }
     return rendered

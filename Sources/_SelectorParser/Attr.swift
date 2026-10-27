@@ -10,7 +10,7 @@ public struct NamespacePair<Prefix: Equatable, Url: Equatable>: Equatable {
   }
 }
 
-public struct AttrSelectorWithOptionalNamespace<Impl: SelectorImpl>: Equatable {
+public struct AttrSelectorWithOptionalNamespace<Impl: SelectorImpl>: Equatable, Sendable {
   public let namespace: NamespaceConstraint<NamespacePair<Impl.NamespacePrefix, Impl.NamespaceUrl>>?
   public let localName: Impl.LocalName
   public let localNameLower: Impl.LocalName
@@ -84,7 +84,7 @@ public enum AttrSelectorOperation<AttrValue> {
 
 let SELECTOR_WHITESPACE: Set<Character> = [" ", "\t", "\n", "\r", "\u{000C}"]
 
-public enum AttrSelectorOperator: Equatable {
+public enum AttrSelectorOperator: Equatable, Sendable {
   case equal
   case includes
   case dashMatch
@@ -133,7 +133,7 @@ extension AttrSelectorOperator: ToCSS {
   }
 }
 
-public enum CaseSensitivity {
+public enum CaseSensitivity: Sendable {
   case caseSensitive
   case asciiCaseInsensitive
 
@@ -167,7 +167,7 @@ public enum CaseSensitivity {
   }
 }
 
-public enum ParsedCaseSensitivity: Equatable {
+public enum ParsedCaseSensitivity: Equatable, Sendable {
   case explicitCaseSensitive
   case asciiCaseInsensitive
   case caseSensitive
@@ -234,3 +234,11 @@ extension Collection {
     return (first, rest)
   }
 }
+
+extension NamespacePair: Sendable where Prefix: Sendable, Url: Sendable {}
+
+extension NamespaceConstraint: Sendable where NamespaceUrl: Sendable {}
+
+extension AttrSelectorOperation: Sendable where AttrValue: Sendable {}
+
+extension ParsedAttrSelectorOperation: Sendable where AttrValue: Sendable {}

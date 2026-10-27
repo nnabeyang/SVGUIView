@@ -108,13 +108,13 @@ extension SelectorParseError: From {
 }
 
 public protocol SelectorImpl {
-  associatedtype AttrValue: ExpressibleByStringLiteral & Equatable & From & ToCSS where AttrValue.From == String
-  associatedtype Identifier: ExpressibleByStringLiteral & From & ToCSS & Hashable where Identifier.From == String
-  associatedtype LocalName: ExpressibleByStringLiteral & Equatable & From & ToCSS & Hashable where LocalName.From == String
-  associatedtype NamespaceUrl: Default & From & ToCSS & Equatable where NamespaceUrl.From == String
-  associatedtype NamespacePrefix: ExpressibleByStringLiteral & Equatable & From & ToCSS & Default where NamespacePrefix.From == String
-  associatedtype NonTSPseudoClass: Equatable & _SelectorParser.NonTSPseudoClass where NonTSPseudoClass.Impl == Self
-  associatedtype PseudoElement: Equatable & _SelectorParser.PseudoElement where PseudoElement.Impl == Self
+  associatedtype AttrValue: Sendable & ExpressibleByStringLiteral & Equatable & From & ToCSS where AttrValue.From == String
+  associatedtype Identifier: Sendable & ExpressibleByStringLiteral & From & ToCSS & Hashable where Identifier.From == String
+  associatedtype LocalName: Sendable & ExpressibleByStringLiteral & Equatable & From & ToCSS & Hashable where LocalName.From == String
+  associatedtype NamespaceUrl: Sendable & Default & From & ToCSS & Equatable where NamespaceUrl.From == String
+  associatedtype NamespacePrefix: Sendable & ExpressibleByStringLiteral & Equatable & From & ToCSS & Default where NamespacePrefix.From == String
+  associatedtype NonTSPseudoClass: Sendable & Equatable & _SelectorParser.NonTSPseudoClass where NonTSPseudoClass.Impl == Self
+  associatedtype PseudoElement: Sendable & Equatable & _SelectorParser.PseudoElement where PseudoElement.Impl == Self
 
   func shouldCollectAttrHash(_ name: LocalName) -> Bool
 }
@@ -189,7 +189,7 @@ extension PseudoElement {
   }
 }
 
-public struct SelectorList<Impl: SelectorImpl>: Equatable {
+public struct SelectorList<Impl: SelectorImpl>: Equatable, Sendable {
   public let slice: [Selector<Impl>]
 
   public init(slice: [Selector<Impl>]) {

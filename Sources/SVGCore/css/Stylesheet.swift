@@ -11,7 +11,7 @@ extension Namespaces: Default {
   }
 }
 
-struct Stylesheet {
+struct Stylesheet: Sendable {
   let rules: [CSSRule]
   /// The `@keyframes` rules by their names. Of the rules with the same name, the last one wins.
   let keyframes: [String: KeyframesRule]

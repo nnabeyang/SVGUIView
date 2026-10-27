@@ -71,6 +71,15 @@ struct RenderTreeBuilderTests {
     #expect(try use(try #require(group.children.first)).instance == nil)
   }
 
+  @Test("the SMIL animations of an element apply to its copies in use elements")
+  func animatedUseInstances() async throws {
+    let tree = try await renderTree(
+      ##"<defs><rect id="r" width="10" height="10"><set attributeName="opacity" to="0.5"/></rect></defs><use href="#r"/>"##,
+      at: 1)
+    let copy = try use(try #require(try children(of: tree).last))
+    #expect(try shape(try #require(copy.instance).content).opacity == 0.5)
+  }
+
   @Test("a gradient takes the stops of the gradient that it references")
   func gradientReference() async throws {
     let tree = try await renderTree(

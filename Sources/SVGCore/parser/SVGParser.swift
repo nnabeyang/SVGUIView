@@ -30,7 +30,29 @@ enum SVGElementName: String, Equatable {
   case feOffset
   case feMerge
   case feMergeNode
+  case animate
+  case set
+  case animateTransform
+  case animateMotion
+  case mpath
   case unknown
+
+  /// Whether the element is a SMIL animation element.
+  var isAnimation: Bool {
+    switch self {
+    case .animate, .set, .animateTransform, .animateMotion: true
+    default: false
+    }
+  }
+
+  /// Whether the element is rendered or used by rendered elements. `<style>`, unknown elements and the elements of
+  /// SMIL animation aren't.
+  var isRendered: Bool {
+    switch self {
+    case .style, .unknown, .animate, .set, .animateTransform, .animateMotion, .mpath: false
+    default: true
+    }
+  }
 }
 
 enum SVGXmlNameSpace: String {
@@ -46,6 +68,8 @@ package final class SVGParser: NSObject {
     let localName: String
     let attributes: [String: String]
     var children: [DocumentElement] = []
+    /// The text content so far, which only `<text>` and `<style>` keep.
+    var text = ""
   }
 
   private var rules: [CSSRule] = []
@@ -53,7 +77,6 @@ package final class SVGParser: NSObject {
   private var stack = [OpenElement]()
   private var root: DocumentElement?
   private var elementCount = 0
-  private var text: String = ""
   private var nameSpaces = [String: (ns: SVGXmlNameSpace, count: Int)]()
 
   private static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "parser")
@@ -70,7 +93,9 @@ package final class SVGParser: NSObject {
     let css = Stylesheet(rules: rules, keyframes: keyframes)
     let element = root.flatMap { ElementCursor(root: $0).makeElement(with: css) as? SVGSVGElement }
     return SVGBaseContext(
-      document: document, root: element, animations: DocumentAnimations(keyframes: keyframes, time: 0))
+      document: document, stylesheet: css, root: element,
+      animations: DocumentAnimations(
+        keyframes: keyframes, smil: SMILAnimation.animations(of: document), time: 0))
   }
 
   private func parse(data: Data) -> SVGBaseContext {
@@ -127,7 +152,7 @@ extension SVGParser: XMLParserDelegate {
     guard let open = stack.popLast() else { return }
     precondition(name == open.name)
     if open.name == .style {
-      let parseInput = ParserInput(input: text)
+      let parseInput = ParserInput(input: open.text)
       let input = Parser(input: parseInput)
       var parser = CSSParser(input: input)
       // Number the rules in document order across `<style>` elements, so that a later rule wins a tie.
@@ -146,8 +171,7 @@ extension SVGParser: XMLParserDelegate {
     }
     let element = DocumentElement(
       id: open.id, name: open.name, localName: open.localName, attributes: filter(attributes: open.attributes),
-      text: text, children: open.children)
-    text = ""
+      text: open.text, children: open.children)
     if stack.isEmpty {
       root = element
     } else {
@@ -158,7 +182,7 @@ extension SVGParser: XMLParserDelegate {
   package func parser(_: XMLParser, foundCharacters fragment: String) {
     switch stack.last?.name {
     case .text, .style:
-      text.append(fragment)
+      stack[stack.count - 1].text.append(fragment)
     default:
       break
     }

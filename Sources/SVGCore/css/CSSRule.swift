@@ -1,6 +1,6 @@
 import _SelectorParser
 
-struct CSSRule {
+struct CSSRule: Sendable {
   let selectors: SelectorList<SVGSelectorImpl>
   let declarations: [CSSDeclaration]
   var sourceOrder: Int

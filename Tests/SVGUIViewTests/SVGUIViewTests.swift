@@ -231,20 +231,19 @@ struct SVGUIViewTests {
     }
     let clock = ContinuousClock()
     let start = clock.now
-    await withTaskGroup(of: SVGRenderingError?.self) { group in
-      for view in views {
-        group.addTask { @MainActor in
-          do throws(SVGRenderingError) {
-            _ = try await view.takeSnapshot()
-            return nil
-          } catch {
-            return error
-          }
+    // The tasks run on the main actor, as the views do, and wait for their renderings at the same time.
+    let snapshots = views.map { view in
+      Task { () -> SVGRenderingError? in
+        do throws(SVGRenderingError) {
+          _ = try await view.takeSnapshot()
+          return nil
+        } catch {
+          return error
         }
       }
-      for await error in group {
-        #expect(error == .timedOut)
-      }
+    }
+    for snapshot in snapshots {
+      #expect(await snapshot.value == .timedOut)
     }
     let elapsed = clock.now - start
     // Before the timeout ran above the priority of renderings, the renderings ran to the end, which took about 20

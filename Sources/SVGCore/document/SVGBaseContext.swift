@@ -1,20 +1,28 @@
 import CoreGraphics
 import Foundation
 
-/// The `@keyframes` rules of a document, and the time that its animations are at.
+/// The `@keyframes` rules and the SMIL animations of a document, and the time that its animations are at.
 struct DocumentAnimations: Sendable {
   /// The rules by their names. Of rules with the same name, the last one in the document wins.
   let keyframes: [String: KeyframesRule]
+  /// The SMIL animations in document order.
+  var smil: [SMILAnimation] = []
   /// The time since the document was loaded, in seconds.
   var time: Double
+  /// The effects of the SMIL animations at the time, by the elements that they change, in the order that they apply
+  /// in.
+  var smilEffects: [ElementID: [SMILEffect]] = [:]
 }
 
 package struct SVGBaseContext: Sendable {
   /// The parsed document, which the elements to render are made from.
   let document: SVGDocument
+  /// The style sheets of the document, which the cascade of the elements uses.
+  let stylesheet: Stylesheet
   package let root: SVGSVGElement?
   let animations: DocumentAnimations
-  /// Whether an element runs an animation with keyframes, so that the computed values change with the time.
+  /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
+  /// values change with the time.
   let isAnimated: Bool
   private(set) var pservers = [String: any SVGGradientServer]()
   private(set) var contentIdMap = [String: ObjectIdentifier]()
@@ -27,17 +35,19 @@ package struct SVGBaseContext: Sendable {
 
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.
-  init(document: SVGDocument, root: SVGSVGElement?, animations: DocumentAnimations) {
+  init(document: SVGDocument, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations) {
     self.document = document
+    self.stylesheet = stylesheet
     self.root = root
     self.animations = animations
     isAnimated =
-      !animations.keyframes.isEmpty
-      && (root?.elements ?? []).contains { element in
-        element.style.animationName.contains {
-          if case .keyframes(let name) = $0 { animations.keyframes[name] != nil } else { false }
+      !animations.smil.isEmpty
+      || !animations.keyframes.isEmpty
+        && (root?.elements ?? []).contains { element in
+          element.style.animationName.contains {
+            if case .keyframes(let name) = $0 { animations.keyframes[name] != nil } else { false }
+          }
         }
-      }
     guard let root else { return }
     for content in root.elements {
       let identifier = content.index
@@ -69,8 +79,20 @@ package struct SVGBaseContext: Sendable {
     guard isAnimated, let root else { return self }
     var animations = animations
     animations.time = time
-    let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
-    return SVGBaseContext(document: document, root: animated, animations: animations)
+    animations.smilEffects = SMILEffect.effects(of: animations.smil, at: time)
+    let attributes = SMILEffect.attributes(of: animations.smilEffects, in: document)
+    let animated: SVGSVGElement?
+    if attributes.isEmpty {
+      animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
+    } else {
+      // Animations of attributes that aren't properties change the attributes before the cascade, so the elements
+      // are made again from the document with the animated attributes.
+      animated =
+        document.replacingAttributes(attributes).root.flatMap {
+          ElementCursor(root: $0).makeElement(with: stylesheet, animations: animations)
+        } as? SVGSVGElement
+    }
+    return SVGBaseContext(document: document, stylesheet: stylesheet, root: animated, animations: animations)
   }
 
   mutating func setClipPath(id: String, value: SVGClipPathElement) {

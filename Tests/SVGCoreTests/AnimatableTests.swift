@@ -274,4 +274,33 @@ struct AnimatableTests {
     // Commands before the first moveto stay as they are.
     #expect(PathData("l5 5 m1 1 l1 1").absolute() == PathData("l5 5 M1 1 L2 2"))
   }
+
+  @Test("sums of property values stay in the ranges of the properties")
+  func sumsOfPropertyValues() throws {
+    let resolver = StyleResolver(style: .initial, parent: .initial, root: .initial)
+    #expect(FillOpacityProperty.added(0.5, to: 0.8, in: resolver) == 1)
+    #expect(OpacityProperty.added(-0.5, to: 0.2, in: resolver) == 0)
+    #expect(StrokeWidthProperty.added(.pixel(-5), to: .pixel(2), in: resolver) == .pixel(0))
+    #expect(StrokeMiterlimitProperty.added(-3, to: 2, in: resolver) == 1)
+    #expect(StrokeDasharrayProperty.added([-5, 2], to: [1, 1], in: resolver) == [0, 3])
+    // Properties whose values can't be added have no sum.
+    #expect(FillRuleProperty.added(.evenodd, to: .nonzero, in: resolver) == nil)
+  }
+
+  @Test("sums and distances of paints resolve currentColor")
+  func paintSumsAndDistances() throws {
+    var style = ComputedStyle.initial
+    style.color = try color("rgb(10, 20, 30)")
+    let resolver = StyleResolver(style: style, parent: .initial, root: .initial)
+    let red = Paint.color(try color("rgb(100, 0, 0)"))
+    let sum = try #require(FillProperty.added(red, to: .currentColor, in: resolver))
+    guard case .color(let summed) = sum else {
+      Issue.record("The sum isn't a color")
+      return
+    }
+    #expect(matches(summed, (110.0 / 255, 20.0 / 255, 30.0 / 255, 1)))
+    let distance = try #require(StrokeProperty.distance(.currentColor, red, in: resolver))
+    #expect(distance > 0)
+    #expect(FillProperty.distance(.none, red, in: resolver) == nil)
+  }
 }

@@ -61,6 +61,18 @@ struct DocumentTests {
     #expect(context.root?.children.map(\.type) == [.rect])
   }
 
+  @Test("the text of a text element around its children stays with it")
+  func textAroundChildren() throws {
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://example.com/x" viewBox="0 0 20 20">
+        <text>Hello<x:foo>?</x:foo>!</text>
+      </svg>
+      """#
+    let root = try #require(SVGParser.parse(data: Data(svg.utf8)).document.root)
+    #expect(root.children[0].text == "Hello!")
+    #expect(root.children[0].children[0].text == "")
+  }
+
   @Test("every element of a document has its own identifier")
   func identifiersAreUnique() throws {
     let svg = #"<svg xmlns="http://www.w3.org/2000/svg"><g><rect/><foo/></g><circle/></svg>"#

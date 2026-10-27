@@ -146,6 +146,7 @@ struct AnimatedStyleTests {
         #"<svg xmlns="http://www.w3.org/2000/svg"><style>@keyframes a { to { opacity: 0 } }</style><rect/></svg>"#
           .utf8))
     #expect(!base.isAnimated)
-    #expect(try #require(base.at(time: 1).root) === base.root)
+    let root = try #require(base.root)
+    #expect(base.at(time: 1).root === root)
   }
 }

@@ -154,6 +154,13 @@ enum FontSizeProperty: StyleProperty {
     if case .length(let length) = size { return .length(length.nonNegative) }
     return size
   }
+
+  /// The sum of two sizes, which isn't negative.
+  static func added(_ value: SVGUIFont.Size, to underlying: SVGUIFont.Size, in _: StyleResolver) -> SVGUIFont.Size? {
+    guard let size = underlying.adding(value) else { return nil }
+    if case .length(let length) = size { return .length(length.nonNegative) }
+    return size
+  }
 }
 
 enum FontWeightProperty: StyleProperty {
@@ -213,6 +220,14 @@ enum FillProperty: StyleProperty {
   static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
     resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
   }
+
+  static func added(_ value: Paint, to underlying: Paint, in resolver: StyleResolver) -> Paint? {
+    resolver.style.resolved(underlying).adding(resolver.style.resolved(value))
+  }
+
+  static func distance(_ from: Paint, _ to: Paint, in resolver: StyleResolver) -> Double? {
+    resolver.style.resolved(from).pacedDistance(to: resolver.style.resolved(to))
+  }
 }
 
 enum FillOpacityProperty: StyleProperty {
@@ -227,6 +242,10 @@ enum FillOpacityProperty: StyleProperty {
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
     clampedOpacity(from.animated(to: to, progress: progress))
+  }
+
+  static func added(_ value: Double, to underlying: Double, in _: StyleResolver) -> Double? {
+    clampedOpacity(underlying + value)
   }
 }
 
@@ -255,6 +274,14 @@ enum StrokeProperty: StyleProperty {
   static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
     resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
   }
+
+  static func added(_ value: Paint, to underlying: Paint, in resolver: StyleResolver) -> Paint? {
+    resolver.style.resolved(underlying).adding(resolver.style.resolved(value))
+  }
+
+  static func distance(_ from: Paint, _ to: Paint, in resolver: StyleResolver) -> Double? {
+    resolver.style.resolved(from).pacedDistance(to: resolver.style.resolved(to))
+  }
 }
 
 enum StrokeOpacityProperty: StyleProperty {
@@ -269,6 +296,10 @@ enum StrokeOpacityProperty: StyleProperty {
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
     clampedOpacity(from.animated(to: to, progress: progress))
+  }
+
+  static func added(_ value: Double, to underlying: Double, in _: StyleResolver) -> Double? {
+    clampedOpacity(underlying + value)
   }
 }
 
@@ -289,6 +320,11 @@ enum StrokeWidthProperty: StyleProperty {
   /// The width between two widths, which isn't negative.
   static func interpolated(_ from: SVGLength, _ to: SVGLength, progress: Double, in _: StyleResolver) -> SVGLength {
     from.animated(to: to, progress: progress).nonNegative
+  }
+
+  /// The sum of two widths, which isn't negative.
+  static func added(_ value: SVGLength, to underlying: SVGLength, in _: StyleResolver) -> SVGLength? {
+    underlying.adding(value)?.nonNegative
   }
 }
 
@@ -346,6 +382,11 @@ enum StrokeMiterlimitProperty: StyleProperty {
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
     max(from.animated(to: to, progress: progress), 1)
   }
+
+  /// The sum of two limits, which is at least 1.
+  static func added(_ value: Double, to underlying: Double, in _: StyleResolver) -> Double? {
+    max(underlying + value, 1)
+  }
 }
 
 enum StrokeDasharrayProperty: StyleProperty {
@@ -364,6 +405,11 @@ enum StrokeDasharrayProperty: StyleProperty {
   /// The dashes between two lists of dashes, which aren't negative.
   static func interpolated(_ from: [CGFloat], _ to: [CGFloat], progress: Double, in _: StyleResolver) -> [CGFloat] {
     from.animated(to: to, progress: progress).map { max($0, 0) }
+  }
+
+  /// The sum of two lists of dashes, which aren't negative.
+  static func added(_ value: [CGFloat], to underlying: [CGFloat], in _: StyleResolver) -> [CGFloat]? {
+    underlying.adding(value)?.map { max($0, 0) }
   }
 }
 
@@ -405,6 +451,8 @@ enum VisibilityProperty: StyleProperty {
   static let isInherited = true
   static let initial = CSSVisibility.visible
   static let computed = \ComputedStyle.visibility
+  /// SMIL animations change keywords discretely, as SVG says. CSS animations interpolate with the rules of CSS.
+  static let isInterpolable = false
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> CSSVisibility? {
     keyword(text, origin: origin)
@@ -449,6 +497,10 @@ enum OpacityProperty: StyleProperty {
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
     clampedOpacity(from.animated(to: to, progress: progress))
+  }
+
+  static func added(_ value: Double, to underlying: Double, in _: StyleResolver) -> Double? {
+    clampedOpacity(underlying + value)
   }
 }
 
@@ -598,6 +650,14 @@ enum StopColorProperty: StyleProperty {
   ) -> ColorValue {
     .color(resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress))
   }
+
+  static func added(_ value: ColorValue, to underlying: ColorValue, in resolver: StyleResolver) -> ColorValue? {
+    resolver.style.resolved(underlying).adding(resolver.style.resolved(value)).map { .color($0) }
+  }
+
+  static func distance(_ from: ColorValue, _ to: ColorValue, in resolver: StyleResolver) -> Double? {
+    resolver.style.resolved(from).pacedDistance(to: resolver.style.resolved(to))
+  }
 }
 
 enum StopOpacityProperty: StyleProperty {
@@ -612,6 +672,10 @@ enum StopOpacityProperty: StyleProperty {
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
     clampedOpacity(from.animated(to: to, progress: progress))
+  }
+
+  static func added(_ value: Double, to underlying: Double, in _: StyleResolver) -> Double? {
+    clampedOpacity(underlying + value)
   }
 }
 
@@ -631,6 +695,14 @@ enum FloodColorProperty: StyleProperty {
   ) -> ColorValue {
     .color(resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress))
   }
+
+  static func added(_ value: ColorValue, to underlying: ColorValue, in resolver: StyleResolver) -> ColorValue? {
+    resolver.style.resolved(underlying).adding(resolver.style.resolved(value)).map { .color($0) }
+  }
+
+  static func distance(_ from: ColorValue, _ to: ColorValue, in resolver: StyleResolver) -> Double? {
+    resolver.style.resolved(from).pacedDistance(to: resolver.style.resolved(to))
+  }
 }
 
 enum FloodOpacityProperty: StyleProperty {
@@ -645,6 +717,10 @@ enum FloodOpacityProperty: StyleProperty {
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
     clampedOpacity(from.animated(to: to, progress: progress))
+  }
+
+  static func added(_ value: Double, to underlying: Double, in _: StyleResolver) -> Double? {
+    clampedOpacity(underlying + value)
   }
 }
 
