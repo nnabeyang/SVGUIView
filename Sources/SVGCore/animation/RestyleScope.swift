@@ -109,17 +109,22 @@ extension SVGElement {
   ///
   /// - Parameters:
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
+  ///   - replacements: The elements that are made again, by the identities of the elements that they replace.
   func restyled(
-    parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations, in scope: RestyleScope
+    parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations, in scope: RestyleScope,
+    replacements: inout [ObjectIdentifier: any SVGElement]
   ) -> any SVGElement {
     let id = base.elementID
     guard scope.containing.contains(id) else { return self }
     // An element that doesn't change has a parent that doesn't change either, so its computed values stay valid.
     let base = scope.changing.contains(id) ? base.restyled(parent: parent, root: root, animations: animations) : base
-    return Self(
+    let element = Self(
       base: base,
       contents: children.map {
-        $0.restyled(parent: base.style, root: root ?? base.style, animations: animations, in: scope)
+        $0.restyled(
+          parent: base.style, root: root ?? base.style, animations: animations, in: scope, replacements: &replacements)
       })
+    replacements[index] = element
+    return element
   }
 }
