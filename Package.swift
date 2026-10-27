@@ -36,7 +36,7 @@ let package = Package(
     ),
     .target(
       name: "SVGUIView",
-      dependencies: ["SVGCore", "SVGRenderCG"],
+      dependencies: ["SVGCore", "SVGRenderCG", "SVGRenderLayer"],
     ),
     .target(
       name: "SVGView",
