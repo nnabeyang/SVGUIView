@@ -200,14 +200,41 @@ struct PlaybackTests {
   func reduceMotion() async throws {
     let (view, clock) = try await makeView(isReduceMotionEnabled: true)
     #expect(!clock.isRunning)
-    view.seek(to: .seconds(2))
+    view.seek(to: .milliseconds(500))
     #expect(green(in: view) == 0)
     // The view follows the setting when it changes.
     view.isReduceMotionEnabled = { false }
     #expect(clock.isRunning)
-    try await waitForGreen(in: view) { $0 == 255 }
+    try await waitForGreen(in: view) { (127...128).contains($0) }
 
     let (_, anywayClock) = try await makeView(playsWithReduceMotion: true, isReduceMotionEnabled: true)
     #expect(anywayClock.isRunning)
+  }
+
+  @Test("the clock stops after the frame that passes the end of the animations, and runs again before it")
+  func stopsAtEnd() async throws {
+    let (view, clock) = try await makeView()
+    clock.advance(by: .milliseconds(500))
+    #expect(clock.isRunning)
+    clock.advance(by: .milliseconds(600))
+    #expect(!clock.isRunning)
+    #expect(view.currentTime == .milliseconds(1100))
+    try await waitForGreen(in: view) { $0 == 255 }
+    view.seek(to: .milliseconds(500))
+    #expect(clock.isRunning)
+    try await waitForGreen(in: view) { (127...128).contains($0) }
+  }
+
+  @Test("the clock keeps running for animations that don't end")
+  func infiniteAnimation() async throws {
+    let (_, clock) = try await makeView(Self.document.replacingOccurrences(of: "forwards", with: "infinite"))
+    clock.advance(by: .seconds(100))
+    #expect(clock.isRunning)
+  }
+
+  @Test("the clock doesn't run for animations that don't change the document")
+  func pausedAnimation() async throws {
+    let (_, clock) = try await makeView(Self.document.replacingOccurrences(of: "forwards", with: "paused"))
+    #expect(!clock.isRunning)
   }
 }
