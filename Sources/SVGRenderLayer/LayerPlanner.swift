@@ -41,7 +41,7 @@ package struct LayerPlanner: Sendable {
     // The root transforms apply one after another, so the last one maps to the rectangle.
     let fit = tree.rootTransforms.reversed().reduce(CGAffineTransform.identity) { $0.concatenating($1) }
     let context = Context(
-      transform: fit, view: rect, isFixed: true, isChanging: false,
+      transform: fit, restingTransform: fit, view: rect, isFixed: true, isChanging: false,
       key: LayerKey(components: [.index(0), .index(0)]))
     let content = ContainerLayer(
       id: nil, transform: fit, opacity: 1, clip: nil,
@@ -55,6 +55,9 @@ package struct LayerPlanner: Sendable {
   private struct Context {
     /// The transform from the coordinates of the nodes to the coordinates of the view.
     let transform: CGAffineTransform
+    /// The transform from the coordinates of the nodes to the coordinates of the view without the transforms that
+    /// animations change, which is the same at every time.
+    let restingTransform: CGAffineTransform
     /// The rectangle of the view in its coordinates.
     let view: CGRect
     /// Whether no animation moves the nodes in the view, so that what's outside the view never shows.
@@ -68,7 +71,9 @@ package struct LayerPlanner: Sendable {
       _ transform: CGAffineTransform, isFixed: Bool = true, isChanging: Bool = false, key: LayerKey.Component
     ) -> Context {
       Context(
-        transform: transform.concatenating(self.transform), view: view, isFixed: self.isFixed && isFixed,
+        transform: transform.concatenating(self.transform),
+        restingTransform: isFixed ? transform.concatenating(restingTransform) : restingTransform, view: view,
+        isFixed: self.isFixed && isFixed,
         isChanging: self.isChanging || isChanging, key: self.key.appending(key))
     }
   }
@@ -179,7 +184,9 @@ package struct LayerPlanner: Sendable {
   private func painted(_ nodes: [RenderNode], in context: Context, changes: Bool) -> PaintedLayer? {
     guard !nodes.isEmpty else { return nil }
     let transform = context.transform
-    let rasterScale = scale * max(hypot(transform.a, transform.b), hypot(transform.c, transform.d))
+    // A rotation changes the scale by the error of the arithmetic, which mustn't make the contents of one time differ
+    // from the next.
+    let rasterScale = (scale * max(hypot(transform.a, transform.b), hypot(transform.c, transform.d)) * 1e6).rounded() / 1e6
     guard rasterScale > 0, rasterScale.isFinite else { return nil }
     var bounds = nodes.paintedBounds
     if context.isFixed {
@@ -189,13 +196,18 @@ package struct LayerPlanner: Sendable {
     guard !bounds.isNull, !bounds.isEmpty else { return nil }
     let margin = Self.margin / rasterScale
     bounds = bounds.insetBy(dx: -margin, dy: -margin)
-    if transform.b == 0, transform.c == 0, abs(transform.a) == abs(transform.d) {
-      // Without a rotation, a skew or a scale that differs between the axes, the pixels of the contents can lie on
-      // the pixels of the screen, so that the layer shows the same pixels as a rendering into one bitmap. A flip
-      // keeps them there.
-      let pixels = CGAffineTransform(scaleX: scale, y: scale)
-      let device = bounds.applying(transform.concatenating(pixels)).integral
-      bounds = device.applying(transform.concatenating(pixels).inverted())
+    // The pixels of the contents lie on the pixels of the screen as the layer is without the transforms that
+    // animations change, so that the layer shows the same pixels as a rendering into one bitmap there, and the
+    // contents of one time can show at the next. Where an animation moves them between the pixels of the screen, the
+    // screen resamples them. A rotation, a skew or a scale that differs between the axes keeps them off the pixels of
+    // the screen, and a flip keeps them on.
+    let resting = context.restingTransform
+    if resting.b == 0, resting.c == 0, abs(resting.a) == abs(resting.d) {
+      let pixels = resting.concatenating(CGAffineTransform(scaleX: scale, y: scale))
+      bounds = bounds.applying(pixels).integral.applying(pixels.inverted())
+    } else if !context.isFixed {
+      let pixels = CGAffineTransform(scaleX: rasterScale, y: rasterScale)
+      bounds = bounds.applying(pixels).integral.applying(pixels.inverted())
     }
     return PaintedLayer(
       nodes: nodes, bounds: bounds, rasterScale: rasterScale, changes: changes || context.isChanging,

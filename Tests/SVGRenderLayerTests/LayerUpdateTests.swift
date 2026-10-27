@@ -59,6 +59,8 @@ struct LayerUpdateTests {
     #expect(after[0].image === before[0].image)
     #expect(after[1].image === before[1].image)
     #expect(after[2].image !== before[2].image)
+    #expect(second.paintedCount(since: first) == 1)
+    #expect(second.paintedCount(since: nil) == 3)
     // Without the previous layers, everything is painted.
     #expect(contents(of: try await layers(at: 0.5)).allSatisfy { $0.image !== before[0].image })
   }

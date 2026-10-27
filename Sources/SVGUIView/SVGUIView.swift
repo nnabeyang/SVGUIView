@@ -62,12 +62,16 @@ public class SVGUIView: UIView {
     }
   }
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
+  /// Records each rendering as a "Render" interval, and each frame that a slower rendering skips as a "Skipped frame"
+  /// event, which Instruments and the metrics of XCTest measure. A rendering into layers records its stages as
+  /// "Style", "Build", "Plan" and "Paint" intervals in it.
+  nonisolated static let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering")
   /// The size that the view last rendered at, so that it renders again when its size changes.
   private var renderedSize: CGSize?
   /// Counts the renderings that the view starts, so that one that finishes after a newer one is not shown.
   private var renderingGeneration = 0
   /// Whether the latest rendering hasn't finished yet.
-  private var isRendering = false
+  private(set) var isRendering = false
   /// Whether a frame of the animations waits for the rendering in progress, which shows the latest time when it
   /// starts, so that frames that come while rendering is slower are skipped.
   private var needsFrame = false
@@ -244,17 +248,35 @@ public class SVGUIView: UIView {
     let painting = painting
     let previous = reusesLayers ? shownLayers : nil
     isRendering = true
+    let signpost = Self.signposter.beginInterval(
+      "Render", id: Self.signposter.makeSignpostID(),
+      "\(time.seconds, format: .fixed(precision: 3)) s into \(promoted == nil ? "an image" : "layers")")
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       if let promoted {
         let result = await SVGUIView.makeLayers(
           rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, previous: previous,
           time: time, fit: fit, timeoutDuration: timeoutDuration)
+        switch result {
+        case .success(let layers) where Self.signposter.isEnabled:
+          // Counting the layers that were painted takes time, so it's done only while the intervals are recorded.
+          let painted = layers.paintedCount(since: previous)
+          Self.signposter.endInterval(
+            "Render", signpost, "painted \(painted) of \(layers.paintedContents.count) layers")
+        case .success:
+          Self.signposter.endInterval("Render", signpost)
+        case .failure(let error):
+          Self.signposter.endInterval("Render", signpost, "\(String(describing: error))")
+        }
         self?.finishRendering(ofRendering: generation) { $0.showLayers(result) }
       } else {
         let result = await SVGUIView.makeImage(
           rect: rect, scale: scale, base: capturedBase, time: time,
           fit: fit, timeoutDuration: timeoutDuration
         )
+        switch result {
+        case .success: Self.signposter.endInterval("Render", signpost, "painted")
+        case .failure(let error): Self.signposter.endInterval("Render", signpost, "\(String(describing: error))")
+        }
         self?.finishRendering(ofRendering: generation) { $0.show(result) }
       }
     }
@@ -279,6 +301,9 @@ public class SVGUIView: UIView {
   /// frames even when rendering one takes longer than the display shows it.
   private func renderFrame() {
     if isRendering {
+      if needsFrame {
+        Self.signposter.emitEvent("Skipped frame")
+      }
       needsFrame = true
     } else {
       startRendering(reusesLayers: true)
@@ -544,9 +569,17 @@ public class SVGUIView: UIView {
       return .failure(.zeroSizedRect)
     }
     return await withRenderingTimeout(timeoutDuration) {
-      let builder = RenderTreeBuilder(base: base.at(time: time.seconds), viewPort: rect, scale: scale)
-      guard let tree = await builder.build(fit: fit) else { return nil }
-      let plan = LayerPlanner(promoted: promoted, painting: painting, scale: scale).plan(tree, in: rect)
+      let signposter = Self.signposter
+      let base = signposter.withIntervalSignpost("Style") { base.at(time: time.seconds) }
+      let buildInterval = signposter.beginInterval("Build")
+      let tree = await RenderTreeBuilder(base: base, viewPort: rect, scale: scale).build(fit: fit)
+      signposter.endInterval("Build", buildInterval)
+      guard let tree else { return nil }
+      let plan = signposter.withIntervalSignpost("Plan") {
+        LayerPlanner(promoted: promoted, painting: painting, scale: scale).plan(tree, in: rect)
+      }
+      let paintInterval = signposter.beginInterval("Paint")
+      defer { signposter.endInterval("Paint", paintInterval) }
       return await plan.painted(scale: scale, reusing: previous)
     }
   }

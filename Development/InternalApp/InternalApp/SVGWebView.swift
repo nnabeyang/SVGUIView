@@ -2,29 +2,36 @@ import SwiftUI
 import WebKit
 
 /// Shows an SVG file with WebKit, fitted into the view as SVGView does with `.fit`, with its CSS and SMIL animations
-/// paused at a time.
+/// paused at a time, or playing from the start.
 struct SVGWebView: UIViewRepresentable {
   let url: URL
-  /// The time of the animations, in seconds.
+  /// The time of the animations, in seconds, where they're paused while they don't play.
   let time: Double
+  /// Whether the animations play from the start instead.
+  var isPlaying = false
 
   final class Coordinator: NSObject, WKNavigationDelegate {
     var url: URL?
     var time = 0.0
+    var isPlaying = false
 
-    /// Pauses the animations of the file at the time, once the file has loaded.
+    /// Pauses the animations of the file at the time, or plays them from the start, once the file has loaded.
     func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
-      seek(webView)
+      update(webView)
     }
 
-    /// Sends the time to the file, which is in a frame of another origin that the page can't reach otherwise.
-    func seek(_ webView: WKWebView) {
+    /// Sends the time to the file, and whether to play from it, as the file is in a frame of another origin that the
+    /// page can't reach otherwise.
+    func update(_ webView: WKWebView) {
+      let time = isPlaying ? 0 : time
       webView.evaluateJavaScript(
-        #"document.querySelector("object")?.contentWindow?.postMessage({ time: \#(time * 1000) }, "*");"#)
+        #"document.querySelector("object")?.contentWindow?.postMessage({ time: \#(time * 1000), play: \#(isPlaying) }, "*");"#
+      )
     }
   }
 
-  /// Pauses the CSS animations and the SMIL animations of the SVG file at the time that the page sends.
+  /// Pauses the CSS animations and the SMIL animations of the SVG file at the time that the page sends, and plays
+  /// them from there when it says so.
   private static var seekScript: WKUserScript {
     WKUserScript(
       source: """
@@ -43,6 +50,12 @@ struct SVGWebView: UIViewRepresentable {
             if (root instanceof SVGSVGElement) {
               root.pauseAnimations();
               root.setCurrentTime(event.data.time / 1000);
+            }
+            if (event.data.play) {
+              for (const animation of document.getAnimations()) {
+                if (seeking.has(animation)) animation.play();
+              }
+              if (root instanceof SVGSVGElement) root.unpauseAnimations();
             }
           });
         }
@@ -66,9 +79,10 @@ struct SVGWebView: UIViewRepresentable {
   }
 
   func updateUIView(_ webView: WKWebView, context: Context) {
-    if context.coordinator.time != time {
+    if context.coordinator.time != time || context.coordinator.isPlaying != isPlaying {
       context.coordinator.time = time
-      context.coordinator.seek(webView)
+      context.coordinator.isPlaying = isPlaying
+      context.coordinator.update(webView)
     }
     guard context.coordinator.url != url else { return }
     context.coordinator.url = url
