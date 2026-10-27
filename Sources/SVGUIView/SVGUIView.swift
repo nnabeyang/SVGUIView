@@ -23,10 +23,14 @@ public class SVGUIView: UIView {
     didSet {
       animationEnd = baseContext.animationEnd()
       promoted = baseContext.elementsWithAnimatedCompositing()
+      painting = baseContext.elementsWithAnimatedPainting()
     }
   }
   /// The elements whose transform or opacity can change, which get layers of their own.
   private var promoted: Set<ElementID>
+  /// The elements whose painting changes in other ways, or `nil` if any painting can change, which tells the layers
+  /// that frames paint again.
+  private var painting: Set<ElementID>?
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
   /// infinite for animations that don't end.
   private var animationEnd: Double
@@ -75,8 +79,10 @@ public class SVGUIView: UIView {
     layer.anchorPoint = .zero
     return layer
   }()
-  /// The layers in the host.
+  /// The layers in the host, which the frames reuse.
   private lazy var layerTree = LayerTree(host: layerTreeHost)
+  /// The layers that the view shows, whose contents the next frame shows where they don't change.
+  private var shownLayers: RenderedContainer?
 
   /// The time of the animations.
   ///
@@ -118,6 +124,7 @@ public class SVGUIView: UIView {
     self.baseContext = baseContext
     animationEnd = baseContext.animationEnd()
     promoted = baseContext.elementsWithAnimatedCompositing()
+    painting = baseContext.elementsWithAnimatedPainting()
     super.init(frame: frame)
     backgroundColor = .clear
     startObservingClock()
@@ -220,7 +227,10 @@ public class SVGUIView: UIView {
   }
 
   /// Starts rendering the document at the time that the view displays.
-  private func startRendering() {
+  ///
+  /// - Parameter reusesLayers: Whether the rendering shows the contents of the layers that the view shows where they
+  ///   don't change, which a frame does. A new size, new data or a new content mode paints everything again.
+  private func startRendering(reusesLayers: Bool = false) {
     let rect = bounds
     renderedSize = rect.size
     let generation = nextRenderingGeneration()
@@ -231,12 +241,14 @@ public class SVGUIView: UIView {
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
     let promoted = configuration.animation == .none ? nil : promoted
+    let painting = painting
+    let previous = reusesLayers ? shownLayers : nil
     isRendering = true
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       if let promoted {
         let result = await SVGUIView.makeLayers(
-          rect: rect, scale: scale, base: capturedBase, promoted: promoted, time: time, fit: fit,
-          timeoutDuration: timeoutDuration)
+          rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, previous: previous,
+          time: time, fit: fit, timeoutDuration: timeoutDuration)
         self?.finishRendering(ofRendering: generation) { $0.showLayers(result) }
       } else {
         let result = await SVGUIView.makeImage(
@@ -257,7 +269,7 @@ public class SVGUIView: UIView {
     show(self)
     if needsFrame {
       needsFrame = false
-      startRendering()
+      startRendering(reusesLayers: true)
     }
   }
 
@@ -269,7 +281,7 @@ public class SVGUIView: UIView {
     if isRendering {
       needsFrame = true
     } else {
-      startRendering()
+      startRendering(reusesLayers: true)
     }
   }
 
@@ -397,6 +409,7 @@ public class SVGUIView: UIView {
     case .success(let image):
       layerTreeHost.removeFromSuperlayer()
       layerTree.clear()
+      shownLayers = nil
       layer.contents = image
     case .failure(let error):
       show(error)
@@ -417,6 +430,7 @@ public class SVGUIView: UIView {
       layerTreeHost.position = layer.bounds.origin
       CATransaction.commit()
       layerTree.show(layers)
+      shownLayers = layers
     case .failure(let error):
       show(error)
     }
@@ -429,6 +443,7 @@ public class SVGUIView: UIView {
     case .missingRootElement, .zeroSizedRect:
       layer.contents = nil
       layerTree.clear()
+      shownLayers = nil
     case .cancelled:
       // A newer rendering cancels the one before it, so this is not worth a warning.
       break
@@ -510,13 +525,16 @@ public class SVGUIView: UIView {
   }
 
   /// Renders the document at a time into layers: the layers of the elements whose transform or opacity changes, and
-  /// the contents of the layers between them.
+  /// the contents of the layers between them, which show the contents of the previous layers where they don't
+  /// change.
   @concurrent
   private static func makeLayers(
     rect: CGRect,
     scale: CGFloat,
     base: SVGBaseContext,
     promoted: Set<ElementID>,
+    painting: Set<ElementID>?,
+    previous: RenderedContainer?,
     time: Duration,
     fit: ContentFit,
     timeoutDuration: Duration
@@ -528,7 +546,8 @@ public class SVGUIView: UIView {
     return await withRenderingTimeout(timeoutDuration) {
       let builder = RenderTreeBuilder(base: base.at(time: time.seconds), viewPort: rect, scale: scale)
       guard let tree = await builder.build(fit: fit) else { return nil }
-      return await LayerPlanner(promoted: promoted, scale: scale).plan(tree, in: rect).painted(scale: scale)
+      let plan = LayerPlanner(promoted: promoted, painting: painting, scale: scale).plan(tree, in: rect)
+      return await plan.painted(scale: scale, reusing: previous)
     }
   }
 }
