@@ -48,6 +48,11 @@ private func spinning(_ id: String, _ attributes: String = "") -> String {
   #"<rect id=""# + id + #"" width="10" height="10" style="animation: s 1s" "# + attributes + "/>"
 }
 
+/// A filter `p` whose blur is animated.
+private let pulse =
+  #"<filter id="p"><feGaussianBlur stdDeviation="1"><animate attributeName="stdDeviation" to="4" dur="1s"/>"#
+  + "</feGaussianBlur></filter>"
+
 /// The painted layers in a layer and the layers in it, in order.
 private func paintedLayers(of layer: PlannedLayer) -> [PaintedLayer] {
   switch layer {
@@ -83,10 +88,11 @@ struct LayerPlannerTests {
         + spinning("r") + "</g>",
       "clip(-([svg]))"
     ),
+    // The element with the filter is painted into a layer of its own, since what it filters moves.
     (
       spin + ##"<filter id="f"><feGaussianBlur stdDeviation="1"/></filter><g id="g" filter="url(#f)">"##
         + spinning("r") + "</g>",
-      "clip(-([svg]))"
+      "clip(-(svg([g])))"
     ),
     // An animated element with a clip path is painted in its layer with it.
     (
@@ -205,6 +211,43 @@ struct LayerPlannerTests {
         + "</feGaussianBlur></filter>"
         + ##"<rect id="r" width="10" height="10" filter="url(#f)" style="animation: s 1s"/>"##,
       "clip(-(svg(r([r]*))))"
+    ),
+    // An element whose filter changes is painted into a layer of its own, between the layers of the elements around
+    // it, which don't change.
+    (
+      pulse + #"<rect id="a" width="10" height="10"/>"#
+        + ##"<rect id="f" width="10" height="10" filter="url(#p)"/><rect id="b" width="10" height="10"/>"##,
+      "clip(-(svg([p a] [f]* [b])))"
+    ),
+    // One whose filter doesn't change is painted with them.
+    (
+      pulse + #"<filter id="still"><feGaussianBlur stdDeviation="1"/></filter><rect id="a" width="10" height="10"/>"#
+        + ##"<rect id="f" width="10" height="10" filter="url(#still)"/><rect id="b" width="10" height="10"/>"##,
+      "clip(-([svg]))"
+    ),
+    // A group around it becomes a container.
+    (
+      pulse + #"<g id="g" opacity="0.5"><rect id="a" width="10" height="10"/>"#
+        + ##"<rect id="f" width="10" height="10" filter="url(#p)"/></g><rect id="b" width="10" height="10"/>"##,
+      "clip(-(svg(g@0.5([a] [f]*) [b])))"
+    ),
+    // Inside a clip path, it's painted with the element that composites it.
+    (
+      pulse + ##"<clipPath id="c"><rect width="5" height="5"/></clipPath><g id="g" clip-path="url(#c)">"##
+        + ##"<rect id="a" width="10" height="10"/><rect id="f" width="10" height="10" filter="url(#p)"/></g>"##,
+      "clip(-([svg]*))"
+    ),
+    // A filter whose content changes changes too, and so does one whose content moves.
+    (
+      "<style>@keyframes c { to { fill: lime } }</style>"
+        + #"<filter id="still"><feGaussianBlur stdDeviation="1"/></filter><rect id="a" width="10" height="10"/>"#
+        + ##"<g id="f" filter="url(#still)"><rect id="c" width="10" height="10" style="animation: c 1s"/></g>"##,
+      "clip(-(svg([still a] [f]*)))"
+    ),
+    (
+      spin + #"<filter id="still"><feGaussianBlur stdDeviation="1"/></filter><rect id="a" width="10" height="10"/>"#
+        + ##"<g id="f" filter="url(#still)">"## + spinning("r") + "</g>",
+      "clip(-(svg([still a] [f]*)))"
     ),
   ]
 

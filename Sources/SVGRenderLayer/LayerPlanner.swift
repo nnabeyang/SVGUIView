@@ -9,6 +9,10 @@ import SVGCore
 /// together into the contents of a layer, in the order of the render tree, so that the layers show what painting the
 /// whole tree into one bitmap shows.
 ///
+/// A node with a filter whose painting changes with the time, such as by an animation of the values of its
+/// primitives or of the nodes that it filters, is painted into a layer of its own, so that the nodes around it aren't
+/// painted again with it.
+///
 /// A node with a clip path, a mask or a filter composites what it paints as one image, so the nodes in it are painted
 /// with it, and none of them gets a layer of its own.
 ///
@@ -93,6 +97,11 @@ package struct LayerPlanner: Sendable {
       if let layer = container(of: node, in: context) {
         paintRun()
         layers.append(.container(layer))
+      } else if isFilteredLayer(node) {
+        paintRun()
+        if let layer = painted([node], in: context, changes: true) {
+          layers.append(.painted(layer))
+        }
       } else {
         run.append(node)
       }
@@ -101,11 +110,11 @@ package struct LayerPlanner: Sendable {
     return layers
   }
 
-  /// The container layer of a node, or `nil` if the node is painted with the nodes around it: when neither it nor a
-  /// node in it gets a layer of its own.
+  /// The container layer of a node, or `nil` if the node is painted with the nodes around it, or into a painted layer
+  /// of its own: when neither it nor a node in it gets a container of its own.
   private func container(of node: RenderNode, in context: Context) -> ContainerLayer? {
     let isPromoted = promoted.contains(node.id.element)
-    guard isPromoted || containsPromoted(node) else { return nil }
+    guard isPromoted || containsOwnLayer(node) else { return nil }
     // An animation moves what the layer of a promoted node shows.
     let isFixed = !isPromoted
     let isChanging = painting?.contains(node.id.element) ?? true
@@ -156,22 +165,28 @@ package struct LayerPlanner: Sendable {
 
   /// Whether a node in the node gets a layer of its own, which it doesn't inside a node that composites what it
   /// paints as one image.
-  private func containsPromoted(_ node: RenderNode) -> Bool {
-    func isOrContainsPromoted(_ node: RenderNode) -> Bool {
-      promoted.contains(node.id.element) || containsPromoted(node)
+  private func containsOwnLayer(_ node: RenderNode) -> Bool {
+    func isOrContainsOwnLayer(_ node: RenderNode) -> Bool {
+      promoted.contains(node.id.element) || isFilteredLayer(node) || containsOwnLayer(node)
     }
     switch node {
     case .group(let group):
-      return group.clip == nil && group.mask == nil && group.children.contains(where: isOrContainsPromoted)
+      return group.clip == nil && group.mask == nil && group.children.contains(where: isOrContainsOwnLayer)
     case .use(let use):
       guard use.clip == nil, use.mask == nil, let content = use.instance?.content else { return false }
-      return isOrContainsPromoted(content)
+      return isOrContainsOwnLayer(content)
     case .viewport(let viewport):
       guard let content = viewport.content, content.clip == nil, content.mask == nil else { return false }
-      return content.children.contains(where: isOrContainsPromoted)
+      return content.children.contains(where: isOrContainsOwnLayer)
     case .shape, .filtered:
       return false
     }
+  }
+
+  /// Whether a node is a filtered node whose painting changes with the time, which is painted into a layer of its own.
+  private func isFilteredLayer(_ node: RenderNode) -> Bool {
+    guard case .filtered = node else { return false }
+    return changes(node)
   }
 
   /// Whether what a node paints can change with the time: the painting or the compositing of it or of a node in it.
