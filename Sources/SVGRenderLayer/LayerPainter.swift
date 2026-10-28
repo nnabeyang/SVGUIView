@@ -29,8 +29,8 @@ package struct PaintedContents: Sendable {
   package let image: CGImage?
   /// The rectangle that the image covers, in the coordinates of the layer around this one.
   package let bounds: CGRect
-  /// The pixels of the image for each unit of the coordinates.
-  package let rasterScale: CGFloat
+  /// The pixels of the image for each unit of the coordinates along each axis.
+  package let rasterScale: CGSize
   /// What the painted layer is in the plans of all times.
   package let key: LayerKey
 }
@@ -105,11 +105,12 @@ extension PaintedLayer {
   /// What the nodes paint, as an image of the bounds at the raster scale.
   fileprivate func painted(scale: CGFloat) async -> PaintedContents {
     // Bounds on the pixels of the screen cover whole pixels, up to the error of the arithmetic that put them there.
-    func pixels(_ length: CGFloat) -> CGFloat {
+    func pixels(_ length: CGFloat, _ rasterScale: CGFloat) -> CGFloat {
       let pixels = length * rasterScale
       return abs(pixels - pixels.rounded()) < 0.01 ? pixels.rounded() : pixels.rounded(.up)
     }
-    let size = CGSize(width: pixels(bounds.width), height: pixels(bounds.height))
+    let size = CGSize(
+      width: pixels(bounds.width, rasterScale.width), height: pixels(bounds.height, rasterScale.height))
     // A bitmap that can't be made, such as one too large, shows nothing, as an element whose filter, mask, clip
     // path or pattern can't be allocated is left out of a rendering into one bitmap.
     guard let graphics = CGContext.bitmap(size: size, scale: 1, space: CGColorSpaceCreateDeviceRGB()) else {

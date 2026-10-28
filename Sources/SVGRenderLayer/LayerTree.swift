@@ -78,8 +78,10 @@ package final class LayerTree {
     if (layer.contents as AnyObject?) !== contents.image {
       layer.contents = contents.image
     }
-    if layer.contentsScale != contents.rasterScale {
-      layer.contentsScale = contents.rasterScale
+    // The image is resized to the bounds, so the scale only tells the screen how sharp it is.
+    let contentsScale = max(contents.rasterScale.width, contents.rasterScale.height)
+    if layer.contentsScale != contentsScale {
+      layer.contentsScale = contentsScale
     }
     return layer
   }
