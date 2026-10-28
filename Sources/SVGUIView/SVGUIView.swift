@@ -27,6 +27,16 @@ public class SVGUIView: UIView {
       painting = baseContext.elementsWithAnimatedPainting()
     }
   }
+  /// The document that the view displays, which an app reads and changes.
+  ///
+  /// The view shows the changes at its next rendering. Assigning new ``data``
+  /// replaces the document.
+  public private(set) var document: SVGDocument {
+    didSet {
+      oldValue.onChange = nil
+      observeDocument()
+    }
+  }
   /// The elements whose transform or opacity can change, which get layers of their own.
   private var promoted: Set<ElementID>
   /// The elements whose painting changes in other ways, or `nil` if any painting can change, which tells the layers
@@ -70,7 +80,7 @@ public class SVGUIView: UIView {
   /// The size that the view last rendered at, so that it renders again when its size changes.
   private var renderedSize: CGSize?
   /// Counts the renderings that the view starts, so that one that finishes after a newer one is not shown.
-  private var renderingGeneration = 0
+  private(set) var renderingGeneration = 0
   /// Whether the latest rendering hasn't finished yet.
   private(set) var isRendering = false
   /// Whether a frame of the animations waits for the rendering in progress, which shows the latest time when it
@@ -130,6 +140,7 @@ public class SVGUIView: UIView {
   init(frame: CGRect, baseContext: SVGBaseContext, data: Data = Data()) {
     self.data = data
     self.baseContext = baseContext
+    document = SVGDocument(tree: baseContext.document)
     animationEnd = baseContext.animationEnd()
     promoted = baseContext.elementsWithAnimatedCompositing()
     painting = baseContext.elementsWithAnimatedPainting()
@@ -137,6 +148,7 @@ public class SVGUIView: UIView {
     backgroundColor = .clear
     startObservingClock()
     observeNotifications()
+    observeDocument()
     setNeedsDisplay()
   }
 
@@ -172,13 +184,14 @@ public class SVGUIView: UIView {
   ///
   /// Setting this property parses the new data and redraws the view
   /// asynchronously. A rendering in progress stops, so that the view renders
-  /// only the latest data. Setting the data that the view already displays
-  /// does nothing.
+  /// only the latest data. The new data also replaces ``document``. Setting the
+  /// data that the view already displays does nothing.
   public var data: Data {
     didSet {
       // SVGView sets its data on every update of the SwiftUI view.
       guard data != oldValue else { return }
       baseContext = Self.parse(data)
+      document = SVGDocument(tree: baseContext.document)
       currentTime = .zero
       updatePlayback()
       setNeedsDisplay()
@@ -229,9 +242,32 @@ public class SVGUIView: UIView {
   /// so that it does not blink. Implementing `draw(_:)` instead would make UIKit replace the image with an
   /// empty one before drawing.
   override public func display(_: CALayer) {
+    let changes = applyDocumentChanges()
     renderingTask?.cancel()
     needsFrame = false
     startRendering()
+    if changes {
+      // Changes can make the animations last longer, after the clock stopped at their end.
+      updatePlayback()
+    }
+  }
+
+  /// Renders the document again when it changes, which shows all the changes made until the layer is displayed.
+  private func observeDocument() {
+    document.onChange = { [weak self] in self?.setNeedsDisplay() }
+  }
+
+  /// Makes the context of the document with the changes that the view hasn't rendered yet.
+  ///
+  /// - Returns: Whether there were changes.
+  @discardableResult
+  private func applyDocumentChanges() -> Bool {
+    let changes = document.takeChanges()
+    guard !changes.isEmpty else { return false }
+    baseContext = baseContext.changingAttributes(changes)
+    // The size of the document can change with the attributes of its root element.
+    invalidateIntrinsicContentSize()
+    return true
   }
 
   /// Starts rendering the document at the time that the view displays.
@@ -495,6 +531,9 @@ public class SVGUIView: UIView {
   /// Renders the current SVG document into an image, as it is at a time of its
   /// animations.
   ///
+  /// The image includes every change made to ``document`` so far, even the
+  /// ones that the view hasn't rendered yet.
+  ///
   /// The image is rendered at the main screen's scale with the view's current
   /// `contentMode`. The view's displayed contents do not change.
   ///
@@ -521,6 +560,7 @@ public class SVGUIView: UIView {
   ) async throws(SVGRenderingError) -> UIImage {
     let rect = rect ?? frame
     let scale = UIScreen.main.scale
+    applyDocumentChanges()
     let capturedBase = baseContext
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration

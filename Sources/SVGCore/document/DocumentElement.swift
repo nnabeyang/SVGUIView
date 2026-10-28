@@ -123,6 +123,16 @@ package struct DocumentTree: Sendable {
     return path.reduce(ElementCursor(root: root)) { $0.child(at: $1) }
   }
 
+  /// The root element, or `nil` for data without an element.
+  package var rootElement: ElementID? {
+    root?.id
+  }
+
+  /// The local name of an element as written, or `nil` if the document has no such element.
+  package func localName(of id: ElementID) -> String? {
+    cursor(at: id)?.element.localName
+  }
+
   /// The attributes of an element as written, or `nil` if the document has no such element.
   package func attributes(of id: ElementID) -> [String: String]? {
     cursor(at: id)?.element.attributes

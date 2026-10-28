@@ -12,9 +12,11 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > is done as well: the `<animate>`, `<set>`, `<animateTransform>` and
 > `<animateMotion>` elements apply to properties and attributes at the same
 > times. Phase 2 is done too: a view plays animations in a tree of layers that
-> `SVGRenderLayer` makes. The document API, CSS Transitions and filters on Metal
-> are planned: the types, properties and methods proposed for them don't exist
-> yet, and their names may change while the work goes on.
+> `SVGRenderLayer` makes. Phase 2.5 has started: ``SVGUIView/SVGUIView/document``
+> finds and changes the elements of a document. Controlling animations from the
+> document API, CSS Transitions and filters on Metal are planned: the types,
+> properties and methods proposed for them don't exist yet, and their names may
+> change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -355,14 +357,15 @@ for animation in document.animations {
 }
 ```
 
-The planned surface is:
+The surface is:
 
-- **Finding elements:** `element(id:)`, `querySelector(_:)` and
-  `querySelectorAll(_:)` on the document and on elements.
+- **Finding elements:** ``SVGDocument/element(id:)``,
+  ``SVGDocument/querySelector(_:)`` and ``SVGDocument/querySelectorAll(_:)``
+  on the document and on elements. See <doc:ChangingDocuments>.
 - **Changing elements:** reading, setting and removing attributes,
   changing the `style` attribute's declarations, and adding, removing and
   toggling classes. Inserting and removing elements comes later.
-- **Controlling animations:** the animations of the document or of one
+- **Controlling animations (planned):** the animations of the document or of one
   element, each with `play()`, `pause()`, `currentTime`, `playbackRate` and a way
   to wait until it finishes. SMIL animations can also be begun and ended, which
   replaces event-based begin values.
@@ -371,9 +374,10 @@ Decisions:
 
 - The document and its elements are isolated to the main actor, like the view.
   Rendering reads snapshots, so it never waits for the main actor.
-- Changes are applied at the next frame, not immediately. Several changes made in
-  one turn of the run loop produce one restyle, and transitions start from the
-  values that were current before the first change.
+- Changes are rendered at the next frame, not immediately, while reading the
+  document sees them at once. Several changes made in one turn of the run loop
+  produce one restyle, and transitions start from the values that were current
+  before the first change.
 - Creating new animations from Swift, like `Element.animate()` in Web
   Animations, isn't part of the first version.
 - The element type is nested in the document type, such as `SVGDocument.Element`,
@@ -406,9 +410,9 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 - **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)``
   takes a time, so that any frame can be rendered as an image. This is what the
   planned `render(at:)` API became, because it keeps one method for snapshots.
-- **Reaching the document:** In phase 2.5, ``SVGUIView/SVGUIView`` gains a
-  `document` property for the document API. Assigning new
-  ``SVGUIView/SVGUIView/data`` replaces the document.
+- **Reaching the document:** ``SVGUIView/SVGUIView/document`` is the
+  document API. Assigning new ``SVGUIView/SVGUIView/data`` replaces the
+  document.
 - **SwiftUI:** `SVGView` reads the animation mode from the same
   configuration in the environment.
 
