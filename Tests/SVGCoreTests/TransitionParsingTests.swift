@@ -56,18 +56,83 @@ struct TransitionParsingTests {
     #expect(CascadedValues.presentationAttributes(of: .rect, attributes: ["transition-duration": "1s"]).isEmpty)
   }
 
+  @Test("the shorthand sets every longhand, and the ones that it doesn't give to their initial values")
+  func shorthand() {
+    let style = "transition: opacity 1s ease-in 2s allow-discrete, 3s FILL"
+    #expect(declared(TransitionPropertyProperty.self, style: style) == [.property(.opacity), .property(.fill)])
+    #expect(declared(TransitionDurationProperty.self, style: style) == [1, 3])
+    #expect(declared(TransitionTimingFunctionProperty.self, style: style) == [.easeIn, .ease])
+    #expect(declared(TransitionDelayProperty.self, style: style) == [2, 0])
+    #expect(declared(TransitionBehaviorProperty.self, style: style) == [.allowDiscrete, .normal])
+    #expect(declared(TransitionPropertyProperty.self, style: "transition: 1s") == [.all])
+  }
+
+  @Test(
+    "an identifier in the shorthand is the easing function or the behavior first, and the property after them",
+    arguments: [
+      ("transition: ease", TransitionProperty.all, EasingFunction.ease, TransitionBehavior.normal),
+      ("transition: ease ease", .unrecognized("ease"), .ease, .normal),
+      ("transition: linear ease", .unrecognized("ease"), .linear, .normal),
+      ("transition: normal", .all, .ease, .normal),
+      ("transition: allow-discrete normal", .unrecognized("normal"), .ease, .allowDiscrete),
+      ("transition: none", .none, .ease, .normal),
+      ("transition: all steps(2)", .all, .steps(2, .jumpEnd), .normal),
+    ])
+  func shorthandIdentifiers(
+    text: String, property: TransitionProperty, easing: EasingFunction, behavior: TransitionBehavior
+  ) {
+    #expect(declared(TransitionPropertyProperty.self, style: text) == [property])
+    #expect(declared(TransitionTimingFunctionProperty.self, style: text) == [easing])
+    #expect(declared(TransitionBehaviorProperty.self, style: text) == [behavior])
+  }
+
+  @Test("a negative time in the shorthand is the delay")
+  func shorthandNegativeTime() {
+    let style = "transition: -1s 2s"
+    #expect(declared(TransitionDurationProperty.self, style: style) == [2])
+    #expect(declared(TransitionDelayProperty.self, style: style) == [-1])
+  }
+
+  @Test("a keyword that every property takes sets it on every longhand")
+  func shorthandWideKeyword() {
+    let cascaded = CascadedValues(SVGUIInlineStyle(description: "transition: inherit").declarations.map(\.declaration))
+    for value in [
+      cascaded[TransitionPropertyProperty.self].map { "\($0)" }, cascaded[TransitionDelayProperty.self].map { "\($0)" },
+      cascaded[TransitionBehaviorProperty.self].map { "\($0)" },
+    ] {
+      #expect(value == "inherit")
+    }
+  }
+
+  @Test(
+    "invalid shorthands",
+    arguments: [
+      "transition: none, opacity 1s", "transition: opacity, none", "transition: 1s 2s 3s", "transition: a b",
+      "transition: ,", "transition: a,", "transition: 1px", "transition: initial 1s", "transition: ease ease ease",
+    ])
+  func invalidShorthands(text: String) {
+    #expect(SVGUIInlineStyle(description: text).declarations.isEmpty)
+  }
+
+  @Test("important declarations of the shorthand make every longhand important")
+  func shorthandImportance() {
+    let declarations = SVGUIInlineStyle(description: "transition: opacity 1s !important").declarations
+    #expect(declarations.count == 5)
+    #expect(declarations.allSatisfy { $0.importance == .important })
+  }
+
   @Test("the computed values are the lists that the cascade gives, and the initial values aren't inherited")
   func computedValues() throws {
     let rect = try #require(
       style(
         of: "r",
-        in: "<style>rect { transition-property: fill, opacity; transition-duration: 1s }</style>"
+        in: "<style>rect { transition: fill 1s, opacity 1s }</style>"
           + #"<g style="transition-delay: 2s"><rect id="r" style="transition-duration: 2s, 3s"/></g>"#))
     #expect(rect.transitionProperty == [.property(.fill), .property(.opacity)])
     #expect(rect.transitionDuration == [2, 3])
-    #expect(rect.transitionTimingFunction == [.ease])
-    #expect(rect.transitionDelay == [0])
-    #expect(rect.transitionBehavior == [.normal])
+    #expect(rect.transitionTimingFunction == [.ease, .ease])
+    #expect(rect.transitionDelay == [0, 0])
+    #expect(rect.transitionBehavior == [.normal, .normal])
     #expect(ComputedStyle.initial.transitionProperty == [.all])
   }
 

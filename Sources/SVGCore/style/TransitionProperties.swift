@@ -84,6 +84,85 @@ enum TransitionBehaviorProperty: AnimationListProperty {
   }
 }
 
+/// The shorthand `transition`, which sets every longhand of CSS Transitions.
+enum TransitionShorthand {
+  static let name = "transition"
+
+  /// The longhands, in the order of their declarations.
+  static var longhands: [any StyleProperty.Type] {
+    [
+      TransitionPropertyProperty.self, TransitionDurationProperty.self, TransitionTimingFunctionProperty.self,
+      TransitionDelayProperty.self, TransitionBehaviorProperty.self,
+    ]
+  }
+
+  /// The declarations of the longhands, or `nil` if the value is invalid.
+  static func declarations(css input: inout _CSSParser.Parser) -> [PropertyDeclaration]? {
+    if let keyword = wideKeyword(&input) {
+      return keywordDeclarations(keyword, of: longhands)
+    }
+    var transitions = [SingleTransition]()
+    repeat {
+      guard let transition = SingleTransition(&input) else { return nil }
+      transitions.append(transition)
+    } while input.tryParse({ $0.expectComma() }).isSuccess
+    guard input.isExhausted() else { return nil }
+    // `none` only comes in a shorthand with one transition.
+    if transitions.count > 1, transitions.contains(where: { $0.property == TransitionProperty.none }) { return nil }
+    return [
+      PropertyDeclaration(TransitionPropertyProperty.self, .value(transitions.map { $0.property ?? .all })),
+      PropertyDeclaration(TransitionDurationProperty.self, .value(transitions.map { $0.duration ?? 0 })),
+      PropertyDeclaration(TransitionTimingFunctionProperty.self, .value(transitions.map { $0.easing ?? .ease })),
+      PropertyDeclaration(TransitionDelayProperty.self, .value(transitions.map { $0.delay ?? 0 })),
+      PropertyDeclaration(TransitionBehaviorProperty.self, .value(transitions.map { $0.behavior ?? .normal })),
+    ]
+  }
+
+  /// The values of one transition in the shorthand, which can come in any order. The first time that isn't negative
+  /// is the duration, and the other time is the delay. An identifier is the easing function or the behavior when
+  /// that isn't set yet, and the property otherwise, as the name of an animation is in `animation`.
+  private struct SingleTransition {
+    var property: TransitionProperty?
+    var duration: Double?
+    var easing: EasingFunction?
+    var delay: Double?
+    var behavior: TransitionBehavior?
+
+    init?(_ input: inout _CSSParser.Parser) {
+      var isEmpty = true
+      while true {
+        let state = input.state
+        switch input.next() {
+        case .failure, .success(.comma):
+          input.reset(state: state)
+          if isEmpty { return nil }
+          return
+        default:
+          input.reset(state: state)
+        }
+        isEmpty = false
+        if let time = attempt(&input, time) {
+          if duration == nil, time >= 0 {
+            duration = time
+          } else if delay == nil {
+            delay = time
+          } else {
+            return nil
+          }
+        } else if easing == nil, let value = attempt(&input, easingFunction) {
+          easing = value
+        } else if behavior == nil, let value: TransitionBehavior = attempt(&input, keyword) {
+          behavior = value
+        } else if property == nil, let value = attempt(&input, transitionProperty) {
+          property = value
+        } else {
+          return nil
+        }
+      }
+    }
+  }
+}
+
 /// `none`, `all` or the name of a property, which is ASCII case-insensitive. The keywords that every property takes
 /// aren't names.
 private func transitionProperty(_ input: inout _CSSParser.Parser) -> TransitionProperty? {

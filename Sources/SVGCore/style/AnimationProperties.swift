@@ -123,15 +123,19 @@ enum AnimationPlayStateProperty: AnimationListProperty {
 enum AnimationShorthand {
   static let name = "animation"
 
+  /// The longhands, in the order of their declarations.
+  static var longhands: [any StyleProperty.Type] {
+    [
+      AnimationNameProperty.self, AnimationDurationProperty.self, AnimationTimingFunctionProperty.self,
+      AnimationDelayProperty.self, AnimationIterationCountProperty.self, AnimationDirectionProperty.self,
+      AnimationFillModeProperty.self, AnimationPlayStateProperty.self,
+    ]
+  }
+
   /// The declarations of the longhands, or `nil` if the value is invalid.
   static func declarations(css input: inout _CSSParser.Parser) -> [PropertyDeclaration]? {
-    let start = input.state
-    while case .success = input.next() {}
-    switch keyword(removingComments(from: input.slice(from: start.sourcePosition))) {
-    case "inherit": return declarations(.inherit)
-    case "initial": return declarations(.initial)
-    case "unset", "revert", "revert-layer": return declarations(.unset)
-    default: input.reset(state: start)
+    if let keyword = wideKeyword(&input) {
+      return keywordDeclarations(keyword, of: longhands)
     }
     var animations = [SingleAnimation]()
     repeat {
@@ -149,25 +153,6 @@ enum AnimationShorthand {
       PropertyDeclaration(AnimationDirectionProperty.self, .value(animations.map { $0.direction ?? .normal })),
       PropertyDeclaration(AnimationFillModeProperty.self, .value(animations.map { $0.fillMode ?? .none })),
       PropertyDeclaration(AnimationPlayStateProperty.self, .value(animations.map { $0.playState ?? .running })),
-    ]
-  }
-
-  /// The declarations that give every longhand the same keyword.
-  private static func declarations(_ keyword: Declared<Never>) -> [PropertyDeclaration] {
-    func declaration<P: StyleProperty>(_: P.Type) -> PropertyDeclaration {
-      let value: Declared<P.Specified> =
-        switch keyword {
-        case .inherit: .inherit
-        case .initial: .initial
-        case .unset, .value: .unset
-        }
-      return PropertyDeclaration(P.self, value)
-    }
-    return [
-      declaration(AnimationNameProperty.self), declaration(AnimationDurationProperty.self),
-      declaration(AnimationTimingFunctionProperty.self), declaration(AnimationDelayProperty.self),
-      declaration(AnimationIterationCountProperty.self), declaration(AnimationDirectionProperty.self),
-      declaration(AnimationFillModeProperty.self), declaration(AnimationPlayStateProperty.self),
     ]
   }
 
@@ -224,6 +209,35 @@ enum AnimationShorthand {
       }
     }
   }
+}
+
+/// The keyword that every property takes, when it's the whole value of a shorthand, or `nil` with the input as it
+/// was.
+func wideKeyword(_ input: inout _CSSParser.Parser) -> Declared<Never>? {
+  let start = input.state
+  while case .success = input.next() {}
+  switch keyword(removingComments(from: input.slice(from: start.sourcePosition))) {
+  case "inherit": return .inherit
+  case "initial": return .initial
+  case "unset", "revert", "revert-layer": return .unset
+  default:
+    input.reset(state: start)
+    return nil
+  }
+}
+
+/// The declarations that give every longhand of a shorthand the same keyword.
+func keywordDeclarations(_ keyword: Declared<Never>, of longhands: [any StyleProperty.Type]) -> [PropertyDeclaration] {
+  func declaration<P: StyleProperty>(_: P.Type) -> PropertyDeclaration {
+    let value: Declared<P.Specified> =
+      switch keyword {
+      case .inherit: .inherit
+      case .initial: .initial
+      case .unset, .value: .unset
+      }
+    return PropertyDeclaration(P.self, value)
+  }
+  return longhands.map { declaration($0) }
 }
 
 /// The value that `parse` reads from the input, or `nil` with the input as it was if it reads none.
