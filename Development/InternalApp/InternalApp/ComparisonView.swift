@@ -42,7 +42,7 @@ struct ComparisonView: View {
     _index = State(initialValue: comparison.index)
   }
 
-  private var document: SVGDocument { comparison.documents[index] }
+  private var document: SVGFile { comparison.documents[index] }
 
   private var configuration: SVGUIViewConfiguration {
     // A view that starts playing plays from the start.

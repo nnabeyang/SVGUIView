@@ -23,7 +23,7 @@ struct ContentView: View {
     }
     .sheet(isPresented: $showingPicker) {
       DocumentPickerView { url in
-        path.append(Comparison(documents: [SVGDocument(url: url)], index: 0))
+        path.append(Comparison(documents: [SVGFile(url: url)], index: 0))
       }
     }
   }
@@ -44,7 +44,7 @@ struct Folder: Hashable {
   private static let topLevelFolders = ["w3c", "custom", "benchmark"]
 
   /// The subfolders and SVG files directly in the folder, sorted by name.
-  func contents() -> (folders: [Folder], documents: [SVGDocument]) {
+  func contents() -> (folders: [Folder], documents: [SVGFile]) {
     if url == Self.testSuite.url {
       return (Self.topLevelFolders.map { Folder(url: url.appending(component: $0), title: $0) }, [])
     }
@@ -55,13 +55,13 @@ struct Folder: Hashable {
     let folders = sorted.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
       .map { Folder(url: $0, title: $0.lastPathComponent) }
     let documents = sorted.filter { $0.pathExtension == "svg" }
-      .map { SVGDocument(url: $0) }
+      .map { SVGFile(url: $0) }
     return (folders, documents)
   }
 }
 
 /// An SVG file to compare.
-struct SVGDocument: Hashable {
+struct SVGFile: Hashable {
   let url: URL
 
   var name: String { url.deletingPathExtension().lastPathComponent }
@@ -69,13 +69,13 @@ struct SVGDocument: Hashable {
 
 /// The SVG files that a comparison can step through, and the one that it shows first.
 struct Comparison: Hashable {
-  let documents: [SVGDocument]
+  let documents: [SVGFile]
   let index: Int
 }
 
 private struct FolderView: View {
   let folder: Folder
-  @State private var contents: (folders: [Folder], documents: [SVGDocument]) = ([], [])
+  @State private var contents: (folders: [Folder], documents: [SVGFile]) = ([], [])
 
   var body: some View {
     List {
