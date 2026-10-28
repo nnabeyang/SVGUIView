@@ -73,6 +73,30 @@ start at the time of the change, as in a browser, while the animations that
 the elements keep running play on. Removing an animation and adding it again
 starts it again.
 
+### Starting transitions
+
+A change starts CSS transitions of the properties whose values it changes, as
+the `transition` properties of the elements give. The transitions start at the
+time of the change, from the values that the elements show then, and the
+changes made in one turn of the run loop start them together.
+
+```swift
+// With `#box { transition: transform 1s }` and a `.moved` class that sets the
+// transform, the box moves to its new place in one second.
+svgView.document.element(id: "box")?.classList.add("moved")
+```
+
+Changing a value back while its transition runs reverses the transition from
+where it is, and changing it to another value starts a new transition from
+there, as in a browser. A change of a value that an animation changes starts
+no transition.
+
+A view whose ``SVGUIViewConfiguration/animation`` is
+``SVGUIViewConfiguration/AnimationMode/none``, or that holds its animations
+because Reduce Motion is on, shows the new values at once and starts no
+transitions. The transitions play on the timeline of the view, so they advance
+only while the view plays. ``SVGDocument/animations`` doesn't list them.
+
 ### Controlling animations
 
 ``SVGDocument/animations`` and ``SVGDocument/Element/animations`` list the CSS

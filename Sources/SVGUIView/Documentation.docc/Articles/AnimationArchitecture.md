@@ -14,9 +14,9 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > times. Phase 2 is done too: a view plays animations in a tree of layers that
 > `SVGRenderLayer` makes. Phase 2.5 has started: ``SVGUIView/SVGUIView/document``
 > finds and changes the elements of a document, controls its CSS animations, and
-> begins and ends its SMIL animations. CSS Transitions and filters on Metal are
-> planned: the types, properties and methods proposed for them don't exist yet,
-> and their names may change while the work goes on.
+> begins and ends its SMIL animations, and its changes start CSS Transitions.
+> Filters on Metal are planned: the types, properties and methods proposed for
+> them don't exist yet, and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -367,7 +367,8 @@ The surface is:
   on the document and on elements. See <doc:ChangingDocuments>.
 - **Changing elements:** reading, setting and removing attributes,
   changing the `style` attribute's declarations, and adding, removing and
-  toggling classes. Inserting and removing elements comes later.
+  toggling classes. A change starts the CSS Transitions of the values that it
+  changes. Inserting and removing elements comes later.
 - **Controlling animations:** the CSS animations of the document or of one
   element, each with ``SVGDocument/Animation/play()``,
   ``SVGDocument/Animation/pause()``, ``SVGDocument/Animation/currentTime``,
