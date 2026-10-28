@@ -203,7 +203,7 @@ extension SVGAttributeScanner {
       return .currentColor
     case .inherit:
       return nil
-    case .rgb, .rgba:
+    case .rgb, .rgba, .hsl, .hsla, .hwb:
       return scanColor(type: type).map { .color($0) }
     case .url:
       guard consume(ascii: UInt8(ascii: "(")) else { return nil }
@@ -234,7 +234,7 @@ extension SVGAttributeScanner {
   private mutating func scanColor(type: SVGFillType) -> SVGColor? {
     switch type {
     case .rgb, .rgba:
-      guard let (channels, alpha, _) = scanColorArguments() else { return nil }
+      guard let (channels, alpha, _) = scanColorArguments(first: { $0.scanColorComponent() }) else { return nil }
       // Each channel is a number from 0 to 255 or a percentage, which the color keeps.
       let dimensions = channels.map { channel -> ColorDimension in
         switch channel {
@@ -245,6 +245,33 @@ extension SVGAttributeScanner {
       }
       guard let alpha else { return .rgb(SVGRGBColor(r: dimensions[0], g: dimensions[1], b: dimensions[2])) }
       return .rgba(SVGRGBAColor(r: dimensions[0], g: dimensions[1], b: dimensions[2], a: alpha.alpha))
+    case .hsl, .hsla:
+      guard let (components, alpha, isLegacy) = scanColorArguments(first: { $0.scanHue() }),
+        !isLegacy || components.dropFirst().allSatisfy(\.isPercentage)
+      else { return nil }
+      // A negative saturation is 0%, and the other values outside their ranges make colors outside sRGB, whose
+      // channels are clamped.
+      let (red, green, blue) = Self.rgb(
+        hue: components[0].value, saturation: max(components[1].value, 0), lightness: components[2].value)
+      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
+    case .hwb:
+      guard let (components, alpha, isLegacy) = scanColorArguments(first: { $0.scanHue() }), !isLegacy else {
+        return nil
+      }
+      let whiteness = components[1].value / 100
+      let blackness = components[2].value / 100
+      let (red, green, blue): (Double, Double, Double)
+      if whiteness + blackness >= 1 {
+        let gray = whiteness / (whiteness + blackness)
+        (red, green, blue) = (gray, gray, gray)
+      } else {
+        let hue = Self.rgb(hue: components[0].value, saturation: 100, lightness: 50)
+        let scale = 1 - whiteness - blackness
+        (red, green, blue) = (
+          hue.red * scale + whiteness, hue.green * scale + whiteness, hue.blue * scale + whiteness
+        )
+      }
+      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
     case .url, .inherit, .current:
       return nil
     }
@@ -263,6 +290,10 @@ extension SVGAttributeScanner {
       }
     }
 
+    var isPercentage: Bool {
+      if case .percentage = self { true } else { false }
+    }
+
     /// The value as an alpha from 0 to 1.
     var alpha: Double {
       switch self {
@@ -276,10 +307,12 @@ extension SVGAttributeScanner {
   /// The arguments of a color function, from its opening parenthesis to its closing one: three components and an
   /// alpha, which is optional, separated by commas in the legacy syntax, or by spaces with a slash before the
   /// alpha in the modern one, which also takes `none`.
-  private mutating func scanColorArguments() -> (
-    components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool
-  )? {
-    guard consume(ascii: UInt8(ascii: "(")), let firstComponent = scanColorComponent() else { return nil }
+  ///
+  /// - Parameter first: Reads the first component, such as the hue of `hsl()`.
+  private mutating func scanColorArguments(
+    first: (inout SVGAttributeScanner) -> ColorComponent?
+  ) -> (components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool)? {
+    guard consume(ascii: UInt8(ascii: "(")), let firstComponent = first(&self) else { return nil }
     let isLegacy = reader.consumeWhitespace() == UInt8(ascii: ",")
     var components = [firstComponent]
     for _ in 0..<2 {
@@ -312,6 +345,51 @@ extension SVGAttributeScanner {
       return .percentage(value)
     }
     return .number(value)
+  }
+
+  /// A hue in degrees: a number, an angle, or `none`.
+  private mutating func scanHue() -> ColorComponent? {
+    // A name starts with a letter, unlike a number.
+    if reader.consumeWhitespace()?.isNameStart == true {
+      return consumeName().lowercased() == "none" ? ColorComponent.none : nil
+    }
+    guard let value = scanNumber() else { return nil }
+    guard reader.peek().isNameStart else { return .number(value) }
+    switch consumeName().lowercased() {
+    case "deg": return .number(value)
+    case "grad": return .number(value * 0.9)
+    case "rad": return .number(value * 180 / .pi)
+    case "turn": return .number(value * 360)
+    default: return nil
+    }
+  }
+
+  /// A color of red, green and blue from 0 to 1, which are clamped to sRGB.
+  private static func color(red: Double, green: Double, blue: Double, alpha: Double) -> SVGColor {
+    func channel(_ value: Double) -> ColorDimension {
+      .absolute(min(max(value, 0), 1) * 255)
+    }
+    return .rgba(SVGRGBAColor(r: channel(red), g: channel(green), b: channel(blue), a: alpha))
+  }
+
+  /// The red, green and blue of a color in HSL, as CSS Color converts it, which can be outside 0 to 1.
+  ///
+  /// - Parameters:
+  ///   - hue: The hue in degrees, which goes around every 360 degrees.
+  ///   - saturation: The saturation, 100 for a full one.
+  ///   - lightness: The lightness, from 0 for black to 100 for white.
+  private static func rgb(hue: Double, saturation: Double, lightness: Double) -> (
+    red: Double, green: Double, blue: Double
+  ) {
+    let hue = hue.truncatingRemainder(dividingBy: 360) + (hue < 0 ? 360 : 0)
+    let saturation = saturation / 100
+    let lightness = lightness / 100
+    func channel(_ n: Double) -> Double {
+      let k = (n + hue / 30).truncatingRemainder(dividingBy: 12)
+      let a = saturation * min(lightness, 1 - lightness)
+      return lightness - a * max(-1, min(k - 3, 9 - k, 1))
+    }
+    return (channel(0), channel(8), channel(4))
   }
 
   static func parseColor(description: String) -> SVGColor? {

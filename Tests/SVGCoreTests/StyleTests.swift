@@ -99,7 +99,7 @@ struct StyleTests {
   @Test("a name that isn't a color and a function that isn't supported are invalid")
   func invalidColors() {
     #expect(FillProperty.declared(attribute: "bogus") == nil)
-    #expect(StopColorProperty.declared(attribute: "hsla(120, 100%, 75%, 0.5)") == nil)
+    #expect(StopColorProperty.declared(attribute: "lab(50 0 0)") == nil)
     #expect(declared(FloodColorProperty.self, css: "bogus") == nil)
     #expect(FillProperty.declared(attribute: "green") != nil)
   }

@@ -4,6 +4,9 @@ import Foundation
 enum SVGFillType: String {
   case rgb
   case rgba
+  case hsl
+  case hsla
+  case hwb
   case url
   case inherit
   case current = "currentcolor"
