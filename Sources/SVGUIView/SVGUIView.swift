@@ -25,6 +25,8 @@ public class SVGUIView: UIView {
       animationEnd = baseContext.animationEnd()
       promoted = baseContext.elementsWithAnimatedCompositing()
       painting = baseContext.elementsWithAnimatedPainting()
+      // The values of another context aren't compared with the frame that the view shows.
+      shownStyled = nil
     }
   }
   /// The document that the view displays, which an app reads and changes.
@@ -104,6 +106,11 @@ public class SVGUIView: UIView {
   /// The render nodes of the elements that make the same nodes at every time, of the frame that the view shows,
   /// which the next frame reuses.
   private var shownNodes = RenderNodeCache()
+  /// The document at the time of the frame that the view shows, which the next frame compares its animated values
+  /// with, so that it isn't rendered if they're the same.
+  private var shownStyled: SVGBaseContext?
+  /// Counts the frames that weren't rendered since their animated values were the same as the frame before.
+  private(set) var unchangedFrameCount = 0
 
   /// The time of the animations.
   ///
@@ -285,6 +292,7 @@ public class SVGUIView: UIView {
     let painting = painting
     let previous = reusesLayers ? shownLayers : nil
     let previousNodes = reusesLayers ? shownNodes : RenderNodeCache()
+    let previousStyled = reusesLayers ? shownStyled : nil
     isRendering = true
     let signpost = Self.signposter.beginInterval(
       "Render", id: Self.signposter.makeSignpostID(),
@@ -293,8 +301,20 @@ public class SVGUIView: UIView {
       if let promoted {
         let rendered = await SVGUIView.makeLayers(
           rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, previous: previous,
-          previousNodes: previousNodes, time: time, fit: fit, timeoutDuration: timeoutDuration)
-        let result = rendered.map(\.layers)
+          previousNodes: previousNodes, previousStyled: previousStyled, time: time, fit: fit,
+          timeoutDuration: timeoutDuration)
+        let result: Result<RenderedContainer, SVGRenderingError>
+        switch rendered {
+        case .success(.unchanged):
+          // The view keeps showing the frame that looks the same.
+          Self.signposter.endInterval("Render", signpost, "unchanged")
+          self?.finishRendering(ofRendering: generation) { $0.unchangedFrameCount += 1 }
+          return
+        case .success(.changed(let layers, _, _)):
+          result = .success(layers)
+        case .failure(let error):
+          result = .failure(error)
+        }
         switch result {
         case .success(let layers) where Self.signposter.isEnabled:
           // Counting the layers that were painted takes time, so it's done only while the intervals are recorded.
@@ -308,8 +328,9 @@ public class SVGUIView: UIView {
         }
         self?.finishRendering(ofRendering: generation) { view in
           view.showLayers(result)
-          if case .success(let frame) = rendered {
-            view.shownNodes = frame.nodes
+          if case .success(.changed(_, let nodes, let styled)) = rendered {
+            view.shownNodes = nodes
+            view.shownStyled = styled
           }
         }
       } else {
@@ -485,6 +506,7 @@ public class SVGUIView: UIView {
       layerTree.clear()
       shownLayers = nil
       shownNodes = RenderNodeCache()
+      shownStyled = nil
       layer.contents = image
     case .failure(let error):
       show(error)
@@ -520,6 +542,7 @@ public class SVGUIView: UIView {
       layerTree.clear()
       shownLayers = nil
       shownNodes = RenderNodeCache()
+      shownStyled = nil
     case .cancelled:
       // A newer rendering cancels the one before it, so this is not worth a warning.
       break
@@ -607,7 +630,11 @@ public class SVGUIView: UIView {
 
   /// Renders the document at a time into layers: the layers of the elements whose transform or opacity changes, and
   /// the contents of the layers between them, which show the contents of the previous layers where they don't
-  /// change, and the render nodes that the next frame can reuse.
+  /// change, and the render nodes that the next frame can reuse. A frame whose animated values are the same as those
+  /// of the frame that the view shows isn't rendered.
+  ///
+  /// - Parameter previousStyled: The document at the time of the frame that the view shows, from the same context,
+  ///   or `nil` to render the frame anyway.
   @concurrent
   private static func makeLayers(
     rect: CGRect,
@@ -617,10 +644,11 @@ public class SVGUIView: UIView {
     painting: Set<ElementID>,
     previous: RenderedContainer?,
     previousNodes: RenderNodeCache,
+    previousStyled: SVGBaseContext?,
     time: Duration,
     fit: ContentFit,
     timeoutDuration: Duration
-  ) async -> Result<(layers: RenderedContainer, nodes: RenderNodeCache), SVGRenderingError> {
+  ) async -> Result<LayerFrame, SVGRenderingError> {
     guard base.root != nil else { return .failure(.missingRootElement) }
     guard (rect.width * scale).rounded(.up) > 0, (rect.height * scale).rounded(.up) > 0 else {
       return .failure(.zeroSizedRect)
@@ -628,6 +656,8 @@ public class SVGUIView: UIView {
     return await withRenderingTimeout(timeoutDuration) {
       let signposter = Self.signposter
       let base = signposter.withIntervalSignpost("Style") { base.at(time: time.seconds) }
+      // A frame whose animated values are the same as the frame that the view shows looks the same.
+      if let previousStyled, base.hasSameAnimatedValues(as: previousStyled) { return LayerFrame.unchanged }
       let buildInterval = signposter.beginInterval("Build")
       let tree = await RenderTreeBuilder(base: base, viewPort: rect, scale: scale, reusing: previousNodes).build(fit: fit)
       signposter.endInterval("Build", buildInterval)
@@ -638,8 +668,15 @@ public class SVGUIView: UIView {
       let paintInterval = signposter.beginInterval("Paint")
       defer { signposter.endInterval("Paint", paintInterval) }
       guard let layers = await plan.painted(scale: scale, reusing: previous) else { return nil }
-      return (layers, tree.reusableNodes)
+      return LayerFrame.changed(layers: layers, nodes: tree.reusableNodes, styled: base)
     }
+  }
+
+  /// The layers of a frame, with the render nodes that the next frame can reuse and the document at its time, or
+  /// none for a frame that looks the same as the one that the view shows.
+  private enum LayerFrame: Sendable {
+    case changed(layers: RenderedContainer, nodes: RenderNodeCache, styled: SVGBaseContext)
+    case unchanged
   }
 }
 
