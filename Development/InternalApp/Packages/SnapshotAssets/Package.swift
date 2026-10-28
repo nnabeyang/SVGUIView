@@ -9,7 +9,7 @@ import PackageDescription
 // `references/<version>`.
 let package = Package(
   name: "SnapshotAssets",
-  platforms: [.iOS(.v16)],
+  platforms: [.iOS(.v18)],
   products: [
     .library(name: "SVGSnapshotAssets", targets: ["SVGTestSuite", "SVGSnapshotReferences"])
   ],

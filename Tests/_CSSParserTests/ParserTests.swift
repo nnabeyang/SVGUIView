@@ -95,7 +95,7 @@ struct ParserTests {
 
   @Test("component value list parses to expected JSON")
   func componentValueList() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "component_value_list", withExtension: "json")!)
+    let json = try String(contentsOf: Bundle.module.url(forResource: "component_value_list", withExtension: "json")!, encoding: .utf8)
     runJSONTests(jsonData: json) { input in
       .array(componentValueToJSON(input: &input))
     }
@@ -103,7 +103,7 @@ struct ParserTests {
 
   @Test("one component value parses or returns error JSON")
   func oneComponentValue() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "one_component_value", withExtension: "json")!)
+    let json = try String(contentsOf: Bundle.module.url(forResource: "one_component_value", withExtension: "json")!, encoding: .utf8)
     runJSONTests(jsonData: json) { input in
       let result: Result<JSONValue, ParseError<DummyError>> = input.parseEntirely { input in
         switch input.next() {
@@ -124,7 +124,7 @@ struct ParserTests {
 
   @Test("declaration list parser yields items including errors")
   func declarationList() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "declaration_list", withExtension: "json")!)
+    let json = try String(contentsOf: Bundle.module.url(forResource: "declaration_list", withExtension: "json")!, encoding: .utf8)
     runJSONTests(jsonData: json) { input in
       let parser: RuleBodyParser<JSONParser, JSONValue, JSONError> = RuleBodyParser(input: input, parser: JSONParser())
       var items: [JSONValue] = []
@@ -142,7 +142,7 @@ struct ParserTests {
 
   @Test("one declaration parses or returns error JSON")
   func oneDeclaration() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "one_declaration", withExtension: "json")!)
+    let json = try String(contentsOf: Bundle.module.url(forResource: "one_declaration", withExtension: "json")!, encoding: .utf8)
     runJSONTests(jsonData: json) { input in
       var parser = JSONParser()
       let result = parseOneDeclaration(input: &input, parser: &parser)
@@ -157,7 +157,7 @@ struct ParserTests {
 
   @Test("one rule parses or returns error JSON")
   func oneRule() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "one_rule", withExtension: "json")!)
+    let json = try String(contentsOf: Bundle.module.url(forResource: "one_rule", withExtension: "json")!, encoding: .utf8)
     runJSONTests(jsonData: json) { input in
       var parser = JSONParser()
       let result = parseOneRule(input: &input, parser: &parser)
@@ -172,7 +172,7 @@ struct ParserTests {
 
   @Test("rule list iterates and collects items")
   func ruleList() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "rule_list", withExtension: "json")!)
+    let json = try String(contentsOf: Bundle.module.url(forResource: "rule_list", withExtension: "json")!, encoding: .utf8)
     runJSONTests(jsonData: json) { input in
       var parser: RuleBodyParser<JSONParser, JSONValue, JSONError> = RuleBodyParser(input: input, parser: JSONParser())
       var items: [JSONValue] = []
@@ -190,7 +190,7 @@ struct ParserTests {
 
   @Test("stylesheet parses into array of items")
   func stylesheet() throws {
-    let json = try String(contentsOf: Bundle.module.url(forResource: "stylesheet", withExtension: "json")!)
+    let json = try String(contentsOf: Bundle.module.url(forResource: "stylesheet", withExtension: "json")!, encoding: .utf8)
     runJSONTests(jsonData: json) { input in
       var jsonParser = JSONParser()
       let parser = StyleSheetParser(input: input, parser: &jsonParser)
