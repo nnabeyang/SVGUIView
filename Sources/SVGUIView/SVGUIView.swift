@@ -663,7 +663,24 @@ extension SVGUIView: DocumentHost {
     let previous = playback
     change(&playback, displayedTime.seconds)
     guard playback != previous else { return }
-    baseContext = baseContext.settingPlayback(playback, of: id)
+    animationsDidChange(baseContext.settingPlayback(playback, of: id))
+  }
+
+  func beginSMILAnimation(_ element: ElementID) {
+    applyDocumentChanges()
+    guard let context = baseContext.beginningSMILAnimation(element, at: displayedTime.seconds) else { return }
+    animationsDidChange(context)
+  }
+
+  func endSMILAnimation(_ element: ElementID) {
+    applyDocumentChanges()
+    guard let context = baseContext.endingSMILAnimation(element, at: displayedTime.seconds) else { return }
+    animationsDidChange(context)
+  }
+
+  /// Shows the document with animations that play in another way, and runs the clock while they change.
+  private func animationsDidChange(_ context: SVGBaseContext) {
+    baseContext = context
     // Only the values of the animated elements change, so a frame shows the layers that don't change as they are.
     if configuration.animation == .none {
       setNeedsDisplay()
