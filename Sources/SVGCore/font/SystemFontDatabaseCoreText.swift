@@ -1,7 +1,7 @@
 import CoreText
 import Foundation
+import Synchronization
 import _SPI
-import os
 
 package class SystemFontDatabaseCoreText {
   /// Makes the font descriptor of a text style, such as `UICTFontTextStyleBody`, at the user's preferred size.
@@ -12,8 +12,7 @@ package class SystemFontDatabaseCoreText {
     get { textStyleDescriptorLock.withLock { $0 } }
     set { textStyleDescriptorLock.withLock { $0 = newValue } }
   }
-  private static let textStyleDescriptorLock = OSAllocatedUnfairLock<(@Sendable (String) -> CTFontDescriptor)?>(
-    initialState: nil)
+  private static let textStyleDescriptorLock = Mutex<(@Sendable (String) -> CTFontDescriptor)?>(nil)
 
   private var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
   let textStyles: [CFString]
