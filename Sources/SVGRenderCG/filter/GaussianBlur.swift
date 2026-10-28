@@ -107,14 +107,14 @@ extension GaussianBlurPrimitive {
     deviation < boxBlurMinimumDeviation
   }
 
-  /// The weights of a Gaussian kernel of a standard deviation in pixels, out to three standard deviations, as integers
-  /// that add up to about 2^14. A standard deviation of 0 doesn't blur.
-  private static func gaussianKernel(deviation: CGFloat) -> [Int16] {
+  /// The weights of a Gaussian kernel of a standard deviation in pixels, out to three standard deviations, which add
+  /// up to 1. A standard deviation of 0 doesn't blur.
+  private static func gaussianKernel(deviation: CGFloat) -> [Float] {
     guard deviation > 0 else { return [1] }
     let radius = Int(ceil(deviation * 3))
     let weights = (-radius...radius).map { exp(-CGFloat($0 * $0) / (2 * deviation * deviation)) }
     let sum = weights.reduce(0, +)
-    return weights.map { Int16(($0 / sum * 16384).rounded()) }
+    return weights.map { Float($0 / sum) }
   }
 
   /// Blurs `srcBuffer` into `destBuffer` by the same standard deviation in pixels in both directions, extending the
@@ -136,8 +136,8 @@ extension GaussianBlurPrimitive {
     let kernelSizeX = Self.isGaussian(deviationX) ? 0 : Self.clampedToKernelSize(value: deviationX, scale: scale)
     let kernelSizeY = Self.isGaussian(deviationY) ? 0 : Self.clampedToKernelSize(value: deviationY, scale: scale)
     if kernelSizeX == 0 || kernelSizeY == 0 {
-      let kernelX: [Int16] = kernelSizeX == 0 ? Self.gaussianKernel(deviation: deviationX) : [1]
-      let kernelY: [Int16] = kernelSizeY == 0 ? Self.gaussianKernel(deviation: deviationY) : [1]
+      let kernelX: [Float] = kernelSizeX == 0 ? Self.gaussianKernel(deviation: deviationX) : [1]
+      let kernelY: [Float] = kernelSizeY == 0 ? Self.gaussianKernel(deviation: deviationY) : [1]
       guard applyGaussian(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelX: kernelX, kernelY: kernelY, extendsEdges: false)
       else { return false }
       guard kernelSizeX != 0 || kernelSizeY != 0 else { return true }
@@ -148,24 +148,15 @@ extension GaussianBlurPrimitive {
     return true
   }
 
-  /// Blurs `srcBuffer` into `destBuffer` with the Gaussian kernels of the two directions, one after the other, and
-  /// returns `false` if the blur failed. The passes use both buffers.
+  /// Blurs `srcBuffer` into `destBuffer` with the Gaussian kernels of the two directions in one pass, and returns
+  /// `false` if the blur failed.
   private func applyGaussian(
-    srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelX: [Int16], kernelY: [Int16], extendsEdges: Bool
+    srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelX: [Float], kernelY: [Float], extendsEdges: Bool
   ) -> Bool {
     let flags = vImage_Flags(extendsEdges ? kvImageEdgeExtend : kvImageBackgroundColorFill)
-    func convolve(_ src: inout vImage_Buffer, _ dest: inout vImage_Buffer, kernel: [Int16], horizontally: Bool) -> Bool {
-      let size = UInt32(kernel.count)
-      let divisor = kernel.reduce(0) { $0 + Int32($1) }
-      return vImageConvolve_ARGB8888(
-        &src, &dest, nil, 0, 0, kernel, horizontally ? 1 : size, horizontally ? size : 1, divisor, [0, 0, 0, 0], flags)
-        == kvImageNoError
-    }
-    guard convolve(&srcBuffer, &destBuffer, kernel: kernelX, horizontally: true),
-      convolve(&destBuffer, &srcBuffer, kernel: kernelY, horizontally: false)
-    else { return false }
-    swap(&srcBuffer, &destBuffer)
-    return true
+    return vImageSepConvolve_ARGB8888(
+      &srcBuffer, &destBuffer, nil, 0, 0, kernelX, UInt32(kernelX.count), kernelY, UInt32(kernelY.count), 0,
+      [0, 0, 0, 0], flags) == kvImageNoError
   }
 
   /// Blurs `srcBuffer` into `destBuffer`, and returns `false` if the temporary buffer couldn't be allocated.

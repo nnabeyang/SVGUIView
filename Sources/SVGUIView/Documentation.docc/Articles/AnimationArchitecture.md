@@ -548,7 +548,7 @@ view seeks back before their end.
 Filters move to Metal in the layer renderer, while still images keep the vImage
 implementation until the Metal one produces the same results.
 
-- The minimum is `MTLGPUFamily.apple3`. Every device that runs iOS 16 belongs to
+- The minimum is `MTLGPUFamily.apple3`. Every device that runs iOS 18 belongs to
   this family or a later one, so there's no fallback for missing Metal support.
 - Gaussian blur uses Metal Performance Shaders, as in the earlier
   `feature/metal-filter-acceleration` work. The other primitives use compute
