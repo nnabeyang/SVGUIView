@@ -220,6 +220,8 @@ struct CSSDeclarationParser: DeclarationParser {
           Self.declaration(id.property, input: &input).map { [$0] }
         } else if name == AnimationShorthand.name {
           AnimationShorthand.declarations(css: &input)
+        } else if name == TransitionShorthand.name {
+          TransitionShorthand.declarations(css: &input)
         } else {
           nil
         }
