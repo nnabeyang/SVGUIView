@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <style>
+    @keyframes spin { to { transform: rotate(360deg) } }
+    @keyframes color { from { fill: rgb(0, 0, 255) } to { fill: rgb(0, 255, 0) } }
+    @keyframes slide { from { transform: translateX(0) } to { transform: translateX(120px) } }
+    .spin { transform-origin: 50px 50px; animation: spin 4s linear infinite }
+    .color { animation: color 2s linear infinite alternate }
+    .run { animation: slide 2s ease-in-out forwards }
+    .held { animation: color 2s linear infinite alternate paused }
+  </style>
+  <rect id="spinner" class="spin" x="20" y="20" width="60" height="60" fill="orange"/>
+  <circle id="lamp" class="color" cx="150" cy="50" r="30"/>
+  <rect id="box" x="20" y="120" width="40" height="40" fill="gray"/>
+  <circle id="held" class="held" cx="150" cy="170" r="20"/>
+</svg>

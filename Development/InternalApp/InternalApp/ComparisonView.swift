@@ -128,6 +128,11 @@ struct ComparisonView: View {
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
+        NavigationLink(value: AnimationControls(file: document)) {
+          Label("Animations", systemImage: "slider.horizontal.3")
+        }
+      }
+      ToolbarItem(placement: .primaryAction) {
         Menu {
           Picker("Content Mode", selection: $contentMode) {
             Text("Fit").tag(ContentMode.fit)
@@ -155,7 +160,7 @@ struct ComparisonView: View {
 
 /// A view in the comparison, framed and labeled with the name of its renderer, so that switching shows which
 /// one is visible even when they look the same.
-private struct Pane: ViewModifier {
+struct Pane: ViewModifier {
   let title: String
   /// The size of the view, as a fraction of the space for it. The view is centered in the space.
   let size: Double

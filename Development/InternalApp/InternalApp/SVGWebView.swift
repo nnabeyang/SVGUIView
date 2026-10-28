@@ -9,6 +9,8 @@ struct SVGWebView: UIViewRepresentable {
   let time: Double
   /// Whether the animations play from the start instead.
   var isPlaying = false
+  /// Sends operations on single animations to the web view, or `nil` for a view that only shows the time.
+  var control: WebAnimationControl?
 
   final class Coordinator: NSObject, WKNavigationDelegate {
     var url: URL?
@@ -39,6 +41,27 @@ struct SVGWebView: UIViewRepresentable {
           // The animations that seeking has paused. An animation that the file pauses stays where it is.
           const seeking = new WeakSet();
           window.addEventListener("message", (event) => {
+            // An operation on a CSS animation of an element, which is found by its position in document order, or
+            // on the classes of the element.
+            const control = event.data.control;
+            if (control) {
+              const element = document.getElementsByTagName("*")[control.element];
+              if (!element) return;
+              if (control.action === "toggleClass") {
+                element.classList.toggle(control.value);
+                return;
+              }
+              const animation = element.getAnimations()
+                .filter((animation) => animation.animationName === control.name)[control.occurrence];
+              if (!animation) return;
+              switch (control.action) {
+                case "play": animation.play(); break;
+                case "pause": animation.pause(); break;
+                case "seek": animation.currentTime = control.value; break;
+                case "rate": animation.playbackRate = control.value; break;
+              }
+              return;
+            }
             for (const animation of document.getAnimations()) {
               if (animation.playState === "paused" && !seeking.has(animation)) continue;
               seeking.add(animation);
@@ -75,6 +98,7 @@ struct SVGWebView: UIViewRepresentable {
     webView.backgroundColor = .clear
     webView.scrollView.isScrollEnabled = false
     webView.scrollView.panGestureRecognizer.isEnabled = false
+    control?.webView = webView
     return webView
   }
 
@@ -107,5 +131,46 @@ struct SVGWebView: UIViewRepresentable {
       <body><object data="\(source)" type="image/svg+xml"></object></body>
       </html>
       """
+  }
+}
+
+/// Sends operations on the CSS animations of the file that a web view shows, as SVGUIView's document API makes them.
+@MainActor
+final class WebAnimationControl {
+  /// An operation, whose value is a time in milliseconds for `seek`, a rate for `rate`, and a class for `toggleClass`.
+  enum Action: String {
+    case play, pause, seek, rate, toggleClass
+  }
+
+  fileprivate weak var webView: WKWebView?
+
+  /// Sends an operation on an animation of an element, or on the element.
+  ///
+  /// - Parameters:
+  ///   - element: The position of the element in document order, from the root element.
+  ///   - name: The name of the animation in `animation-name`.
+  ///   - occurrence: The number of the animations of the element with the same name before it.
+  func send(_ action: Action, element: Int, name: String = "", occurrence: Int = 0, value: Double = 0) {
+    post(action, element: element, name: name, occurrence: occurrence, value: "\(value)")
+  }
+
+  /// Toggles a class of an element.
+  func toggleClass(_ name: String, element: Int) {
+    post(.toggleClass, element: element, name: "", occurrence: 0, value: Self.literal(name))
+  }
+
+  /// Posts an operation to the frame of the file, whose value is JavaScript.
+  private func post(_ action: Action, element: Int, name: String, occurrence: Int, value: String) {
+    let control =
+      "{ action: \(Self.literal(action.rawValue)), element: \(element), name: \(Self.literal(name)), "
+      + "occurrence: \(occurrence), value: \(value) }"
+    webView?.evaluateJavaScript(
+      #"document.querySelector("object")?.contentWindow?.postMessage({ control: \#(control) }, "*");"#)
+  }
+
+  /// A string as a JavaScript literal.
+  private static func literal(_ string: String) -> String {
+    let data = (try? JSONSerialization.data(withJSONObject: [string])) ?? Data("[\"\"]".utf8)
+    return String(decoding: data.dropFirst().dropLast(), as: UTF8.self)
   }
 }
