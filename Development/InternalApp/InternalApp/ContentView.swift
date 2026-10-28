@@ -15,6 +15,7 @@ struct ContentView: View {
       FolderView(folder: .testSuite)
         .navigationDestination(for: Folder.self) { FolderView(folder: $0) }
         .navigationDestination(for: Comparison.self) { ComparisonView(comparison: $0) }
+        .navigationDestination(for: AnimationControls.self) { AnimationControlView(file: $0.file) }
         .toolbar {
           ToolbarItem(placement: .primaryAction) {
             Button("Open File…") { showingPicker = true }
@@ -23,7 +24,7 @@ struct ContentView: View {
     }
     .sheet(isPresented: $showingPicker) {
       DocumentPickerView { url in
-        path.append(Comparison(documents: [SVGDocument(url: url)], index: 0))
+        path.append(Comparison(documents: [SVGFile(url: url)], index: 0))
       }
     }
   }
@@ -38,44 +39,59 @@ struct Folder: Hashable {
     Folder(url: TestSuite.bundle.bundleURL, title: "Test Suite")
   }
 
+  /// The SVG files that come with the app to try the viewer with, which the app's bundle has at its top, since
+  /// the files of the folders of the app's sources are copied there.
+  static var samples: Folder {
+    Folder(url: Bundle.main.bundleURL, title: "Samples")
+  }
+
   /// The folders at the top of the test suite: `w3c` for the tests from other projects, `custom` for the ones
   /// written for SVGUIView, and `benchmark` for the documents that measure playback. The bundle has other files
   /// beside them.
   private static let topLevelFolders = ["w3c", "custom", "benchmark"]
 
   /// The subfolders and SVG files directly in the folder, sorted by name.
-  func contents() -> (folders: [Folder], documents: [SVGDocument]) {
+  func contents() -> (folders: [Folder], documents: [SVGFile]) {
     if url == Self.testSuite.url {
-      return (Self.topLevelFolders.map { Folder(url: url.appending(component: $0), title: $0) }, [])
+      return ([.samples] + Self.topLevelFolders.map { Folder(url: url.appending(component: $0), title: $0) }, [])
     }
     let urls =
       (try? FileManager.default.contentsOfDirectory(
         at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
     let sorted = urls.sorted { $0.lastPathComponent < $1.lastPathComponent }
-    let folders = sorted.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
-      .map { Folder(url: $0, title: $0.lastPathComponent) }
+    // The app's bundle has folders of its own beside the samples.
+    let folders =
+      url == Self.samples.url
+      ? []
+      : sorted.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+        .map { Folder(url: $0, title: $0.lastPathComponent) }
     let documents = sorted.filter { $0.pathExtension == "svg" }
-      .map { SVGDocument(url: $0) }
+      .map { SVGFile(url: $0) }
     return (folders, documents)
   }
 }
 
 /// An SVG file to compare.
-struct SVGDocument: Hashable {
+struct SVGFile: Hashable {
   let url: URL
 
   var name: String { url.deletingPathExtension().lastPathComponent }
 }
 
+/// An SVG file whose CSS animations the viewer controls.
+struct AnimationControls: Hashable {
+  let file: SVGFile
+}
+
 /// The SVG files that a comparison can step through, and the one that it shows first.
 struct Comparison: Hashable {
-  let documents: [SVGDocument]
+  let documents: [SVGFile]
   let index: Int
 }
 
 private struct FolderView: View {
   let folder: Folder
-  @State private var contents: (folders: [Folder], documents: [SVGDocument]) = ([], [])
+  @State private var contents: (folders: [Folder], documents: [SVGFile]) = ([], [])
 
   var body: some View {
     List {
