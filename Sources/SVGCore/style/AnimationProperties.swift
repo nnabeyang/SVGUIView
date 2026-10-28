@@ -10,7 +10,7 @@ enum AnimationName: Sendable, Equatable {
   case keyframes(String)
 }
 
-/// A property of CSS Animations, whose value is a list.
+/// A property of CSS Animations or CSS Transitions, whose value is a list.
 protocol AnimationListProperty: StyleProperty where Specified == [Element], Computed == [Element] {
   associatedtype Element: Sendable
   /// One value of the list, or `nil` if it's invalid.
@@ -227,7 +227,7 @@ enum AnimationShorthand {
 }
 
 /// The value that `parse` reads from the input, or `nil` with the input as it was if it reads none.
-private func attempt<T>(_ input: inout _CSSParser.Parser, _ parse: (inout _CSSParser.Parser) -> T?) -> T? {
+func attempt<T>(_ input: inout _CSSParser.Parser, _ parse: (inout _CSSParser.Parser) -> T?) -> T? {
   let state = input.state
   if let value = parse(&input) { return value }
   input.reset(state: state)
@@ -235,7 +235,7 @@ private func attempt<T>(_ input: inout _CSSParser.Parser, _ parse: (inout _CSSPa
 }
 
 /// A `<time>`, in seconds.
-private func time(_ input: inout _CSSParser.Parser) -> Double? {
+func time(_ input: inout _CSSParser.Parser) -> Double? {
   guard case .success(.dimention(let dimension)) = input.next() else { return nil }
   switch dimension.unit.lowercased() {
   case "s": return Double(dimension.value)
@@ -245,7 +245,7 @@ private func time(_ input: inout _CSSParser.Parser) -> Double? {
 }
 
 /// A keyword of the given type, whose raw values are in lowercase.
-private func keyword<T: RawRepresentable & CaseIterable>(_ input: inout _CSSParser.Parser) -> T?
+func keyword<T: RawRepresentable & CaseIterable>(_ input: inout _CSSParser.Parser) -> T?
 where T.RawValue == String {
   guard case .success(.ident(let name)) = input.next() else { return nil }
   return T(rawValue: name.lowercased())
@@ -372,7 +372,7 @@ private func linear(_ input: inout _CSSParser.Parser) -> EasingFunction? {
 }
 
 extension Result {
-  fileprivate var isSuccess: Bool {
+  var isSuccess: Bool {
     if case .success = self { true } else { false }
   }
 }

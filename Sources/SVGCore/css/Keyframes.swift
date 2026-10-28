@@ -11,8 +11,8 @@ struct KeyframesRule: Sendable {
 struct Keyframe: Sendable {
   /// The offsets that the keyframe applies to, between 0 and 1.
   let offsets: [Double]
-  /// The values of the keyframe. Important declarations and the properties of CSS Animations are left out, since
-  /// keyframes ignore them.
+  /// The values of the keyframe. Important declarations and the properties of CSS Animations and CSS Transitions are
+  /// left out, since keyframes ignore them.
   let declarations: CascadedValues
   /// The easing function from the keyframe to the next one, from its `animation-timing-function`, or `nil` to use
   /// the animation's.
@@ -21,7 +21,7 @@ struct Keyframe: Sendable {
   init(offsets: [Double], declarations: [CSSDeclaration]) {
     self.offsets = offsets
     let declarations = declarations.filter { $0.importance == .normal }.map(\.declaration)
-    self.declarations = CascadedValues(declarations.filter { !$0.id.isAnimation })
+    self.declarations = CascadedValues(declarations.filter { $0.id.isAnimatable })
     let easings = CascadedValues(declarations).declared(AnimationTimingFunctionProperty.self)
     easing = easings?.count == 1 ? easings?.first : nil
   }

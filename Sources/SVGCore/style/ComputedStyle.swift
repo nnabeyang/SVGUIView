@@ -54,6 +54,11 @@ enum PropertyID: String, CaseIterable, Sendable {
   case animationDirection = "animation-direction"
   case animationFillMode = "animation-fill-mode"
   case animationPlayState = "animation-play-state"
+  case transitionProperty = "transition-property"
+  case transitionDuration = "transition-duration"
+  case transitionTimingFunction = "transition-timing-function"
+  case transitionDelay = "transition-delay"
+  case transitionBehavior = "transition-behavior"
 
   /// The description of the property.
   var property: any StyleProperty.Type {
@@ -112,6 +117,11 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .animationDirection: visitor.visit(AnimationDirectionProperty.self)
     case .animationFillMode: visitor.visit(AnimationFillModeProperty.self)
     case .animationPlayState: visitor.visit(AnimationPlayStateProperty.self)
+    case .transitionProperty: visitor.visit(TransitionPropertyProperty.self)
+    case .transitionDuration: visitor.visit(TransitionDurationProperty.self)
+    case .transitionTimingFunction: visitor.visit(TransitionTimingFunctionProperty.self)
+    case .transitionDelay: visitor.visit(TransitionDelayProperty.self)
+    case .transitionBehavior: visitor.visit(TransitionBehaviorProperty.self)
     }
   }
 }
@@ -174,6 +184,11 @@ struct ComputedStyle: Sendable {
   var animationDirection: [AnimationDirection]
   var animationFillMode: [AnimationFillMode]
   var animationPlayState: [AnimationPlayState]
+  var transitionProperty: [TransitionProperty]
+  var transitionDuration: [Double]
+  var transitionTimingFunction: [EasingFunction]
+  var transitionDelay: [Double]
+  var transitionBehavior: [TransitionBehavior]
   /// The transform that SMIL `<animateMotion>` elements add after `transform`, which isn't a property.
   var motion = CGAffineTransform.identity
 
@@ -199,7 +214,10 @@ struct ComputedStyle: Sendable {
     animationTimingFunction: AnimationTimingFunctionProperty.initial, animationDelay: AnimationDelayProperty.initial,
     animationIterationCount: AnimationIterationCountProperty.initial,
     animationDirection: AnimationDirectionProperty.initial, animationFillMode: AnimationFillModeProperty.initial,
-    animationPlayState: AnimationPlayStateProperty.initial)
+    animationPlayState: AnimationPlayStateProperty.initial, transitionProperty: TransitionPropertyProperty.initial,
+    transitionDuration: TransitionDurationProperty.initial,
+    transitionTimingFunction: TransitionTimingFunctionProperty.initial,
+    transitionDelay: TransitionDelayProperty.initial, transitionBehavior: TransitionBehaviorProperty.initial)
 
   /// The computed values of an element with the given cascaded values.
   ///
@@ -254,7 +272,7 @@ struct ComputedStyle: Sendable {
       // Animations override the cascaded values except for important declarations. SMIL animations come first, and
       // CSS animations override them. A later animation overrides an earlier one, with the value under it as the
       // value that it starts from.
-      if !P.id.isAnimation, !cascaded.important.contains(P.id) {
+      if P.id.isAnimatable, !cascaded.important.contains(P.id) {
         for (property, effect) in smil where property == P.id {
           if let animated = effect.value(of: P.self, over: value, in: resolver) {
             value = animated
@@ -283,7 +301,9 @@ struct ComputedStyle: Sendable {
     y: SVGLength?, width: SVGLength?, height: SVGLength?, d: PathData, animationName: [AnimationName],
     animationDuration: [Double], animationTimingFunction: [EasingFunction], animationDelay: [Double],
     animationIterationCount: [AnimationIterationCount], animationDirection: [AnimationDirection],
-    animationFillMode: [AnimationFillMode], animationPlayState: [AnimationPlayState]
+    animationFillMode: [AnimationFillMode], animationPlayState: [AnimationPlayState],
+    transitionProperty: [TransitionProperty], transitionDuration: [Double], transitionTimingFunction: [EasingFunction],
+    transitionDelay: [Double], transitionBehavior: [TransitionBehavior]
   ) {
     self.fontFamily = fontFamily
     self.fontSize = fontSize
@@ -332,6 +352,11 @@ struct ComputedStyle: Sendable {
     self.animationDirection = animationDirection
     self.animationFillMode = animationFillMode
     self.animationPlayState = animationPlayState
+    self.transitionProperty = transitionProperty
+    self.transitionDuration = transitionDuration
+    self.transitionTimingFunction = transitionTimingFunction
+    self.transitionDelay = transitionDelay
+    self.transitionBehavior = transitionBehavior
   }
 
   /// The font, with its size resolved except for viewport units.
