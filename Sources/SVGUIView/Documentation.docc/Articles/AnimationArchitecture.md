@@ -635,11 +635,11 @@ changes the output of the documents that those bugs affected.
   `opacity` isn't filtered again, but a filter whose parameters or input content
   change is run again on the CPU in every frame, and a slow one skips frames in
   that layer. In the benchmark document with filters, whose blurs change, running
-  the filters takes most of each frame in a simulator. Devices haven't been
-  measured yet. If such animations don't fit the frame budget on devices and are
-  common in the documents to support, phase 3 moves ahead of phase 2.5. The
-  cache of filter results is keyed by layer, so it can be used with vImage as
-  well.
+  the filters takes most of each frame. On a device, a frame of that document
+  takes a little longer than a frame at 60 Hz, while the frames of the other
+  benchmark documents fit easily. Animations of filter parameters aren't common
+  in the documents to support, so phase 2.5 comes before phase 3. The cache of
+  filter results is keyed by layer, so it can be used with vImage as well.
 - Whether `.play` should become the default animation mode once animation
   support is stable.
 - Whether the timeline should keep running while playback is stopped for being

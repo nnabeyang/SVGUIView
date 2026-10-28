@@ -16,7 +16,7 @@ struct DocumentAnimations: Sendable {
 
 package struct SVGBaseContext: Sendable {
   /// The parsed document, which the elements to render are made from.
-  let document: SVGDocument
+  package let document: DocumentTree
   /// The style sheets of the document, which the cascade of the elements uses.
   let stylesheet: Stylesheet
   package let root: SVGSVGElement?
@@ -41,7 +41,7 @@ package struct SVGBaseContext: Sendable {
   /// - Parameter restyleScope: The elements whose computed values animations can change, which the context of the
   ///   document at a time keeps from the context that it comes from, or `nil` to find them.
   init(
-    document: SVGDocument, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
+    document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
     restyleScope: RestyleScope? = nil
   ) {
     self.document = document
@@ -78,6 +78,15 @@ package struct SVGBaseContext: Sendable {
     root.mask(context: &self)
     root.pattern(context: &self)
     root.filter(context: &self)
+  }
+
+  /// The context of the elements made from a document and its style sheets, with the animations at time zero.
+  init(document: DocumentTree, stylesheet: Stylesheet) {
+    self.init(
+      document: document, stylesheet: stylesheet,
+      root: document.root.flatMap { ElementCursor(root: $0).makeElement(with: stylesheet) as? SVGSVGElement },
+      animations: DocumentAnimations(
+        keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0))
   }
 
   /// The context with the computed values at the given time, or the context itself if they don't change with the

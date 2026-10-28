@@ -121,7 +121,7 @@ extension SMILEffect {
   /// - Parameter effects: The effects of the animations by the elements that they change, in the order that they
   ///   apply in.
   static func attributes(
-    of effects: [ElementID: [SMILEffect]], in document: SVGDocument
+    of effects: [ElementID: [SMILEffect]], in document: DocumentTree
   ) -> [ElementID: [String: String]] {
     let targets = effects.filter { $0.value.contains(where: \.changesAttribute) }
     guard !targets.isEmpty, let root = document.root else { return [:] }

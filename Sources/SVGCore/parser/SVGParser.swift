@@ -89,13 +89,8 @@ package final class SVGParser: NSObject {
   private func parse(parser: XMLParser) -> SVGBaseContext {
     parser.delegate = self
     parser.parse()
-    let document = SVGDocument(root: root)
-    let css = Stylesheet(rules: rules, keyframes: keyframes)
-    let element = root.flatMap { ElementCursor(root: $0).makeElement(with: css) as? SVGSVGElement }
     return SVGBaseContext(
-      document: document, stylesheet: css, root: element,
-      animations: DocumentAnimations(
-        keyframes: keyframes, smil: SMILAnimation.animations(of: document), time: 0))
+      document: DocumentTree(root: root), stylesheet: Stylesheet(rules: rules, keyframes: keyframes))
   }
 
   private func parse(data: Data) -> SVGBaseContext {
