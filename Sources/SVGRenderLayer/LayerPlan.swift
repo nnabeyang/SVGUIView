@@ -34,9 +34,10 @@ package struct PaintedLayer: Sendable {
   /// The rectangle that the nodes paint in, in the coordinates of the layer around this one, which the contents
   /// cover.
   package let bounds: CGRect
-  /// The pixels of the contents for each unit of the coordinates, which is the scale of the screen times the scale of
-  /// the transforms around the layer, so that the contents are as sharp as a rendering into one bitmap.
-  package let rasterScale: CGFloat
+  /// The pixels of the contents for each unit of the coordinates along each axis, which is the scale of the screen
+  /// times the scale of the transforms around the layer along the axis, so that the contents are as sharp as a
+  /// rendering into one bitmap, also under a transform that scales the axes differently.
+  package let rasterScale: CGSize
   /// Whether what the nodes paint can change with the time, so that the contents of another time can't be shown.
   package let changes: Bool
   /// What the layer is in the plans of all times, which the layers of one time are matched with the layers of

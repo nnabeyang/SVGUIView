@@ -134,7 +134,16 @@ struct LayerPlannerTests {
   @Test("the contents are as sharp as a rendering into one bitmap")
   func rasterScale() async throws {
     let (layer, _) = try await plan(spin + spinning("r"), viewBox: "0 0 10 10", scale: 2)
-    #expect(paintedLayers(of: .container(layer)).map(\.rasterScale) == [20])
+    #expect(paintedLayers(of: .container(layer)).map(\.rasterScale) == [CGSize(width: 20, height: 20)])
+    // A transform that scales the axes differently scales the pixels of each axis, which lie on the pixels of the
+    // screen.
+    let (scaled, _) = try await plan(
+      spin + #"<g transform="scale(2, 3)"><rect x="0.3" y="0.3" width="2" height="2"/>"# + spinning("r") + "</g>",
+      viewBox: "0 0 10 10", scale: 2)
+    let painted = try #require(paintedLayers(of: .container(scaled)).first)
+    #expect(painted.rasterScale == CGSize(width: 40, height: 60))
+    let pixels = painted.bounds.applying(CGAffineTransform(scaleX: 40, y: 60))
+    #expect(pixels == pixels.integral)
   }
 
   @Test("a painted layer that doesn't move covers only what shows in the view, and one that moves covers everything")

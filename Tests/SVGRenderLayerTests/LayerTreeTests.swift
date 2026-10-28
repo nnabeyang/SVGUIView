@@ -121,6 +121,12 @@ struct LayerTreeTests {
         + #"<g style="animation: c 1s linear"><rect x="60" y="0" width="20" height="20"/>"#
         + #"<rect x="70" y="70" width="20" height="20" style="animation: m 1s linear"/></g>"#, true
     ),
+    // A layer under a transform that scales the axes differently has the pixels of the screen along both axes.
+    (
+      keyframes + #"<g transform="scale(2.4, 1.8)"><rect x="2" y="2" width="10" height="10" fill="red"/>"#
+        + #"<text x="2" y="25" font-size="8">Ab</text>"#
+        + #"<rect x="20" y="2" width="10" height="10" fill="blue" style="animation: f 1s linear"/></g>"#, false
+    ),
     // Elements with a clip path, a mask and a filter are painted with them in their layers.
     (
       keyframes + #"<clipPath id="c"><circle cx="20" cy="20" r="20"/></clipPath>"#

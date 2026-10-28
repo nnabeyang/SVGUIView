@@ -188,27 +188,31 @@ package struct LayerPlanner: Sendable {
     let transform = context.transform
     // A rotation changes the scale by the error of the arithmetic, which mustn't make the contents of one time differ
     // from the next.
-    let rasterScale = (scale * max(hypot(transform.a, transform.b), hypot(transform.c, transform.d)) * 1e6).rounded() / 1e6
-    guard rasterScale > 0, rasterScale.isFinite else { return nil }
+    func rounded(_ value: CGFloat) -> CGFloat {
+      (scale * value * 1e6).rounded() / 1e6
+    }
+    let rasterScale = CGSize(
+      width: rounded(hypot(transform.a, transform.b)), height: rounded(hypot(transform.c, transform.d)))
+    guard rasterScale.width > 0, rasterScale.height > 0, rasterScale.width.isFinite, rasterScale.height.isFinite
+    else { return nil }
     var bounds = nodes.paintedBounds
     if context.isFixed {
       // What's outside the view never shows, so the contents don't cover it.
       bounds = bounds.intersection(context.view.applying(transform.inverted()))
     }
     guard !bounds.isNull, !bounds.isEmpty else { return nil }
-    let margin = Self.margin / rasterScale
-    bounds = bounds.insetBy(dx: -margin, dy: -margin)
+    bounds = bounds.insetBy(dx: -Self.margin / rasterScale.width, dy: -Self.margin / rasterScale.height)
     // The pixels of the contents lie on the pixels of the screen as the layer is without the transforms that
     // animations change, so that the layer shows the same pixels as a rendering into one bitmap there, and the
     // contents of one time can show at the next. Where an animation moves them between the pixels of the screen, the
-    // screen resamples them. A rotation, a skew or a scale that differs between the axes keeps them off the pixels of
-    // the screen, and a flip keeps them on.
+    // screen resamples them. A rotation or a skew keeps them off the pixels of the screen, and a flip or a scale that
+    // differs between the axes keeps them on.
     let resting = context.restingTransform
-    if resting.b == 0, resting.c == 0, abs(resting.a) == abs(resting.d) {
+    if resting.b == 0, resting.c == 0 {
       let pixels = resting.concatenating(CGAffineTransform(scaleX: scale, y: scale))
       bounds = bounds.applying(pixels).integral.applying(pixels.inverted())
     } else if !context.isFixed {
-      let pixels = CGAffineTransform(scaleX: rasterScale, y: rasterScale)
+      let pixels = CGAffineTransform(scaleX: rasterScale.width, y: rasterScale.height)
       bounds = bounds.applying(pixels).integral.applying(pixels.inverted())
     }
     return PaintedLayer(

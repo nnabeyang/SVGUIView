@@ -588,8 +588,11 @@ playback is smooth.
 - **Agreement between renderers:** For the same time, the image from
   `SVGRenderCG` and the image of the layer tree from `SVGRenderLayer` must
   match. This keeps playback from looking different from snapshots. Layers that
-  don't move show the same pixels as the image. Moving layers differ only at
-  their antialiased edges, where the screen resamples them. Layers that frames
+  don't move show the same pixels as the image, also under a transform that
+  scales the axes differently, since their contents have the pixels of the
+  screen along each axis. The edges of a viewport's clip and of the cells of a
+  pattern that fall between pixels still differ slightly. Moving layers differ
+  only at their antialiased edges, where the screen resamples them. Layers that frames
   reuse show the same pixels as layers painted again.
 - **Playback with a test clock:** The renderer takes its clock as a
   dependency. Tests replace the display link with a clock they advance by hand,
