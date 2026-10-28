@@ -71,13 +71,19 @@ extension SVGBaseContext {
         return elements.contains(id) && (transitions[id] != nil || element.style.startsTransitions)
       }.map(\.base.elementID))
     guard !updated.isEmpty else { return transitions }
+    let current = at(time: time)
     let before = Dictionary(
-      (at(time: time).root?.elements ?? []).lazy.filter { updated.contains($0.base.elementID) }.map {
+      (current.root?.elements ?? []).lazy.filter { updated.contains($0.base.elementID) }.map {
         ($0.base.elementID, $0.style)
       }, uniquingKeysWith: { first, _ in first })
+    // An element that wasn't rendered has no values to start from, so it starts no transitions.
+    let hidden = current.elementsNotRendered()
     for element in changed.at(time: time).root?.elements ?? [] where updated.contains(element.base.elementID) {
       let id = element.base.elementID
-      guard let style = before[id] else { continue }
+      guard let style = before[id], !hidden.contains(id) else {
+        transitions[id] = nil
+        continue
+      }
       var update = TransitionUpdate(
         before: style, after: element.style, time: time, transitions: transitions[id] ?? [:])
       for property in element.style.transitionedProperties(running: update.transitions.keys) {
@@ -86,6 +92,20 @@ extension SVGBaseContext {
       transitions[id] = update.transitions.isEmpty ? nil : update.transitions
     }
     return transitions
+  }
+
+  /// The elements that aren't rendered, since their `display` or that of an ancestor is `none`.
+  func elementsNotRendered() -> Set<ElementID> {
+    var elements = Set<ElementID>()
+    func visit(_ element: any SVGElement, isHidden: Bool) {
+      let isHidden = isHidden || element.style.display == .none
+      if isHidden { elements.insert(element.base.elementID) }
+      for child in element.children {
+        visit(child, isHidden: isHidden)
+      }
+    }
+    if let root { visit(root, isHidden: false) }
+    return elements
   }
 
   /// The transitions that have an effect at the time or later.

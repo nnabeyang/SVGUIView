@@ -235,4 +235,38 @@ struct TransitionTests {
     #expect(style(of: "a", in: base, at: 0.99)?.display == .inline)
     #expect(style(of: "a", in: base, at: 1)?.display == CSSDisplay.none)
   }
+
+  @Test("a change that stops rendering an element or its ancestor cancels its transitions")
+  func cancelsHidden() throws {
+    let started = try changing(parse(Self.fade), to: "on", at: 0)
+    let hidden = try changing(started, "a", "style", to: "display: none", at: 0.5)
+    #expect(hidden.animations.transitions.isEmpty)
+    #expect(hidden.animationEnd() == 0)
+    let grouped = parse(Self.fade.replacingOccurrences(of: #"<rect id="a""#, with: #"<g id="g"><rect id="a""#) + "</g>")
+    let inGroup = try changing(changing(grouped, to: "on", at: 0), "g", "style", to: "display: none", at: 0.5)
+    #expect(inGroup.animations.transitions.isEmpty)
+  }
+
+  @Test("an element that wasn't rendered starts no transitions when it's rendered again")
+  func startsNoneWhenShown() throws {
+    let base = parse(Self.fade.replacingOccurrences(of: ".low", with: ".gone { display: none } .low"))
+    let gone = try changing(base, to: "gone", at: 0)
+    let shown = try changing(gone, to: "on", at: 1)
+    #expect(shown.animations.transitions.isEmpty)
+    #expect(style(of: "a", in: shown, at: 1)?.opacity == 0)
+  }
+
+  @Test("a transition of display with allow-discrete keeps the element rendered, and its other transitions, until it ends")
+  func transitionsDisplay() throws {
+    let base = parse(
+      "<style>rect { transition: opacity 1s linear, display 1s allow-discrete } .hide { opacity: 0; display: none }"
+        + "</style>" + #"<rect id="a" width="10" height="10"/>"#)
+    let hidden = try changing(base, to: "hide", at: 0)
+    let element = try #require(base.document.element(id: "a"))
+    #expect(hidden.animations.transitions[element].map { Set($0.keys) } == [.opacity, .display])
+    #expect(isClose(style(of: "a", in: hidden, at: 0.5)?.opacity, 0.5))
+    #expect(style(of: "a", in: hidden, at: 0.99)?.display == .inline)
+    #expect(style(of: "a", in: hidden, at: 1)?.display == CSSDisplay.none)
+    #expect(hidden.animationEnd() == 1)
+  }
 }

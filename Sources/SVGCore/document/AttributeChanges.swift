@@ -17,7 +17,9 @@ extension SVGBaseContext {
   /// local time that it's at then, or plays it on from the local time that it's paused at.
   ///
   /// The change starts transitions of the properties that it changes, as `transition-*` gives, from the values at
-  /// the time, and reverses or cancels the running ones. Transitions that have ended are left out.
+  /// the time, and reverses or cancels the running ones. Transitions that have ended are left out. An element that
+  /// isn't rendered, since its `display` or that of an ancestor is `none`, starts no transitions, and the ones of an
+  /// element that the change stops rendering are cancelled, unless a transition of `display` keeps it rendered.
   ///
   /// - Parameters:
   ///   - changes: The values to set by the elements and the names of the attributes, with `nil` to remove an
@@ -67,6 +69,16 @@ extension SVGBaseContext {
     guard startsTransitions else { return context }
     animations.transitions = transitions(changingTo: context, of: Self.elements(of: root, in: changed), at: time)
     guard !animations.transitions.isEmpty else { return context }
+    let transitioned = SVGBaseContext(
+      document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
+    // The transitions of the elements that the change stops rendering are cancelled. Whether an element is rendered
+    // is found with the transitions, since a transition of `display` keeps it rendered until it ends.
+    guard !context.elementsNotRendered().isDisjoint(with: animations.transitions.keys) else { return transitioned }
+    let hidden = transitioned.at(time: time).elementsNotRendered()
+    let rendered = animations.transitions.filter { !hidden.contains($0.key) }
+    guard rendered.count < animations.transitions.count else { return transitioned }
+    animations.transitions = rendered
+    guard !rendered.isEmpty else { return context }
     return SVGBaseContext(
       document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
   }

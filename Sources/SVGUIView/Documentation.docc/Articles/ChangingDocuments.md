@@ -91,6 +91,13 @@ where it is, and changing it to another value starts a new transition from
 there, as in a browser. A change of a value that an animation changes starts
 no transition.
 
+An element that isn't rendered, because its `display` or that of an ancestor
+is `none`, has no transitions: a change that hides it cancels them, and a
+change that shows it again shows the new values at once. A transition of
+`display` with `transition-behavior: allow-discrete` keeps the element rendered
+until it ends, so that its other transitions, such as one of `opacity`, can
+play before it disappears.
+
 A view whose ``SVGUIViewConfiguration/animation`` is
 ``SVGUIViewConfiguration/AnimationMode/none``, or that holds its animations
 because Reduce Motion is on, shows the new values at once and starts no
