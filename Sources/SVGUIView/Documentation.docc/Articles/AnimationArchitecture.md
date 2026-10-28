@@ -12,11 +12,12 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > is done as well: the `<animate>`, `<set>`, `<animateTransform>` and
 > `<animateMotion>` elements apply to properties and attributes at the same
 > times. Phase 2 is done too: a view plays animations in a tree of layers that
-> `SVGRenderLayer` makes. Phase 2.5 has started: ``SVGUIView/SVGUIView/document``
-> finds and changes the elements of a document, controls its CSS animations, and
-> begins and ends its SMIL animations, and its changes start CSS Transitions.
-> Filters on Metal are planned: the types, properties and methods proposed for
-> them don't exist yet, and their names may change while the work goes on.
+> `SVGRenderLayer` makes. Phase 2.5 is done as well:
+> ``SVGUIView/SVGUIView/document`` finds and changes the elements of a document,
+> controls its CSS animations, and begins and ends its SMIL animations, and its
+> changes start CSS Transitions. Filters on Metal are planned: the types,
+> properties and methods proposed for them don't exist yet, and their names may
+> change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -205,8 +206,8 @@ Painting is done by one of the two renderers. See <doc:#Rendering-strategies>.
 A new animation frame redoes only part of the work of the frame before it:
 
 - **Styles:** Only the elements that animations can change, which are the
-  ones that run CSS animations or that SMIL animations change, and their
-  descendants, get their computed values computed again. Every other subtree is
+  ones that run CSS animations, that SMIL animations change or that have
+  transitions, and their descendants, get their computed values computed again. Every other subtree is
   the same as in the frame before. A document whose SMIL animations change
   attributes that aren't properties makes every element again from the cascade.
 - **Render tree and layers:** The render tree and the plan of its layers are
@@ -218,20 +219,19 @@ A new animation frame redoes only part of the work of the frame before it:
   changes the elements that use it, which can't be told, so every layer is
   painted again then.
 
-Phase 2.5 adds changes made through the document API. Such a change marks what
-has to be recomputed, and the amount of work depends on what changed:
+A change made through the document API makes again only the elements whose
+computed values it can change: the changed elements and their descendants, plus
+their following siblings and theirs when the style sheets use sibling
+combinators. Their ancestors are copied with the new children, and every other
+element is shared with the document before the change.
+The view then renders the whole document again, and paints every layer again,
+as it does for a new size. The animations and transitions that the change
+starts play in the frames after it like any other animation.
 
-| What changed | Recomputed |
-|---|---|
-| A class, ID or attribute that a selector depends on | Styles of the affected elements and their descendants |
-| A property that affects geometry, such as `d`, `x` or `font-size` | The render tree nodes of the affected elements |
-| A paint property, such as `fill` or `stroke` | Painting of the affected layers only |
-| `transform` or `opacity` | Nothing is repainted. The layer's property is updated. |
-
-The first version restyles the changed element's subtree, plus its following
-siblings when the style sheets use sibling combinators. Finer invalidation, such
-as an index of the classes and attributes that selectors use, is added only when
-measurements show the need.
+Finer invalidation is added only when measurements show the need, such as an
+index of the classes and attributes that selectors use, or painting again only
+the layers whose painting a change affects, and only updating the properties
+of a layer whose `transform` or `opacity` is the only thing that changes.
 
 ## Animation model
 
@@ -618,7 +618,10 @@ documents instead.
 
 The viewer of the snapshot test app plays a document in SVGUIView and in a
 `WKWebView` from the start, side by side or in the same place, to catch stutter
-and flicker that numbers and snapshots miss.
+and flicker that numbers and snapshots miss. Its animation controls make the
+same changes of classes and the same operations on CSS animations in both
+views, so that the animations and transitions that changes start can be
+compared too.
 
 ## Implementation phases
 
@@ -631,7 +634,7 @@ before it is merged.
 | 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done in 0.26.0 |
 | 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Done in 0.27.0 |
 | 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Done in 0.28.0 |
-| 2.5 | The document API and CSS Transitions, which need the document API to start. | Planned |
+| 2.5 | The document API and CSS Transitions, which need the document API to start. | Done in 0.29.0 |
 | 3 | Filters on Metal. | Planned |
 
 Phase 0 kept the output of every test document the same while it moved the
@@ -650,7 +653,7 @@ changes the output of the documents that those bugs affected.
   the filters takes most of each frame. On a device, a frame of that document
   takes a little longer than a frame at 60 Hz, while the frames of the other
   benchmark documents fit easily. Animations of filter parameters aren't common
-  in the documents to support, so phase 2.5 comes before phase 3. The cache of
+  in the documents to support, so phase 2.5 came before phase 3. The cache of
   filter results is keyed by layer, so it can be used with vImage as well.
 - Whether `.play` should become the default animation mode once animation
   support is stable.

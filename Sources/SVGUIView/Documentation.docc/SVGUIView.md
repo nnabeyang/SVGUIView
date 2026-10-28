@@ -74,8 +74,8 @@ animation elements `<animate>`, `<set>`, `<animateTransform>` and
 `<animateMotion>`. The time starts at zero when the document is loaded, and a
 view that doesn't play its animations displays the document at time zero. A
 document without animations looks the same at any time. SMIL begin and end
-times that depend on user events, access keys or the wall clock never come, and
-`<animateColor>` is ignored.
+times that depend on user events, access keys or the wall clock never come by
+themselves, and `<animateColor>` is ignored.
 
 ```swift
 let image = try await svgView.takeSnapshot(at: .seconds(1.5))
@@ -114,7 +114,10 @@ moves or fades its layer. Snapshots are still rendered into one image.
 
 ``SVGUIView/SVGUIView/document`` finds the elements of the document, and
 changes their attributes, classes and styles. The view shows the changes at its
-next rendering. See <doc:ChangingDocuments>.
+next rendering, and a change starts the CSS transitions of the values that it
+changes. The document also controls the CSS animations, and begins and ends
+the SMIL animations, such as the ones that would begin with a click in a
+browser. See <doc:ChangingDocuments>.
 
 ```swift
 svgView.document.element(id: "play")?.classList.add("active")
