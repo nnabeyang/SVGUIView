@@ -177,12 +177,25 @@ struct LayerPlannerTests {
         + spinning("r") + "</g>",
       "clip(-([svg]*))"
     ),
-    // When an animation in a gradient changes the elements that use it, every layer changes.
+    // An animation in a gradient changes only the layers of the elements that use it.
     (
       spin + #"<linearGradient id="l"><stop offset="0" stop-color="red">"#
         + #"<animate attributeName="stop-color" to="lime" dur="1s"/></stop></linearGradient>"#
-        + #"<rect id="a" width="10" height="10"/>"# + spinning("r"),
-      "clip(-(svg([a]* r([r]*))))"
+        + ##"<rect id="a" width="10" height="10" fill="url(#l)"/>"## + spinning("r")
+        + #"<rect id="b" width="10" height="10"/>"#,
+      "clip(-(svg([a]* r([r]) [b])))"
+    ),
+    // A moving element with a filter keeps its contents, unless the filter changes.
+    (
+      spin + #"<filter id="f"><feGaussianBlur stdDeviation="1"/></filter>"#
+        + ##"<rect id="r" width="10" height="10" filter="url(#f)" style="animation: s 1s"/>"##,
+      "clip(-(svg(r([r]))))"
+    ),
+    (
+      spin + #"<filter id="f"><feGaussianBlur stdDeviation="1"><animate attributeName="stdDeviation" to="4" dur="1s"/>"#
+        + "</feGaussianBlur></filter>"
+        + ##"<rect id="r" width="10" height="10" filter="url(#f)" style="animation: s 1s"/>"##,
+      "clip(-(svg(r([r]*))))"
     ),
   ]
 

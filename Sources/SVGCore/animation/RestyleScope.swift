@@ -81,7 +81,7 @@ struct RestyleScope: Sendable {
   }
 
   /// The IDs of the elements that an element references to make its render node.
-  private static func references(of element: any SVGElement) -> [String] {
+  static func references(of element: any SVGElement) -> [String] {
     let style = element.style
     var names = [String]()
     if case .url(let name) = style.clipPath { names.append(name) }

@@ -143,8 +143,10 @@ package struct LayerPlanner: Sendable {
       // A promoted node that paints as one image, or a shape, is painted in its own coordinates in its layer.
       let inner = context.inside(node.transform, isFixed: false, key: key)
       // The container composites the node, so only the painting of the node and of the nodes in it changes the
-      // contents.
-      let contentChanges = isChanging || node.descendants.contains(where: changes)
+      // contents. The source of a filter is the element itself without its transform and its opacity, which the
+      // container composites, so the nodes of the element don't change the contents by moving.
+      let contentChanges =
+        isChanging || node.descendants.contains { $0.id.element != node.id.element && changes($0) }
       return ContainerLayer(
         id: node.id, transform: node.transform, opacity: node.groupOpacity, clip: nil,
         children: painted([node.withoutCompositing], in: inner, changes: contentChanges).map { [.painted($0)] } ?? [],

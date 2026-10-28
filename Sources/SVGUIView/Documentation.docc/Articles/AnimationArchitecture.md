@@ -216,8 +216,9 @@ A new animation frame redoes only part of the work of the frame before it:
   are painted again. An element whose `transform` or `opacity` is the only thing
   that changes keeps its contents, and only the properties of its layer change.
   An animation inside a clip path, a mask, a pattern, a gradient or a filter
-  changes the elements that use it, which can't be told, so every layer is
-  painted again then.
+  changes the elements that use it, directly or through other resources, so
+  only their layers are painted again. A moving element with a filter keeps its
+  contents while the filter doesn't change.
 
 A change made through the document API makes again only the elements whose
 computed values it can change: the changed elements and their descendants, plus

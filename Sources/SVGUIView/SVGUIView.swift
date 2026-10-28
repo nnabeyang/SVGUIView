@@ -41,9 +41,8 @@ public class SVGUIView: UIView {
   }
   /// The elements whose transform or opacity can change, which get layers of their own.
   private var promoted: Set<ElementID>
-  /// The elements whose painting changes in other ways, or `nil` if any painting can change, which tells the layers
-  /// that frames paint again.
-  private var painting: Set<ElementID>?
+  /// The elements whose painting changes in other ways, which tells the layers that frames paint again.
+  private var painting: Set<ElementID>
   /// The CSS animations whose ends tasks wait for, which ``SVGDocument/Animation/finished()`` adds.
   private var finishWaiters = [(id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
@@ -615,7 +614,7 @@ public class SVGUIView: UIView {
     scale: CGFloat,
     base: SVGBaseContext,
     promoted: Set<ElementID>,
-    painting: Set<ElementID>?,
+    painting: Set<ElementID>,
     previous: RenderedContainer?,
     previousNodes: RenderNodeCache,
     time: Duration,
