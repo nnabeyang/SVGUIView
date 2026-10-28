@@ -84,10 +84,19 @@ struct DocumentQueryTests {
     #expect(ids(try document.elements(matching: "[x")) == ["r1"])
   }
 
+  @Test("the root element, and the local names of elements as written")
+  func names() throws {
+    let root = try #require(document.rootElement)
+    #expect(document.localName(of: root) == "svg")
+    #expect(document.localName(of: try #require(document.element(id: "f"))) == "foo")
+    #expect(DocumentTree(root: nil).rootElement == nil)
+  }
+
   @Test("an element that the document doesn't have has no attributes and no descendants")
   func missingElement() throws {
     let missing = ElementID(rawValue: 1000)
     #expect(document.attributes(of: missing) == nil)
+    #expect(document.localName(of: missing) == nil)
     #expect(try document.elements(matching: "rect", in: missing).isEmpty)
   }
 }
