@@ -211,7 +211,7 @@ struct TransitionTests {
     let b = try #require(base.document.element(id: "b"))
     let changed = base.changingAttributes([a: ["class": "on"], b: ["class": "red"]], at: 0)
     #expect(changed.elementsWithAnimatedCompositing() == [a])
-    #expect(changed.elementsWithAnimatedPainting()?.contains(b) == true)
-    #expect(changed.elementsWithAnimatedPainting()?.contains(a) == false)
+    #expect(changed.elementsWithAnimatedPainting().contains(b))
+    #expect(!changed.elementsWithAnimatedPainting().contains(a))
   }
 }
