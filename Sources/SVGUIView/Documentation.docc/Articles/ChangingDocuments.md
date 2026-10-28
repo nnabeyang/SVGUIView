@@ -103,3 +103,23 @@ animations don't advance, but setting an animation's
 
 The list doesn't include SMIL animations, which play on the timeline of the
 document.
+
+### Beginning and ending SMIL animations
+
+A SMIL animation whose `begin` is `indefinite`, or an event that SVGUIView
+doesn't have, such as `click`, never begins by itself. The element of an
+animation, such as `<animate>`, begins it at the current time with
+``SVGDocument/Element/beginElement()``, and ends it with
+``SVGDocument/Element/endElement()``, as the DOM methods of the same names do.
+
+```swift
+svgView.document.element(id: "fade-in")?.beginElement()
+```
+
+A begin follows the animation's `restart` attribute: an animation with
+`restart="whenNotActive"` doesn't begin again while it plays. The animations
+whose `begin` or `end` refer to the animation, such as `fade-in.end`, follow
+its new times. Elements that aren't animations do nothing. A view whose
+``SVGUIViewConfiguration/animation`` is
+``SVGUIViewConfiguration/AnimationMode/none`` displays time zero, so an
+animation that it begins begins at time zero.

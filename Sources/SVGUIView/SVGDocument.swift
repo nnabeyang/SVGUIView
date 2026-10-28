@@ -136,6 +136,10 @@ protocol DocumentHost: AnyObject {
   func changePlayback(of id: CSSAnimationID, _ change: (inout AnimationPlayback, Double) -> Void)
   /// Waits until a CSS animation finishes, or no element runs it, or the view no longer shows the document.
   func waitUntilFinished(_ id: CSSAnimationID) async
+  /// Begins the SMIL animation of an animation element at the time of the timeline that the view displays.
+  func beginSMILAnimation(_ element: ElementID)
+  /// Ends the SMIL animation of an animation element at the time of the timeline that the view displays.
+  func endSMILAnimation(_ element: ElementID)
 }
 
 extension SVGDocument {
@@ -227,6 +231,22 @@ extension SVGDocument.Element {
   /// `animation-name`.
   public var animations: [SVGDocument.Animation] {
     document.animations.filter { $0.element == self }
+  }
+
+  /// Begins the SMIL animation of an animation element, such as
+  /// `<animate>`, at the current time, as the DOM's `beginElement()` does.
+  ///
+  /// The animation begins whatever its `begin` attribute is, such as
+  /// `indefinite` or an event that SVGUIView doesn't have, and as its
+  /// `restart` attribute allows. Other elements do nothing.
+  public func beginElement() {
+    document.host?.beginSMILAnimation(id)
+  }
+
+  /// Ends the SMIL animation of an animation element at the current time, as
+  /// the DOM's `endElement()` does. Other elements do nothing.
+  public func endElement() {
+    document.host?.endSMILAnimation(id)
   }
 
   /// The classes of the element, in its `class` attribute.

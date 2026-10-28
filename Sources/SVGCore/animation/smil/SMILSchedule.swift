@@ -62,8 +62,10 @@ struct SMILSchedule: Sendable {
     for _ in 0..<passes {
       let next = animations.map { animation in
         Self.intervals(
-          of: animation, begins: Self.times(of: animation.begin, indices: indices, intervals: intervals),
-          ends: animation.end.map { Self.times(of: $0, indices: indices, intervals: intervals) }, until: time)
+          of: animation,
+          begins: (Self.times(of: animation.begin, indices: indices, intervals: intervals) + animation.addedBegins)
+            .sorted(),
+          ends: Self.ends(of: animation, indices: indices, intervals: intervals), until: time)
       }
       if next == intervals {
         isComplete = !intervals.contains { $0.count == Self.maximumIntervals }
@@ -122,6 +124,15 @@ struct SMILSchedule: Sendable {
     return times.sorted()
   }
 
+  /// The times of the `end` list of an animation and the times that the document API ends it at, in order, or `nil`
+  /// if the animation has neither.
+  private static func ends(
+    of animation: SMILAnimation, indices: [String: Int], intervals: [[SMILInterval]]
+  ) -> [Double]? {
+    guard animation.end != nil || !animation.addedEnds.isEmpty else { return nil }
+    return (times(of: animation.end ?? [], indices: indices, intervals: intervals) + animation.addedEnds).sorted()
+  }
+
   /// The intervals of an animation that begin at the time or before it.
   ///
   /// - Parameters:
@@ -131,9 +142,11 @@ struct SMILSchedule: Sendable {
     of animation: SMILAnimation, begins: [Double], ends: [Double]?, until time: Double
   ) -> [SMILInterval] {
     // An `end` list with values that can resolve later, such as `indefinite` or a syncbase value, doesn't stop the
-    // intervals when none of its times is after a begin.
+    // intervals when none of its times is after a begin. The document API can end an animation later too, once it
+    // has ended it.
     let endsCanResolveLater =
-      animation.end?.contains {
+      !animation.addedEnds.isEmpty
+      || animation.end?.contains {
         if case .offset = $0 { false } else { true }
       } ?? false
     var intervals = [SMILInterval]()

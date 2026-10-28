@@ -41,8 +41,19 @@ extension SVGBaseContext {
     }
     let root = root?.remade(
       changing: changed, containing: containing, in: document, with: stylesheet, parent: nil, root: nil)
+    // The times that the document API begins and ends the SMIL animations at stay with their elements.
+    let added = Dictionary(
+      self.animations.smil.map { ($0.elementID, ($0.addedBegins, $0.addedEnds)) }, uniquingKeysWith: { first, _ in first })
     var animations = DocumentAnimations(
-      keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0)
+      keyframes: stylesheet.keyframes,
+      smil: SMILAnimation.animations(of: document).map { animation in
+        var animation = animation
+        if let (begins, ends) = added[animation.elementID] {
+          animation.addedBegins = begins
+          animation.addedEnds = ends
+        }
+        return animation
+      }, time: 0)
     animations.playback = playback(of: root, at: time)
     return SVGBaseContext(
       document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
