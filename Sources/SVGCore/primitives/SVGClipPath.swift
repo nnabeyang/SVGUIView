@@ -5,7 +5,7 @@ enum SVGClipPathType: String {
   case url
 }
 
-enum SVGClipPath {
+enum SVGClipPath: Equatable {
   case url(url: String)
   case none
 
