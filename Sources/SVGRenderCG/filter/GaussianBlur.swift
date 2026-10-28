@@ -6,6 +6,10 @@ import SVGCore
 extension GaussianBlurPrimitive {
   private static let maxKernelSize: UInt32 = 100
 
+  /// The size of the three boxes that approximate a Gaussian blur of a standard deviation in pixels, as the
+  /// specification computes it. Where the size is even, the specification uses two boxes of the size that are offset by
+  /// half a pixel and a centered box one pixel larger, while the boxes of the same standard deviation in both
+  /// directions are made odd and centered, since vImage, and `MPSImageBox` on the GPU, only have centered odd boxes.
   private static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {
     let calculatedRadius = max(floor(value * 3.0 * sqrt(2 * .pi) / 4 + 0.5), 2 * scale)
     return min(Self.maxKernelSize, UInt32(calculatedRadius))
@@ -67,22 +71,17 @@ extension GaussianBlurPrimitive {
         break
       }
       if x != y {
-        let kernelSizeX = Self.clampedToKernelSize(value: x * scale, scale: scale)
-        let kernelSizeY = Self.clampedToKernelSize(value: y * scale, scale: scale)
-        applyUnaccelerated(
-          srcBuffer: &buffer, destBuffer: &destBuffer,
-          kernelSizeX: kernelSizeX, kernelSizeY: kernelSizeY)
+        guard applyHetero(srcBuffer: &buffer, destBuffer: &destBuffer, deviationX: x * scale, deviationY: y * scale, scale: scale)
+        else { return nil }
       } else {
-        let kernelSize = Self.clampedToKernelSize(value: x * scale, scale: scale) | 1
-        guard applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize) else { return nil }
+        guard applyIso(srcBuffer: &buffer, destBuffer: &destBuffer, deviation: x * scale, scale: scale) else { return nil }
       }
     case .iso(let x):
       guard x >= 0 else {
         swap(&buffer, &destBuffer)
         break
       }
-      let kernelSize = Self.clampedToKernelSize(value: x * scale, scale: scale) | 1
-      guard applyAccelerated(srcBuffer: &buffer, destBuffer: &destBuffer, kernelSize: kernelSize) else { return nil }
+      guard applyIso(srcBuffer: &buffer, destBuffer: &destBuffer, deviation: x * scale, scale: scale) else { return nil }
     }
     // The image uses the memory of the buffer, which is freed after the image is drawn below.
     guard
@@ -101,6 +100,72 @@ extension GaussianBlurPrimitive {
     cgContext.setAlpha(opacity)
     cgContext.draw(image, in: effectRect)
     return cgContext.makeImage()
+  }
+
+  /// Whether a blur of a standard deviation in pixels uses a Gaussian kernel, rather than three box blurs.
+  private static func isGaussian(_ deviation: CGFloat) -> Bool {
+    deviation < boxBlurMinimumDeviation
+  }
+
+  /// The weights of a Gaussian kernel of a standard deviation in pixels, out to three standard deviations, as integers
+  /// that add up to about 2^14. A standard deviation of 0 doesn't blur.
+  private static func gaussianKernel(deviation: CGFloat) -> [Int16] {
+    guard deviation > 0 else { return [1] }
+    let radius = Int(ceil(deviation * 3))
+    let weights = (-radius...radius).map { exp(-CGFloat($0 * $0) / (2 * deviation * deviation)) }
+    let sum = weights.reduce(0, +)
+    return weights.map { Int16(($0 / sum * 16384).rounded()) }
+  }
+
+  /// Blurs `srcBuffer` into `destBuffer` by the same standard deviation in pixels in both directions, extending the
+  /// pixels on the edges, and returns `false` if the temporary buffer couldn't be allocated.
+  private func applyIso(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, deviation: CGFloat, scale: CGFloat) -> Bool {
+    guard Self.isGaussian(deviation) else {
+      let kernelSize = Self.clampedToKernelSize(value: deviation, scale: scale) | 1
+      return applyAccelerated(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelSize: kernelSize)
+    }
+    let kernel = Self.gaussianKernel(deviation: deviation)
+    return applyGaussian(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelX: kernel, kernelY: kernel, extendsEdges: true)
+  }
+
+  /// Blurs `srcBuffer` into `destBuffer` by different standard deviations in pixels, with transparent black outside
+  /// the edges, and returns `false` if the blur failed. Each direction uses a Gaussian kernel or three box blurs.
+  private func applyHetero(
+    srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, deviationX: CGFloat, deviationY: CGFloat, scale: CGFloat
+  ) -> Bool {
+    let kernelSizeX = Self.isGaussian(deviationX) ? 0 : Self.clampedToKernelSize(value: deviationX, scale: scale)
+    let kernelSizeY = Self.isGaussian(deviationY) ? 0 : Self.clampedToKernelSize(value: deviationY, scale: scale)
+    if kernelSizeX == 0 || kernelSizeY == 0 {
+      let kernelX: [Int16] = kernelSizeX == 0 ? Self.gaussianKernel(deviation: deviationX) : [1]
+      let kernelY: [Int16] = kernelSizeY == 0 ? Self.gaussianKernel(deviation: deviationY) : [1]
+      guard applyGaussian(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelX: kernelX, kernelY: kernelY, extendsEdges: false)
+      else { return false }
+      guard kernelSizeX != 0 || kernelSizeY != 0 else { return true }
+      // The boxes blur the other direction of the result.
+      swap(&srcBuffer, &destBuffer)
+    }
+    applyUnaccelerated(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelSizeX: kernelSizeX, kernelSizeY: kernelSizeY)
+    return true
+  }
+
+  /// Blurs `srcBuffer` into `destBuffer` with the Gaussian kernels of the two directions, one after the other, and
+  /// returns `false` if the blur failed. The passes use both buffers.
+  private func applyGaussian(
+    srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelX: [Int16], kernelY: [Int16], extendsEdges: Bool
+  ) -> Bool {
+    let flags = vImage_Flags(extendsEdges ? kvImageEdgeExtend : kvImageBackgroundColorFill)
+    func convolve(_ src: inout vImage_Buffer, _ dest: inout vImage_Buffer, kernel: [Int16], horizontally: Bool) -> Bool {
+      let size = UInt32(kernel.count)
+      let divisor = kernel.reduce(0) { $0 + Int32($1) }
+      return vImageConvolve_ARGB8888(
+        &src, &dest, nil, 0, 0, kernel, horizontally ? 1 : size, horizontally ? size : 1, divisor, [0, 0, 0, 0], flags)
+        == kvImageNoError
+    }
+    guard convolve(&srcBuffer, &destBuffer, kernel: kernelX, horizontally: true),
+      convolve(&destBuffer, &srcBuffer, kernel: kernelY, horizontally: false)
+    else { return false }
+    swap(&srcBuffer, &destBuffer)
+    return true
   }
 
   /// Blurs `srcBuffer` into `destBuffer`, and returns `false` if the temporary buffer couldn't be allocated.
@@ -151,6 +216,8 @@ extension GaussianBlurPrimitive {
     return true
   }
 
+  /// Blurs `srcBuffer` into `destBuffer` with three boxes of each size, in the directions whose size isn't 0, with
+  /// transparent black outside the edges. The passes use both buffers.
   private func applyUnaccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSizeX: UInt32, kernelSizeY: UInt32) {
     var dxLeft = 0
     var dxRight = 0
@@ -182,6 +249,8 @@ extension GaussianBlurPrimitive {
       }
       i += 1
     }
+    // Each pass leaves its result in `srcBuffer`.
+    swap(&srcBuffer, &destBuffer)
   }
 
   private func boxBlur(
