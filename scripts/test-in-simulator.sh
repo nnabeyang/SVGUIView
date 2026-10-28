@@ -3,6 +3,7 @@
 # Runs the package tests in the iOS simulator for CI, and keeps their output and result bundle.
 #
 #   scripts/test-in-simulator.sh <name> [xcodebuild arguments...]
+#   scripts/test-in-simulator.sh --boot
 #
 # The output goes to <results>/<name>.log and the result bundle to <results>/<name>.xcresult, where <results> is
 # $TEST_RESULTS_DIR. The arguments are passed to xcodebuild before the test action, such as `clean`.
@@ -10,13 +11,33 @@
 # The simulator sometimes fails to start the test runner, and xcodebuild reports "The test runner hung before
 # establishing connection." instead of running a test target. When that is the only failure, the tests run once
 # more, as <name>-retry. A test that fails is never run again, so that flaky tests still fail.
+#
+# With --boot, the script starts booting the simulator of the tests and returns without waiting for it, so that it
+# boots while the tests build. Right after it boots, the simulator takes minutes to launch the first test runner, so
+# it's better booted early. xcodebuild waits for a simulator that is still booting.
 
 set -uo pipefail
+
+device_name="iPhone 17e"
+runtime="com.apple.CoreSimulator.SimRuntime.iOS-27-0"
+destination="platform=iOS Simulator,name=${device_name},OS=27.0"
+
+if [[ "${1:-}" == "--boot" ]]; then
+  udid=$(xcrun simctl list devices available --json \
+    | jq -r --arg runtime "${runtime}" --arg name "${device_name}" \
+      'first(.devices[$runtime][]? | select(.name == $name) | .udid) // empty')
+  if [[ -z "${udid}" ]]; then
+    echo "::warning title=Simulator not found::${device_name} with ${runtime} isn't available, so it boots with the tests."
+    exit 0
+  fi
+  # A simulator that is already booted fails to boot again, which doesn't matter.
+  xcrun simctl boot "${udid}" || true
+  exit 0
+fi
 
 name="$1"
 shift
 results="${TEST_RESULTS_DIR:?set TEST_RESULTS_DIR to the directory for the results}"
-destination="platform=iOS Simulator,name=iPhone 17e,OS=27.0"
 mkdir -p "${results}"
 
 run_tests() {

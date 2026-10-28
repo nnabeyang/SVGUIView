@@ -66,6 +66,10 @@ jobs:
         with:
           xcode-version: '27.0'
 
+      # The simulator boots while the tests build, which takes minutes after it boots too.
+      - name: Boot the simulator
+        run: scripts/test-in-simulator.sh --boot
+
       - name: Run xcodebuild tests (iOS)
         env:
           TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
@@ -73,13 +77,14 @@ jobs:
         run: scripts/test-in-simulator.sh tests clean SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 
       # With one thread in the cooperative thread pool, a rendering that never lets other tasks run keeps the
-      # tests from cancelling it on time.
+      # tests from cancelling it on time. The tests of the views cancel renderings and time them out, so only they
+      # run again.
       - name: Run xcodebuild tests with one thread in the cooperative pool (iOS)
         if: ${{ !cancelled() }}
         env:
           TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
           TEST_RUNNER_LIBDISPATCH_COOPERATIVE_POOL_STRICT: "1"
-        run: scripts/test-in-simulator.sh tests-one-thread SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+        run: scripts/test-in-simulator.sh tests-one-thread -only-testing:SVGUIViewTests SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 
       - name: Report failed tests
         if: ${{ failure() }}

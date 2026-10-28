@@ -223,10 +223,12 @@ struct SVGUIViewTests {
       """#
     let timeout = Duration.milliseconds(500)
     // Twice as many renderings as cores fill every thread of the pool, and the threads of dispatch queues of the
-    // same quality of service.
+    // same quality of service. The views share the parsed document, which takes long to parse.
+    let data = Data(svg.utf8)
+    let base = SVGParser.parse(data: data)
     let views = (0..<ProcessInfo.processInfo.activeProcessorCount * 2).map { _ in
-      let view = makeView(svg, timeoutDuration: timeout)
-      view.frame.size = CGSize(width: 300, height: 300)
+      let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), baseContext: base, data: data)
+      view.configuration = SVGUIViewConfiguration(timeoutDuration: timeout)
       return view
     }
     let clock = ContinuousClock()
