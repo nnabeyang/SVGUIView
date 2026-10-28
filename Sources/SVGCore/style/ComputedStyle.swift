@@ -136,7 +136,7 @@ private struct PropertyTypeVisitor: StylePropertyVisitor {
 ///
 /// Computed values are a function of the element's cascaded values and its parent's computed values, so that they
 /// can be computed again for another parent, such as the `<use>` element that shows the element.
-struct ComputedStyle: Sendable {
+struct ComputedStyle: Sendable, Equatable {
   var fontFamily: String
   var fontSize: SVGUIFont.Size
   var fontWeight: SVGUIFont.Weight

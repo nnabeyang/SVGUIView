@@ -207,9 +207,11 @@ A new animation frame redoes only part of the work of the frame before it:
 
 - **Styles:** Only the elements that animations can change, which are the
   ones that run CSS animations, that SMIL animations change or that have
-  transitions, and their descendants, get their computed values computed again. Every other subtree is
-  the same as in the frame before. A document whose SMIL animations change
-  attributes that aren't properties makes every element again from the cascade.
+  transitions, and their descendants, get their computed values computed again.
+  Every other subtree is the same as in the frame before. A document whose SMIL
+  animations change attributes that aren't properties makes every element again
+  from the cascade. When the values are the same as in the frame before, nothing
+  else is done for the frame.
 - **Render tree and layers:** The render tree and the plan of its layers are
   made again for every frame.
 - **Painting:** Only the layers that contain an element whose painting changes
@@ -481,9 +483,13 @@ rejected: it can't express every timing function, SMIL timing or animations
 that depend on other animations, and it would make the visible frame hard to
 reproduce in a snapshot.
 
-When only discrete animations are running, such as `steps()` or `<set>`, the
-display link's preferred frame rate is to be lowered to what the animations
-need. This isn't done yet: such a view renders every frame.
+A frame whose animated values are the same as those of the frame that the view
+shows isn't rendered: after the computed values at its time, it compares them
+and the attributes that SMIL animations change with the frame before, and keeps
+the layers that the view shows. So while only discrete animations are running,
+such as `steps()` or `<set>`, or an animation waits for its delay, a view
+renders only the frames where a value changes. The display link still runs at
+the frame rate of the display, which isn't lowered.
 
 ## Concurrency
 
