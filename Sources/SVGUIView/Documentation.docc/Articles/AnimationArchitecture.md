@@ -13,10 +13,10 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > `<animateMotion>` elements apply to properties and attributes at the same
 > times. Phase 2 is done too: a view plays animations in a tree of layers that
 > `SVGRenderLayer` makes. Phase 2.5 has started: ``SVGUIView/SVGUIView/document``
-> finds and changes the elements of a document, and controls its CSS animations.
-> Beginning and ending SMIL animations from the document API, CSS Transitions and
-> filters on Metal are planned: the types, properties and methods proposed for
-> them don't exist yet, and their names may change while the work goes on.
+> finds and changes the elements of a document, controls its CSS animations, and
+> begins and ends its SMIL animations. CSS Transitions and filters on Metal are
+> planned: the types, properties and methods proposed for them don't exist yet,
+> and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -277,8 +277,11 @@ step, because an element's timing can depend on other elements:
 - Begin and end values that depend on what SVGUIView doesn't have never
   resolve, the same as `indefinite`: user events such as `click`, because there
   are no user events without JavaScript, `accessKey()`, `wallclock()`, and the
-  repeats of other animations, such as `a.repeat(2)`. From phase 2.5, the app
-  can begin and end an animation through the Swift API instead.
+  repeats of other animations, such as `a.repeat(2)`. The app can begin and end
+  an animation through the Swift API instead, with
+  ``SVGDocument/Element/beginElement()`` and
+  ``SVGDocument/Element/endElement()``, which add the times of the view to the
+  begin and end lists as the DOM methods do.
 
 Easing functions include `linear`, the `ease` keywords, `cubic-bezier()`,
 `steps()` and `linear()`. SMIL's `calcMode="spline"` uses the same Bézier curve
@@ -370,8 +373,9 @@ The surface is:
   ``SVGDocument/Animation/pause()``, ``SVGDocument/Animation/currentTime``,
   ``SVGDocument/Animation/playbackRate`` and
   ``SVGDocument/Animation/finished()``. A CSS animation that a change starts
-  starts at the time of the change. SMIL animations are planned to be begun and
-  ended from their elements, which replaces event-based begin values.
+  starts at the time of the change. SMIL animations are begun and ended from
+  their elements with ``SVGDocument/Element/beginElement()`` and
+  ``SVGDocument/Element/endElement()``, which replaces event-based begin values.
 
 Decisions:
 
