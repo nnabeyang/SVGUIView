@@ -210,9 +210,11 @@ struct ComputedStyle: Sendable {
   ///     override its values except for important declarations, or `nil` for no animations.
   ///   - smil: The effects of the SMIL animations of the element at the time, in the order that they apply in, which
   ///     CSS animations override.
+  ///   - element: The element, whose CSS animations play as the document keeps for them, or `nil` for animations
+  ///     that play from the time that the document was loaded.
   init(
     cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations? = nil,
-    smil: [SMILEffect] = []
+    smil: [SMILEffect] = [], element: ElementID? = nil
   ) {
     var computer = Computer(
       cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial),
@@ -222,7 +224,8 @@ struct ComputedStyle: Sendable {
       for id in PropertyID.allCases where id.isAnimation {
         id.visit(&computer)
       }
-      computer.animations = ElementAnimation.animations(of: computer.resolver.style, in: animations)
+      computer.animations = ElementAnimation.animations(
+        of: computer.resolver.style, element: element, in: animations)
     }
     for id in PropertyID.allCases {
       id.visit(&computer)

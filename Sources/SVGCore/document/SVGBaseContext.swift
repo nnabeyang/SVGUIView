@@ -12,6 +12,9 @@ struct DocumentAnimations: Sendable {
   /// The effects of the SMIL animations at the time, by the elements that they change, in the order that they apply
   /// in.
   var smilEffects: [ElementID: [SMILEffect]] = [:]
+  /// How the CSS animations play, for the ones that don't play from the time that the document was loaded, such as
+  /// the ones that the document API pauses.
+  var playback = [CSSAnimationID: AnimationPlayback]()
 }
 
 package struct SVGBaseContext: Sendable {
@@ -20,7 +23,7 @@ package struct SVGBaseContext: Sendable {
   /// The style sheets of the document, which the cascade of the elements uses.
   let stylesheet: Stylesheet
   package let root: SVGSVGElement?
-  let animations: DocumentAnimations
+  private(set) var animations: DocumentAnimations
   /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
   /// values change with the time.
   package let isAnimated: Bool
@@ -87,6 +90,13 @@ package struct SVGBaseContext: Sendable {
       root: document.root.flatMap { ElementCursor(root: $0).makeElement(with: stylesheet) as? SVGSVGElement },
       animations: DocumentAnimations(
         keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0))
+  }
+
+  /// The context with a CSS animation playing as given.
+  package func settingPlayback(_ playback: AnimationPlayback, of id: CSSAnimationID) -> SVGBaseContext {
+    var context = self
+    context.animations.playback[id] = playback
+    return context
   }
 
   /// The context with the computed values at the given time, or the context itself if they don't change with the

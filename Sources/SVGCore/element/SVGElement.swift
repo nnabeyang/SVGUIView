@@ -100,7 +100,7 @@ final class SVGBaseElement: Sendable {
       elementID: elementID, name: name, text: text, attributes: attributes, cascaded: cascaded,
       style: ComputedStyle(
         cascaded: cascaded, parent: parent, root: root, animations: animations,
-        smil: animations?.smilEffects[elementID] ?? []))
+        smil: animations?.smilEffects[elementID] ?? [], element: elementID))
   }
 }
 
@@ -203,7 +203,7 @@ extension ElementCursor {
     let cascaded = cascade(element: self, stylesheet: css)
     let style = ComputedStyle(
       cascaded: cascaded, parent: parent, root: root, animations: animations,
-      smil: animations?.smilEffects[element.id] ?? [])
+      smil: animations?.smilEffects[element.id] ?? [], element: element.id)
     let contents = element.children.indices.compactMap {
       child(at: $0).makeElement(with: css, parent: style, root: root ?? style, animations: animations)
     }
