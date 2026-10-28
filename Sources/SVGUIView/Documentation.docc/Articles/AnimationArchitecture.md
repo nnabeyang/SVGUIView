@@ -13,10 +13,10 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > `<animateMotion>` elements apply to properties and attributes at the same
 > times. Phase 2 is done too: a view plays animations in a tree of layers that
 > `SVGRenderLayer` makes. Phase 2.5 has started: ``SVGUIView/SVGUIView/document``
-> finds and changes the elements of a document. Controlling animations from the
-> document API, CSS Transitions and filters on Metal are planned: the types,
-> properties and methods proposed for them don't exist yet, and their names may
-> change while the work goes on.
+> finds and changes the elements of a document, and controls its CSS animations.
+> Beginning and ending SMIL animations from the document API, CSS Transitions and
+> filters on Metal are planned: the types, properties and methods proposed for
+> them don't exist yet, and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -365,10 +365,13 @@ The surface is:
 - **Changing elements:** reading, setting and removing attributes,
   changing the `style` attribute's declarations, and adding, removing and
   toggling classes. Inserting and removing elements comes later.
-- **Controlling animations (planned):** the animations of the document or of one
-  element, each with `play()`, `pause()`, `currentTime`, `playbackRate` and a way
-  to wait until it finishes. SMIL animations can also be begun and ended, which
-  replaces event-based begin values.
+- **Controlling animations:** the CSS animations of the document or of one
+  element, each with ``SVGDocument/Animation/play()``,
+  ``SVGDocument/Animation/pause()``, ``SVGDocument/Animation/currentTime``,
+  ``SVGDocument/Animation/playbackRate`` and
+  ``SVGDocument/Animation/finished()``. A CSS animation that a change starts
+  starts at the time of the change. SMIL animations are planned to be begun and
+  ended from their elements, which replaces event-based begin values.
 
 Decisions:
 

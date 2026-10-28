@@ -33,8 +33,10 @@ public class SVGUIView: UIView {
   /// replaces the document.
   public private(set) var document: SVGDocument {
     didSet {
-      oldValue.onChange = nil
-      observeDocument()
+      oldValue.host = nil
+      document.host = self
+      // The animations of the document that the view no longer shows don't finish.
+      resumeWaiters { _ in true }
     }
   }
   /// The elements whose transform or opacity can change, which get layers of their own.
@@ -42,6 +44,8 @@ public class SVGUIView: UIView {
   /// The elements whose painting changes in other ways, or `nil` if any painting can change, which tells the layers
   /// that frames paint again.
   private var painting: Set<ElementID>?
+  /// The CSS animations whose ends tasks wait for, which ``SVGDocument/Animation/finished()`` adds.
+  private var finishWaiters = [(id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
   /// infinite for animations that don't end.
   private var animationEnd: Double
@@ -148,7 +152,7 @@ public class SVGUIView: UIView {
     backgroundColor = .clear
     startObservingClock()
     observeNotifications()
-    observeDocument()
+    document.host = self
     setNeedsDisplay()
   }
 
@@ -242,32 +246,23 @@ public class SVGUIView: UIView {
   /// so that it does not blink. Implementing `draw(_:)` instead would make UIKit replace the image with an
   /// empty one before drawing.
   override public func display(_: CALayer) {
-    let changes = applyDocumentChanges()
+    applyDocumentChanges()
     renderingTask?.cancel()
     needsFrame = false
     startRendering()
-    if changes {
-      // Changes can make the animations last longer, after the clock stopped at their end.
-      updatePlayback()
-    }
-  }
-
-  /// Renders the document again when it changes, which shows all the changes made until the layer is displayed.
-  private func observeDocument() {
-    document.onChange = { [weak self] in self?.setNeedsDisplay() }
   }
 
   /// Makes the context of the document with the changes that the view hasn't rendered yet.
-  ///
-  /// - Returns: Whether there were changes.
-  @discardableResult
-  private func applyDocumentChanges() -> Bool {
+  private func applyDocumentChanges() {
     let changes = document.takeChanges()
-    guard !changes.isEmpty else { return false }
-    baseContext = baseContext.changingAttributes(changes)
+    guard !changes.isEmpty else { return }
+    // The CSS animations that the changes start start at the time that the view displays.
+    baseContext = baseContext.changingAttributes(changes, at: displayedTime.seconds)
+    // Changes can make the animations last longer, after the clock stopped at their end.
+    updatePlayback()
+    resumeFinishedWaiters()
     // The size of the document can change with the attributes of its root element.
     invalidateIntrinsicContentSize()
-    return true
   }
 
   /// Starts rendering the document at the time that the view displays.
@@ -360,6 +355,9 @@ public class SVGUIView: UIView {
   deinit {
     // The rendering holds the view weakly, so without this it would go on until the timeout.
     renderingTask?.cancel()
+    for waiter in finishWaiters {
+      waiter.continuation.resume()
+    }
   }
 
   /// Plays the animations of the document from the current time.
@@ -390,6 +388,7 @@ public class SVGUIView: UIView {
     guard configuration.animation != .none else { return }
     currentTime = max(time, .zero)
     updatePlayback()
+    resumeFinishedWaiters()
   }
 
   /// Whether Reduce Motion holds the animations at time zero.
@@ -421,6 +420,7 @@ public class SVGUIView: UIView {
       guard let self else { return }
       currentTime += elapsed
       renderFrame()
+      resumeFinishedWaiters()
       // The clock stops after the frame that passes the end of the animations.
       updatePlayback()
     }
@@ -638,6 +638,69 @@ public class SVGUIView: UIView {
       guard let layers = await plan.painted(scale: scale, reusing: previous) else { return nil }
       return (layers, tree.reusableNodes)
     }
+  }
+}
+
+extension SVGUIView: DocumentHost {
+  func documentDidChange() {
+    // The layer is displayed once for the changes made until then.
+    setNeedsDisplay()
+  }
+
+  func cssAnimations() -> [CSSAnimationID] {
+    applyDocumentChanges()
+    return baseContext.cssAnimations()
+  }
+
+  func playback(of id: CSSAnimationID) -> (playback: AnimationPlayback, time: Double)? {
+    applyDocumentChanges()
+    return baseContext.playback(of: id).map { ($0, displayedTime.seconds) }
+  }
+
+  func changePlayback(of id: CSSAnimationID, _ change: (inout AnimationPlayback, Double) -> Void) {
+    applyDocumentChanges()
+    guard var playback = baseContext.playback(of: id) else { return }
+    let previous = playback
+    change(&playback, displayedTime.seconds)
+    guard playback != previous else { return }
+    baseContext = baseContext.settingPlayback(playback, of: id)
+    // Only the values of the animated elements change, so a frame shows the layers that don't change as they are.
+    if configuration.animation == .none {
+      setNeedsDisplay()
+    } else {
+      renderFrame()
+    }
+    updatePlayback()
+    resumeFinishedWaiters()
+  }
+
+  func waitUntilFinished(_ id: CSSAnimationID) async {
+    applyDocumentChanges()
+    guard !baseContext.isFinished(id, at: displayedTime.seconds) else { return }
+    await withCheckedContinuation { continuation in
+      finishWaiters.append((id, continuation))
+    }
+  }
+
+  /// Lets the tasks go on that wait for the animations that have finished at the time that the view displays, or
+  /// that no element runs.
+  fileprivate func resumeFinishedWaiters() {
+    guard !finishWaiters.isEmpty else { return }
+    let time = displayedTime.seconds
+    resumeWaiters { baseContext.isFinished($0, at: time) }
+  }
+
+  /// Lets the tasks go on that wait for the animations that pass a check.
+  fileprivate func resumeWaiters(where finished: (CSSAnimationID) -> Bool) {
+    var waiting = [(id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
+    for waiter in finishWaiters {
+      if finished(waiter.id) {
+        waiter.continuation.resume()
+      } else {
+        waiting.append(waiter)
+      }
+    }
+    finishWaiters = waiting
   }
 }
 

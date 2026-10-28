@@ -19,12 +19,14 @@ extension SVGBaseContext {
     var end = 0.0
     for element in root.elements {
       let style = element.style
-      for (index, name) in style.animationName.enumerated() {
-        guard case .keyframes(let name) = name, animations.keyframes[name] != nil else { continue }
+      for (name, occurrence, index) in style.cssAnimations(keyframes: animations.keyframes) {
+        let id = CSSAnimationID(element: element.base.elementID, name: name, occurrence: occurrence)
         let (timing, isPaused) = ElementAnimation.timing(of: style, at: index)
-        // A paused animation stays at its start.
-        guard !isPaused else { continue }
-        end = max(end, timing.delay + timing.activeDuration)
+        // A paused animation stays where it is.
+        guard let finish = animations.playback(of: id, isPaused: isPaused).timeOfFinish(end: timing.end) else {
+          continue
+        }
+        end = max(end, finish)
       }
     }
     // Animations that keep beginning again, such as ones that begin when the other ends, add intervals in every

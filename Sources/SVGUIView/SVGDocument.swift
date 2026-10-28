@@ -20,9 +20,10 @@ import SVGCore
 /// document that it replaces can still be read and changed, but the view no
 /// longer shows it.
 ///
-/// CSS animations that a change starts, such as ones that a new class sets,
-/// play on the timeline of the document, so they run as if they started when
-/// the document was loaded.
+/// ``animations`` lists the CSS animations that the elements run, which
+/// ``Animation`` pauses, plays, moves and speeds up. A CSS animation that a
+/// change starts, such as one that a new class sets, starts at the time of the
+/// change.
 @MainActor
 public final class SVGDocument {
   /// The tree of the document with every change, which reading the document sees.
@@ -30,8 +31,8 @@ public final class SVGDocument {
   /// The changes that the view hasn't rendered yet, by the elements and the names of the attributes, with `nil` for an
   /// attribute that is removed.
   private var changes = [ElementID: [String: String?]]()
-  /// Tells the view that shows the document that it has changed.
-  var onChange: (() -> Void)?
+  /// The view that shows the document, or `nil` for a document that a view no longer shows.
+  weak var host: (any DocumentHost)?
 
   init(tree: DocumentTree) {
     self.tree = tree
@@ -74,6 +75,16 @@ public final class SVGDocument {
     try elements(matching: selectors, in: nil)
   }
 
+  /// The CSS animations that the elements run, in document order and in
+  /// the order of each element's `animation-name`.
+  ///
+  /// The list includes the changes made to the document so far, and it's
+  /// empty for a document that a view no longer shows. SMIL animations aren't
+  /// in it.
+  public var animations: [Animation] {
+    (host?.cssAnimations() ?? []).map { Animation(element: Element(document: self, id: $0.element), id: $0) }
+  }
+
   /// Takes the changes that the view hasn't rendered yet.
   func takeChanges() -> [ElementID: [String: String?]] {
     defer { changes = [:] }
@@ -102,13 +113,29 @@ public final class SVGDocument {
     guard let attributes = tree.attributes(of: id), attributes[name] != value else { return }
     tree = tree.changingAttributes([id: [name: value]])
     changes[id, default: [:]][name] = .some(value)
-    onChange?()
+    host?.documentDidChange()
   }
 
   /// The name of an attribute as the document keeps it, which keeps `href` of the XLink namespace as `href`.
   private static func attributeName(_ name: String) -> String {
     name == "xlink:href" ? "href" : name
   }
+}
+
+/// The view that shows a document, which keeps how the animations of the document play.
+@MainActor
+protocol DocumentHost: AnyObject {
+  /// Renders the changes of the document.
+  func documentDidChange()
+  /// The CSS animations of the document with its changes.
+  func cssAnimations() -> [CSSAnimationID]
+  /// The playback of a CSS animation and the time of the timeline that the view displays, or `nil` if no element
+  /// runs the animation.
+  func playback(of id: CSSAnimationID) -> (playback: AnimationPlayback, time: Double)?
+  /// Changes the playback of a CSS animation at the time of the timeline that the view displays.
+  func changePlayback(of id: CSSAnimationID, _ change: (inout AnimationPlayback, Double) -> Void)
+  /// Waits until a CSS animation finishes, or no element runs it, or the view no longer shows the document.
+  func waitUntilFinished(_ id: CSSAnimationID) async
 }
 
 extension SVGDocument {
@@ -194,6 +221,12 @@ extension SVGDocument.Element {
   /// - Throws: ``SVGDocument/SelectorError`` if the selectors can't be parsed.
   public func querySelectorAll(_ selectors: String) throws(SVGDocument.SelectorError) -> [SVGDocument.Element] {
     try document.elements(matching: selectors, in: id)
+  }
+
+  /// The CSS animations that the element runs, in the order of its
+  /// `animation-name`.
+  public var animations: [SVGDocument.Animation] {
+    document.animations.filter { $0.element == self }
   }
 
   /// The classes of the element, in its `class` attribute.
@@ -343,5 +376,89 @@ extension SVGDocument.Style {
 
   private var declarations: StyleDeclarations {
     StyleDeclarations(element.attribute("style") ?? "")
+  }
+}
+
+extension SVGDocument {
+  /// A CSS animation that an element runs, in the terms of Web Animations.
+  ///
+  /// An animation plays on the timeline of the view, from the time that the
+  /// element starts running it: the time that the document was loaded, or the
+  /// time of the change that makes the element run it. Pausing, playing,
+  /// moving and changing the rate of an animation change how it plays from the
+  /// time that the view displays. A view whose
+  /// ``SVGUIViewConfiguration/animation`` is
+  /// ``SVGUIViewConfiguration/AnimationMode/none`` displays time zero, so an
+  /// animation doesn't advance there, but moving it shows it at another time.
+  ///
+  /// An animation that the element no longer runs, such as after its class is
+  /// removed, does nothing.
+  public struct Animation: Hashable, Sendable {
+    /// The element that runs the animation.
+    public let element: Element
+    let id: CSSAnimationID
+
+    /// The name of the animation, which `animation-name` gives.
+    public var animationName: String {
+      id.name
+    }
+  }
+}
+
+@MainActor
+extension SVGDocument.Animation {
+  /// The time of the animation, or `nil` if the element no longer runs it.
+  ///
+  /// The time is zero when the animation starts, before its delay. Setting
+  /// it moves the animation to the time.
+  public var currentTime: Duration? {
+    get {
+      host?.playback(of: id).map { .seconds($0.playback.localTime(at: $0.time)) }
+    }
+    nonmutating set {
+      guard let newValue else { return }
+      host?.changePlayback(of: id) { $0.seek(to: newValue.seconds, at: $1) }
+    }
+  }
+
+  /// How fast the animation plays, which is 1 by default and negative to
+  /// play backward.
+  public var playbackRate: Double {
+    get {
+      host?.playback(of: id)?.playback.rate ?? 1
+    }
+    nonmutating set {
+      host?.changePlayback(of: id) { $0.setRate(newValue, at: $1) }
+    }
+  }
+
+  /// Whether the animation is paused, by ``pause()`` or by
+  /// `animation-play-state`.
+  public var isPaused: Bool {
+    host?.playback(of: id)?.playback.isPaused ?? false
+  }
+
+  /// Plays the animation from the time that it's paused at.
+  public func play() {
+    host?.changePlayback(of: id) { $0.play(at: $1) }
+  }
+
+  /// Holds the animation at its current time.
+  public func pause() {
+    host?.changePlayback(of: id) { $0.pause(at: $1) }
+  }
+
+  /// Waits until the animation finishes: until it reaches its end, or its
+  /// start when it plays backward.
+  ///
+  /// This also returns when the element no longer runs the animation, or the
+  /// view no longer shows the document. It returns at once for an animation
+  /// that has finished.
+  public func finished() async {
+    await host?.waitUntilFinished(id)
+  }
+
+  private var host: (any DocumentHost)? {
+    element.document.host
   }
 }

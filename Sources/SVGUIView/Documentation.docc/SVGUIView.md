@@ -130,6 +130,8 @@ svgView.document.element(id: "play")?.classList.add("active")
 
 - <doc:ChangingDocuments>
 - ``SVGDocument``
+- ``SVGDocument/Element``
+- ``SVGDocument/Animation``
 
 ### Configuring rendering
 

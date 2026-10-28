@@ -69,5 +69,37 @@ The document that it replaces can still be read and changed, but the view no
 longer shows it.
 
 A change can start CSS animations, such as ones that a new class sets. They
-play on the timeline of the document, so they run as if they started when the
-document was loaded.
+start at the time of the change, as in a browser, while the animations that
+the elements keep running play on. Removing an animation and adding it again
+starts it again.
+
+### Controlling animations
+
+``SVGDocument/animations`` and ``SVGDocument/Element/animations`` list the CSS
+animations that the elements run, as ``SVGDocument/Animation`` values. An
+animation follows the Web Animations API: it plays from the time that it
+starts, and ``SVGDocument/Animation/pause()``,
+``SVGDocument/Animation/play()``, ``SVGDocument/Animation/currentTime`` and
+``SVGDocument/Animation/playbackRate`` change how it plays from then on.
+``SVGDocument/Animation/finished()`` waits until it reaches its end.
+
+```swift
+for animation in svgView.document.animations {
+  animation.pause()
+}
+if let spin = svgView.document.element(id: "wheel")?.animations.first {
+  spin.playbackRate = 2
+  spin.play()
+  await spin.finished()
+}
+```
+
+The animations play on the timeline of the view, so they advance only while
+the view plays: ``SVGUIView/SVGUIView/pause()`` holds all of them. A view
+whose ``SVGUIViewConfiguration/animation`` is
+``SVGUIViewConfiguration/AnimationMode/none`` displays time zero, where the
+animations don't advance, but setting an animation's
+``SVGDocument/Animation/currentTime`` shows it at that time.
+
+The list doesn't include SMIL animations, which play on the timeline of the
+document.
