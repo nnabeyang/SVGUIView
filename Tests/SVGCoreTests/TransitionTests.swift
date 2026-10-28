@@ -214,4 +214,25 @@ struct TransitionTests {
     #expect(changed.elementsWithAnimatedPainting().contains(b))
     #expect(!changed.elementsWithAnimatedPainting().contains(a))
   }
+
+  @Test(
+    "display is the value that isn't none between none and another value, and changes halfway between other values",
+    arguments: [
+      (CSSDisplay.inline, CSSDisplay.none, 0.0, CSSDisplay.inline), (.inline, .none, 0.5, .inline),
+      (.inline, .none, 0.99, .inline), (.inline, .none, 1, .none), (.none, .inline, 0, .none),
+      (.none, .inline, 0.01, .inline), (.none, .inline, 1, .inline), (.inline, .block, 0.49, .inline),
+      (.inline, .block, 0.5, .block),
+    ])
+  func displayInterpolation(from: CSSDisplay, to: CSSDisplay, progress: Double, expected: CSSDisplay) {
+    #expect(DisplayProperty.interpolated(from, to, progress: progress, in: resolver) == expected)
+  }
+
+  @Test("an animation of display to none shows the element until its end")
+  func displayAnimation() {
+    let base = parse(
+      "<style>@keyframes k { to { display: none } } rect { animation: k 1s linear forwards }</style>"
+        + #"<rect id="a" width="10" height="10"/>"#)
+    #expect(style(of: "a", in: base, at: 0.99)?.display == .inline)
+    #expect(style(of: "a", in: base, at: 1)?.display == CSSDisplay.none)
+  }
 }

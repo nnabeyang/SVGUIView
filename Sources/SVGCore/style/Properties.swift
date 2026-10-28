@@ -627,6 +627,15 @@ enum DisplayProperty: StyleProperty {
   static func parse(_ text: String, origin: DeclarationOrigin) -> CSSDisplay? {
     keyword(text, origin: origin)
   }
+
+  /// One of the values, which is the one that isn't `none` between `none` and another value, so that an element
+  /// shows while it's animated to or from `none`, as CSS Display specifies. Other values change halfway.
+  static func interpolated(_ from: CSSDisplay, _ to: CSSDisplay, progress: Double, in _: StyleResolver) -> CSSDisplay {
+    guard from != to, from == .none || to == .none else { return discrete(from, to, progress: progress) }
+    if progress <= 0 { return from }
+    if progress >= 1 { return to }
+    return from == .none ? to : from
+  }
 }
 
 /// `overflow`, whose computed value is `nil` where the element doesn't declare it, so that each element can choose
