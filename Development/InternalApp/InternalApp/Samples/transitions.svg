@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <style>
+    #box {
+      fill: gray;
+      transform-origin: 40px 40px;
+      transition: transform 1s ease-in-out, fill 1s linear;
+    }
+    #box.run { transform: translate(120px, 0) rotate(45deg); fill: rgb(0, 160, 255) }
+    #lamp { fill: orange; opacity: 0.3; transition: opacity 0.5s 0.5s }
+    .run ~ #lamp { opacity: 1 }
+  </style>
+  <rect id="box" x="20" y="20" width="40" height="40"/>
+  <circle id="lamp" cx="100" cy="140" r="30"/>
+</svg>
