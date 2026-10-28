@@ -45,6 +45,10 @@ package enum FilterPrimitive: Sendable {
 }
 
 package struct GaussianBlurPrimitive: Sendable {
+  /// The smallest standard deviation in pixels that is blurred with three box blurs rather than a Gaussian kernel.
+  /// Below it, the boxes differ much from a Gaussian blur, and a Gaussian kernel is small enough to be fast.
+  package static let boxBlurMinimumDeviation: CGFloat = 7
+
   package enum StandardDeviation: Sendable {
     case iso(CGFloat)
     case hetero(x: CGFloat, y: CGFloat)
