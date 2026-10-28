@@ -30,7 +30,7 @@ struct SMILEffect: Sendable {
   ///
   /// `<animate>` doesn't change `transform`, which `<animateTransform>` animates instead.
   var property: PropertyID? {
-    guard let name = animation.attributeName, let id = PropertyID(rawValue: name), !id.isAnimation else { return nil }
+    guard let name = animation.attributeName, let id = PropertyID(rawValue: name), id.isAnimatable else { return nil }
     switch animation.kind {
     case .animateTransform:
       return id == .transform ? id : nil

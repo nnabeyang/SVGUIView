@@ -5,7 +5,7 @@ enum SVGFilterType: String {
   case url
 }
 
-enum SVGFilter {
+enum SVGFilter: Equatable {
   case url(url: String)
   case none
 

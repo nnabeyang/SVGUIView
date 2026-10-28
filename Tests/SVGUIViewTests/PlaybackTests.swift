@@ -5,19 +5,6 @@ import UIKit
 
 @testable import SVGUIView
 
-/// A clock that tests advance by hand.
-@MainActor
-private final class ManualClock: AnimationClock {
-  var onFrame: ((Duration) -> Void)?
-  var isRunning = false
-
-  /// Shows a frame after the time, if the clock is running.
-  func advance(by time: Duration) {
-    guard isRunning else { return }
-    onFrame?(time)
-  }
-}
-
 /// Tests that a view plays, pauses and seeks the animations of its document.
 @MainActor
 @Suite("Playback", .serialized)
@@ -32,8 +19,6 @@ struct PlaybackTests {
   private static let still =
     #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20"/></svg>"#
 
-  /// How long a test waits for a rendering, which only catches a rendering that never ends.
-  private static let patience: Duration = .seconds(60)
   /// The window of the views, which the suite keeps for the test, since a view only plays in a window.
   private let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 20, height: 20))
 
@@ -47,41 +32,12 @@ struct PlaybackTests {
     view.clock = clock
     view.isReduceMotionEnabled = { isReduceMotionEnabled }
     view.configuration = SVGUIViewConfiguration(
-      timeoutDuration: Self.patience, animation: animation, playsWithReduceMotion: playsWithReduceMotion)
+      timeoutDuration: patience, animation: animation, playsWithReduceMotion: playsWithReduceMotion)
     window.addSubview(view)
     view.layoutIfNeeded()
     view.layer.displayIfNeeded()
     try await waitForGreen(in: view) { _ in true }
     return (view, clock)
-  }
-
-  /// The green component of the pixel at the center of what the view shows, in its image or in its layers, or `nil`
-  /// if it shows nothing there.
-  private func green(in view: SVGUIView) -> UInt8? {
-    var components = [UInt8](repeating: 0, count: 4)
-    guard
-      let context = CGContext(
-        data: &components, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-    else { return nil }
-    context.translateBy(x: -view.bounds.midX, y: -view.bounds.midY)
-    view.layer.render(in: context)
-    return components[3] == 0 ? nil : components[1]
-  }
-
-  /// Waits until the green component at the center of the image that the view shows passes the check.
-  private func waitForGreen(
-    in view: SVGUIView, sourceLocation: SourceLocation = #_sourceLocation, _ check: (UInt8) -> Bool
-  ) async throws {
-    let deadline = ContinuousClock.now + Self.patience
-    while green(in: view).map(check) != true {
-      guard ContinuousClock.now < deadline else {
-        Issue.record(
-          "The view shows green \(green(in: view).map(String.init) ?? "nil")", sourceLocation: sourceLocation)
-        return
-      }
-      try await Task.sleep(for: .milliseconds(10))
-    }
   }
 
   @Test("the view plays the animations as its clock advances")
@@ -147,7 +103,7 @@ struct PlaybackTests {
     let (view, clock) = try await makeView()
     clock.advance(by: .seconds(2))
     try await waitForGreen(in: view) { $0 == 255 }
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: Self.patience)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
     #expect(!clock.isRunning)
     #expect(view.currentTime == .zero)
     try await waitForGreen(in: view) { $0 == 0 }
@@ -242,8 +198,8 @@ struct PlaybackTests {
     let (view, _) = try await makeView()
     #expect(view.layer.contents == nil)
     #expect(view.layer.sublayers?.isEmpty == false)
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: Self.patience)
-    let deadline = ContinuousClock.now + Self.patience
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    let deadline = ContinuousClock.now + patience
     while view.layer.contents == nil, ContinuousClock.now < deadline {
       try await Task.sleep(for: .milliseconds(10))
     }

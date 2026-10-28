@@ -96,6 +96,12 @@ struct SMILAnimation: Sendable {
   let motionPath: String?
   /// The path data of the `<path>` that the `<mpath>` child references, as written.
   var motionPathData: String?
+  /// The times in seconds that the document API begins the animation at, which SMIL adds to the times of the
+  /// `begin` list as `beginElement()` does.
+  var addedBegins = [Double]()
+  /// The times in seconds that the document API ends the animation at, which SMIL adds to the times of the `end`
+  /// list as `endElement()` does.
+  var addedEnds = [Double]()
 }
 
 extension SMILAnimation {
@@ -265,7 +271,7 @@ extension SMILAnimation {
 extension SMILAnimation {
   /// The animations of a document in document order. An animation changes the element that its `href` references,
   /// or its parent.
-  static func animations(of document: SVGDocument) -> [SMILAnimation] {
+  static func animations(of document: DocumentTree) -> [SMILAnimation] {
     guard let root = document.root else { return [] }
     // Of elements with the same ID, the first one in the document is the one that `href` finds.
     var elements = [String: DocumentElement]()

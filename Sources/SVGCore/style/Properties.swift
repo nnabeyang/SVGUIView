@@ -217,6 +217,10 @@ enum FillProperty: StyleProperty {
   }
 
   /// The paint between two paints, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolates(_ from: Paint, _ to: Paint, in resolver: StyleResolver) -> Bool {
+    resolver.style.resolved(from).interpolated(to: resolver.style.resolved(to), progress: 0.5) != nil
+  }
+
   static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
     resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
   }
@@ -271,6 +275,10 @@ enum StrokeProperty: StyleProperty {
   }
 
   /// The paint between two paints, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolates(_ from: Paint, _ to: Paint, in resolver: StyleResolver) -> Bool {
+    resolver.style.resolved(from).interpolated(to: resolver.style.resolved(to), progress: 0.5) != nil
+  }
+
   static func interpolated(_ from: Paint, _ to: Paint, progress: Double, in resolver: StyleResolver) -> Paint {
     resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress)
   }
@@ -645,6 +653,10 @@ enum StopColorProperty: StyleProperty {
   }
 
   /// The color between two colors, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolates(_ from: ColorValue, _ to: ColorValue, in resolver: StyleResolver) -> Bool {
+    resolver.style.resolved(from).interpolated(to: resolver.style.resolved(to), progress: 0.5) != nil
+  }
+
   static func interpolated(
     _ from: ColorValue, _ to: ColorValue, progress: Double, in resolver: StyleResolver
   ) -> ColorValue {
@@ -690,6 +702,10 @@ enum FloodColorProperty: StyleProperty {
   }
 
   /// The color between two colors, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolates(_ from: ColorValue, _ to: ColorValue, in resolver: StyleResolver) -> Bool {
+    resolver.style.resolved(from).interpolated(to: resolver.style.resolved(to), progress: 0.5) != nil
+  }
+
   static func interpolated(
     _ from: ColorValue, _ to: ColorValue, progress: Double, in resolver: StyleResolver
   ) -> ColorValue {

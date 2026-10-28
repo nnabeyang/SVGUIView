@@ -110,11 +110,28 @@ While it can play animations, the view shows its document in layers of its
 layer, so that a change of the transform or the opacity of an element only
 moves or fades its layer. Snapshots are still rendered into one image.
 
+### Changing the document
+
+``SVGUIView/SVGUIView/document`` finds the elements of the document, and
+changes their attributes, classes and styles. The view shows the changes at its
+next rendering. See <doc:ChangingDocuments>.
+
+```swift
+svgView.document.element(id: "play")?.classList.add("active")
+```
+
 ## Topics
 
 ### Displaying SVG
 
 - ``SVGUIView/SVGUIView``
+
+### Changing the document
+
+- <doc:ChangingDocuments>
+- ``SVGDocument``
+- ``SVGDocument/Element``
+- ``SVGDocument/Animation``
 
 ### Configuring rendering
 

@@ -1,9 +1,8 @@
 import Foundation
 
-/// The timing of an animation in the terms of Web Animations, which gives its progress at each time.
+/// The timing of an animation in the terms of Web Animations, which gives its progress at each local time.
 ///
-/// The playback rate is always 1: an animation's local time is the time of the timeline since the animation
-/// started.
+/// The local time comes from how the animation plays on the timeline, which ``AnimationPlayback`` describes.
 struct AnimationTiming: Sendable, Equatable {
   /// The time in seconds from the start to the first iteration, which is negative to start partway through.
   var delay: Double
@@ -24,6 +23,11 @@ struct AnimationTiming: Sendable, Equatable {
     case .count(let count): duration == 0 || count == 0 ? 0 : duration * count
     case .infinite: duration == 0 ? 0 : .infinity
     }
+  }
+
+  /// The local time of the end of the active interval, after the delay.
+  var end: Double {
+    delay + activeDuration
   }
 
   /// The iterations as a number, which is infinite for an infinite count.

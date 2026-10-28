@@ -16,14 +16,20 @@ struct ElementAnimation {
   ///
   /// The other lists repeat to the length of `animation-name`, and the extra values are dropped, as CSS
   /// Animations specifies.
-  static func animations(of style: ComputedStyle, in animations: DocumentAnimations) -> [ElementAnimation] {
-    style.animationName.indices.compactMap { index in
-      guard case .keyframes(let name) = style.animationName[index], let rule = animations.keyframes[name] else {
-        return nil
-      }
+  ///
+  /// - Parameter element: The element with the values, whose animations play as the document keeps for them, or
+  ///   `nil` for animations that play from the time that the document was loaded.
+  static func animations(of style: ComputedStyle, element: ElementID?, in animations: DocumentAnimations)
+    -> [ElementAnimation]
+  {
+    style.cssAnimations(keyframes: animations.keyframes).compactMap { name, occurrence, index in
+      guard let rule = animations.keyframes[name] else { return nil }
       let (timing, isPaused) = Self.timing(of: style, at: index)
-      // A paused animation has been paused since the document was loaded, so it stays at the start.
-      guard let sample = timing.sample(at: isPaused ? 0 : animations.time) else { return nil }
+      let playback =
+        element.map {
+          animations.playback(of: CSSAnimationID(element: $0, name: name, occurrence: occurrence), isPaused: isPaused)
+        } ?? AnimationPlayback(isPaused: isPaused)
+      guard let sample = timing.sample(at: playback.localTime(at: animations.time)) else { return nil }
       let keyframes = rule.keyframes.flatMap { keyframe in keyframe.offsets.map { (offset: $0, keyframe: keyframe) } }
         .enumerated()
         .sorted { $0.element.offset == $1.element.offset ? $0.offset < $1.offset : $0.element.offset < $1.element.offset }

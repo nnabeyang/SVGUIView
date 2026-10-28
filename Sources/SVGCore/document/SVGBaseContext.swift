@@ -12,17 +12,22 @@ struct DocumentAnimations: Sendable {
   /// The effects of the SMIL animations at the time, by the elements that they change, in the order that they apply
   /// in.
   var smilEffects: [ElementID: [SMILEffect]] = [:]
+  /// How the CSS animations play, for the ones that don't play from the time that the document was loaded, such as
+  /// the ones that the document API pauses.
+  var playback = [CSSAnimationID: AnimationPlayback]()
+  /// The transitions that changes of the document started, by the elements and the properties that they change.
+  var transitions = [ElementID: [PropertyID: CSSTransition]]()
 }
 
 package struct SVGBaseContext: Sendable {
   /// The parsed document, which the elements to render are made from.
-  let document: SVGDocument
+  package let document: DocumentTree
   /// The style sheets of the document, which the cascade of the elements uses.
   let stylesheet: Stylesheet
   package let root: SVGSVGElement?
-  let animations: DocumentAnimations
-  /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
-  /// values change with the time.
+  private(set) var animations: DocumentAnimations
+  /// Whether the document has SMIL animations or transitions, or an element runs an animation with keyframes, so that
+  /// the computed values change with the time.
   package let isAnimated: Bool
   /// The elements whose computed values animations can change, or `nil` for a document without animations.
   let restyleScope: RestyleScope?
@@ -41,7 +46,7 @@ package struct SVGBaseContext: Sendable {
   /// - Parameter restyleScope: The elements whose computed values animations can change, which the context of the
   ///   document at a time keeps from the context that it comes from, or `nil` to find them.
   init(
-    document: SVGDocument, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
+    document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
     restyleScope: RestyleScope? = nil
   ) {
     self.document = document
@@ -49,7 +54,7 @@ package struct SVGBaseContext: Sendable {
     self.root = root
     self.animations = animations
     isAnimated =
-      !animations.smil.isEmpty
+      !animations.smil.isEmpty || !animations.transitions.isEmpty
       || !animations.keyframes.isEmpty
         && (root?.elements ?? []).contains { element in
           element.style.animationName.contains {
@@ -78,6 +83,44 @@ package struct SVGBaseContext: Sendable {
     root.mask(context: &self)
     root.pattern(context: &self)
     root.filter(context: &self)
+  }
+
+  /// The context of the elements made from a document and its style sheets, with the animations at time zero.
+  init(document: DocumentTree, stylesheet: Stylesheet) {
+    self.init(
+      document: document, stylesheet: stylesheet,
+      root: document.root.flatMap { ElementCursor(root: $0).makeElement(with: stylesheet) as? SVGSVGElement },
+      animations: DocumentAnimations(
+        keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0))
+  }
+
+  /// The context with a CSS animation playing as given.
+  package func settingPlayback(_ playback: AnimationPlayback, of id: CSSAnimationID) -> SVGBaseContext {
+    var context = self
+    context.animations.playback[id] = playback
+    return context
+  }
+
+  /// The context with a SMIL animation beginning at a time, as `beginElement()` makes it, or `nil` if the element
+  /// isn't an animation that changes an element.
+  ///
+  /// - Parameter time: The time of the document in seconds.
+  package func beginningSMILAnimation(_ element: ElementID, at time: Double) -> SVGBaseContext? {
+    guard let index = animations.smil.firstIndex(where: { $0.elementID == element }) else { return nil }
+    var context = self
+    context.animations.smil[index].addedBegins.append(time)
+    return context
+  }
+
+  /// The context with a SMIL animation ending at a time, as `endElement()` makes it, or `nil` if the element isn't
+  /// an animation that changes an element.
+  ///
+  /// - Parameter time: The time of the document in seconds.
+  package func endingSMILAnimation(_ element: ElementID, at time: Double) -> SVGBaseContext? {
+    guard let index = animations.smil.firstIndex(where: { $0.elementID == element }) else { return nil }
+    var context = self
+    context.animations.smil[index].addedEnds.append(time)
+    return context
   }
 
   /// The context with the computed values at the given time, or the context itself if they don't change with the

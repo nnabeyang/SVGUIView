@@ -12,9 +12,11 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > is done as well: the `<animate>`, `<set>`, `<animateTransform>` and
 > `<animateMotion>` elements apply to properties and attributes at the same
 > times. Phase 2 is done too: a view plays animations in a tree of layers that
-> `SVGRenderLayer` makes. The document API, CSS Transitions and filters on Metal
-> are planned: the types, properties and methods proposed for them don't exist
-> yet, and their names may change while the work goes on.
+> `SVGRenderLayer` makes. Phase 2.5 has started: ``SVGUIView/SVGUIView/document``
+> finds and changes the elements of a document, controls its CSS animations, and
+> begins and ends its SMIL animations, and its changes start CSS Transitions.
+> Filters on Metal are planned: the types, properties and methods proposed for
+> them don't exist yet, and their names may change while the work goes on.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -275,8 +277,11 @@ step, because an element's timing can depend on other elements:
 - Begin and end values that depend on what SVGUIView doesn't have never
   resolve, the same as `indefinite`: user events such as `click`, because there
   are no user events without JavaScript, `accessKey()`, `wallclock()`, and the
-  repeats of other animations, such as `a.repeat(2)`. From phase 2.5, the app
-  can begin and end an animation through the Swift API instead.
+  repeats of other animations, such as `a.repeat(2)`. The app can begin and end
+  an animation through the Swift API instead, with
+  ``SVGDocument/Element/beginElement()`` and
+  ``SVGDocument/Element/endElement()``, which add the times of the view to the
+  begin and end lists as the DOM methods do.
 
 Easing functions include `linear`, the `ease` keywords, `cubic-bezier()`,
 `steps()` and `linear()`. SMIL's `calcMode="spline"` uses the same Bézier curve
@@ -355,25 +360,32 @@ for animation in document.animations {
 }
 ```
 
-The planned surface is:
+The surface is:
 
-- **Finding elements:** `element(id:)`, `querySelector(_:)` and
-  `querySelectorAll(_:)` on the document and on elements.
+- **Finding elements:** ``SVGDocument/element(id:)``,
+  ``SVGDocument/querySelector(_:)`` and ``SVGDocument/querySelectorAll(_:)``
+  on the document and on elements. See <doc:ChangingDocuments>.
 - **Changing elements:** reading, setting and removing attributes,
   changing the `style` attribute's declarations, and adding, removing and
-  toggling classes. Inserting and removing elements comes later.
-- **Controlling animations:** the animations of the document or of one
-  element, each with `play()`, `pause()`, `currentTime`, `playbackRate` and a way
-  to wait until it finishes. SMIL animations can also be begun and ended, which
-  replaces event-based begin values.
+  toggling classes. A change starts the CSS Transitions of the values that it
+  changes. Inserting and removing elements comes later.
+- **Controlling animations:** the CSS animations of the document or of one
+  element, each with ``SVGDocument/Animation/play()``,
+  ``SVGDocument/Animation/pause()``, ``SVGDocument/Animation/currentTime``,
+  ``SVGDocument/Animation/playbackRate`` and
+  ``SVGDocument/Animation/finished()``. A CSS animation that a change starts
+  starts at the time of the change. SMIL animations are begun and ended from
+  their elements with ``SVGDocument/Element/beginElement()`` and
+  ``SVGDocument/Element/endElement()``, which replaces event-based begin values.
 
 Decisions:
 
 - The document and its elements are isolated to the main actor, like the view.
   Rendering reads snapshots, so it never waits for the main actor.
-- Changes are applied at the next frame, not immediately. Several changes made in
-  one turn of the run loop produce one restyle, and transitions start from the
-  values that were current before the first change.
+- Changes are rendered at the next frame, not immediately, while reading the
+  document sees them at once. Several changes made in one turn of the run loop
+  produce one restyle, and transitions start from the values that were current
+  before the first change.
 - Creating new animations from Swift, like `Element.animate()` in Web
   Animations, isn't part of the first version.
 - The element type is nested in the document type, such as `SVGDocument.Element`,
@@ -406,9 +418,9 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 - **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)``
   takes a time, so that any frame can be rendered as an image. This is what the
   planned `render(at:)` API became, because it keeps one method for snapshots.
-- **Reaching the document:** In phase 2.5, ``SVGUIView/SVGUIView`` gains a
-  `document` property for the document API. Assigning new
-  ``SVGUIView/SVGUIView/data`` replaces the document.
+- **Reaching the document:** ``SVGUIView/SVGUIView/document`` is the
+  document API. Assigning new ``SVGUIView/SVGUIView/data`` replaces the
+  document.
 - **SwiftUI:** `SVGView` reads the animation mode from the same
   configuration in the environment.
 
@@ -635,11 +647,11 @@ changes the output of the documents that those bugs affected.
   `opacity` isn't filtered again, but a filter whose parameters or input content
   change is run again on the CPU in every frame, and a slow one skips frames in
   that layer. In the benchmark document with filters, whose blurs change, running
-  the filters takes most of each frame in a simulator. Devices haven't been
-  measured yet. If such animations don't fit the frame budget on devices and are
-  common in the documents to support, phase 3 moves ahead of phase 2.5. The
-  cache of filter results is keyed by layer, so it can be used with vImage as
-  well.
+  the filters takes most of each frame. On a device, a frame of that document
+  takes a little longer than a frame at 60 Hz, while the frames of the other
+  benchmark documents fit easily. Animations of filter parameters aren't common
+  in the documents to support, so phase 2.5 comes before phase 3. The cache of
+  filter results is keyed by layer, so it can be used with vImage as well.
 - Whether `.play` should become the default animation mode once animation
   support is stable.
 - Whether the timeline should keep running while playback is stopped for being

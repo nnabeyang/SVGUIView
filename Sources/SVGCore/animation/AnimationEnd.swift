@@ -8,8 +8,8 @@ extension SVGBaseContext {
   /// The time in seconds after which the computed values of the document don't change, which is 0 for a document
   /// without animations and infinite for animations that don't end.
   ///
-  /// After an animation ends, it keeps its last value or has no effect, so the document looks the same at any later
-  /// time. The CSS animations are the ones that the elements run as the document is loaded: one that a SMIL
+  /// After an animation or a transition ends, it keeps its last value or has no effect, so the document looks the
+  /// same at any later time. The CSS animations are the ones that the elements run as the document is loaded: one that a SMIL
   /// animation starts by changing `class` or `style` isn't counted.
   ///
   /// This finds the intervals of every SMIL animation, so a renderer calls it once for a document, not for the
@@ -19,12 +19,19 @@ extension SVGBaseContext {
     var end = 0.0
     for element in root.elements {
       let style = element.style
-      for (index, name) in style.animationName.enumerated() {
-        guard case .keyframes(let name) = name, animations.keyframes[name] != nil else { continue }
+      for (name, occurrence, index) in style.cssAnimations(keyframes: animations.keyframes) {
+        let id = CSSAnimationID(element: element.base.elementID, name: name, occurrence: occurrence)
         let (timing, isPaused) = ElementAnimation.timing(of: style, at: index)
-        // A paused animation stays at its start.
-        guard !isPaused else { continue }
-        end = max(end, timing.delay + timing.activeDuration)
+        // A paused animation stays where it is.
+        guard let finish = animations.playback(of: id, isPaused: isPaused).timeOfFinish(end: timing.end) else {
+          continue
+        }
+        end = max(end, finish)
+      }
+    }
+    for transitions in animations.transitions.values {
+      for transition in transitions.values {
+        end = max(end, transition.endTime)
       }
     }
     // Animations that keep beginning again, such as ones that begin when the other ends, add intervals in every

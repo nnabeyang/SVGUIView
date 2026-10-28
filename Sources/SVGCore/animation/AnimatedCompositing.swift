@@ -29,9 +29,9 @@ extension SVGBaseContext {
   /// The properties that a layer composites an element with.
   static let compositingProperties: Set<PropertyID> = [.transform, .transformOrigin, .transformBox, .opacity]
 
-  /// The properties that the keyframes of the CSS animations of an element set.
+  /// The properties that the keyframes of the CSS animations of an element set, and that its transitions change.
   func animatedProperties(of element: any SVGElement) -> Set<PropertyID> {
-    var properties = Set<PropertyID>()
+    var properties = Set(animations.transitions[element.base.elementID].map { Array($0.keys) } ?? [])
     for name in element.style.animationName {
       guard case .keyframes(let name) = name, let rule = animations.keyframes[name] else { continue }
       for keyframe in rule.keyframes {

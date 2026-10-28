@@ -4,7 +4,8 @@ import Foundation
 /// the elements that have them in their subtrees, which it makes again around them. Every other element stays as it
 /// is at every time.
 struct RestyleScope: Sendable {
-  /// The elements that run CSS animations or that SMIL animations change, with their descendants, which inherit
+  /// The elements that run CSS animations, that SMIL animations change or that have transitions, with their
+  /// descendants, which inherit
   /// their properties and resolve their lengths against them.
   let changing: Set<ElementID>
   /// The elements in `changing` and their ancestors.
@@ -19,7 +20,7 @@ struct RestyleScope: Sendable {
   ///
   /// - Parameter animations: The animations of the document that the tree comes from.
   init(root: some SVGElement, animations: DocumentAnimations) {
-    let targets = Set(animations.smil.map(\.target))
+    let targets = Set(animations.smil.map(\.target)).union(animations.transitions.keys)
     var changing = Set<ElementID>()
     var containing = Set<ElementID>()
     /// Collects the elements of a subtree, and returns whether any of them changes.

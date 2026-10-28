@@ -5,7 +5,7 @@ enum SVGMaskType: String {
   case url
 }
 
-enum SVGMask {
+enum SVGMask: Equatable {
   case url(url: String)
   case none
 

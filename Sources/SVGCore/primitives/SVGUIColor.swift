@@ -24,7 +24,7 @@ protocol SVGUIColor: CustomStringConvertible, Codable {
   var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) { get }
 }
 
-enum SVGColor: SVGUIColor, Sendable {
+enum SVGColor: SVGUIColor, Equatable, Sendable {
   case named(SVGColorName)
   case hex(SVGHexColor)
   case rgb(SVGRGBColor)
@@ -74,6 +74,16 @@ enum SVGColor: SVGUIColor, Sendable {
     case .url(let value):
       "url(\(value))"
     }
+  }
+}
+
+extension SVGColor {
+  /// Whether two colors are the same color however they're written, such as `red` and `#f00`, or the same paint
+  /// server.
+  static func == (lhs: SVGColor, rhs: SVGColor) -> Bool {
+    if case .url(let lhs) = lhs, case .url(let rhs) = rhs { return lhs == rhs }
+    guard let lhs = lhs.components, let rhs = rhs.components else { return false }
+    return lhs == rhs
   }
 }
 

@@ -15,10 +15,15 @@ struct Stylesheet: Sendable {
   let rules: [CSSRule]
   /// The `@keyframes` rules by their names. Of the rules with the same name, the last one wins.
   let keyframes: [String: KeyframesRule]
+  /// Whether a selector has a sibling combinator, `+` or `~`, so that an element's attributes can change what the
+  /// rules give its later siblings and their descendants.
+  let hasSiblingCombinators: Bool
 
   init(rules: [CSSRule], keyframes: [String: KeyframesRule] = [:]) {
     self.rules = rules
     self.keyframes = keyframes
+    var finder = SiblingCombinatorFinder()
+    hasSiblingCombinators = rules.contains { rule in rule.selectors.slice.contains { !$0.visit(&finder) } }
   }
 
   func matchElement(element: ElementCursor) -> [RuleMatch] {
@@ -43,5 +48,18 @@ struct Stylesheet: Sendable {
           sourceOrder: rule.sourceOrder))
     }
     return matches
+  }
+}
+
+/// Stops at the first sibling combinator of a selector, including the ones in the selectors of `:not()` and `:is()`.
+private struct SiblingCombinatorFinder: SelectorVisitor {
+  typealias Impl = SVGSelectorImpl
+
+  mutating func visitSelectorList(listKind _: SelectorListKind, list: [Selector<Impl>]) -> Bool {
+    list.allSatisfy { $0.visit(&self) }
+  }
+
+  mutating func visitComplexSelector(combinatorToRight: Combinator?) -> Bool {
+    !(combinatorToRight?.isSibling ?? false)
   }
 }
