@@ -228,15 +228,17 @@ struct ComputedStyle: Sendable {
   ///     override its values except for important declarations, or `nil` for no animations.
   ///   - smil: The effects of the SMIL animations of the element at the time, in the order that they apply in, which
   ///     CSS animations override.
-  ///   - element: The element, whose CSS animations play as the document keeps for them, or `nil` for animations
-  ///     that play from the time that the document was loaded.
+  ///   - element: The element, whose CSS animations play as the document keeps for them and whose transitions
+  ///     override every other value, or `nil` for animations that play from the time that the document was loaded
+  ///     and no transitions.
   init(
     cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations? = nil,
     smil: [SMILEffect] = [], element: ElementID? = nil
   ) {
     var computer = Computer(
       cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial),
-      smil: smil.compactMap { effect in effect.property.map { (property: $0, effect: effect) } })
+      smil: smil.compactMap { effect in effect.property.map { (property: $0, effect: effect) } },
+      transitions: element.flatMap { animations?.transitions[$0] } ?? [:], time: animations?.time ?? 0)
     if let animations, !animations.keyframes.isEmpty {
       // The properties of CSS Animations come last in the order, and are computed first to find the animations.
       for id in PropertyID.allCases where id.isAnimation {
@@ -264,6 +266,10 @@ struct ComputedStyle: Sendable {
     var resolver: StyleResolver
     /// The SMIL animations of the element's properties, in the order that they apply in.
     let smil: [(property: PropertyID, effect: SMILEffect)]
+    /// The transitions of the element's properties.
+    let transitions: [PropertyID: CSSTransition]
+    /// The time of the document, in seconds.
+    let time: Double
     /// The animations that the element runs, in the order of `animation-name`.
     var animations = [ElementAnimation]()
 
@@ -283,6 +289,10 @@ struct ComputedStyle: Sendable {
             value = animated
           }
         }
+      }
+      // Transitions override the animations and important declarations.
+      if let transition = transitions[P.id], let transitioned = transition.value(of: P.self, at: time, in: resolver) {
+        value = transitioned
       }
       resolver.style[keyPath: P.computed] = value
     }

@@ -256,8 +256,11 @@ public class SVGUIView: UIView {
   private func applyDocumentChanges() {
     let changes = document.takeChanges()
     guard !changes.isEmpty else { return }
-    // The CSS animations that the changes start start at the time that the view displays.
-    baseContext = baseContext.changingAttributes(changes, at: displayedTime.seconds)
+    // The CSS animations and the transitions that the changes start start at the time that the view displays. A view
+    // that doesn't play animations, or that Reduce Motion holds, shows the new values at once.
+    baseContext = baseContext.changingAttributes(
+      changes, at: displayedTime.seconds,
+      startsTransitions: configuration.animation != .none && !isHeldByReduceMotion)
     // Changes can make the animations last longer, after the clock stopped at their end.
     updatePlayback()
     resumeFinishedWaiters()

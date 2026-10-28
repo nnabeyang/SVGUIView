@@ -15,6 +15,8 @@ struct DocumentAnimations: Sendable {
   /// How the CSS animations play, for the ones that don't play from the time that the document was loaded, such as
   /// the ones that the document API pauses.
   var playback = [CSSAnimationID: AnimationPlayback]()
+  /// The transitions that changes of the document started, by the elements and the properties that they change.
+  var transitions = [ElementID: [PropertyID: CSSTransition]]()
 }
 
 package struct SVGBaseContext: Sendable {
@@ -24,8 +26,8 @@ package struct SVGBaseContext: Sendable {
   let stylesheet: Stylesheet
   package let root: SVGSVGElement?
   private(set) var animations: DocumentAnimations
-  /// Whether the document has SMIL animations, or an element runs an animation with keyframes, so that the computed
-  /// values change with the time.
+  /// Whether the document has SMIL animations or transitions, or an element runs an animation with keyframes, so that
+  /// the computed values change with the time.
   package let isAnimated: Bool
   /// The elements whose computed values animations can change, or `nil` for a document without animations.
   let restyleScope: RestyleScope?
@@ -52,7 +54,7 @@ package struct SVGBaseContext: Sendable {
     self.root = root
     self.animations = animations
     isAnimated =
-      !animations.smil.isEmpty
+      !animations.smil.isEmpty || !animations.transitions.isEmpty
       || !animations.keyframes.isEmpty
         && (root?.elements ?? []).contains { element in
           element.style.animationName.contains {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// The value of `fill` or `stroke`.
-enum Paint: Sendable {
+enum Paint: Sendable, Equatable {
   case none
   case color(SVGColor)
   /// The value of `color`, which stays a keyword in computed values and is resolved where it's used.
@@ -24,7 +24,7 @@ enum Paint: Sendable {
 }
 
 /// The value of `color`, `stop-color` or `flood-color`.
-enum ColorValue: Sendable {
+enum ColorValue: Sendable, Equatable {
   case color(SVGColor)
   case currentColor
 

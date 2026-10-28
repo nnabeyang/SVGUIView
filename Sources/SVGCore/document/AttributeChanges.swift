@@ -16,11 +16,18 @@ extension SVGBaseContext {
   /// the elements keep running play on as before. A change of `animation-play-state` pauses an animation at the
   /// local time that it's at then, or plays it on from the local time that it's paused at.
   ///
+  /// The change starts transitions of the properties that it changes, as `transition-*` gives, from the values at
+  /// the time, and reverses or cancels the running ones. Transitions that have ended are left out.
+  ///
   /// - Parameters:
   ///   - changes: The values to set by the elements and the names of the attributes, with `nil` to remove an
   ///     attribute.
   ///   - time: The time of the timeline at which the change is made, in seconds.
-  package func changingAttributes(_ changes: [ElementID: [String: String?]], at time: Double = 0) -> SVGBaseContext {
+  ///   - startsTransitions: Whether the change starts transitions. If it doesn't, the running transitions are
+  ///     cancelled too, so the values change at once.
+  package func changingAttributes(
+    _ changes: [ElementID: [String: String?]], at time: Double = 0, startsTransitions: Bool = true
+  ) -> SVGBaseContext {
     guard !changes.isEmpty else { return self }
     let document = document.changingAttributes(changes)
     var changed = Set<ElementID>()
@@ -55,8 +62,27 @@ extension SVGBaseContext {
         return animation
       }, time: 0)
     animations.playback = playback(of: root, at: time)
+    let context = SVGBaseContext(
+      document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
+    guard startsTransitions else { return context }
+    animations.transitions = transitions(changingTo: context, of: Self.elements(of: root, in: changed), at: time)
+    guard !animations.transitions.isEmpty else { return context }
     return SVGBaseContext(
       document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
+  }
+
+  /// The elements of a tree that are in a set, and their descendants.
+  private static func elements(of root: (any SVGElement)?, in set: Set<ElementID>) -> Set<ElementID> {
+    var elements = Set<ElementID>()
+    func visit(_ element: any SVGElement, isInSet: Bool) {
+      let isInSet = isInSet || set.contains(element.base.elementID)
+      if isInSet { elements.insert(element.base.elementID) }
+      for child in element.children {
+        visit(child, isInSet: isInSet)
+      }
+    }
+    if let root { visit(root, isInSet: false) }
+    return elements
   }
 
   /// The playback of the CSS animations of a new tree of the document, whose elements run the animations that start

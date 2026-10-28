@@ -26,7 +26,7 @@ protocol StyleProperty {
   /// The value that a declaration gives.
   associatedtype Specified: Sendable
   /// The value that drawing reads, with relative values resolved as far as they can be without layout.
-  associatedtype Computed: Sendable
+  associatedtype Computed: Sendable, Equatable
 
   static var id: PropertyID { get }
   static var isInherited: Bool { get }
@@ -44,6 +44,9 @@ protocol StyleProperty {
   /// Whether values between two computed values exist, so that SMIL animations interpolate them instead of changing
   /// them discretely.
   static var isInterpolable: Bool { get }
+  /// Whether the values between two computed values exist, so that a transition interpolates them instead of
+  /// changing them discretely.
+  static func interpolates(_ from: Computed, _ to: Computed, in resolver: StyleResolver) -> Bool
   /// The value between two computed values of an animation, at a progress that can be outside 0 to 1.
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in resolver: StyleResolver) -> Computed
   /// The sum of a computed value and the value under it, which additive and accumulating animations use, or `nil`
@@ -81,6 +84,10 @@ extension StyleProperty where Specified == Computed {
 extension StyleProperty {
   static var isInterpolable: Bool { false }
 
+  static func interpolates(_: Computed, _: Computed, in _: StyleResolver) -> Bool {
+    false
+  }
+
   /// One of the values, for a property whose values can't be interpolated.
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
     discrete(from, to, progress: progress)
@@ -99,6 +106,10 @@ extension StyleProperty {
 
 extension StyleProperty where Computed: Animatable {
   static var isInterpolable: Bool { true }
+
+  static func interpolates(_ from: Computed, _ to: Computed, in _: StyleResolver) -> Bool {
+    from.interpolated(to: to, progress: 0.5) != nil
+  }
 
   static func interpolated(_ from: Computed, _ to: Computed, progress: Double, in _: StyleResolver) -> Computed {
     from.animated(to: to, progress: progress)
