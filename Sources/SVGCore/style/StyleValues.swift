@@ -16,7 +16,7 @@ enum Paint: Sendable, Equatable {
       var scanner = SVGAttributeScanner(bytes: bytes)
       return scanner.scanPaint()
     }
-    // A name that isn't a color, or a function that isn't supported, such as `hsla()`, is invalid.
+    // A name that isn't a color, or a function that isn't supported, such as `lab()`, is invalid.
     if case .color(let color) = paint, color.toCGColor(opacity: 1) == nil { return nil }
     guard let paint else { return nil }
     self = paint
@@ -33,7 +33,7 @@ enum ColorValue: Sendable, Equatable {
       self = .currentColor
       return
     }
-    // A name that isn't a color, or a function that isn't supported, such as `hsla()`, is invalid.
+    // A name that isn't a color, or a function that isn't supported, such as `lab()`, is invalid.
     guard let color = SVGAttributeScanner.parseColor(description: text), color.toCGColor(opacity: 1) != nil else {
       return nil
     }

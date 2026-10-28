@@ -203,7 +203,7 @@ extension SVGAttributeScanner {
       return .currentColor
     case .inherit:
       return nil
-    case .rgb, .rgba:
+    case .rgb, .rgba, .hsl, .hsla, .hwb:
       return scanColor(type: type).map { .color($0) }
     case .url:
       guard consume(ascii: UInt8(ascii: "(")) else { return nil }
@@ -224,39 +224,172 @@ extension SVGAttributeScanner {
     guard let name = scanIdentity() else {
       return nil
     }
-    guard let type = SVGFillType(rawValue: name) else {
+    guard let type = SVGFillType(rawValue: name.lowercased()) else {
       return .named(SVGColorName(name: name))
     }
     return scanColor(type: type)
   }
 
+  /// A color function after its name, or `nil` for a function that isn't a color or an invalid one.
   private mutating func scanColor(type: SVGFillType) -> SVGColor? {
     switch type {
-    case .rgb:
-      guard consume(ascii: UInt8(ascii: "(")) else { return nil }
-      _ = reader.consumeWhitespace()
-      guard let r = scanColorDimension() else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: ","))
-      guard let g = scanColorDimension() else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: ","))
-      guard let b = scanColorDimension() else { return nil }
-      guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return .rgb(SVGRGBColor(r: r, g: g, b: b))
-    case .rgba:
-      guard consume(ascii: UInt8(ascii: "(")) else { return nil }
-      _ = reader.consumeWhitespace()
-      guard let r = scanColorDimension() else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: ","))
-      guard let g = scanColorDimension() else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: ","))
-      guard let b = scanColorDimension() else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: ","))
-      guard let a = scanNumber() else { return nil }
-      guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return .rgba(SVGRGBAColor(r: r, g: g, b: b, a: a))
+    case .rgb, .rgba:
+      guard let (channels, alpha, _) = scanColorArguments(first: { $0.scanColorComponent() }) else { return nil }
+      // Each channel is a number from 0 to 255 or a percentage, which the color keeps.
+      let dimensions = channels.map { channel -> ColorDimension in
+        switch channel {
+        case .number(let value): .absolute(min(max(value, 0), 255))
+        case .percentage(let value): .percent(min(max(value, 0), 100))
+        case .none: .absolute(0)
+        }
+      }
+      guard let alpha else { return .rgb(SVGRGBColor(r: dimensions[0], g: dimensions[1], b: dimensions[2])) }
+      return .rgba(SVGRGBAColor(r: dimensions[0], g: dimensions[1], b: dimensions[2], a: alpha.alpha))
+    case .hsl, .hsla:
+      guard let (components, alpha, isLegacy) = scanColorArguments(first: { $0.scanHue() }),
+        !isLegacy || components.dropFirst().allSatisfy(\.isPercentage)
+      else { return nil }
+      // A negative saturation is 0%, and the other values outside their ranges make colors outside sRGB, whose
+      // channels are clamped.
+      let (red, green, blue) = Self.rgb(
+        hue: components[0].value, saturation: max(components[1].value, 0), lightness: components[2].value)
+      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
+    case .hwb:
+      guard let (components, alpha, isLegacy) = scanColorArguments(first: { $0.scanHue() }), !isLegacy else {
+        return nil
+      }
+      let whiteness = components[1].value / 100
+      let blackness = components[2].value / 100
+      let (red, green, blue): (Double, Double, Double)
+      if whiteness + blackness >= 1 {
+        let gray = whiteness / (whiteness + blackness)
+        (red, green, blue) = (gray, gray, gray)
+      } else {
+        let hue = Self.rgb(hue: components[0].value, saturation: 100, lightness: 50)
+        let scale = 1 - whiteness - blackness
+        (red, green, blue) = (
+          hue.red * scale + whiteness, hue.green * scale + whiteness, hue.blue * scale + whiteness
+        )
+      }
+      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
     case .url, .inherit, .current:
       return nil
     }
+  }
+
+  /// A number, a percentage, or `none`, which is 0, in a color function.
+  private enum ColorComponent {
+    case number(Double)
+    case percentage(Double)
+    case none
+
+    var value: Double {
+      switch self {
+      case .number(let value), .percentage(let value): value
+      case .none: 0
+      }
+    }
+
+    var isPercentage: Bool {
+      if case .percentage = self { true } else { false }
+    }
+
+    /// The value as an alpha from 0 to 1.
+    var alpha: Double {
+      switch self {
+      case .number(let value): min(max(value, 0), 1)
+      case .percentage(let value): min(max(value / 100, 0), 1)
+      case .none: 0
+      }
+    }
+  }
+
+  /// The arguments of a color function, from its opening parenthesis to its closing one: three components and an
+  /// alpha, which is optional, separated by commas in the legacy syntax, or by spaces with a slash before the
+  /// alpha in the modern one, which also takes `none`.
+  ///
+  /// - Parameter first: Reads the first component, such as the hue of `hsl()`.
+  private mutating func scanColorArguments(
+    first: (inout SVGAttributeScanner) -> ColorComponent?
+  ) -> (components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool)? {
+    guard consume(ascii: UInt8(ascii: "(")), let firstComponent = first(&self) else { return nil }
+    let isLegacy = reader.consumeWhitespace() == UInt8(ascii: ",")
+    var components = [firstComponent]
+    for _ in 0..<2 {
+      if isLegacy, !consume(ascii: UInt8(ascii: ",")) { return nil }
+      guard let component = scanColorComponent() else { return nil }
+      components.append(component)
+    }
+    var alpha: ColorComponent?
+    if consume(ascii: UInt8(ascii: isLegacy ? "," : "/")) {
+      guard let component = scanColorComponent() else { return nil }
+      alpha = component
+    }
+    guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+    // `none` is a component only in the modern syntax.
+    if isLegacy, (components + [alpha].compactMap { $0 }).contains(where: { if case .none = $0 { true } else { false } }) {
+      return nil
+    }
+    return (components, alpha, isLegacy)
+  }
+
+  /// A component of a color function: a number, a percentage, or `none`.
+  private mutating func scanColorComponent() -> ColorComponent? {
+    // A name starts with a letter, unlike a number.
+    if reader.consumeWhitespace()?.isNameStart == true {
+      return consumeName().lowercased() == "none" ? ColorComponent.none : nil
+    }
+    guard let value = scanNumber() else { return nil }
+    if reader.peek() == UInt8(ascii: "%") {
+      reader.advance()
+      return .percentage(value)
+    }
+    return .number(value)
+  }
+
+  /// A hue in degrees: a number, an angle, or `none`.
+  private mutating func scanHue() -> ColorComponent? {
+    // A name starts with a letter, unlike a number.
+    if reader.consumeWhitespace()?.isNameStart == true {
+      return consumeName().lowercased() == "none" ? ColorComponent.none : nil
+    }
+    guard let value = scanNumber() else { return nil }
+    guard reader.peek().isNameStart else { return .number(value) }
+    switch consumeName().lowercased() {
+    case "deg": return .number(value)
+    case "grad": return .number(value * 0.9)
+    case "rad": return .number(value * 180 / .pi)
+    case "turn": return .number(value * 360)
+    default: return nil
+    }
+  }
+
+  /// A color of red, green and blue from 0 to 1, which are clamped to sRGB.
+  private static func color(red: Double, green: Double, blue: Double, alpha: Double) -> SVGColor {
+    func channel(_ value: Double) -> ColorDimension {
+      .absolute(min(max(value, 0), 1) * 255)
+    }
+    return .rgba(SVGRGBAColor(r: channel(red), g: channel(green), b: channel(blue), a: alpha))
+  }
+
+  /// The red, green and blue of a color in HSL, as CSS Color converts it, which can be outside 0 to 1.
+  ///
+  /// - Parameters:
+  ///   - hue: The hue in degrees, which goes around every 360 degrees.
+  ///   - saturation: The saturation, 100 for a full one.
+  ///   - lightness: The lightness, from 0 for black to 100 for white.
+  private static func rgb(hue: Double, saturation: Double, lightness: Double) -> (
+    red: Double, green: Double, blue: Double
+  ) {
+    let hue = hue.truncatingRemainder(dividingBy: 360) + (hue < 0 ? 360 : 0)
+    let saturation = saturation / 100
+    let lightness = lightness / 100
+    func channel(_ n: Double) -> Double {
+      let k = (n + hue / 30).truncatingRemainder(dividingBy: 12)
+      let a = saturation * min(lightness, 1 - lightness)
+      return lightness - a * max(-1, min(k - 3, 9 - k, 1))
+    }
+    return (channel(0), channel(8), channel(4))
   }
 
   static func parseColor(description: String) -> SVGColor? {
