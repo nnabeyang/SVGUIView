@@ -182,6 +182,8 @@ extension GaussianBlurPrimitive {
       }
       i += 1
     }
+    // Each pass leaves its result in `srcBuffer`.
+    swap(&srcBuffer, &destBuffer)
   }
 
   private func boxBlur(
