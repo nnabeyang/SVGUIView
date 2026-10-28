@@ -99,6 +99,28 @@ package struct SVGBaseContext: Sendable {
     return context
   }
 
+  /// The context with a SMIL animation beginning at a time, as `beginElement()` makes it, or `nil` if the element
+  /// isn't an animation that changes an element.
+  ///
+  /// - Parameter time: The time of the document in seconds.
+  package func beginningSMILAnimation(_ element: ElementID, at time: Double) -> SVGBaseContext? {
+    guard let index = animations.smil.firstIndex(where: { $0.elementID == element }) else { return nil }
+    var context = self
+    context.animations.smil[index].addedBegins.append(time)
+    return context
+  }
+
+  /// The context with a SMIL animation ending at a time, as `endElement()` makes it, or `nil` if the element isn't
+  /// an animation that changes an element.
+  ///
+  /// - Parameter time: The time of the document in seconds.
+  package func endingSMILAnimation(_ element: ElementID, at time: Double) -> SVGBaseContext? {
+    guard let index = animations.smil.firstIndex(where: { $0.elementID == element }) else { return nil }
+    var context = self
+    context.animations.smil[index].addedEnds.append(time)
+    return context
+  }
+
   /// The context with the computed values at the given time, or the context itself if they don't change with the
   /// time.
   ///
