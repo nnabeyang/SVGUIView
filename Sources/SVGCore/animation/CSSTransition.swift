@@ -80,7 +80,7 @@ extension SVGBaseContext {
       guard let style = before[id] else { continue }
       var update = TransitionUpdate(
         before: style, after: element.style, time: time, transitions: transitions[id] ?? [:])
-      for property in PropertyID.allCases where property.isAnimatable {
+      for property in element.style.transitionedProperties(running: update.transitions.keys) {
         property.visit(&update)
       }
       transitions[id] = update.transitions.isEmpty ? nil : update.transitions
@@ -106,6 +106,17 @@ extension ComputedStyle {
     }
   }
 
+  /// The properties whose transitions a change can start, reverse or cancel: the ones that `transition-property`
+  /// names, or every property that animations change for `all`, and the ones with running transitions.
+  fileprivate func transitionedProperties(running: some Collection<PropertyID>) -> [PropertyID] {
+    if transitionProperty.contains(.all) { return animatableProperties }
+    var properties = Set(running)
+    for case .property(let id) in transitionProperty where id.isAnimatable {
+      properties.insert(id)
+    }
+    return Array(properties)
+  }
+
   /// The timing of the transition at an index of `transition-property`. The other lists repeat to its length.
   fileprivate func transitionTiming(at index: Int) -> TransitionTiming {
     func value<T>(_ list: [T], _ initial: T) -> T {
@@ -116,6 +127,9 @@ extension ComputedStyle {
       easing: value(transitionTimingFunction, .ease), behavior: value(transitionBehavior, .normal))
   }
 }
+
+/// The properties that animations change, in the order of ``PropertyID``.
+private let animatableProperties = PropertyID.allCases.filter(\.isAnimatable)
 
 /// The values of the `transition-*` properties for a property.
 private struct TransitionTiming {
@@ -154,9 +168,11 @@ private struct TransitionUpdate: StylePropertyVisitor {
     if let running, let end = running.endValue as? P.Computed, end == value { return }
     transitions[P.id] = nil
     let timing = after.transitionTiming(at: index)
-    let resolver = StyleResolver(style: after, parent: .initial, root: .initial)
-    guard current != value, timing.combinedDuration > 0,
-      P.interpolates(current, value, in: resolver) || timing.behavior == .allowDiscrete
+    guard current != value, timing.combinedDuration > 0 else { return }
+    // Whether the values interpolate is asked only for a value that changes, since the resolver copies the values.
+    guard
+      timing.behavior == .allowDiscrete
+        || P.interpolates(current, value, in: StyleResolver(style: after, parent: .initial, root: .initial))
     else { return }
     // A change back to the value that a running transition started from reverses it from where it is, in the part
     // of the time that it has taken so far.
