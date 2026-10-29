@@ -465,6 +465,23 @@ enum WhiteSpaceProperty: StyleProperty {
   }
 }
 
+/// `text-decoration`, whose lines aren't inherited but decorate the text of the descendants too, so the computed
+/// value of an element has the lines of its ancestors as well as its own.
+enum TextDecorationProperty: StyleProperty {
+  static let id = PropertyID.textDecoration
+  static let isInherited = true
+  static let initial: TextDecorationLines = []
+  static let computed = \ComputedStyle.textDecoration
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TextDecorationLines? {
+    TextDecorationLines(text, caseInsensitive: origin == .css)
+  }
+
+  static func compute(_ lines: TextDecorationLines, in resolver: StyleResolver) -> TextDecorationLines {
+    lines.union(resolver.parent.textDecoration)
+  }
+}
+
 enum VisibilityProperty: StyleProperty {
   static let id = PropertyID.visibility
   static let isInherited = true
