@@ -24,6 +24,16 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(in: "basic", "text", "letter-spacing"))
+    func letterSpacing(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "word-spacing"))
+    func wordSpacing(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(in: "basic", "text", "text-anchor"))
     func textAnchor(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
