@@ -24,7 +24,7 @@ final class SVGTextElement: ShapeGeometry {
 
   init(base: SVGBaseElement, text: String, attributes: [String: String]) {
     self.base = base
-    self.text = text
+    self.text = base.style.whiteSpace.processed(text)
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
   }
