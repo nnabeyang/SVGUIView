@@ -8,6 +8,11 @@ extension CGPainter {
   func paint(_ filtered: FilteredNode, into cgContext: CGContext) async {
     guard let source = await sourceImage(of: filtered), let result = await filterResult(of: filtered, source: source)
     else { return }
+    draw(result, of: filtered, into: cgContext)
+  }
+
+  /// Draws the result of a filter with the transform of the element into its filter region.
+  package func draw(_ result: CGImage, of filtered: FilteredNode, into cgContext: CGContext) {
     cgContext.saveGState()
     cgContext.concatenate(filtered.transform)
     cgContext.draw(result, in: filtered.effectRect)
@@ -17,22 +22,28 @@ extension CGPainter {
   /// The element without its filter, painted into a bitmap of the filter region in the color space of
   /// `color-interpolation`, or `nil` if the bitmap can't be made or the task is cancelled.
   package func sourceImage(of filtered: FilteredNode) async -> CGImage? {
-    let rect = filtered.effectRect
     guard
-      let graphics = CGContext.bitmap(size: rect.size, scale: scale, space: filtered.colorInterpolation.colorSpace)
+      let graphics = CGContext.bitmap(
+        size: filtered.effectRect.size, scale: scale, space: filtered.colorInterpolation.colorSpace),
+      await paintSource(of: filtered, into: graphics)
     else { return nil }
+    return graphics.makeImage()
+  }
+
+  /// Paints the element without its filter into a cleared bitmap of the filter region at the scale, in the color
+  /// space of `color-interpolation`, and returns `false` if the task is cancelled.
+  package func paintSource(of filtered: FilteredNode, into graphics: CGContext) async -> Bool {
+    let rect = filtered.effectRect
     let transform = CGAffineTransform(scaleX: scale, y: scale)
       .translatedBy(x: -rect.minX, y: -rect.minY)
-    graphics.concatenate(transform)
-
     graphics.saveGState()
-    guard !Task.isCancelled else { return nil }
+    defer { graphics.restoreGState() }
+    graphics.concatenate(transform)
+    guard !Task.isCancelled else { return false }
     if let source = filtered.source {
       await paint(source, into: graphics)
     }
-    guard let image = graphics.makeImage() else { return nil }
-    graphics.restoreGState()
-    return image
+    return true
   }
 
   /// The result of the primitives of a filter on the image of the element from `sourceImage(of:)`, as an image of

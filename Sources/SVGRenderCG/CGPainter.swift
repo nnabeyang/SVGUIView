@@ -5,7 +5,7 @@ import SVGCore
 /// Paints a render tree into a `CGContext`.
 package struct CGPainter {
   /// The scale of the image being rendered.
-  let scale: CGFloat
+  package let scale: CGFloat
 
   package init(scale: CGFloat) {
     self.scale = scale
