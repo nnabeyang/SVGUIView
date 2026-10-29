@@ -9,7 +9,7 @@ import PackageDescription
 // `references/<version>`.
 let package = Package(
   name: "SnapshotAssets",
-  platforms: [.iOS(.v16)],
+  platforms: [.iOS(.v18)],
   products: [
     .library(name: "SVGSnapshotAssets", targets: ["SVGTestSuite", "SVGSnapshotReferences"])
   ],
@@ -20,7 +20,7 @@ let package = Package(
       checksum: "d0f9475acde3b85b01b9c14eec66552ccfbe2b60ce766ac5d50644da4b641d7f"),
     .binaryTarget(
       name: "SVGSnapshotReferences",
-      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/686260143.zip",
-      checksum: "7aff66836792bf623914fc8a0dd418130f935333bebbabf36409c39347d5ac51"),
+      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/686608140.zip",
+      checksum: "5320fb85b99eab100fb63368084ef4b4012867b811c1054a61714e1e25a84651"),
   ]
 )

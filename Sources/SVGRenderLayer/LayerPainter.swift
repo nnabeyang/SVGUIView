@@ -33,6 +33,8 @@ package struct PaintedContents: Sendable {
   package let rasterScale: CGSize
   /// What the painted layer is in the plans of all times.
   package let key: LayerKey
+  /// Whether the filter of the element that the layer paints ran on the GPU.
+  package var filteredOnGPU = false
 }
 
 extension RenderedContainer {
@@ -68,42 +70,94 @@ extension RenderedContainer {
 extension ContainerLayer {
   /// The container layer with its painted layers painted, in order, or `nil` if the task is cancelled.
   ///
+  /// The layers whose filters run on the GPU are painted at the same time as each other and as the other layers, so
+  /// that the waits for the GPU overlap.
+  ///
   /// - Parameters:
   ///   - scale: The scale of the screen, which the bitmaps of clip paths, masks, filters and patterns are made at,
   ///     as in a rendering into one bitmap.
   ///   - previous: The layers of another time, whose contents the painted layers that don't change show instead of
   ///     being painted again.
-  package func painted(scale: CGFloat, reusing previous: RenderedContainer? = nil) async -> RenderedContainer? {
-    await painted(scale: scale, reusing: previous?.contentsByKey ?? [:])
-  }
-
-  private func painted(scale: CGFloat, reusing previous: [LayerKey: PaintedContents]) async -> RenderedContainer? {
-    var children = [RenderedLayer]()
-    for child in self.children {
-      guard !Task.isCancelled else { return nil }
-      switch child {
-      case .container(let container):
-        guard let painted = await container.painted(scale: scale, reusing: previous) else { return nil }
-        children.append(.container(painted))
-      case .painted(let layer):
-        if !layer.changes, let contents = previous[layer.key], contents.bounds == layer.bounds,
-          contents.rasterScale == layer.rasterScale
-        {
-          children.append(.painted(contents))
-        } else {
-          children.append(.painted(await layer.painted(scale: scale)))
-        }
+  ///   - filters: The renderer that runs the filters of the layers that paint only an element with a filter on the
+  ///     GPU, or `nil` to run them on the CPU.
+  package func painted(
+    scale: CGFloat, reusing previous: RenderedContainer? = nil, filters: MetalFilterRenderer? = nil
+  ) async -> RenderedContainer? {
+    let previous = previous?.contentsByKey ?? [:]
+    let layers = paintedLayers.filter { $0.reusedContents(of: previous) == nil }
+    let onGPU = filters.map { filters in layers.filter { $0.runsFilterOnGPU(filters, scale: scale) } } ?? []
+    let onCPU = layers.filter { layer in !onGPU.contains { $0.key == layer.key } }
+    let painted = await withTaskGroup(of: [LayerKey: PaintedContents].self) { group in
+      for layer in onGPU {
+        group.addTask { [layer.key: await layer.painted(scale: scale, filters: filters)] }
       }
+      group.addTask {
+        var painted = [LayerKey: PaintedContents]()
+        for layer in onCPU {
+          guard !Task.isCancelled else { break }
+          painted[layer.key] = await layer.painted(scale: scale, filters: nil)
+        }
+        return painted
+      }
+      return await group.reduce(into: [:]) { $0.merge($1) { $1 } }
     }
     guard !Task.isCancelled else { return nil }
+    return assembled(painted: painted, reusing: previous)
+  }
+
+  /// The painted layers in the container, at every depth, in order.
+  private var paintedLayers: [PaintedLayer] {
+    children.flatMap { child -> [PaintedLayer] in
+      switch child {
+      case .container(let container): container.paintedLayers
+      case .painted(let layer): [layer]
+      }
+    }
+  }
+
+  /// The container with the contents of its painted layers, which are painted or reused.
+  private func assembled(
+    painted: [LayerKey: PaintedContents], reusing previous: [LayerKey: PaintedContents]
+  ) -> RenderedContainer {
+    let children = children.map { child -> RenderedLayer in
+      switch child {
+      case .container(let container):
+        .container(container.assembled(painted: painted, reusing: previous))
+      case .painted(let layer):
+        .painted(
+          layer.reusedContents(of: previous) ?? painted[layer.key]
+            ?? PaintedContents(image: nil, bounds: layer.bounds, rasterScale: layer.rasterScale, key: layer.key))
+      }
+    }
     return RenderedContainer(
       id: id, transform: transform, opacity: opacity, clip: clip, children: children, key: key)
   }
 }
 
 extension PaintedLayer {
+  /// The contents of another time that the layer shows instead of being painted again, if it doesn't change and they
+  /// cover the same pixels.
+  fileprivate func reusedContents(of previous: [LayerKey: PaintedContents]) -> PaintedContents? {
+    guard !changes, let contents = previous[key], contents.bounds == bounds, contents.rasterScale == rasterScale
+    else { return nil }
+    return contents
+  }
+
+  /// The filter of the layer, if it paints only an element with a filter.
+  private var filtered: FilteredNode? {
+    guard nodes.count == 1, case .filtered(let filtered) = nodes[0] else { return nil }
+    return filtered
+  }
+
+  /// Whether the layer paints only an element with a filter, which the renderer runs on the GPU.
+  fileprivate func runsFilterOnGPU(_ filters: MetalFilterRenderer, scale: CGFloat) -> Bool {
+    filtered.map { MetalFilterRenderer.supports($0, scale: scale) } ?? false
+  }
+
   /// What the nodes paint, as an image of the bounds at the raster scale.
-  fileprivate func painted(scale: CGFloat) async -> PaintedContents {
+  ///
+  /// The filter of a layer that paints only an element with a filter runs on the GPU when `filters` runs it.
+  fileprivate func painted(scale: CGFloat, filters: MetalFilterRenderer?) async -> PaintedContents {
     // Bounds on the pixels of the screen cover whole pixels, up to the error of the arithmetic that put them there.
     func pixels(_ length: CGFloat, _ rasterScale: CGFloat) -> CGFloat {
       let pixels = length * rasterScale
@@ -120,7 +174,13 @@ extension PaintedLayer {
     graphics.concatenate(
       CGAffineTransform(size.width / bounds.width, 0, 0, -size.height / bounds.height, 0, size.height))
     graphics.translateBy(x: -bounds.minX, y: -bounds.minY)
-    await CGPainter(scale: scale).paint(nodes, into: graphics)
+    let painter = CGPainter(scale: scale)
+    if let filters, let filtered, let result = await filters.filterImage(of: filtered, painter: painter) {
+      painter.draw(result, of: filtered, into: graphics)
+      return PaintedContents(
+        image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key, filteredOnGPU: true)
+    }
+    await painter.paint(nodes, into: graphics)
     return PaintedContents(image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key)
   }
 }

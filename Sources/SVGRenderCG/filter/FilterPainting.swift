@@ -6,14 +6,57 @@ import SVGCore
 extension CGPainter {
   /// Paints an element with its filter.
   func paint(_ filtered: FilteredNode, into cgContext: CGContext) async {
+    guard let source = await sourceImage(of: filtered), let result = await filterResult(of: filtered, source: source)
+    else { return }
+    draw(result, of: filtered, into: cgContext)
+  }
+
+  /// Draws the result of a filter with the transform of the element into its filter region.
+  package func draw(_ result: CGImage, of filtered: FilteredNode, into cgContext: CGContext) {
+    cgContext.saveGState()
+    cgContext.concatenate(filtered.transform)
+    cgContext.draw(result, in: filtered.effectRect)
+    cgContext.restoreGState()
+  }
+
+  /// The element without its filter, painted into a bitmap of the filter region in the color space of
+  /// `color-interpolation`, or `nil` if the bitmap can't be made or the task is cancelled.
+  package func sourceImage(of filtered: FilteredNode) async -> CGImage? {
+    guard
+      let graphics = CGContext.bitmap(
+        size: filtered.effectRect.size, scale: scale, space: filtered.colorInterpolation.colorSpace),
+      await paintSource(of: filtered, into: graphics)
+    else { return nil }
+    return graphics.makeImage()
+  }
+
+  /// Paints the element without its filter into a cleared bitmap of the filter region at the scale, in the color
+  /// space of `color-interpolation`, and returns `false` if the task is cancelled.
+  package func paintSource(of filtered: FilteredNode, into graphics: CGContext) async -> Bool {
+    let rect = filtered.effectRect
+    let transform = CGAffineTransform(scaleX: scale, y: scale)
+      .translatedBy(x: -rect.minX, y: -rect.minY)
+    graphics.saveGState()
+    defer { graphics.restoreGState() }
+    graphics.concatenate(transform)
+    guard !Task.isCancelled else { return false }
+    if let source = filtered.source {
+      await paint(source, into: graphics)
+    }
+    return true
+  }
+
+  /// The result of the primitives of a filter on the image of the element from `sourceImage(of:)`, as an image of
+  /// the filter region in the color space of `color-interpolation-filters`, or `nil` if its bitmap can't be made.
+  ///
+  /// A primitive whose result can't be made, or a cancelled task, ends the filter with the result of the primitives
+  /// before it.
+  package func filterResult(of filtered: FilteredNode, source srcImage: CGImage) async -> CGImage? {
     let effectRect = filtered.effectRect
     guard
-      let imageCgContext = CGContext.bitmap(
-        size: effectRect.size, scale: scale, space: filtered.colorInterpolation.colorSpace),
-      let srcImage = await sourceImage(of: filtered, graphics: imageCgContext),
       let filterCgContext = CGContext.bitmap(
         size: effectRect.size, scale: scale, space: filtered.colorInterpolationFilters.colorSpace)
-    else { return }
+    else { return nil }
     let transform = CGAffineTransform(scaleX: scale, y: scale)
       .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
     filterCgContext.concatenate(transform)
@@ -39,27 +82,7 @@ extension CGPainter {
       }
       inputImage = clippedImage
     }
-    cgContext.saveGState()
-    cgContext.concatenate(filtered.transform)
-    cgContext.draw(inputImage, in: effectRect)
-    cgContext.restoreGState()
-  }
-
-  /// The element without its filter, painted into the bitmap of the filter region.
-  private func sourceImage(of filtered: FilteredNode, graphics: CGContext) async -> CGImage? {
-    let rect = filtered.effectRect
-    let transform = CGAffineTransform(scaleX: scale, y: scale)
-      .translatedBy(x: -rect.minX, y: -rect.minY)
-    graphics.concatenate(transform)
-
-    graphics.saveGState()
-    guard !Task.isCancelled else { return nil }
-    if let source = filtered.source {
-      await paint(source, into: graphics)
-    }
-    guard let image = graphics.makeImage() else { return nil }
-    graphics.restoreGState()
-    return image
+    return inputImage
   }
 
   /// Applies a primitive to its inputs, drawing the result into `cgContext`, and returns the result clipped to the

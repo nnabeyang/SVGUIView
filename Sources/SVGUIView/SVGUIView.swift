@@ -120,8 +120,18 @@ public class SVGUIView: UIView {
   public private(set) var currentTime: Duration = .zero
   /// Whether the animations advance when the view can be seen, which ``play()`` and ``pause()`` change.
   private var isPlaying = false
-  /// Whether the app is in the background, where the animations don't advance.
+  /// Whether the app is in the background, where the animations don't advance, and the GPU can't be used.
   private var isInBackground = false
+  /// Whether the layers run the filters of the elements that are painted into layers of their own on the GPU, where it
+  /// gives the same results as the CPU, which tests turn off to compare them.
+  var runsFiltersOnGPU = true
+  /// Whether every element with a filter is painted into a layer of its own, as if what it paints changed, which
+  /// tests turn on to run all the filters of a document on the GPU.
+  var paintsFiltersIntoOwnLayers = false
+  /// How many layers that the view shows ran their filters on the GPU.
+  var layersFilteredOnGPU: Int {
+    shownLayers?.paintedContents.count(where: \.filteredOnGPU) ?? 0
+  }
   /// The clock that advances the animations, which tests replace.
   var clock: any AnimationClock = DisplayLinkClock() {
     didSet {
@@ -289,7 +299,8 @@ public class SVGUIView: UIView {
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
     let promoted = configuration.animation == .none ? nil : promoted
-    let painting = painting
+    let painting = paintsFiltersIntoOwnLayers ? nil : painting
+    let usesGPU = runsFiltersOnGPU && !isInBackground
     let previous = reusesLayers ? shownLayers : nil
     let previousNodes = reusesLayers ? shownNodes : RenderNodeCache()
     let previousStyled = reusesLayers ? shownStyled : nil
@@ -300,8 +311,8 @@ public class SVGUIView: UIView {
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       if let promoted {
         let rendered = await SVGUIView.makeLayers(
-          rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, previous: previous,
-          previousNodes: previousNodes, previousStyled: previousStyled, time: time, fit: fit,
+          rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, usesGPU: usesGPU,
+          previous: previous, previousNodes: previousNodes, previousStyled: previousStyled, time: time, fit: fit,
           timeoutDuration: timeoutDuration)
         let result: Result<RenderedContainer, SVGRenderingError>
         switch rendered {
@@ -319,8 +330,10 @@ public class SVGUIView: UIView {
         case .success(let layers) where Self.signposter.isEnabled:
           // Counting the layers that were painted takes time, so it's done only while the intervals are recorded.
           let painted = layers.paintedCount(since: previous)
+          let filtered = layers.paintedContents.count(where: \.filteredOnGPU)
           Self.signposter.endInterval(
-            "Render", signpost, "painted \(painted) of \(layers.paintedContents.count) layers")
+            "Render", signpost,
+            "painted \(painted) of \(layers.paintedContents.count) layers, \(filtered) filtered on the GPU")
         case .success:
           Self.signposter.endInterval("Render", signpost)
         case .failure(let error):
@@ -633,15 +646,20 @@ public class SVGUIView: UIView {
   /// change, and the render nodes that the next frame can reuse. A frame whose animated values are the same as those
   /// of the frame that the view shows isn't rendered.
   ///
-  /// - Parameter previousStyled: The document at the time of the frame that the view shows, from the same context,
-  ///   or `nil` to render the frame anyway.
+  /// - Parameters:
+  ///   - painting: The elements whose painting changes in other ways than their compositing, or `nil` if any painting
+  ///     can change.
+  ///   - usesGPU: Whether the filters of the elements that are painted into layers of their own run on the GPU.
+  ///   - previousStyled: The document at the time of the frame that the view shows, from the same context, or `nil`
+  ///     to render the frame anyway.
   @concurrent
   private static func makeLayers(
     rect: CGRect,
     scale: CGFloat,
     base: SVGBaseContext,
     promoted: Set<ElementID>,
-    painting: Set<ElementID>,
+    painting: Set<ElementID>?,
+    usesGPU: Bool,
     previous: RenderedContainer?,
     previousNodes: RenderNodeCache,
     previousStyled: SVGBaseContext?,
@@ -667,7 +685,9 @@ public class SVGUIView: UIView {
       }
       let paintInterval = signposter.beginInterval("Paint")
       defer { signposter.endInterval("Paint", paintInterval) }
-      guard let layers = await plan.painted(scale: scale, reusing: previous) else { return nil }
+      // The renderer is made when it's first used, off the main thread, since it compiles the kernels.
+      let filters = usesGPU ? MetalFilterRenderer.shared : nil
+      guard let layers = await plan.painted(scale: scale, reusing: previous, filters: filters) else { return nil }
       return LayerFrame.changed(layers: layers, nodes: tree.reusableNodes, styled: base)
     }
   }

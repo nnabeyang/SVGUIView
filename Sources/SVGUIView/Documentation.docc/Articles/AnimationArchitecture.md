@@ -15,9 +15,8 @@ The planned design for playing CSS Animations, CSS Transitions and SMIL animatio
 > `SVGRenderLayer` makes. Phase 2.5 is done as well:
 > ``SVGUIView/SVGUIView/document`` finds and changes the elements of a document,
 > controls its CSS animations, and begins and ends its SMIL animations, and its
-> changes start CSS Transitions. Filters on Metal are planned: the types,
-> properties and methods proposed for them don't exist yet, and their names may
-> change while the work goes on.
+> changes start CSS Transitions. Phase 3 is done as well: a view that plays
+> animations runs the filters that change on the GPU.
 
 SVGUIView draws an SVG document as a still image. This article describes how it
 will be extended to play animations, and records the decisions made for the
@@ -88,7 +87,9 @@ parsed. This section records its limits, and which of them phase 0 removed.
   that plays animations shows them in layers, and paints again only the layers
   that change. Still images and snapshots are still rendered into one bitmap.
 - **Filters run on the CPU.** Filter primitives are implemented with Core
-  Graphics and vImage. This remains until phase 3.
+  Graphics and vImage. Phase 3 runs the filters that change in a view that plays
+  animations on the GPU, while still images and snapshots still run them on the
+  CPU. See <doc:#Filters-on-Metal>.
 
 Animation needs the opposite assumptions: values that depend on time and on
 changes made through the API, and redrawing only what changed.
@@ -117,7 +118,7 @@ computing what to draw is separate from the two ways of drawing it.
 |---|---|
 | `SVGCore` | Parsing, the document tree, the cascade and computed values, and the render tree. From phase 1, also the timeline, timing and interpolation. It uses Core Graphics and Core Text for geometry and text layout, but not UIKit. |
 | `SVGRenderCG` | Paints a render tree into a `CGContext`. It produces still images, and the contents of individual layers for `SVGRenderLayer`. Filters keep their Core Graphics and vImage implementations. |
-| `SVGRenderLayer` | Plans the layers that show a render tree and the bounds that their contents cover, paints their contents with `SVGRenderCG`, and updates a tree of `CALayer` objects with them. From phase 3, filters that run on Metal live here. |
+| `SVGRenderLayer` | Plans the layers that show a render tree and the bounds that their contents cover, paints their contents with `SVGRenderCG`, and updates a tree of `CALayer` objects with them. Since phase 3, it runs the filters of the layers that paint only an element with a filter on Metal. |
 | `SVGUIView` | The public `UIView`. It draws still images with `SVGRenderCG`, and plays animations with `SVGRenderLayer`. It owns the document and the clock of its animations. |
 | `SVGView` | The SwiftUI wrapper of ``SVGUIView/SVGUIView``. |
 
@@ -461,6 +462,12 @@ layer. The tree is built so that the common animations don't repaint anything:
   gave such an element a layer of its own whether or not it's animated, but a
   layer would only clip, mask or filter what's in it, which painting it whole
   does as well.
+- An element whose filter paints differently over time is painted into a layer
+  of its own. This happens when the values of the filter's primitives are
+  animated, or when the elements that it filters change. Only that layer is
+  painted again in each frame, and not the content around the element, and its
+  filter runs on the GPU. See <doc:#Filters-on-Metal>. An element whose filter
+  doesn't change is painted with the content around it.
 - Neighboring content that doesn't need a layer is painted together into one
   layer by `SVGRenderCG`. A document without animations becomes a single layer.
 - A change of `transform` or `opacity` only sets the layer's property. Nothing
@@ -545,20 +552,66 @@ view seeks back before their end.
 
 ## Filters on Metal
 
-Filters move to Metal in the layer renderer, while still images keep the vImage
-implementation until the Metal one produces the same results.
+A view that plays animations runs on the GPU the filters of the layers that
+paint only an element with a filter. Such a layer is the layer of an element
+whose filter paints differently over time, or the layer of a moving element
+with a filter. Still images, snapshots and the frames rendered while the app is
+in the background run the filters on the CPU with Core Graphics and vImage, as
+before.
 
-- The minimum is `MTLGPUFamily.apple3`. Every device that runs iOS 16 belongs to
-  this family or a later one, so there's no fallback for missing Metal support.
-- Gaussian blur uses Metal Performance Shaders, as in the earlier
-  `feature/metal-filter-acceleration` work. The other primitives use compute
-  shaders.
+- `MetalFilterRenderer` in `SVGRenderLayer` runs the same steps as the CPU for
+  each primitive, so that the results are the same up to the rounding. Each
+  primitive draws into a cleared image of the filter region with the opacity of
+  the element, clipped to its subregion, and converts the color spaces where
+  the CPU does. The color conversions and the opacity are looked up in tables
+  that Core Graphics and vImage make, so that they round as on the CPU.
+- A Gaussian blur uses a Gaussian kernel where its standard deviation is
+  smaller than 7 pixels, and three box blurs from 7 pixels, both on the CPU and
+  on the GPU, with the same kernels. The boxes on the GPU are those of Metal
+  Performance Shaders, and the Gaussian kernels are compute shaders.
+- The GPU doesn't run the filters whose results it can't make the same, which
+  run on the CPU instead:
+  - A filter region or a subregion whose edges, or a `feOffset` whose distance,
+    aren't on the pixels. The CPU resamples the image of the filter for them.
+  - A `feBlend` or a `feMerge` whose subregion isn't the filter region, whose
+    inputs the CPU scales into the subregion.
+  - The blend modes that Core Graphics computes differently from the formulas
+    of the specification.
+  - A blur whose standard deviations differ, and that blurs a direction with
+    three boxes.
+  - A filter region too large for a texture.
+- The element is painted with Core Graphics into memory that the GPU reads, and
+  the result is read from memory that the GPU writes, so the pixels aren't
+  copied on the CPU. The result is drawn into the contents of the layer as the
+  CPU draws it.
+- The layers of a frame whose filters run on the GPU are painted at the same
+  time, as each other and as the other layers, so that the waits for the GPU
+  overlap. Each wait is longer than the work of the GPU for a small filter, so
+  waiting for one layer after another took longer than running the filters on
+  the CPU.
+- The kernels are compiled from their source when the renderer is made, in the
+  first frame that runs a filter on the GPU, so building the package doesn't
+  need the Metal toolchain.
 - No GPU work is submitted while the app is in the background, because iOS
-  doesn't allow it. A snapshot requested in the background uses the vImage
-  implementation.
-- Each filtered layer caches its result. The cache key is the version of the
-  filter's input content, the filter's parameters and the scale, so a filter is
-  run again only when one of them changes.
+  doesn't allow it. A frame whose GPU work fails runs its filters on the CPU.
+- In the benchmark document with filters, whose blurs change, running them on
+  the GPU makes the frames shorter, and takes about half the time of the CPU.
+
+Decisions:
+
+- The GPU runs a filter only where its result is the same as on the CPU, so
+  that a view that plays animations shows what a snapshot shows. Still images
+  keep running the filters on the CPU, since they're rendered in the background
+  as well.
+- Only the filters of the layers of their own elements run on the GPU. A filter
+  that doesn't change is painted with the content around it once, so running it
+  on the GPU would only add a layer.
+- The renderer isn't prepared before the first frame that needs it. Preparing it
+  in the background and running the filters on the CPU until it was ready made
+  the first frames longer in total, since making it takes only about as long
+  as two frames.
+- Every device that runs iOS 18 supports Metal. Without a GPU, such as in some
+  virtual machines, the filters run on the CPU.
 
 ## Testing and evaluation
 
@@ -594,6 +647,13 @@ playback is smooth.
   pattern that fall between pixels still differ slightly. Moving layers differ
   only at their antialiased edges, where the screen resamples them. Layers that frames
   reuse show the same pixels as layers painted again.
+- **Filters on the GPU against the CPU:** The tests of the package run the
+  filters of test documents on the GPU and on the CPU, and compare their
+  results. The test app renders the layers of the documents of the test suite
+  with filters twice, with the filters on the GPU and on the CPU, after giving
+  every element with a filter a layer of its own so that its filter can run on
+  the GPU, and compares them. The snapshot tests can't check the GPU, since
+  still images run the filters on the CPU.
 - **Playback with a test clock:** The renderer takes its clock as a
   dependency. Tests replace the display link with a clock they advance by hand,
   then check layer properties. Playing, pausing, seeking and the conditions in
@@ -613,10 +673,13 @@ documents instead.
   changing path shapes, many elements, and filters.
 - The time of each rendering is recorded as a "Render" signpost interval, with
   its stages as "Style", "Build", "Plan" and "Paint" intervals in it, and a frame
-  that a slower rendering skips is a "Skipped frame" event. The benchmarks of
-  the test app measure them with XCTest metrics, only when
-  `TEST_RUNNER_RUN_BENCHMARKS` is `1`. They run in the Release configuration,
-  as apps are built, since the Debug configuration takes many times longer.
+  that a slower rendering skips is a "Skipped frame" event. Running a filter on
+  the GPU is a "Filter on GPU" interval in "Paint", with the size of the filter
+  region, and making the renderer is a "Prepare GPU filters" interval. The
+  benchmarks of the test app measure the renderings and the time of the CPU
+  with XCTest metrics, only when `TEST_RUNNER_RUN_BENCHMARKS` is `1`. They run
+  in the Release configuration, as apps are built, since the Debug
+  configuration takes many times longer.
 - Performance is measured on devices. Simulators and Xcode Cloud, which only
   runs simulators, don't reflect device performance, so performance isn't a
   pass-or-fail check in CI. Instruments' animation hitches template is used to
@@ -645,7 +708,7 @@ before it is merged.
 | 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Done in 0.27.0 |
 | 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Done in 0.28.0 |
 | 2.5 | The document API and CSS Transitions, which need the document API to start. | Done in 0.29.0 |
-| 3 | Filters on Metal. | Planned |
+| 3 | Filters of playing views on Metal, with the same results as on the CPU. | Done in 0.30.0 |
 
 Phase 0 kept the output of every test document the same while it moved the
 code. The bugs it found on the way were fixed after the move, so 0.25.0 also
@@ -653,18 +716,13 @@ changes the output of the documents that those bugs affected.
 
 ## Open questions
 
-- Whether still images should use the Metal filters once they produce the same
-  results as the vImage implementation.
-- Whether filters should move to Metal before phase 3. Until then, playback runs
-  filters with vImage. A filtered element that only moves by `transform` or
-  `opacity` isn't filtered again, but a filter whose parameters or input content
-  change is run again on the CPU in every frame, and a slow one skips frames in
-  that layer. In the benchmark document with filters, whose blurs change, running
-  the filters takes most of each frame. On a device, a frame of that document
-  takes a little longer than a frame at 60 Hz, while the frames of the other
-  benchmark documents fit easily. Animations of filter parameters aren't common
-  in the documents to support, so phase 2.5 came before phase 3. The cache of
-  filter results is keyed by layer, so it can be used with vImage as well.
+- Whether still images should run filters on the GPU. They would need to run
+  the filters that the GPU doesn't run on the CPU anyway, and to render in the
+  background, where the GPU can't be used.
+- Whether the GPU should run more filters. The CPU resamples the image of a
+  filter whose region isn't on the pixels, which the GPU doesn't reproduce.
+  Painting the filters on the pixels on the CPU would change the still images
+  of those filters, and let the GPU run them.
 - Whether `.play` should become the default animation mode once animation
   support is stable.
 - Whether the timeline should keep running while playback is stopped for being
