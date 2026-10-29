@@ -67,9 +67,7 @@ final class SVGTextElement: ShapeGeometry {
     var transform = CGAffineTransform(translationX: x, y: y)
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
     let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    if case .middle = style.textAnchor {
-      transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
-    }
+    transform = transform.translatedBy(x: anchorOffset(width: rect.width), y: 0)
     return rect.applying(transform)
   }
 
@@ -104,10 +102,17 @@ final class SVGTextElement: ShapeGeometry {
       .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
 
     let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    if case .middle = style.textAnchor {
-      transform = transform.translatedBy(x: -rect.width / 2.0, y: 0)
-    }
+    transform = transform.translatedBy(x: anchorOffset(width: rect.width), y: 0)
     return letters.applying(transform)
+  }
+
+  /// How far the line of text of the width moves along the line from `x`, so that its `text-anchor` is at `x`.
+  private func anchorOffset(width: CGFloat) -> CGFloat {
+    switch style.textAnchor {
+    case .start: 0
+    case .middle: -width / 2
+    case .end: -width
+    }
   }
 
   static func withUnsafeMutablePointer<T>(array: inout [T], from: Int) -> UnsafeMutablePointer<T> {
