@@ -48,7 +48,7 @@ struct SMILAttributeTests {
     let text = try element(
       #"<text id="e" x="0">A<animate attributeName="x" values="0;40" dur="2s"/></text>"#, at: 0.5,
       as: SVGTextElement.self)
-    #expect(text.x == .number(10))
+    #expect(text.positions.x == [.number(10)])
     #expect(text.text == "A")
     let image = try element(
       #"<image id="e" width="10"><animate attributeName="width" to="50" dur="2s"/></image>"#, at: 1,

@@ -189,6 +189,50 @@ struct RenderTreeBuilderTests {
     #expect(abs(text.frame.maxX - 10) < 0.001)
   }
 
+  /// Text with positions of its characters, and texts that draw the same glyphs.
+  private static let characterPositions: [(String, String)] = [
+    (#"<text x="2 8 14" y="10">abc</text>"#, #"<text x="2" y="10">a</text><text x="8" y="10">b</text><text x="14" y="10">c</text>"#),
+    (#"<text x="2 8" y="10 14">ab</text>"#, #"<text x="2" y="10">a</text><text x="8" y="14">b</text>"#),
+    // The characters after the list follow the last character with a position, on one line.
+    (#"<text x="2 8" y="10">abc</text>"#, #"<text x="2" y="10">a</text><text x="8" y="10">bc</text>"#),
+    (#"<text x="2" dx="3" y="10" dy="2">ab</text>"#, #"<text x="5" y="12">ab</text>"#),
+    (#"<text x="2 8" dx="1, 1" y="10">ab</text>"#, #"<text x="3 9" y="10">ab</text>"#),
+    // A list with a value that isn't a length is ignored.
+    (#"<text x="2 a" y="10">ab</text>"#, #"<text y="10">ab</text>"#),
+    // The last rotation applies to the characters after the list.
+    (#"<text x="2" y="10" rotate="0 180">TTT</text>"#, #"<text x="2" y="10" rotate="0 180 180">TTT</text>"#),
+    // Each text chunk is anchored at its absolute position.
+    (
+      #"<text x="10 20" y="10" text-anchor="end">ab</text>"#,
+      #"<text x="10" y="10" text-anchor="end">a</text><text x="20" y="10" text-anchor="end">b</text>"#
+    ),
+  ]
+
+  @Test("x, y, dx, dy and rotate place the characters of text", arguments: characterPositions)
+  func textCharacterPositions(text: String, same: String) async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+      guard case .group(let group) = try children(of: tree).first else { throw NodeError.unexpected(nil) }
+      return try group.children.map { try #require(try shape($0).geometry).path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    let actual = try await glyphBounds(text)
+    let expected = try await glyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.001, "\(actual) isn't \(expected)")
+    }
+  }
+
+  @Test("rotate turns each glyph about its origin, clockwise")
+  func textRotation() async throws {
+    let tree = try await renderTree(#"<text x="10" y="10" font-size="4" rotate="180">T</text>"#)
+    let glyphs = try #require(try shape(try children(of: tree).first).geometry).path.cgPath.boundingBoxOfPath
+    // Turned half a turn about (10, 10), the letter is left of x and below the baseline.
+    #expect(glyphs.maxX <= 10.001 && glyphs.minX < 10)
+    #expect(glyphs.minY >= 9.999 && glyphs.maxY > 10)
+  }
+
   /// Text, and the part of its width that its `text-anchor` moves it left by.
   private static let textAnchors: [(String, CGFloat)] = [
     (#"<text x="10" y="10" font-size="4">Text</text>"#, 0),
