@@ -326,6 +326,51 @@ struct RenderTreeBuilderTests {
     #expect(shapes.last.flatMap(fillColor(of:))?.components == [0, 1, 0, 1])
   }
 
+  /// Text with spacings, and text with the same glyphs placed by `dx`.
+  private static let spacedTexts: [(String, String)] = [
+    (#"<text x="2" y="10" letter-spacing="2">ab</text>"#, #"<text x="2" y="10" dx="0 2">ab</text>"#),
+    (#"<text x="2" y="10" letter-spacing="50%">ab</text>"#, #"<text x="2" y="10" dx="0 2">ab</text>"#),
+    (#"<text x="2" y="10" word-spacing="3">a b</text>"#, #"<text x="2" y="10" dx="0 0 3">a b</text>"#),
+    (#"<text x="2" y="10">a<tspan letter-spacing="2">bc</tspan></text>"#, #"<text x="2" y="10" dx="0 0 2">abc</text>"#),
+    // The space after the last character doesn't count in the width that text-anchor anchors.
+    (
+      #"<text x="10" y="10" text-anchor="end" letter-spacing="2">ab</text>"#,
+      #"<text x="10" y="10" text-anchor="end" dx="0 2">ab</text>"#
+    ),
+  ]
+
+  @Test("letter-spacing and word-spacing add space after characters and spaces", arguments: spacedTexts)
+  func textSpacing(text: String, same: String) async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+      return try shapes(of: children(of: tree)).map { try #require($0.geometry).path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    let actual = try await glyphBounds(text)
+    let expected = try await glyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.01, "\(actual) isn't \(expected)")
+    }
+  }
+
+  @Test("a spacing of 0 keeps the kerning of the font")
+  func zeroSpacing() async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+      return try #require(
+        try shape(
+          try children(of: tree).first.flatMap { node in
+            if case .group(let group) = node { group.children.first } else { nil }
+          }
+        ).geometry
+      ).path.cgPath.boundingBoxOfPath
+    }
+    let spaced = try await glyphBounds(#"<text x="2" y="10" letter-spacing="0" word-spacing="normal">AVA</text>"#)
+    let plain = try await glyphBounds(#"<text x="2" y="10">AVA</text>"#)
+    #expect(spaced == plain)
+  }
+
   /// The bounds of the outlines of a shape.
   private func bounds(of shape: ShapeNode) throws -> CGRect {
     try #require(shape.geometry).path.cgPath.boundingBoxOfPath

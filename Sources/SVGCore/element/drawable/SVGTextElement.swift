@@ -176,13 +176,44 @@ final class SVGTextElement: ShapeGeometry {
     return 0
   }
 
-  /// The line of a run of characters in the font of a style, or `nil` if it isn't drawn.
-  private static func line(of text: String, style: ComputedStyle, context: any SVGLengthContext) -> CTLine? {
+  /// The line of a run of characters in the font of a style, spaced by its `letter-spacing` and `word-spacing`, and
+  /// the space after its last character, or `nil` if it isn't drawn.
+  private static func line(
+    of text: String, style: ComputedStyle, context: any SVGLengthContext
+  ) -> (line: CTLine, trailingSpace: CGFloat)? {
     guard let font = font(of: style, context: context),
       let attributedText = CFAttributedStringCreate(
         kCFAllocatorDefault, text as NSString, [kCTFontAttributeName: font] as CFDictionary)
     else { return nil }
-    return CTLineCreateWithAttributedString(attributedText)
+    // The line is in the font, which is scaled by the text scale. A percentage is of the size of the font.
+    func spacing(_ length: SVGLength) -> CGFloat {
+      let value: CGFloat =
+        if case .percent(let percent) = length {
+          percent / 100 * CTFontGetSize(font)
+        } else {
+          length.value(context: context, mode: .other) * context.textScale
+        }
+      return value.isFinite ? value : 0
+    }
+    let letter = spacing(style.letterSpacing)
+    let word = spacing(style.wordSpacing)
+    // A kern of 0 turns the kerning of the font off, so text without spacings has no kern.
+    guard letter != 0 || word != 0,
+      let spaced = CFAttributedStringCreateMutableCopy(kCFAllocatorDefault, 0, attributedText)
+    else { return (CTLineCreateWithAttributedString(attributedText), 0) }
+    var offset = 0
+    var kern: CGFloat = 0
+    for character in text {
+      let length = character.utf16.count
+      // word-spacing applies to the spaces that separate words.
+      kern = letter + (character == " " || character == "\u{A0}" ? word : 0)
+      if kern != 0 {
+        CFAttributedStringSetAttribute(
+          spaced, CFRange(location: offset, length: length), kCTKernAttributeName, kern as CFNumber)
+      }
+      offset += length
+    }
+    return (CTLineCreateWithAttributedString(spaced), kern)
   }
 
   /// The font of a style, scaled by the text scale, or `nil` if its text isn't drawn.

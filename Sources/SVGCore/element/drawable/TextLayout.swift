@@ -107,9 +107,12 @@ struct TextLayout {
   /// - Parameters:
   ///   - characters: The characters, with their white space processed.
   ///   - anchors: The `text-anchor` of each element of the text.
-  ///   - line: Makes the line of a run of characters of an element, or returns `nil` if they aren't drawn.
+  ///   - line: Makes the line of a run of characters of an element, with the space after its last character, or
+  ///     returns `nil` if they aren't drawn. The space after the last character of a chunk doesn't count in its
+  ///     width, which it's anchored with.
   init?(
-    characters: [TextCharacter], anchors: [TextAnchor], textScale: CGFloat, line: (String, Int) -> CTLine?
+    characters: [TextCharacter], anchors: [TextAnchor], textScale: CGFloat,
+    line: (String, Int) -> (line: CTLine, trailingSpace: CGFloat)?
   ) {
     // The runs, with the index of their first character.
     var starts = [0]
@@ -147,14 +150,15 @@ struct TextLayout {
       if chunks.isEmpty || first.startsChunk {
         chunks.append(Chunk(x: x, anchor: anchors[first.owner]))
       }
-      guard let runLine = line(String(characters[start..<end].map(\.character)), first.owner) else { continue }
+      guard let (runLine, trailingSpace) = line(String(characters[start..<end].map(\.character)), first.owner)
+      else { continue }
       let width = CTLineGetBoundsWithOptions(runLine, CTLineBoundsOptions()).width
       let chunk = chunks.count - 1
       // The offset of the first run of a chunk is 0, so that text without positions is laid out as one line.
       let offset = chunks[chunk].runs.isEmpty ? 0 : (x - chunks[chunk].x) * textScale
       chunks[chunk].runs.append(
         Run(line: runLine, owner: first.owner, width: width, y: y, offset: offset, rotation: first.rotate))
-      chunks[chunk].width = offset + width
+      chunks[chunk].width = offset + width - trailingSpace
       x += width / textScale
     }
     runs = chunks.flatMap { chunk in

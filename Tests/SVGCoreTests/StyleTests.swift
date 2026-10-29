@@ -406,6 +406,33 @@ struct StyleTests {
     #expect(none.textDecoration == [.underline, .lineThrough])
   }
 
+  /// Values of `letter-spacing` and `word-spacing`, and their lengths, or `nil` for a value that isn't valid.
+  private static let spacings: [(String, SVGLength?)] = [
+    ("normal", .number(0)),
+    (" 3 ", .number(3)),
+    ("-2", .number(-2)),
+    ("5%", .percent(5)),
+    ("1mm", .millimeters(1)),
+    ("wide", nil),
+  ]
+
+  @Test("letter-spacing and word-spacing are normal, which is 0, or a length", arguments: spacings)
+  func spacing(text: String, length: SVGLength?) {
+    #expect(LetterSpacingProperty.parse(text, origin: .attribute) == length)
+    #expect(WordSpacingProperty.parse(text, origin: .attribute) == length)
+  }
+
+  @Test("letter-spacing and word-spacing are inherited")
+  func spacingInheritance() {
+    let parent = style([
+      PropertyDeclaration(LetterSpacingProperty.self, .value(.number(2))),
+      PropertyDeclaration(WordSpacingProperty.self, .value(.number(5))),
+    ])
+    let child = style([], parent: parent)
+    #expect(child.letterSpacing == .number(2))
+    #expect(child.wordSpacing == .number(5))
+  }
+
   @Test("xml:space declares white-space before the white-space attribute, which overrides it")
   func xmlSpace() {
     func whiteSpace(_ attributes: [String: String]) -> CSSWhiteSpace? {

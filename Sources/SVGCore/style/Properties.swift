@@ -482,6 +482,45 @@ enum TextDecorationProperty: StyleProperty {
   }
 }
 
+/// A spacing of text, `normal` or a length, whose `normal` is 0.
+private func spacing(_ text: String, origin: DeclarationOrigin) -> SVGLength? {
+  let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+  if (origin == .css ? text.lowercased() : text) == "normal" { return .number(0) }
+  return SVGLength(text)
+}
+
+/// `letter-spacing`, the space after each character of text.
+enum LetterSpacingProperty: StyleProperty {
+  static let id = PropertyID.letterSpacing
+  static let isInherited = true
+  static let initial = SVGLength.number(0)
+  static let computed = \ComputedStyle.letterSpacing
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> SVGLength? {
+    spacing(text, origin: origin)
+  }
+
+  static func compute(_ length: SVGLength, in resolver: StyleResolver) -> SVGLength {
+    resolvingFontRelative(length, in: resolver)
+  }
+}
+
+/// `word-spacing`, the space added to each space between words.
+enum WordSpacingProperty: StyleProperty {
+  static let id = PropertyID.wordSpacing
+  static let isInherited = true
+  static let initial = SVGLength.number(0)
+  static let computed = \ComputedStyle.wordSpacing
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> SVGLength? {
+    spacing(text, origin: origin)
+  }
+
+  static func compute(_ length: SVGLength, in resolver: StyleResolver) -> SVGLength {
+    resolvingFontRelative(length, in: resolver)
+  }
+}
+
 enum VisibilityProperty: StyleProperty {
   static let id = PropertyID.visibility
   static let isInherited = true
