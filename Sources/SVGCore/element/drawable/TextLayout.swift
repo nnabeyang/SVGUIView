@@ -37,26 +37,55 @@ struct CharacterPositions {
     return numbers.contains(nil) ? [] : numbers.compactMap(\.self)
   }
 
-  /// The rotation of the character at an index, or `nil` if it isn't rotated.
-  func rotation(at index: Int) -> Double? {
-    guard let last = rotate.last else { return nil }
-    return index < rotate.count ? rotate[index] : last
+  /// Gives the characters of an element, in order, the positions that they don't have yet.
+  ///
+  /// The characters of the descendants of the element are given their positions first, so that the positions of
+  /// the closest element win.
+  func apply(to characters: inout ArraySlice<TextCharacter>, context: any GeometryContext) {
+    for (number, index) in characters.indices.enumerated() {
+      if characters[index].x == nil, number < x.count {
+        characters[index].x = x[number].value(context: context, mode: .width)
+      }
+      if characters[index].y == nil, number < y.count {
+        characters[index].y = y[number].value(context: context, mode: .height)
+      }
+      if characters[index].dx == nil, number < dx.count {
+        characters[index].dx = dx[number].value(context: context, mode: .width)
+      }
+      if characters[index].dy == nil, number < dy.count {
+        characters[index].dy = dy[number].value(context: context, mode: .height)
+      }
+      if characters[index].rotate == nil, let last = rotate.last {
+        characters[index].rotate = number < rotate.count ? rotate[number] : last
+      }
+    }
   }
+}
 
-  /// Whether the character at an index starts a run of its own, because it has a position of its own or is rotated.
-  func startsRun(at index: Int) -> Bool {
-    index < x.count || index < y.count || index < dx.count || index < dy.count || !rotate.isEmpty
-  }
+/// A character of text, the element that it belongs to, and the position that the elements give it.
+struct TextCharacter {
+  let character: Character
+  /// The element that the character belongs to, as an index into the elements of the text.
+  let owner: Int
+  var x: CGFloat?
+  var y: CGFloat?
+  var dx: CGFloat?
+  var dy: CGFloat?
+  /// The rotation in degrees.
+  var rotate: Double?
 
-  /// Whether the character at an index starts a text chunk, because it has an absolute position.
-  func startsChunk(at index: Int) -> Bool {
-    index < x.count || index < y.count
-  }
+  /// Whether the character starts a run of its own, because it has a position of its own or is rotated.
+  var startsRun: Bool { x != nil || y != nil || dx != nil || dy != nil || rotate != nil }
+
+  /// Whether the character starts a text chunk, because it has an absolute position.
+  var startsChunk: Bool { x != nil || y != nil }
 }
 
 /// A run of the characters of text, laid out on one line, and where its glyphs are drawn.
 struct PlacedTextRun {
   let line: CTLine
+  /// The element of the characters, as an index into the elements of the text.
+  let owner: Int
   /// The transform from the coordinates of the line, which the font is scaled in and whose y-axis points up, to the
   /// user space.
   let transform: CGAffineTransform
@@ -64,30 +93,31 @@ struct PlacedTextRun {
   let rotation: Double?
 }
 
-/// Text laid out in runs of characters, with the positions that its element gives them.
+/// Text laid out in runs of characters, with the positions that its elements give them.
 ///
-/// The characters are split into runs where they have positions of their own, and each run is a line of its own. A
-/// text chunk starts at each character with an absolute position, and is anchored by `text-anchor` with its width.
-/// Text without positions of its characters is one run, as one line.
+/// The characters are split into runs where they have positions of their own or belong to another element, and each
+/// run is a line of its own. A text chunk starts at each character with an absolute position, and is anchored by the
+/// `text-anchor` of the element of its first character with its width. Text of one element without positions of its
+/// characters is one run, as one line.
 struct TextLayout {
   let runs: [PlacedTextRun]
 
   /// - Parameters:
-  ///   - text: The characters, with their white space processed.
-  ///   - line: Makes the line of a run of characters, or returns `nil` if the text isn't drawn.
+  ///   - characters: The characters, with their white space processed.
+  ///   - anchors: The `text-anchor` of each element of the text.
+  ///   - line: Makes the line of a run of characters of an element, or returns `nil` if they aren't drawn.
   init?(
-    text: String, positions: CharacterPositions, anchor: TextAnchor, context: any GeometryContext,
-    line: (String) -> CTLine?
+    characters: [TextCharacter], anchors: [TextAnchor], textScale: CGFloat, line: (String, Int) -> CTLine?
   ) {
-    let characters = Array(text)
-    let textScale = context.textScale
     // The runs, with the index of their first character.
     var starts = [0]
-    for index in characters.indices.dropFirst() where positions.startsRun(at: index) {
+    for index in characters.indices.dropFirst()
+    where characters[index].startsRun || characters[index].owner != characters[index - 1].owner {
       starts.append(index)
     }
     struct Run {
       let line: CTLine
+      let owner: Int
       /// The width of the line in the coordinates of the line.
       let width: CGFloat
       let y: CGFloat
@@ -97,6 +127,7 @@ struct TextLayout {
     }
     struct Chunk {
       let x: CGFloat
+      let anchor: TextAnchor
       var width: CGFloat = 0
       var runs = [Run]()
     }
@@ -105,57 +136,54 @@ struct TextLayout {
     var x: CGFloat = 0
     for (number, start) in starts.enumerated() {
       let end = number + 1 < starts.count ? starts[number + 1] : characters.count
-      guard let runLine = line(String(characters[start..<end])) else { return nil }
-      if start < positions.x.count {
-        x = positions.x[start].value(context: context, mode: .width)
+      // Text without characters is one empty run of the text itself.
+      let first = start < characters.count ? characters[start] : TextCharacter(character: " ", owner: 0)
+      x = first.x ?? x
+      y = first.y ?? y
+      x += first.dx ?? 0
+      y += first.dy ?? 0
+      if chunks.isEmpty || first.startsChunk {
+        chunks.append(Chunk(x: x, anchor: anchors[first.owner]))
       }
-      if start < positions.y.count {
-        y = positions.y[start].value(context: context, mode: .height)
-      }
-      if start < positions.dx.count {
-        x += positions.dx[start].value(context: context, mode: .width)
-      }
-      if start < positions.dy.count {
-        y += positions.dy[start].value(context: context, mode: .height)
-      }
-      if chunks.isEmpty || positions.startsChunk(at: start) {
-        chunks.append(Chunk(x: x))
-      }
+      guard let runLine = line(String(characters[start..<end].map(\.character)), first.owner) else { continue }
       let width = CTLineGetBoundsWithOptions(runLine, CTLineBoundsOptions()).width
       let chunk = chunks.count - 1
       // The offset of the first run of a chunk is 0, so that text without positions is laid out as one line.
       let offset = chunks[chunk].runs.isEmpty ? 0 : (x - chunks[chunk].x) * textScale
       chunks[chunk].runs.append(
-        Run(line: runLine, width: width, y: y, offset: offset, rotation: positions.rotation(at: start)))
+        Run(line: runLine, owner: first.owner, width: width, y: y, offset: offset, rotation: first.rotate))
       chunks[chunk].width = offset + width
       x += width / textScale
     }
     runs = chunks.flatMap { chunk in
       let anchorOffset: CGFloat =
-        switch anchor {
+        switch chunk.anchor {
         case .start: 0
         case .middle: -chunk.width / 2
         case .end: -chunk.width
         }
       return chunk.runs.map { run in
         PlacedTextRun(
-          line: run.line,
+          line: run.line, owner: run.owner,
           transform: CGAffineTransform(translationX: chunk.x, y: run.y)
             .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
             .translatedBy(x: anchorOffset + run.offset, y: 0),
           rotation: run.rotation)
       }
     }
+    if runs.isEmpty { return nil }
   }
 
-  /// The bounds of the lines of the runs, which are larger than the bounds of their glyphs.
-  var frame: CGRect {
-    runs.map { CTLineGetBoundsWithOptions($0.line, CTLineBoundsOptions()).applying($0.transform) }
+  /// The bounds of the lines of the runs of the elements, which are larger than the bounds of their glyphs.
+  func frame(of owners: Set<Int>? = nil) -> CGRect {
+    runs.filter { owners?.contains($0.owner) ?? true }
+      .map { CTLineGetBoundsWithOptions($0.line, CTLineBoundsOptions()).applying($0.transform) }
       .reduce(CGRect.null) { $0.union($1) }
   }
 
-  /// The outlines of the glyphs.
-  var path: CGPath {
+  /// The outlines of the glyphs of the elements.
+  func path(of owners: Set<Int>? = nil) -> CGPath {
+    let runs = runs.filter { owners?.contains($0.owner) ?? true }
     if runs.count == 1 {
       return Self.glyphs(of: runs[0]).applying(runs[0].transform)
     }

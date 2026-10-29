@@ -23,5 +23,15 @@ extension SnapshotTests {
     func fontSize(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "text-anchor"))
+    func textAnchor(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "tspan"))
+    func tspan(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

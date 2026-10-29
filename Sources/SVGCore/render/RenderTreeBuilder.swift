@@ -149,6 +149,12 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: element)
     let references = beginsLevel(mode) ? references.beginning(.all) : references
+    if let text = element as? SVGTextElement, !text.children.isEmpty, let spans = text.spans(in: context),
+      spans.contains(where: { $0.element !== text })
+    {
+      return await textNode(
+        of: text, spans: spans, context: context, mode: mode, guard: references, instance: instance)
+    }
     let path = await path(of: element, context: context, guard: references)
     var geometry: Geometry?
     var clip: ClipPathEffect?
@@ -182,6 +188,44 @@ package struct RenderTreeBuilder {
       ShapeNode(
         id: renderID(of: element, instance: instance), transform: transform, geometry: geometry, clip: clip,
         mask: mask, opacity: element.opacity, content: content))
+  }
+
+  /// The node of text whose `<tspan>` descendants have glyphs: a group with the effects of the text, and a shape
+  /// with the paints of each element for its glyphs.
+  ///
+  /// The shapes have the bounds of the whole text, so that a paint that they inherit from the text covers it as one.
+  private func textNode(
+    of text: SVGTextElement, spans: [TextSpan], context: ResolveContext, mode: DrawMode,
+    guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> RenderNode {
+    let frame = spans.reduce(CGRect.null) { $0.union($1.frame) }
+    let clip = await clipEffect(text.clipPath, frame: frame, context: context, guard: references)
+    let mask = await maskEffect(text.mask, frame: frame, context: context, guard: references)
+    let transform =
+      mode != .filter(isRoot: true)
+      ? await transform(of: text, context: context, frame: frame, guard: references) : .identity
+    var children = [RenderNode]()
+    for span in spans {
+      let element = span.element
+      let context = context.styled(by: element)
+      var content: ShapeContent?
+      if element.style.visibility == .visible {
+        let fill = await fillPaint(
+          of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance)
+        content = .vector(
+          fill: fill, stroke: strokeStyle(of: element, context: context), fillRule: element.pathFillRule)
+      }
+      children.append(
+        .shape(
+          ShapeNode(
+            id: renderID(of: element, instance: instance), transform: .identity,
+            geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
+            content: content)))
+    }
+    return .group(
+      GroupNode(
+        id: renderID(of: text, instance: instance), transform: transform, opacity: text.opacity, clip: clip,
+        mask: mask, children: children))
   }
 
   private func groupNode(

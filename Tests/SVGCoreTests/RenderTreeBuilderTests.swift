@@ -233,6 +233,99 @@ struct RenderTreeBuilderTests {
     #expect(glyphs.minY >= 9.999 && glyphs.maxY > 10)
   }
 
+  /// The shapes of the nodes and their descendants, in order.
+  private func shapes(of nodes: [RenderNode]) -> [ShapeNode] {
+    nodes.flatMap { node -> [ShapeNode] in
+      switch node {
+      case .shape(let shape): [shape]
+      case .group(let group): shapes(of: group.children)
+      default: []
+      }
+    }
+  }
+
+  /// The color that a shape is filled with, or `nil` if it isn't filled with a color.
+  private func fillColor(of shape: ShapeNode) -> CGColor? {
+    if case .vector(.color(let color), _, _) = shape.content { color } else { nil }
+  }
+
+  @Test("a tspan is a shape of its own in the group of its text, with its fill and the fill that it inherits")
+  func tspanShapes() async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4" fill="red">a<tspan fill="lime">b<tspan>c</tspan></tspan>d</text>"#)
+    guard case .group(let text) = try children(of: tree).first else {
+      Issue.record("The text isn't a group")
+      return
+    }
+    let shapes = shapes(of: text.children)
+    #expect(shapes.count == 3)
+    #expect(Set(shapes.map(\.id.element)).count == 3)
+    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[1, 0, 0, 1], [0, 1, 0, 1], [0, 1, 0, 1]])
+    // The shapes have the bounds of the whole text.
+    #expect(Set(shapes.map { $0.geometry?.frame.width ?? 0 }).count == 1)
+  }
+
+  /// Text with tspans, and texts that draw the same glyphs.
+  private static let tspanTexts: [(String, String)] = [
+    // White space collapses across the elements.
+    (#"<text x="2" y="10">a <tspan> b </tspan> c</text>"#, #"<text x="2" y="10">a b c</text>"#),
+    (#"<text x="2" y="10">a<tspan x="8">b</tspan></text>"#, #"<text x="2" y="10">a</text><text x="8" y="10">b</text>"#),
+    (
+      #"<text x="2 8 14" y="10">a<tspan dy="3">b</tspan>c</text>"#,
+      #"<text x="2" y="10">a</text><text x="8" y="13">b</text><text x="14" y="13">c</text>"#
+    ),
+    // The positions of a tspan win over the positions of its text.
+    (#"<text x="2 8" y="10">a<tspan x="20">b</tspan></text>"#, #"<text x="2" y="10">a</text><text x="20" y="10">b</text>"#),
+    (#"<text x="2" y="10">a<tspan display="none">b</tspan>c</text>"#, #"<text x="2" y="10">ac</text>"#),
+    (
+      #"<text x="2 8" y="10">a<tspan font-size="8">b</tspan></text>"#,
+      #"<text x="2" y="10">a</text><text x="8" y="10" font-size="8">b</text>"#
+    ),
+    // The element of the first character of a chunk anchors it.
+    (
+      #"<text x="10" y="10"><tspan text-anchor="end">a</tspan>b</text>"#,
+      #"<text x="10" y="10" text-anchor="end">ab</text>"#
+    ),
+  ]
+
+  @Test("tspans place their characters, and the white space of text collapses across them", arguments: tspanTexts)
+  func tspanPositions(text: String, same: String) async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+      return try shapes(of: children(of: tree)).map { try #require($0.geometry).path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    let actual = try await glyphBounds(text)
+    let expected = try await glyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.001, "\(actual) isn't \(expected)")
+    }
+  }
+
+  @Test("a tspan outside text isn't rendered, and a hidden tspan takes its place without painting")
+  func tspanOutsideTextAndHidden() async throws {
+    let outside = try await renderTree(#"<g><tspan x="2" y="10">a</tspan></g>"#)
+    guard case .group(let group) = try children(of: outside).first else {
+      Issue.record("The g isn't a group")
+      return
+    }
+    #expect(group.children.isEmpty)
+    let hidden = try await renderTree(#"<text x="2" y="10" font-size="4">a<tspan visibility="hidden">b</tspan>c</text>"#)
+    let shapes = shapes(of: try children(of: hidden))
+    #expect(shapes.count == 2)
+    #expect(shapes.map { $0.content == nil } == [false, true])
+  }
+
+  @Test("the animations of a tspan apply to its glyphs")
+  func tspanAnimation() async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4">a<tspan fill="red">b<set attributeName="fill" to="lime" begin="1s"/></tspan></text>"#,
+      at: 2)
+    let shapes = shapes(of: try children(of: tree))
+    #expect(shapes.last.flatMap(fillColor(of:))?.components == [0, 1, 0, 1])
+  }
+
   /// Text, and the part of its width that its `text-anchor` moves it left by.
   private static let textAnchors: [(String, CGFloat)] = [
     (#"<text x="10" y="10" font-size="4">Text</text>"#, 0),
