@@ -155,6 +155,40 @@ struct RenderTreeBuilderTests {
     #expect(try #require(rect.geometry).frame == CGRect(x: 0, y: 0, width: 5, height: 5))
   }
 
+  /// Text, and text with the same bounds whose white space is drawn as it's written.
+  private static let textWhiteSpaces: [(String, String)] = [
+    ("<text x=\"10\" y=\"10\" font-size=\"4\">\n    A\n    B\n  </text>", "A B"),
+    (#"<text x="10" y="10" font-size="4" xml:space="preserve">  A\#nB  </text>"#, "  A B  "),
+    (#"<g xml:space="preserve"><text x="10" y="10" font-size="4">  A  B</text></g>"#, "  A  B"),
+    (#"<g xml:space="preserve"><text x="10" y="10" font-size="4" xml:space="default">  A  B</text></g>"#, "A B"),
+    (#"<text x="10" y="10" font-size="4" xml:space="preserve" white-space="normal">  A  </text>"#, "A"),
+    (#"<style>text { white-space: normal }</style><text x="10" y="10" font-size="4" xml:space="preserve"> A </text>"#, "A"),
+  ]
+
+  @Test("text is drawn with its white space processed, as white-space or xml:space says", arguments: textWhiteSpaces)
+  func textWhiteSpace(text: String, drawn: String) async throws {
+    let tree = try await renderTree(
+      text + #"<text x="10" y="10" font-size="4" style="white-space: pre">"# + drawn + "</text>")
+    let nodes = try children(of: tree).flatMap { node -> [RenderNode] in
+      if case .group(let group) = node { group.children } else { [node] }
+    }
+    let texts = try nodes.compactMap { node -> Geometry? in
+      if case .shape = node { try shape(node).geometry } else { nil }
+    }
+    try #require(texts.count == 2)
+    #expect(texts[1].frame.width > 0)
+    #expect(abs(texts[0].frame.minX - texts[1].frame.minX) < 0.001)
+    #expect(abs(texts[0].frame.width - texts[1].frame.width) < 0.001)
+  }
+
+  @Test("text with line breaks and indents around it is anchored at its end at x")
+  func textAnchorWithWhiteSpace() async throws {
+    let tree = try await renderTree("<text x=\"10\" y=\"10\" font-size=\"4\" text-anchor=\"end\">\n    Text\n  </text>")
+    let text = try #require(try shape(try children(of: tree).first).geometry)
+    #expect(text.frame.width > 0)
+    #expect(abs(text.frame.maxX - 10) < 0.001)
+  }
+
   /// Text, and the part of its width that its `text-anchor` moves it left by.
   private static let textAnchors: [(String, CGFloat)] = [
     (#"<text x="10" y="10" font-size="4">Text</text>"#, 0),

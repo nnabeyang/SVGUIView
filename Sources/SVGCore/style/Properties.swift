@@ -454,6 +454,17 @@ enum TextAnchorProperty: StyleProperty {
   }
 }
 
+enum WhiteSpaceProperty: StyleProperty {
+  static let id = PropertyID.whiteSpace
+  static let isInherited = true
+  static let initial = CSSWhiteSpace.normal
+  static let computed = \ComputedStyle.whiteSpace
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> CSSWhiteSpace? {
+    keyword(text, origin: origin)
+  }
+}
+
 enum VisibilityProperty: StyleProperty {
   static let id = PropertyID.visibility
   static let isInherited = true

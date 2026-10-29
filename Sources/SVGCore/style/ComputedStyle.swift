@@ -25,6 +25,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case strokeDashoffset = "stroke-dashoffset"
   case clipRule = "clip-rule"
   case textAnchor = "text-anchor"
+  case whiteSpace = "white-space"
   case visibility
   case colorInterpolation = "color-interpolation"
   case colorInterpolationFilters = "color-interpolation-filters"
@@ -88,6 +89,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .strokeDashoffset: visitor.visit(StrokeDashoffsetProperty.self)
     case .clipRule: visitor.visit(ClipRuleProperty.self)
     case .textAnchor: visitor.visit(TextAnchorProperty.self)
+    case .whiteSpace: visitor.visit(WhiteSpaceProperty.self)
     case .visibility: visitor.visit(VisibilityProperty.self)
     case .colorInterpolation: visitor.visit(ColorInterpolationProperty.self)
     case .colorInterpolationFilters: visitor.visit(ColorInterpolationFiltersProperty.self)
@@ -155,6 +157,7 @@ struct ComputedStyle: Sendable, Equatable {
   var strokeDashoffset: CGFloat
   var clipRule: FillRule
   var textAnchor: TextAnchor
+  var whiteSpace: CSSWhiteSpace
   var visibility: CSSVisibility
   var colorInterpolation: SVGColorInterpolation?
   var colorInterpolationFilters: SVGColorInterpolation?
@@ -202,6 +205,7 @@ struct ComputedStyle: Sendable, Equatable {
     strokeLinejoin: StrokeLinejoinProperty.initial, strokeMiterlimit: StrokeMiterlimitProperty.initial,
     strokeDasharray: StrokeDasharrayProperty.initial, strokeDashoffset: StrokeDashoffsetProperty.initial,
     clipRule: ClipRuleProperty.initial, textAnchor: TextAnchorProperty.initial,
+    whiteSpace: WhiteSpaceProperty.initial,
     visibility: VisibilityProperty.initial, colorInterpolation: ColorInterpolationProperty.initial,
     colorInterpolationFilters: ColorInterpolationFiltersProperty.initial, opacity: OpacityProperty.initial,
     transform: TransformProperty.initial, transformOrigin: TransformOriginProperty.initial,
@@ -303,6 +307,7 @@ struct ComputedStyle: Sendable, Equatable {
     color: SVGColor, fill: Paint, fillOpacity: Double, fillRule: FillRule, stroke: Paint, strokeOpacity: Double,
     strokeWidth: SVGLength, strokeLinecap: CGLineCap, strokeLinejoin: CGLineJoin, strokeMiterlimit: Double,
     strokeDasharray: [CGFloat], strokeDashoffset: CGFloat, clipRule: FillRule, textAnchor: TextAnchor,
+    whiteSpace: CSSWhiteSpace,
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
     colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
     transformOrigin: TransformOrigin, transformBox: TransformBox,
@@ -333,6 +338,7 @@ struct ComputedStyle: Sendable, Equatable {
     self.strokeDashoffset = strokeDashoffset
     self.clipRule = clipRule
     self.textAnchor = textAnchor
+    self.whiteSpace = whiteSpace
     self.visibility = visibility
     self.colorInterpolation = colorInterpolation
     self.colorInterpolationFilters = colorInterpolationFilters

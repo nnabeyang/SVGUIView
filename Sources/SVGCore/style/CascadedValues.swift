@@ -57,11 +57,20 @@ struct CascadedValues: Sendable {
     of name: SVGElementName, attributes: [String: String]
   ) -> [PropertyDeclaration] {
     // Each property has one attribute, so the order of the attributes doesn't change the cascaded values.
-    attributes.compactMap { attribute, text in
+    let declarations = attributes.compactMap { attribute, text -> PropertyDeclaration? in
       guard let id = PropertyID(rawValue: attribute) else { return nil }
       var declarator = AttributeDeclarator(name: name, text: text)
       return id.visit(&declarator)
     }
+    // SVG 2 maps `xml:space` to `white-space` in the user agent's style sheet, so that the `white-space` attribute
+    // and style sheets override it.
+    let whiteSpace: CSSWhiteSpace? =
+      switch attributes["xml:space"] {
+      case "preserve": .pre
+      case "default": .normal
+      default: nil
+      }
+    return whiteSpace.map { [PropertyDeclaration(WhiteSpaceProperty.self, .value($0))] + declarations } ?? declarations
   }
 }
 

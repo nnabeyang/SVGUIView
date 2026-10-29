@@ -29,6 +29,41 @@ enum CSSVisibility: String, CaseIterable, Sendable {
   case collapse
 }
 
+/// The `white-space` property, which decides how the white space in the content of text is drawn.
+enum CSSWhiteSpace: String, CaseIterable, Sendable {
+  case normal
+  case pre
+  case nowrap
+  case preWrap = "pre-wrap"
+  case breakSpaces = "break-spaces"
+  case preLine = "pre-line"
+
+  /// Whether a sequence of white space is drawn as one space, and white space at the start and the end of the text
+  /// isn't drawn.
+  var collapsesSpaces: Bool {
+    switch self {
+    case .normal, .nowrap, .preLine: true
+    case .pre, .preWrap, .breakSpaces: false
+    }
+  }
+
+  /// The characters of text with its white space processed, as SVG draws them on one line.
+  ///
+  /// Line breaks and tabs become spaces, since SVG text doesn't wrap. Spaces are then collapsed into one, and
+  /// removed from the start and the end, unless the value preserves them.
+  func processed(_ text: String) -> String {
+    let spaced = String(
+      text.unicodeScalars.map { scalar -> Character in
+        switch scalar {
+        case "\n", "\r", "\t": " "
+        default: Character(scalar)
+        }
+      })
+    guard collapsesSpaces else { return spaced }
+    return spaced.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+  }
+}
+
 /// A declaration in a style sheet or the `style` attribute, with what the cascade sorts it by.
 struct CSSDeclaration: Comparable {
   let declaration: PropertyDeclaration
