@@ -129,6 +129,7 @@ struct MetalFilterRendererTests {
     // Floods.
     filter(#"<feFlood flood-color="orange" flood-opacity="0.7" x="20" y="20" width="40" height="50"/>"#),
     filter(#"<feFlood flood-color="orange"/>"#, space: "sRGB", opacity: "0.3"),
+    filter(#"<feFlood flood-color="rgba(255, 165, 0, 0.5)" flood-opacity="0.7"/>"#),
     // Merges of the results, the source and its alpha.
     filter(
       #"<feGaussianBlur in="SourceAlpha" stdDeviation="2" result="b"/><feOffset dx="3" dy="3" result="o"/>"#

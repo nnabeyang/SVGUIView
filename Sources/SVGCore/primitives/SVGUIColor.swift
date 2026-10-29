@@ -311,23 +311,24 @@ struct SVGHexColor: SVGUIColor {
   }
 
   func toCGColor(opacity: Double) -> CGColor? {
-    let base = CGFloat(isShort ? 0xF : 0xFF)
     let (r, g, b, a) = rgba
     return CGColor.extendedSRGB(
-      red: CGFloat(r) / base,
-      green: CGFloat(g) / base,
-      blue: CGFloat(b) / base,
-      alpha: CGFloat(a) / base * opacity
+      red: r / 255,
+      green: g / 255,
+      blue: b / 255,
+      alpha: a / 255 * opacity
     )
   }
 
   var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
     let shift = isShort ? 4 : 8
     let mask: UInt64 = isShort ? 0xF : 0xFF
-    let alpha = CGFloat(hasAlpha ? ((value >> (shift * 0)) & mask) : mask)
-    let blue = CGFloat((value >> (shift * (hasAlpha ? 1 : 0))) & mask)
-    let green = CGFloat((value >> (shift * (hasAlpha ? 2 : 1))) & mask)
-    let red = CGFloat((value >> (shift * (hasAlpha ? 3 : 2))) & mask)
+    // A digit of the short form repeats, so that F is FF.
+    let scale: CGFloat = isShort ? 17 : 1
+    let alpha = CGFloat(hasAlpha ? ((value >> (shift * 0)) & mask) : mask) * scale
+    let blue = CGFloat((value >> (shift * (hasAlpha ? 1 : 0))) & mask) * scale
+    let green = CGFloat((value >> (shift * (hasAlpha ? 2 : 1))) & mask) * scale
+    let red = CGFloat((value >> (shift * (hasAlpha ? 3 : 2))) & mask) * scale
     return (red: red, green: green, blue: blue, alpha: alpha)
   }
 }

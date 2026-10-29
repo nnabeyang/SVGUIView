@@ -137,17 +137,21 @@ extension RenderTreeBuilder {
     }
   }
 
-  /// The color of a flood, premultiplied by the flood opacity, in the order of the pixels of the bitmap.
+  /// The color of a flood, premultiplied by its alpha and the flood opacity, in the order of the pixels of the
+  /// bitmap.
   private func floodColor(of flood: SVGFeFloodElement) -> [UInt8] {
     let (red:r, green:g, blue:b, alpha:a) = flood.floodColor.rgba
     let opacity = flood.floodOpacity
-    let y = (r * 0.2125 + g * 0.7154 + b * 0.0721) * opacity
-    let u = (r * -0.115 + g * -0.386 + b * 0.5) * opacity
-    let v = (r * 0.5 + g * -0.454 + b * -0.046) * opacity
+    let alpha = opacity * a / 255
+    let y = (r * 0.2125 + g * 0.7154 + b * 0.0721) * alpha
+    let u = (r * -0.115 + g * -0.386 + b * 0.5) * alpha
+    let v = (r * 0.5 + g * -0.454 + b * -0.046) * alpha
+    // The conversion through luma and chroma can make a component of 0 a little less than 0.
+    func component(_ value: CGFloat) -> UInt8 { UInt8(min(max(round(value), 0), 255)) }
     return [
-      UInt8(round(y + u * 1.8558)),
-      UInt8(round(y + u * -0.187 + v * -0.4678)),
-      UInt8(round(y + v * 1.575)),
+      component(y + u * 1.8558),
+      component(y + u * -0.187 + v * -0.4678),
+      component(y + v * 1.575),
       UInt8((a * opacity).rounded(.toNearestOrAwayFromZero)),
     ]
   }
