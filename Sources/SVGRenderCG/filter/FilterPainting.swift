@@ -6,14 +6,46 @@ import SVGCore
 extension CGPainter {
   /// Paints an element with its filter.
   func paint(_ filtered: FilteredNode, into cgContext: CGContext) async {
+    guard let source = await sourceImage(of: filtered), let result = await filterResult(of: filtered, source: source)
+    else { return }
+    cgContext.saveGState()
+    cgContext.concatenate(filtered.transform)
+    cgContext.draw(result, in: filtered.effectRect)
+    cgContext.restoreGState()
+  }
+
+  /// The element without its filter, painted into a bitmap of the filter region in the color space of
+  /// `color-interpolation`, or `nil` if the bitmap can't be made or the task is cancelled.
+  package func sourceImage(of filtered: FilteredNode) async -> CGImage? {
+    let rect = filtered.effectRect
+    guard
+      let graphics = CGContext.bitmap(size: rect.size, scale: scale, space: filtered.colorInterpolation.colorSpace)
+    else { return nil }
+    let transform = CGAffineTransform(scaleX: scale, y: scale)
+      .translatedBy(x: -rect.minX, y: -rect.minY)
+    graphics.concatenate(transform)
+
+    graphics.saveGState()
+    guard !Task.isCancelled else { return nil }
+    if let source = filtered.source {
+      await paint(source, into: graphics)
+    }
+    guard let image = graphics.makeImage() else { return nil }
+    graphics.restoreGState()
+    return image
+  }
+
+  /// The result of the primitives of a filter on the image of the element from `sourceImage(of:)`, as an image of
+  /// the filter region in the color space of `color-interpolation-filters`, or `nil` if its bitmap can't be made.
+  ///
+  /// A primitive whose result can't be made, or a cancelled task, ends the filter with the result of the primitives
+  /// before it.
+  package func filterResult(of filtered: FilteredNode, source srcImage: CGImage) async -> CGImage? {
     let effectRect = filtered.effectRect
     guard
-      let imageCgContext = CGContext.bitmap(
-        size: effectRect.size, scale: scale, space: filtered.colorInterpolation.colorSpace),
-      let srcImage = await sourceImage(of: filtered, graphics: imageCgContext),
       let filterCgContext = CGContext.bitmap(
         size: effectRect.size, scale: scale, space: filtered.colorInterpolationFilters.colorSpace)
-    else { return }
+    else { return nil }
     let transform = CGAffineTransform(scaleX: scale, y: scale)
       .translatedBy(x: -effectRect.minX, y: -effectRect.minY)
     filterCgContext.concatenate(transform)
@@ -39,27 +71,7 @@ extension CGPainter {
       }
       inputImage = clippedImage
     }
-    cgContext.saveGState()
-    cgContext.concatenate(filtered.transform)
-    cgContext.draw(inputImage, in: effectRect)
-    cgContext.restoreGState()
-  }
-
-  /// The element without its filter, painted into the bitmap of the filter region.
-  private func sourceImage(of filtered: FilteredNode, graphics: CGContext) async -> CGImage? {
-    let rect = filtered.effectRect
-    let transform = CGAffineTransform(scaleX: scale, y: scale)
-      .translatedBy(x: -rect.minX, y: -rect.minY)
-    graphics.concatenate(transform)
-
-    graphics.saveGState()
-    guard !Task.isCancelled else { return nil }
-    if let source = filtered.source {
-      await paint(source, into: graphics)
-    }
-    guard let image = graphics.makeImage() else { return nil }
-    graphics.restoreGState()
-    return image
+    return inputImage
   }
 
   /// Applies a primitive to its inputs, drawing the result into `cgContext`, and returns the result clipped to the
