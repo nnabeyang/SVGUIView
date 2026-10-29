@@ -2,9 +2,9 @@ name: Swift Package Tests
 
 on:
   push:
-    branches: ["main", "epic/animation"]
-  # Every pull request, also one on the branch of another pull request, whose base changes to main or epic/animation
-  # when the other one is merged. That change doesn't run the workflow, so the checks of its first run are kept.
+    branches: ["main"]
+  # Every pull request, also one on the branch of another pull request, whose base changes to main when the other one
+  # is merged. That change doesn't run the workflow, so the checks of its first run are kept.
   pull_request:
   workflow_dispatch:
 
@@ -40,9 +40,9 @@ jobs:
         run: |
           if [ "$EVENT_NAME" != pull_request ]; then
             printf 'test=true\ndocumentation=true\n' >> "$GITHUB_OUTPUT"
-          elif [ "$BASE_REF" != main ] && [ "$BASE_REF" != epic/animation ]; then
-            # The changes from the branch of the other pull request don't tell what changes from main or
-            # epic/animation, which the base changes to.
+          elif [ "$BASE_REF" != main ]; then
+            # The changes from the branch of the other pull request don't tell what changes from main, which the base
+            # changes to.
             printf 'test=true\ndocumentation=true\n' >> "$GITHUB_OUTPUT"
           else
             scripts/changes-code.sh "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
