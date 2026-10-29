@@ -360,6 +360,32 @@ struct RenderTreeBuilderTests {
     #expect(color == CGColor.opaqueBlack)
   }
 
+  /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
+  private static let floodColors: [(String, [Int])] = [
+    (#"flood-color="lime""#, [0, 255, 0, 255]),
+    (#"flood-color="rgba(0, 255, 0, 0.5)""#, [0, 128, 0, 128]),
+    (#"flood-color="lime" flood-opacity="0.5""#, [0, 128, 0, 128]),
+    (#"flood-color="rgba(0, 255, 0, 0.5)" flood-opacity="0.5""#, [0, 64, 0, 64]),
+    (#"flood-color="hsla(120, 100%, 25%, 0.5)""#, [0, 64, 0, 128]),
+    (##"flood-color="#0f0""##, [0, 255, 0, 255]),
+    (##"flood-color="#0f08""##, [0, 136, 0, 136]),
+    (##"flood-color="#00ff0080""##, [0, 128, 0, 128]),
+  ]
+
+  @Test("a flood premultiplies its color by the alpha of the color and the flood opacity", arguments: floodColors)
+  func floodColor(attributes: String, expected: [Int]) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feFlood "## + attributes + ##"/></filter><rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .flood(let color) = try #require(filtered.primitives.first).primitive else {
+      Issue.record("The primitive isn't a flood")
+      return
+    }
+    #expect(color.count == 4)
+    for (component, value) in zip(color, expected) {
+      #expect(abs(Int(component) - value) <= 1, "\(color) isn't \(expected)")
+    }
+  }
+
   @Test("an element with a filter keeps itself without the filter, which is the source image")
   func filterSource() async throws {
     let filtered = try await filteredNode(
