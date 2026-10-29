@@ -19,17 +19,22 @@ final class SVGTextElement: ShapeGeometry {
 
   let base: SVGBaseElement
   let text: String
-  let x: SVGLength?
-  let y: SVGLength?
+  let positions: CharacterPositions
 
   init(base: SVGBaseElement, text: String, attributes: [String: String]) {
     self.base = base
     self.text = base.style.whiteSpace.processed(text)
-    x = SVGLength(attributes["x"])
-    y = SVGLength(attributes["y"])
+    positions = CharacterPositions(attributes: attributes)
   }
 
-  private func getLine(context: any SVGLengthContext) -> CTLine? {
+  /// The text laid out with the positions of its characters, or `nil` if it isn't drawn.
+  private func layout(context: any GeometryContext) -> TextLayout? {
+    TextLayout(text: text, positions: positions, anchor: style.textAnchor, context: context) {
+      getLine(text: $0, context: context)
+    }
+  }
+
+  private func getLine(text: String, context: any SVGLengthContext) -> CTLine? {
     var attributes: [CFString: Any] = [:]
     let font = style.font
     let modifiedFont: SVGUIFont? = {
@@ -58,61 +63,14 @@ final class SVGTextElement: ShapeGeometry {
     return CTLineCreateWithAttributedString(attributedText)
   }
 
-  /// The bounds of the line of text, which are larger than the bounds of its glyphs.
+  /// The bounds of the lines of text, which are larger than the bounds of its glyphs.
   func frame(in context: any GeometryContext, path _: CGPath?) -> CGRect {
-    guard let line = getLine(context: context) else { return .zero }
-    let x = x?.value(context: context, mode: .width) ?? 0
-    let y = y?.value(context: context, mode: .height) ?? 0
-    let textScale = context.textScale
-    var transform = CGAffineTransform(translationX: x, y: y)
-      .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
-    let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    transform = transform.translatedBy(x: anchorOffset(width: rect.width), y: 0)
-    return rect.applying(transform)
+    layout(context: context)?.frame ?? .zero
   }
 
   /// The outlines of the glyphs of the text.
   func path(in context: any GeometryContext) -> CGPath? {
-    guard let line = getLine(context: context) else { return nil }
-    let letters = CGMutablePath()
-    let runs = CTLineGetGlyphRuns(line)
-    for i in 0..<CFArrayGetCount(runs) {
-      let run = unsafeBitCast(CFArrayGetValueAtIndex(runs, i), to: CTRun.self)
-      let fontPointer = CFDictionaryGetValue(CTRunGetAttributes(run), Unmanaged.passUnretained(kCTFontAttributeName).toOpaque())
-      let runFont = unsafeBitCast(fontPointer, to: CTFont.self)
-
-      let length = CTRunGetGlyphCount(run) as Int
-      var glyphs = [CGGlyph](repeating: .init(), count: length)
-      var positions = [CGPoint](repeating: CGPoint(), count: length)
-      let range = CFRange(location: 0, length: length)
-      CTRunGetGlyphs(run, range, &glyphs)
-      CTRunGetPositions(run, range, &positions)
-      for index in 0..<glyphs.count {
-        let position = positions[index]
-        let glyph = glyphs[index]
-        guard let letter = CTFontCreatePathForGlyph(runFont, glyph, nil) else { continue }
-        letters.addPath(letter, transform: CGAffineTransform(translationX: position.x, y: position.y))
-      }
-    }
-
-    let x = x?.value(context: context, mode: .width) ?? 0
-    let y = y?.value(context: context, mode: .height) ?? 0
-    let textScale = context.textScale
-    var transform = CGAffineTransform(translationX: x, y: y)
-      .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
-
-    let rect = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
-    transform = transform.translatedBy(x: anchorOffset(width: rect.width), y: 0)
-    return letters.applying(transform)
-  }
-
-  /// How far the line of text of the width moves along the line from `x`, so that its `text-anchor` is at `x`.
-  private func anchorOffset(width: CGFloat) -> CGFloat {
-    switch style.textAnchor {
-    case .start: 0
-    case .middle: -width / 2
-    case .end: -width
-    }
+    layout(context: context)?.path
   }
 
   static func withUnsafeMutablePointer<T>(array: inout [T], from: Int) -> UnsafeMutablePointer<T> {
