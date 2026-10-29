@@ -34,6 +34,18 @@ private let filters = #"""
   </svg>
   """#
 
+/// A document whose second rectangle `f` has a filter whose blur changes, between rectangles that don't change.
+private let changingFilter = #"""
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <filter id="pulse">
+      <feGaussianBlur stdDeviation="1"><animate attributeName="stdDeviation" to="4" dur="1s"/></feGaussianBlur>
+    </filter>
+    <rect id="a" width="20" height="20"/>
+    <rect id="f" x="40" y="40" width="20" height="20" filter="url(#pulse)"/>
+    <rect id="b" x="70" width="20" height="20"/>
+  </svg>
+  """#
+
 /// The layers of a document at the time, which reuse the previous ones.
 private func layers(
   of document: String = document, at time: Double, reusing previous: RenderedContainer? = nil
@@ -93,6 +105,19 @@ struct LayerUpdateTests {
     #expect(after[0].image === before[0].image)
     #expect(after[1].image === before[1].image)
     #expect(after[2].image !== before[2].image)
+    #expect(second.paintedCount(since: first) == 1)
+  }
+
+  @Test("a filter that changes paints again only its layer, and not the elements around it")
+  func reusesImagesAroundFilters() async throws {
+    let first = try await layers(of: changingFilter, at: 0)
+    let second = try await layers(of: changingFilter, at: 0.5, reusing: first)
+    let before = contents(of: first)
+    let after = contents(of: second)
+    try #require(before.count == 3 && after.count == 3)
+    #expect(after[0].image === before[0].image)
+    #expect(after[1].image !== before[1].image)
+    #expect(after[2].image === before[2].image)
     #expect(second.paintedCount(since: first) == 1)
   }
 

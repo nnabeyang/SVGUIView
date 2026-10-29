@@ -461,6 +461,11 @@ layer. The tree is built so that the common animations don't repaint anything:
   gave such an element a layer of its own whether or not it's animated, but a
   layer would only clip, mask or filter what's in it, which painting it whole
   does as well.
+- An element whose filter paints differently over time is painted into a layer
+  of its own. This happens when the values of the filter's primitives are animated, or when the elements that it
+  filters change. Only that layer is painted again in each frame, and not the
+  content around the element. An element whose filter doesn't change is painted
+  with the content around it.
 - Neighboring content that doesn't need a layer is painted together into one
   layer by `SVGRenderCG`. A document without animations becomes a single layer.
 - A change of `transform` or `opacity` only sets the layer's property. Nothing
