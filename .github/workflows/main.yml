@@ -66,25 +66,35 @@ jobs:
         with:
           xcode-version: '27.0'
 
-      # The simulator boots while the tests build, which takes minutes after it boots too.
+      # The simulator boots while the tests build. Its first boot on a new machine takes minutes.
       - name: Boot the simulator
         run: scripts/test-in-simulator.sh --boot
+
+      - name: Build the tests (iOS)
+        id: build
+        env:
+          TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
+        # Warnings in the package's code fail the build. Remote dependencies are built without warnings. A build
+        # for any simulator builds every architecture, so it builds only the one of the machine.
+        run: scripts/test-in-simulator.sh --build clean SWIFT_TREAT_WARNINGS_AS_ERRORS=YES ARCHS=arm64
+
+      - name: Wait for the simulator
+        run: scripts/test-in-simulator.sh --wait
 
       - name: Run xcodebuild tests (iOS)
         env:
           TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
-        # Warnings in the package's code fail the build. Remote dependencies are built without warnings.
-        run: scripts/test-in-simulator.sh tests clean SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+        run: scripts/test-in-simulator.sh tests
 
       # With one thread in the cooperative thread pool, a rendering that never lets other tasks run keeps the
       # tests from cancelling it on time. The tests of the views cancel renderings and time them out, so only they
       # run again.
       - name: Run xcodebuild tests with one thread in the cooperative pool (iOS)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           TEST_RESULTS_DIR: ${{ runner.temp }}/test-results
           TEST_RUNNER_LIBDISPATCH_COOPERATIVE_POOL_STRICT: "1"
-        run: scripts/test-in-simulator.sh tests-one-thread -only-testing:SVGUIViewTests SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+        run: scripts/test-in-simulator.sh tests-one-thread -only-testing:SVGUIViewTests
 
       - name: Report failed tests
         if: ${{ failure() }}
