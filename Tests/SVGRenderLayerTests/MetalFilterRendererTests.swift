@@ -146,6 +146,15 @@ struct MetalFilterRendererTests {
     filter(##"<feFlood flood-color="#3080ff" result="f"/><feBlend in="SourceGraphic" in2="f" mode="screen"/>"##),
     filter(##"<feFlood flood-color="#3080ff" result="f"/><feBlend in="f" in2="SourceGraphic" mode="darken"/>"##),
     filter(#"<feGaussianBlur stdDeviation="3" result="b"/><feBlend in="SourceGraphic" in2="b"/>"#, opacity: "0.6"),
+    // A blend and a merge of part of the region, which clips their results.
+    filter(
+      ##"<feFlood flood-color="#3080ff" result="f"/>"##
+        + #"<feBlend in="SourceGraphic" in2="f" mode="multiply" x="20" y="30" width="50" height="40"/>"#),
+    filter(#"<feMerge x="20" y="20" width="40" height="40"><feMergeNode/><feMergeNode/></feMerge>"#),
+    // A region off the pixels, whose primitives have subregions on the pixels.
+    filter(
+      #"<feFlood flood-color="gold" x="10" y="10" width="60" height="60"/>"#
+        + #"<feGaussianBlur stdDeviation="2" x="10" y="10" width="70" height="70"/>"#, region: offPixelsRegion),
   ]
 
   @Test("the GPU runs a filter as the CPU does", arguments: documents, [1.0, 3.0])
@@ -174,8 +183,8 @@ struct MetalFilterRendererTests {
   private static let unsupported: [String] = [
     // A blur that blurs a direction with three boxes, by a standard deviation different from the other.
     filter(#"<feGaussianBlur stdDeviation="1 10"/>"#),
-    // A merge of part of the region, whose result the GPU doesn't clip.
-    filter(#"<feMerge x="20" y="20" width="40" height="40"><feMergeNode/></feMerge>"#),
+    // A primitive whose subregion is a region off the pixels, which the CPU clips to part of a pixel.
+    filter(#"<feGaussianBlur stdDeviation="1"/>"#, region: offPixelsRegion),
     // A blend mode that Core Graphics computes differently from the specification.
     filter(##"<feFlood flood-color="#3080ff" result="f"/><feBlend in="SourceGraphic" in2="f" mode="color-dodge"/>"##),
     // An offset off the pixels.

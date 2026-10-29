@@ -214,8 +214,9 @@ private struct FilterGeometry {
   let filtered: FilteredNode
   let scale: CGFloat
 
-  var width: Int { Int((filtered.effectRect.width * scale).rounded()) }
-  var height: Int { Int((filtered.effectRect.height * scale).rounded()) }
+  /// The pixels of the filter bitmap of the CPU, whose width and height are rounded up to whole pixels.
+  var width: Int { CGContext.bitmapLayout(size: filtered.effectRect.size, scale: scale)?.width ?? 0 }
+  var height: Int { CGContext.bitmapLayout(size: filtered.effectRect.size, scale: scale)?.height ?? 0 }
 
   func isOnPixels(_ value: CGFloat) -> Bool {
     abs(value - value.rounded()) < 1e-6
@@ -242,23 +243,18 @@ private struct FilterGeometry {
     DrawArea(origin: .zero, end: SIMD2(Int32(width), Int32(height)))
   }
 
-  func isFilterRegion(_ rect: CGRect) -> Bool {
-    guard let area = area(of: rect) else { return false }
-    return area.origin == .zero && area.end == SIMD2(Int32(width), Int32(height))
-  }
-
   /// Whether the GPU runs the filter with the same results as the CPU, as `FilterRun` checks while it encodes it.
   var isSupported: Bool {
     let effectRect = filtered.effectRect
-    guard !filtered.primitives.isEmpty, isOnPixels(effectRect.width * scale), isOnPixels(effectRect.height * scale),
-      (1...Self.maximumSize).contains(width), (1...Self.maximumSize).contains(height)
+    guard !filtered.primitives.isEmpty, (1...Self.maximumSize).contains(width),
+      (1...Self.maximumSize).contains(height)
     else { return false }
     var clipRect = effectRect
     for step in filtered.primitives {
       let subregion = step.subregion
       switch step.primitive {
       case .blend(let mode, _, _):
-        guard blendModes.contains(mode), isFilterRegion(subregion) else { return false }
+        guard blendModes.contains(mode), area(of: subregion) != nil else { return false }
         clipRect = subregion
       case .flood(let color):
         guard area(of: subregion) != nil, color.count == 4 else { return false }
@@ -272,7 +268,7 @@ private struct FilterGeometry {
         }
         clipRect = subregion
       case .merge:
-        guard isFilterRegion(subregion) else { return false }
+        guard area(of: subregion) != nil else { return false }
         clipRect = subregion
       case .offset(let translation):
         clipRect = clipRect.intersection(subregion)
@@ -337,22 +333,22 @@ private struct FilterRun {
   private func isOnPixels(_ value: CGFloat) -> Bool { geometry.isOnPixels(value) }
   private func area(of rect: CGRect) -> DrawArea? { geometry.area(of: rect) }
   private var fullArea: DrawArea { geometry.fullArea }
-  private func isFilterRegion(_ rect: CGRect) -> Bool { geometry.isFilterRegion(rect) }
 
   private mutating func apply(_ step: FilterStep, source: FilterImage, input: FilterImage) -> FilterImage? {
     let subregion = step.subregion
     switch step.primitive {
     case .blend(let mode, let input1, let input2):
-      guard let modeIndex = blendModes.firstIndex(of: mode), isFilterRegion(subregion) else { return nil }
+      guard let modeIndex = blendModes.firstIndex(of: mode), let area = area(of: subregion) else { return nil }
       clipRect = subregion
       // The inputs are in the color space of the source.
       var source = source
       guard let converted = convert(input, to: source.space),
         let image1 = self.input(input1, source: &source, input: converted, space: source.space),
         let image2 = self.input(input2, source: &source, input: converted, space: source.space),
-        let backdrop = draw(image2, in: fullArea)
+        let backdrop = draw(image2, in: fullArea),
+        let blended = blend(image1, over: backdrop, mode: UInt32(modeIndex))
       else { return nil }
-      return blend(image1, over: backdrop, mode: UInt32(modeIndex))
+      return clipped(blended, to: area)
     case .flood(let color):
       guard let area = area(of: subregion), color.count == 4,
         let table = renderer.table(.draw(from: source.space, to: space, alpha: filtered.opacity))
@@ -370,7 +366,7 @@ private struct FilterRun {
       clipRect = subregion
       return draw(blurred, in: area)
     case .merge(let inputs, let colorInterpolationFilters):
-      guard isFilterRegion(subregion) else { return nil }
+      guard let area = area(of: subregion) else { return nil }
       clipRect = subregion
       let mergeSpace = colorInterpolationFilters ?? (step.isFirst ? source.space : input.space)
       guard var source = convert(source, to: mergeSpace), let converted = convert(input, to: mergeSpace) else {
@@ -389,7 +385,8 @@ private struct FilterRun {
           result = drawn
         }
       }
-      return result ?? fill(.zero, in: fullArea)
+      guard let result else { return fill(.zero, in: fullArea) }
+      return clipped(result, to: area)
     case .offset(let translation):
       let dx = translation.tx * scale
       let dy = translation.ty * scale
@@ -541,6 +538,24 @@ private struct FilterRun {
         })
     else { return nil }
     return FilterImage(texture: output, space: space)
+  }
+
+  /// An image with its pixels outside an area cleared and the others kept, as the clip of the CPU leaves them.
+  private func clipped(_ image: FilterImage, to area: DrawArea) -> FilterImage? {
+    if area.origin == fullArea.origin, area.end == fullArea.end { return image }
+    guard let table = tableBuffer(.draw(from: image.space, to: image.space, alpha: 1)),
+      let output = makeTexture()
+    else { return nil }
+    var area = area
+    guard
+      dispatch(
+        .drawImage, textures: [image.texture, output],
+        body: { encoder in
+          encoder.setBuffer(table, offset: 0, index: 0)
+          encoder.setBytes(&area, length: MemoryLayout<DrawArea>.stride, index: 1)
+        })
+    else { return nil }
+    return FilterImage(texture: output, space: image.space)
   }
 
   /// An image drawn with the opacity and a blend mode over an image of the filter.
