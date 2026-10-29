@@ -10,7 +10,7 @@ extension GaussianBlurPrimitive {
   /// specification computes it. Where the size is even, the specification uses two boxes of the size that are offset by
   /// half a pixel and a centered box one pixel larger, while the boxes of the same standard deviation in both
   /// directions are made odd and centered, since vImage, and `MPSImageBox` on the GPU, only have centered odd boxes.
-  private static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {
+  package static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {
     let calculatedRadius = max(floor(value * 3.0 * sqrt(2 * .pi) / 4 + 0.5), 2 * scale)
     return min(Self.maxKernelSize, UInt32(calculatedRadius))
   }
@@ -103,13 +103,13 @@ extension GaussianBlurPrimitive {
   }
 
   /// Whether a blur of a standard deviation in pixels uses a Gaussian kernel, rather than three box blurs.
-  private static func isGaussian(_ deviation: CGFloat) -> Bool {
+  package static func isGaussian(_ deviation: CGFloat) -> Bool {
     deviation < boxBlurMinimumDeviation
   }
 
   /// The weights of a Gaussian kernel of a standard deviation in pixels, out to three standard deviations, which add
   /// up to 1. A standard deviation of 0 doesn't blur.
-  private static func gaussianKernel(deviation: CGFloat) -> [Float] {
+  package static func gaussianKernel(deviation: CGFloat) -> [Float] {
     guard deviation > 0 else { return [1] }
     let radius = Int(ceil(deviation * 3))
     let weights = (-radius...radius).map { exp(-CGFloat($0 * $0) / (2 * deviation * deviation)) }
