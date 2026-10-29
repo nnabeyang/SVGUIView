@@ -5,6 +5,10 @@ import MetalPerformanceShaders
 import SVGCore
 import SVGRenderCG
 import Synchronization
+import os
+
+/// The signposts of rendering, as `SVGUIView` marks them.
+private let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering")
 
 /// Runs the primitives of filters on the GPU, with the same results as the filters on the CPU up to the rounding.
 ///
@@ -57,7 +61,13 @@ package final class MetalFilterRenderer: Sendable {
   }
 
   /// The renderer of the process, made when it's first used, or `nil` if there's no GPU.
-  package static let shared = MetalFilterRenderer()
+  ///
+  /// Making it compiles the kernels, which the first frame that runs a filter on the GPU waits for.
+  package static let shared: MetalFilterRenderer? = {
+    let interval = signposter.beginInterval("Prepare GPU filters")
+    defer { signposter.endInterval("Prepare GPU filters", interval) }
+    return MetalFilterRenderer()
+  }()
 
   /// Whether the GPU runs a filter at a scale with the same results as the CPU.
   package static func supports(_ filtered: FilteredNode, scale: CGFloat) -> Bool {
@@ -89,6 +99,8 @@ package final class MetalFilterRenderer: Sendable {
     guard geometry.isSupported else { return nil }
     let width = geometry.width
     let height = geometry.height
+    let interval = signposter.beginInterval("Filter on GPU", id: signposter.makeSignpostID(), "\(width) × \(height)")
+    defer { signposter.endInterval("Filter on GPU", interval) }
     let bytesPerRow = width * 4
     let length = bytesPerRow * height
     let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue

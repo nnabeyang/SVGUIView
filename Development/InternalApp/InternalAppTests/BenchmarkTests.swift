@@ -10,6 +10,8 @@ import XCTest
 /// in the snapshot tests and in CI. Devices give the times that matter: simulators don't reflect their performance.
 /// Run them in the Release configuration, as apps are built, with `-configuration Release ENABLE_TESTABILITY=YES`:
 /// the Debug configuration doesn't specialize the generic code of the styles, and takes many times longer.
+///
+/// Besides the time, they measure the time of the CPU, which running the filters on the GPU reduces.
 final class BenchmarkTests: XCTestCase {
   /// The frames that each measurement renders, at 60 frames per second.
   private static let frames = 120
@@ -50,7 +52,7 @@ final class BenchmarkTests: XCTestCase {
     let stages = ["Render", "Style", "Build", "Plan", "Paint"].map {
       XCTOSSignpostMetric(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering", name: $0)
     }
-    measure(metrics: [XCTClockMetric()] + stages) {
+    measure(metrics: [XCTClockMetric(), XCTCPUMetric()] + stages) {
       for frame in 1...Self.frames {
         view.seek(to: .seconds(Double(frame) / 60))
         run { !view.isRendering }
@@ -63,7 +65,7 @@ final class BenchmarkTests: XCTestCase {
   private func measureImages(of name: String) throws {
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), data: try data(of: name))
     view.contentMode = .scaleAspectFit
-    measure(metrics: [XCTClockMetric()]) {
+    measure(metrics: [XCTClockMetric(), XCTCPUMetric()]) {
       for frame in 1...Self.frames {
         var isDone = false
         Task {
