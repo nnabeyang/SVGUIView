@@ -357,6 +357,37 @@ struct StyleTests {
     #expect(circle[XProperty.self] == nil)
     #expect(circle[FillProperty.self] != nil)
   }
+
+  /// Values of `white-space`, text, and the text as SVG draws it.
+  private static let whiteSpaces: [(CSSWhiteSpace, String, String)] = [
+    (.normal, "\n    Text\n  ", "Text"),
+    (.normal, "A\t\tB  \n C", "A B C"),
+    (.normal, " \n\t ", ""),
+    (.nowrap, "  A  B  ", "A B"),
+    (.preLine, "A\n\nB", "A B"),
+    (.pre, "  A\tB\n  ", "  A B   "),
+    (.preWrap, "A  B", "A  B"),
+    (.breakSpaces, "\nA ", " A "),
+  ]
+
+  @Test(
+    "white-space turns line breaks and tabs into spaces, and collapses spaces unless it preserves them",
+    arguments: whiteSpaces)
+  func whiteSpace(value: CSSWhiteSpace, text: String, processed: String) {
+    #expect(value.processed(text) == processed)
+  }
+
+  @Test("xml:space declares white-space before the white-space attribute, which overrides it")
+  func xmlSpace() {
+    func whiteSpace(_ attributes: [String: String]) -> CSSWhiteSpace? {
+      let cascaded = CascadedValues(CascadedValues.presentationAttributes(of: .text, attributes: attributes))
+      return cascaded.declared(WhiteSpaceProperty.self)
+    }
+    #expect(whiteSpace(["xml:space": "preserve"]) == .pre)
+    #expect(whiteSpace(["xml:space": "default"]) == .normal)
+    #expect(whiteSpace(["xml:space": "other"]) == nil)
+    #expect(whiteSpace(["xml:space": "preserve", "white-space": "nowrap"]) == .nowrap)
+  }
 }
 
 private struct SVGLengthContextStub: SVGLengthContext {

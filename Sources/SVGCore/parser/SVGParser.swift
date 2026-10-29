@@ -114,6 +114,9 @@ extension SVGParser: XMLParserDelegate {
       let attributeName = a[1]
       if case .xlink = nameSpaces[prefix]?.ns, attributeName == "href" {
         attributes[attributeName] = element.value
+      } else if prefix == "xml", attributeName == "space" {
+        // The `xml` prefix is bound without a declaration, so the parser doesn't report it.
+        attributes[element.key] = element.value
       }
     }
     return attributes
