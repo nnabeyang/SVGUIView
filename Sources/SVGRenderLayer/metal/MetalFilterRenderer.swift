@@ -15,7 +15,8 @@ import Synchronization
 /// spaces where the CPU does. The color conversions and the opacity are looked up in tables that Core Graphics and
 /// vImage make, so that they round in the same way.
 ///
-/// It doesn't run filters whose results it can't make the same, for which it returns `nil`:
+/// It doesn't run a filter region larger than the textures that every GPU can make, nor filters whose results it can't
+/// make the same, for which it returns `nil`:
 /// - A filter region or a subregion whose edges, or an offset whose distance, aren't on the pixels, which the CPU
 ///   resamples.
 /// - A `feBlend` or a `feMerge` whose subregion isn't the filter region, which the CPU scales its inputs into.
@@ -55,6 +56,14 @@ package final class MetalFilterRenderer: Sendable {
     self.gaussianPass = gaussianPass
   }
 
+  /// The renderer of the process, made when it's first used, or `nil` if there's no GPU.
+  package static let shared = MetalFilterRenderer()
+
+  /// Whether the GPU runs a filter at a scale with the same results as the CPU.
+  package static func supports(_ filtered: FilteredNode, scale: CGFloat) -> Bool {
+    FilterGeometry(filtered: filtered, scale: scale).isSupported
+  }
+
   /// The result of the primitives of a filter on the image of the element, as a texture of the filter region in the
   /// color space of `color-interpolation-filters`, or `nil` if the filter can't be run on the GPU.
   ///
@@ -63,15 +72,76 @@ package final class MetalFilterRenderer: Sendable {
   ///     size of the filter region at the scale.
   ///   - scale: The scale of the screen.
   package func render(_ filtered: FilteredNode, source: MTLTexture, scale: CGFloat) async -> MTLTexture? {
-    guard !filtered.primitives.isEmpty, let buffer = queue.makeCommandBuffer() else { return nil }
+    guard let buffer = queue.makeCommandBuffer() else { return nil }
     var run = FilterRun(renderer: self, filtered: filtered, scale: scale, buffer: buffer)
-    guard let result = run.encode(source: source) else { return nil }
+    guard let result = run.encode(source: source), await Self.run(buffer) else { return nil }
+    return result
+  }
+
+  /// The result of a filter as `CGPainter.filterResult(of:source:)` makes it, with the element painted by the painter
+  /// and the primitives run on the GPU, or `nil` if the filter can't be run on the GPU or the task is cancelled.
+  ///
+  /// The element is painted into memory that the GPU reads, and the result is read from memory that the GPU writes,
+  /// so the pixels aren't copied on the CPU.
+  package func filterImage(of filtered: FilteredNode, painter: CGPainter) async -> CGImage? {
+    let scale = painter.scale
+    let geometry = FilterGeometry(filtered: filtered, scale: scale)
+    guard geometry.isSupported else { return nil }
+    let width = geometry.width
+    let height = geometry.height
+    let bytesPerRow = width * 4
+    let length = bytesPerRow * height
+    let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+    guard let sourceBuffer = device.makeBuffer(length: length, options: .storageModeShared),
+      let resultBuffer = device.makeBuffer(length: length, options: .storageModeShared),
+      let graphics = CGContext(
+        data: sourceBuffer.contents(), width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+        space: filtered.colorInterpolation.colorSpace, bitmapInfo: bitmapInfo)
+    else { return nil }
+    graphics.clear(CGRect(x: 0, y: 0, width: width, height: height))
+    guard await painter.paintSource(of: filtered, into: graphics), !Task.isCancelled else { return nil }
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
+    descriptor.usage = [.shaderRead, .shaderWrite]
+    descriptor.storageMode = .private
+    let size = MTLSize(width: width, height: height, depth: 1)
+    guard let buffer = queue.makeCommandBuffer(), let source = device.makeTexture(descriptor: descriptor),
+      let upload = buffer.makeBlitCommandEncoder()
+    else { return nil }
+    upload.copy(
+      from: sourceBuffer, sourceOffset: 0, sourceBytesPerRow: bytesPerRow, sourceBytesPerImage: length,
+      sourceSize: size, to: source, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin())
+    upload.endEncoding()
+    var run = FilterRun(renderer: self, filtered: filtered, scale: scale, buffer: buffer)
+    guard let result = run.encode(source: source), let download = buffer.makeBlitCommandEncoder() else { return nil }
+    download.copy(
+      from: result, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(), sourceSize: size, to: resultBuffer,
+      destinationOffset: 0, destinationBytesPerRow: bytesPerRow, destinationBytesPerImage: length)
+    download.endEncoding()
+    guard await Self.run(buffer) else { return nil }
+    // The image reads the memory of the buffer, which it keeps until it's released.
+    let retained = Unmanaged.passRetained(resultBuffer as AnyObject).toOpaque()
+    guard
+      let provider = CGDataProvider(
+        dataInfo: retained, data: resultBuffer.contents(), size: length,
+        releaseData: { info, _, _ in info.map { Unmanaged<AnyObject>.fromOpaque($0).release() } })
+    else {
+      Unmanaged<AnyObject>.fromOpaque(retained).release()
+      return nil
+    }
+    return CGImage(
+      width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: bytesPerRow,
+      space: filtered.colorInterpolationFilters.colorSpace, bitmapInfo: CGBitmapInfo(rawValue: bitmapInfo),
+      provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+  }
+
+  /// Commits a command buffer, and returns whether it completed, which it doesn't while the app is in the background.
+  private static func run(_ buffer: MTLCommandBuffer) async -> Bool {
     await withCheckedContinuation { continuation in
       buffer.addCompletedHandler { _ in continuation.resume() }
       buffer.commit()
     }
-    guard buffer.status == .completed else { return nil }
-    return result
+    return buffer.status == .completed
   }
 
   /// The table of a color operation, made once.
@@ -124,55 +194,23 @@ private struct FilterImage {
   let space: SVGColorInterpolation
 }
 
-/// The encoding of the primitives of a filter into a command buffer.
-private struct FilterRun {
-  let renderer: MetalFilterRenderer
+/// Where the pixels of a filter are, and whether the GPU runs it.
+private struct FilterGeometry {
+  /// The largest width and height of the textures, which every GPU and the simulator can make.
+  static let maximumSize = 8192
+
   let filtered: FilteredNode
   let scale: CGFloat
-  let buffer: MTLCommandBuffer
-  /// The results of the primitives with names.
-  var results = [String: FilterImage]()
-  /// The rectangle that the last primitive clipped to, which `feOffset` clips to as well.
-  var clipRect: CGRect
-
-  init(renderer: MetalFilterRenderer, filtered: FilteredNode, scale: CGFloat, buffer: MTLCommandBuffer) {
-    self.renderer = renderer
-    self.filtered = filtered
-    self.scale = scale
-    self.buffer = buffer
-    clipRect = filtered.effectRect
-  }
 
   var width: Int { Int((filtered.effectRect.width * scale).rounded()) }
   var height: Int { Int((filtered.effectRect.height * scale).rounded()) }
-  /// The color space of the bitmap that the primitives draw into.
-  var space: SVGColorInterpolation { filtered.colorInterpolationFilters }
 
-  /// Encodes the primitives on the source, and returns the texture of the result, or `nil` if the filter can't be run
-  /// on the GPU.
-  mutating func encode(source: MTLTexture) -> MTLTexture? {
-    let effectRect = filtered.effectRect
-    guard isOnPixels(effectRect.width * scale), isOnPixels(effectRect.height * scale), width > 0, height > 0,
-      source.width == width, source.height == height
-    else { return nil }
-    let sourceImage = FilterImage(texture: source, space: filtered.colorInterpolation)
-    var input = sourceImage
-    for step in filtered.primitives {
-      guard let result = apply(step, source: sourceImage, input: input) else { return nil }
-      if let name = step.result {
-        results[name] = result
-      }
-      input = result
-    }
-    return input.texture
-  }
-
-  private func isOnPixels(_ value: CGFloat) -> Bool {
+  func isOnPixels(_ value: CGFloat) -> Bool {
     abs(value - value.rounded()) < 1e-6
   }
 
   /// The pixels of a rectangle of the filter region, from the top left, or `nil` if its edges aren't on the pixels.
-  private func area(of rect: CGRect) -> DrawArea? {
+  func area(of rect: CGRect) -> DrawArea? {
     let effectRect = filtered.effectRect
     let left = (rect.minX - effectRect.minX) * scale
     let right = (rect.maxX - effectRect.minX) * scale
@@ -188,9 +226,106 @@ private struct FilterRun {
       end: SIMD2(clamped(right), clamped(CGFloat(height) - bottom)))
   }
 
-  private var fullArea: DrawArea {
+  var fullArea: DrawArea {
     DrawArea(origin: .zero, end: SIMD2(Int32(width), Int32(height)))
   }
+
+  func isFilterRegion(_ rect: CGRect) -> Bool {
+    guard let area = area(of: rect) else { return false }
+    return area.origin == .zero && area.end == SIMD2(Int32(width), Int32(height))
+  }
+
+  /// Whether the GPU runs the filter with the same results as the CPU, as `FilterRun` checks while it encodes it.
+  var isSupported: Bool {
+    let effectRect = filtered.effectRect
+    guard !filtered.primitives.isEmpty, isOnPixels(effectRect.width * scale), isOnPixels(effectRect.height * scale),
+      (1...Self.maximumSize).contains(width), (1...Self.maximumSize).contains(height)
+    else { return false }
+    var clipRect = effectRect
+    for step in filtered.primitives {
+      let subregion = step.subregion
+      switch step.primitive {
+      case .blend(let mode, _, _):
+        guard blendModes.contains(mode), isFilterRegion(subregion) else { return false }
+        clipRect = subregion
+      case .flood(let color):
+        guard area(of: subregion) != nil, color.count == 4 else { return false }
+        clipRect = subregion
+      case .gaussianBlur(let blur):
+        guard area(of: subregion) != nil else { return false }
+        if case .hetero(let x, let y) = blur.standardDeviation, x >= 0, y >= 0, x != y {
+          guard GaussianBlurPrimitive.isGaussian(x * scale), GaussianBlurPrimitive.isGaussian(y * scale) else {
+            return false
+          }
+        }
+        clipRect = subregion
+      case .merge:
+        guard isFilterRegion(subregion) else { return false }
+        clipRect = subregion
+      case .offset(let translation):
+        clipRect = clipRect.intersection(subregion)
+        guard isOnPixels(translation.tx * scale), isOnPixels(translation.ty * scale),
+          clipRect.isNull || area(of: clipRect) != nil
+        else { return false }
+      }
+    }
+    return true
+  }
+}
+
+/// The buffers of the tables of the color operations of a run of a filter.
+private final class TableBuffers {
+  var buffers = [ColorOperation: MTLBuffer]()
+}
+
+/// The encoding of the primitives of a filter into a command buffer.
+private struct FilterRun {
+  let renderer: MetalFilterRenderer
+  let filtered: FilteredNode
+  let scale: CGFloat
+  let buffer: MTLCommandBuffer
+  /// The results of the primitives with names.
+  var results = [String: FilterImage]()
+  /// The rectangle that the last primitive clipped to, which `feOffset` clips to as well.
+  var clipRect: CGRect
+  /// The tables of the color operations that the run uses, in buffers that the kernels read, which are too large to
+  /// pass as bytes.
+  let tableBuffers = TableBuffers()
+
+  init(renderer: MetalFilterRenderer, filtered: FilteredNode, scale: CGFloat, buffer: MTLCommandBuffer) {
+    self.renderer = renderer
+    self.filtered = filtered
+    self.scale = scale
+    self.buffer = buffer
+    clipRect = filtered.effectRect
+  }
+
+  private var geometry: FilterGeometry { FilterGeometry(filtered: filtered, scale: scale) }
+  var width: Int { geometry.width }
+  var height: Int { geometry.height }
+  /// The color space of the bitmap that the primitives draw into.
+  var space: SVGColorInterpolation { filtered.colorInterpolationFilters }
+
+  /// Encodes the primitives on the source, and returns the texture of the result, or `nil` if the filter can't be run
+  /// on the GPU.
+  mutating func encode(source: MTLTexture) -> MTLTexture? {
+    guard geometry.isSupported, source.width == width, source.height == height else { return nil }
+    let sourceImage = FilterImage(texture: source, space: filtered.colorInterpolation)
+    var input = sourceImage
+    for step in filtered.primitives {
+      guard let result = apply(step, source: sourceImage, input: input) else { return nil }
+      if let name = step.result {
+        results[name] = result
+      }
+      input = result
+    }
+    return input.texture
+  }
+
+  private func isOnPixels(_ value: CGFloat) -> Bool { geometry.isOnPixels(value) }
+  private func area(of rect: CGRect) -> DrawArea? { geometry.area(of: rect) }
+  private var fullArea: DrawArea { geometry.fullArea }
+  private func isFilterRegion(_ rect: CGRect) -> Bool { geometry.isFilterRegion(rect) }
 
   private mutating func apply(_ step: FilterStep, source: FilterImage, input: FilterImage) -> FilterImage? {
     let subregion = step.subregion
@@ -256,11 +391,6 @@ private struct FilterRun {
       area.offset = SIMD2(Int32(dx.rounded()), Int32(-dy.rounded()))
       return draw(converted, in: area)
     }
-  }
-
-  private func isFilterRegion(_ rect: CGRect) -> Bool {
-    guard let area = area(of: rect) else { return false }
-    return area.origin == .zero && area.end == SIMD2(Int32(width), Int32(height))
   }
 
   /// The input of a primitive, in a color space, as `inputImageBuffer` makes it on the CPU.
@@ -365,18 +495,28 @@ private struct FilterRun {
 
   // MARK: Kernels
 
+  /// The buffer of the table of a color operation, made once for the run.
+  private func tableBuffer(_ operation: ColorOperation) -> MTLBuffer? {
+    if let buffer = tableBuffers.buffers[operation] { return buffer }
+    guard let table = renderer.table(operation),
+      let buffer = renderer.device.makeBuffer(bytes: table, length: table.count, options: .storageModeShared)
+    else { return nil }
+    tableBuffers.buffers[operation] = buffer
+    return buffer
+  }
+
   /// An image converted into a color space, as vImage converts it.
   private func convert(_ image: FilterImage, to space: SVGColorInterpolation) -> FilterImage? {
     guard image.space != space else { return image }
-    guard let table = renderer.table(.convert(from: image.space, to: space)), let output = makeTexture(),
-      dispatch(.convertImage, textures: [image.texture, output], body: { $0.setBytes(table, length: table.count, index: 0) })
+    guard let table = tableBuffer(.convert(from: image.space, to: space)), let output = makeTexture(),
+      dispatch(.convertImage, textures: [image.texture, output], body: { $0.setBuffer(table, offset: 0, index: 0) })
     else { return nil }
     return FilterImage(texture: output, space: space)
   }
 
   /// An image drawn with the opacity into the area of a cleared bitmap of the filter.
   private func draw(_ image: FilterImage, in area: DrawArea) -> FilterImage? {
-    guard let table = renderer.table(.draw(from: image.space, to: space, alpha: filtered.opacity)),
+    guard let table = tableBuffer(.draw(from: image.space, to: space, alpha: filtered.opacity)),
       let output = makeTexture()
     else { return nil }
     var area = area
@@ -384,7 +524,7 @@ private struct FilterRun {
       dispatch(
         .drawImage, textures: [image.texture, output],
         body: { encoder in
-          encoder.setBytes(table, length: table.count, index: 0)
+          encoder.setBuffer(table, offset: 0, index: 0)
           encoder.setBytes(&area, length: MemoryLayout<DrawArea>.stride, index: 1)
         })
     else { return nil }
@@ -393,7 +533,7 @@ private struct FilterRun {
 
   /// An image drawn with the opacity and a blend mode over an image of the filter.
   private func blend(_ image: FilterImage, over backdrop: FilterImage, mode: UInt32) -> FilterImage? {
-    guard let table = renderer.table(.draw(from: image.space, to: space, alpha: filtered.opacity)),
+    guard let table = tableBuffer(.draw(from: image.space, to: space, alpha: filtered.opacity)),
       let output = makeTexture()
     else { return nil }
     var mode = mode
@@ -401,7 +541,7 @@ private struct FilterRun {
       dispatch(
         .blendImage, textures: [image.texture, backdrop.texture, output],
         body: { encoder in
-          encoder.setBytes(table, length: table.count, index: 0)
+          encoder.setBuffer(table, offset: 0, index: 0)
           encoder.setBytes(&mode, length: MemoryLayout<UInt32>.stride, index: 1)
         })
     else { return nil }
