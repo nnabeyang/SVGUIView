@@ -97,13 +97,17 @@ private func largestDifference(_ content: String, scale: CGFloat) async throws -
 
 /// The style of a filter region of the square from 10 to 90, which is on the pixels at any whole scale.
 private let region = #"filterUnits="userSpaceOnUse" x="10" y="10" width="80" height="80""#
+/// The style of a filter region whose right and top edges aren't on the pixels at the scales 1 and 3.
+private let offPixelsRegion = #"filterUnits="userSpaceOnUse" x="10" y="10" width="80.5" height="80.5""#
 /// Shapes to filter: a translucent green square and an opaque circle.
 private let shapes =
   #"<rect x="20" y="20" width="40" height="30" fill="green" fill-opacity="0.6"/>"#
   + ##"<circle cx="60" cy="60" r="18" fill="#c06030"/>"##
 
 /// A group of the shapes with a filter of the primitives, in a color space, and with the opacity.
-private func filter(_ primitives: String, space: String = "linearRGB", opacity: String = "1") -> String {
+private func filter(
+  _ primitives: String, space: String = "linearRGB", opacity: String = "1", region: String = region
+) -> String {
   #"<filter id="f" "# + region + #" color-interpolation-filters=""# + space + #"">"# + primitives + "</filter>"
     + ##"<g filter="url(#f)" opacity=""## + opacity + #"">"# + shapes + "</g>"
 }
@@ -142,6 +146,15 @@ struct MetalFilterRendererTests {
     filter(##"<feFlood flood-color="#3080ff" result="f"/><feBlend in="SourceGraphic" in2="f" mode="screen"/>"##),
     filter(##"<feFlood flood-color="#3080ff" result="f"/><feBlend in="f" in2="SourceGraphic" mode="darken"/>"##),
     filter(#"<feGaussianBlur stdDeviation="3" result="b"/><feBlend in="SourceGraphic" in2="b"/>"#, opacity: "0.6"),
+    // A blend and a merge of part of the region, which clips their results.
+    filter(
+      ##"<feFlood flood-color="#3080ff" result="f"/>"##
+        + #"<feBlend in="SourceGraphic" in2="f" mode="multiply" x="20" y="30" width="50" height="40"/>"#),
+    filter(#"<feMerge x="20" y="20" width="40" height="40"><feMergeNode/><feMergeNode/></feMerge>"#),
+    // A region off the pixels, whose primitives have subregions on the pixels.
+    filter(
+      #"<feFlood flood-color="gold" x="10" y="10" width="60" height="60"/>"#
+        + #"<feGaussianBlur stdDeviation="2" x="10" y="10" width="70" height="70"/>"#, region: offPixelsRegion),
   ]
 
   @Test("the GPU runs a filter as the CPU does", arguments: documents, [1.0, 3.0])
@@ -170,8 +183,8 @@ struct MetalFilterRendererTests {
   private static let unsupported: [String] = [
     // A blur that blurs a direction with three boxes, by a standard deviation different from the other.
     filter(#"<feGaussianBlur stdDeviation="1 10"/>"#),
-    // A merge of part of the region, which the CPU scales its inputs into.
-    filter(#"<feMerge x="20" y="20" width="40" height="40"><feMergeNode/></feMerge>"#),
+    // A primitive whose subregion is a region off the pixels, which the CPU clips to part of a pixel.
+    filter(#"<feGaussianBlur stdDeviation="1"/>"#, region: offPixelsRegion),
     // A blend mode that Core Graphics computes differently from the specification.
     filter(##"<feFlood flood-color="#3080ff" result="f"/><feBlend in="SourceGraphic" in2="f" mode="color-dodge"/>"##),
     // An offset off the pixels.
@@ -202,6 +215,29 @@ struct MetalFilterRendererTests {
       let actual = try bytes(of: try #require(gpu.image))
       let expected = try bytes(of: try #require(cpu.image))
       #expect(zip(actual, expected).allSatisfy { abs(Int($0) - Int($1)) <= 2 })
+    }
+  }
+}
+
+@Suite("Running filters on the CPU")
+struct FilterPaintingTests {
+  @Test("primitives copy their results pixel for pixel in a region off the pixels, and clip them to the region")
+  func resultsOnPixels() async throws {
+    let painter = CGPainter(scale: 1)
+    let nodes = try await filteredNodes(
+      filter(#"<feOffset dx="0"/><feOffset dx="0"/>"#, space: "sRGB", region: offPixelsRegion), scale: 1)
+    let filtered = try #require(nodes.first)
+    let source = try #require(await painter.sourceImage(of: filtered))
+    let result = try #require(await painter.filterResult(of: filtered, source: source))
+    // The bitmap covers the region rounded up to whole pixels.
+    #expect(result.width == 81 && result.height == 81)
+    #expect(painter.bitmapRect(of: filtered) == CGRect(x: 10, y: 10, width: 81, height: 81))
+    let expected = try bytes(of: source)
+    let actual = try bytes(of: result)
+    // The top row and the right column are only partly in the region, which clips them.
+    for row in 1..<81 {
+      let range = (row * 81 * 4)..<((row * 81 + 80) * 4)
+      #expect(Array(actual[range]) == Array(expected[range]), "row \(row)")
     }
   }
 }

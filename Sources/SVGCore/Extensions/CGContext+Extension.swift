@@ -18,7 +18,7 @@ extension CGContext {
 
   /// The width and height in pixels and the bytes per row of a bitmap of a size in points, or `nil` if the size has
   /// no pixel or doesn't fit in `Int`, in which case `bitmap(size:scale:space:)` makes no bitmap.
-  static func bitmapLayout(size: CGSize, scale: CGFloat) -> (width: Int, height: Int, bytesPerRow: Int)? {
+  package static func bitmapLayout(size: CGSize, scale: CGFloat) -> (width: Int, height: Int, bytesPerRow: Int)? {
     let width = (size.width * scale).rounded(.up)
     let height = (size.height * scale).rounded(.up)
     // A size that does not fit in `Int` is too large for a bitmap anyway.

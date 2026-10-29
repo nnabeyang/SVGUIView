@@ -17,7 +17,7 @@ extension GaussianBlurPrimitive {
 
   /// Blurs the input in the color space of the primitive, and draws it into `cgContext`.
   func apply(
-    srcImage: CGImage, inImage: CGImage, subregion: CGRect, clipRect: inout CGRect, effectRect: CGRect,
+    srcImage: CGImage, inImage: CGImage, subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect,
     opacity: CGFloat, cgContext: CGContext, results: [String: CGImage], isFirst: Bool, scale: CGFloat
   ) -> CGImage? {
     let colorSpace: CGColorSpace
@@ -98,7 +98,7 @@ extension GaussianBlurPrimitive {
     clipRect = subregion
     cgContext.clip(to: subregion)
     cgContext.setAlpha(opacity)
-    cgContext.draw(image, in: effectRect)
+    cgContext.draw(image, in: bitmapRect)
     return cgContext.makeImage()
   }
 
