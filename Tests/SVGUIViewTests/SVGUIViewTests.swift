@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import SVGCore
+import Synchronization
 import Testing
 import UIKit
 
@@ -184,32 +185,46 @@ struct SVGUIViewTests {
     }
   }
 
-  @Test("a rendering that times out stops in the middle of a filter")
+  /// A document with a filter of many blurs, which takes seconds to render, and checks for cancellation between
+  /// them.
+  private static let blurs = #"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+      <filter id="blur">\#(String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: blurCount))</filter>
+      <rect width="20" height="20" filter="url(#blur)"/>
+    </svg>
+    """#
+  private static let blurCount = 10_000
+
+  /// Checks that a rendering that returned stopped in the middle of the filter, and paints nothing afterwards.
+  ///
+  /// The tests count the primitives instead of timing the renderings, since the time depends on how busy the
+  /// machine is.
+  private func expectStopped(_ counter: PrimitiveCounter, sourceLocation: SourceLocation = #_sourceLocation)
+    async throws
+  {
+    let painted = counter.value
+    #expect(painted < Self.blurCount, "The rendering painted all the primitives", sourceLocation: sourceLocation)
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(
+      counter.value == painted, "The rendering painted primitives after it returned", sourceLocation: sourceLocation)
+  }
+
+  @Test("a rendering that times out stops in the middle of a filter", .timeLimit(.minutes(1)))
   func timeoutStopsFilter() async throws {
-    // A long chain of blurs is the slowest part of the rendering, and it is a single element.
-    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
-    let view = makeView(
-      #"""
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-        <filter id="blur">\#(blurs)</filter>
-        <rect width="20" height="20" filter="url(#blur)"/>
-      </svg>
-      """#)
+    let view = makeView(Self.blurs, timeoutDuration: .milliseconds(200))
     view.frame.size = CGSize(width: 600, height: 600)
-    let clock = ContinuousClock()
-    let full = try await clock.measure { _ = try await view.takeSnapshot() }
-    // Time out a tenth of the way through, and compare with the full time, which depends on the machine.
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: full / 10)
-    var error: SVGRenderingError?
-    let cancelled = await clock.measure {
+    let counter = PrimitiveCounter()
+    let error = await RenderingProgress.$onFilterPrimitive.withValue({ counter.paint() }) {
+      () async -> SVGRenderingError? in
       do throws(SVGRenderingError) {
         _ = try await view.takeSnapshot()
-      } catch let e {
-        error = e
+        return nil
+      } catch {
+        return error
       }
     }
     #expect(error == .timedOut)
-    #expect(cancelled < full / 2, "Rendering took \(cancelled) after a timeout of \(full / 10), and \(full) in full")
+    try await expectStopped(counter)
   }
 
   @Test("renderings that occupy every thread of the cooperative thread pool still time out on time")
@@ -253,57 +268,38 @@ struct SVGUIViewTests {
     #expect(elapsed < timeout * 4, "The renderings returned after \(elapsed) with a timeout of \(timeout)")
   }
 
-  @Test("cancelling the task that waits for a snapshot stops the rendering in the middle")
+  @Test("cancelling the task that waits for a snapshot stops the rendering in the middle", .timeLimit(.minutes(1)))
   func cancellingSnapshotStopsRendering() async throws {
-    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
-    let view = makeView(
-      #"""
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-        <filter id="blur">\#(blurs)</filter>
-        <rect width="20" height="20" filter="url(#blur)"/>
-      </svg>
-      """#)
+    let view = makeView(Self.blurs)
     view.frame.size = CGSize(width: 600, height: 600)
-    let clock = ContinuousClock()
-    let full = try await clock.measure { _ = try await view.takeSnapshot() }
-    // Cancel a tenth of the way through, and compare with the full time, which depends on the machine.
-    let start = clock.now
-    let task = Task { _ = try await view.takeSnapshot() }
-    try await Task.sleep(for: full / 10)
+    let counter = PrimitiveCounter()
+    // The rendering inherits the task-local value from the task that it renders for.
+    let task = RenderingProgress.$onFilterPrimitive.withValue({ counter.paint() }) {
+      Task { _ = try await view.takeSnapshot() }
+    }
+    await counter.waitUntilPainting()
     task.cancel()
     let result = await task.result
-    let cancelled = clock.now - start
     #expect(throws: SVGRenderingError.cancelled) { try result.get() }
-    #expect(cancelled < full / 2, "Rendering took \(cancelled) with a cancellation after \(full / 10), and \(full) in full")
+    try await expectStopped(counter)
   }
 
-  @Test("releasing a view stops its rendering in the middle")
+  @Test("releasing a view stops its rendering in the middle", .timeLimit(.minutes(1)))
   func releasingViewStopsRendering() async throws {
-    let blurs = String(repeating: #"<feGaussianBlur stdDeviation="10"/>"#, count: 10_000)
-    let svg = #"""
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-        <filter id="blur">\#(blurs)</filter>
-        <rect width="20" height="20" filter="url(#blur)"/>
-      </svg>
-      """#
-    let measured = makeView(svg, timeoutDuration: .seconds(60))
-    measured.frame.size = CGSize(width: 600, height: 600)
-    let clock = ContinuousClock()
-    let full = try await clock.measure { _ = try await measured.takeSnapshot() }
-    // Release the view a tenth of the way through, and compare with the full time, which depends on the machine.
-    var view: SVGUIView? = makeView(svg, timeoutDuration: .seconds(60))
+    var view: SVGUIView? = makeView(Self.blurs)
     view?.frame.size = CGSize(width: 600, height: 600)
-    render(try #require(view))
+    let counter = PrimitiveCounter()
+    try RenderingProgress.$onFilterPrimitive.withValue({ counter.paint() }) {
+      render(try #require(view))
+    }
     let task = try #require(view?.renderingTask)
-    try await Task.sleep(for: full / 10)
-    let start = clock.now
+    await counter.waitUntilPainting()
     weak let released = view
     view = nil
     #expect(released == nil)
     #expect(task.isCancelled)
     await task.value
-    let stopped = clock.now - start
-    #expect(stopped < full / 2, "Rendering took \(stopped) after the view was released, and \(full) in full")
+    try await expectStopped(counter)
   }
 
   @Test("a view gives the fonts of text styles to the documents that it parses")
@@ -511,5 +507,35 @@ struct SVGUIViewTests {
     #expect(
       growth < bitmap * renderings / 4,
       "Virtual memory grew by \(growth / 1_048_576) MB over \(renderings) renderings; a bitmap is \(bitmap / 1_048_576) MB")
+  }
+}
+
+/// Counts the filter primitives that renderings paint, and tells when they have painted a few.
+private final class PrimitiveCounter: Sendable {
+  private let count = Mutex(0)
+  private let painting: AsyncStream<Void>
+  private let continuation: AsyncStream<Void>.Continuation
+  /// How many primitives make the renderings count as painting.
+  private let threshold = 10
+
+  init() {
+    (painting, continuation) = AsyncStream.makeStream()
+  }
+
+  var value: Int { count.withLock { $0 } }
+
+  /// Counts a primitive that a rendering painted.
+  func paint() {
+    if count.withLock({ count in
+      count += 1
+      return count
+    }) == threshold {
+      continuation.finish()
+    }
+  }
+
+  /// Waits until the renderings have painted a few primitives.
+  func waitUntilPainting() async {
+    for await _ in painting {}
   }
 }

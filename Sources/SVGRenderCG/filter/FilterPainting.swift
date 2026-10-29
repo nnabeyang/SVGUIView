@@ -81,6 +81,7 @@ extension CGPainter {
         results[result] = clippedImage
       }
       inputImage = clippedImage
+      RenderingProgress.onFilterPrimitive?()
     }
     return inputImage
   }
