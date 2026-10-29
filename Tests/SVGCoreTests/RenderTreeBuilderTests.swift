@@ -326,6 +326,60 @@ struct RenderTreeBuilderTests {
     #expect(shapes.last.flatMap(fillColor(of:))?.components == [0, 1, 0, 1])
   }
 
+  /// The bounds of the outlines of a shape.
+  private func bounds(of shape: ShapeNode) throws -> CGRect {
+    try #require(shape.geometry).path.cgPath.boundingBoxOfPath
+  }
+
+  @Test("an underline goes under the glyphs, and a text with one is one shape")
+  func underline() async throws {
+    let plain = try shape(try children(of: try await renderTree(#"<text x="2" y="10" font-size="4">ab</text>"#)).first)
+    let decorated = try shape(
+      try children(
+        of: try await renderTree(
+          #"<text x="2" y="10" font-size="4" text-decoration="underline">ab</text>"#)
+      ).first)
+    #expect(try bounds(of: plain).maxY <= 10.01)
+    #expect(try bounds(of: decorated).maxY > 10.1)
+    #expect(try bounds(of: decorated).minX <= bounds(of: plain).minX)
+  }
+
+  @Test("a line declared around text is drawn with the paints of the text, under the glyphs of its tspans")
+  func decorationAroundText() async throws {
+    let tree = try await renderTree(
+      #"<g text-decoration="underline" fill="red"><text x="2" y="10" font-size="4" fill="lime">a"#
+        + #"<tspan fill="blue">bcd</tspan></text></g>"#)
+    let shapes = shapes(of: try children(of: tree))
+    try #require(shapes.count == 2)
+    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[0, 1, 0, 1], [0, 0, 1, 1]])
+    // The underline of the text goes under the glyphs of the tspan too.
+    #expect(try bounds(of: shapes[0]).maxX >= bounds(of: shapes[1]).maxX - 0.5)
+    #expect(try bounds(of: shapes[0]).maxY > 10.1)
+  }
+
+  @Test("a line through text is drawn after all the glyphs, with the paints of the element that declares it")
+  func lineThrough() async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4">a<tspan fill="blue" text-decoration="line-through">b</tspan>c</text>"#)
+    let shapes = shapes(of: try children(of: tree))
+    try #require(shapes.count == 3)
+    #expect(shapes[2].id == shapes[1].id)
+    #expect(fillColor(of: shapes[2])?.components == [0, 0, 1, 1])
+    // The line is above the baseline, over the glyph.
+    let line = try bounds(of: shapes[2])
+    let glyph = try bounds(of: shapes[1])
+    #expect(line.maxY < 10 && line.minY > glyph.minY)
+  }
+
+  @Test("an underline follows the characters that dy moves")
+  func underlineFollowsPositions() async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4" text-decoration="underline">a<tspan dy="5">b</tspan></text>"#)
+    let shapes = shapes(of: try children(of: tree))
+    try #require(shapes.count == 2)
+    #expect(try bounds(of: shapes[0]).maxY > 15.1)
+  }
+
   /// Text, and the part of its width that its `text-anchor` moves it left by.
   private static let textAnchors: [(String, CGFloat)] = [
     (#"<text x="10" y="10" font-size="4">Text</text>"#, 0),

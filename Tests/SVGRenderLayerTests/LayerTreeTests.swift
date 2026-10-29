@@ -134,6 +134,12 @@ struct LayerTreeTests {
         + #"<tspan dy="8" fill="green">c</tspan></text><text x="10" y="70" font-size="12" style="animation: f 1s linear">"#
         + #"d<tspan x="40" fill="orange">e</tspan></text>"#, true
     ),
+    // Text with lines of text-decoration under and through the glyphs of tspans, some of which move.
+    (
+      keyframes
+        + #"<text x="10" y="30" font-size="12" text-decoration="underline" style="animation: m 1s linear">A"#
+        + #"<tspan fill="red" text-decoration="line-through">bc</tspan>d</text>"#, true
+    ),
     // Elements with a clip path, a mask and a filter are painted with them in their layers.
     (
       keyframes + #"<clipPath id="c"><circle cx="20" cy="20" r="20"/></clipPath>"#

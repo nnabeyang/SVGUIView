@@ -86,6 +86,8 @@ struct PlacedTextRun {
   let line: CTLine
   /// The element of the characters, as an index into the elements of the text.
   let owner: Int
+  /// The width of the line, in the coordinates of the line.
+  let width: CGFloat
   /// The transform from the coordinates of the line, which the font is scaled in and whose y-axis points up, to the
   /// user space.
   let transform: CGAffineTransform
@@ -164,7 +166,7 @@ struct TextLayout {
         }
       return chunk.runs.map { run in
         PlacedTextRun(
-          line: run.line, owner: run.owner,
+          line: run.line, owner: run.owner, width: run.width,
           transform: CGAffineTransform(translationX: chunk.x, y: run.y)
             .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
             .translatedBy(x: anchorOffset + run.offset, y: 0),
@@ -179,6 +181,12 @@ struct TextLayout {
     runs.filter { owners?.contains($0.owner) ?? true }
       .map { CTLineGetBoundsWithOptions($0.line, CTLineBoundsOptions()).applying($0.transform) }
       .reduce(CGRect.null) { $0.union($1) }
+  }
+
+  /// The rotation of the glyphs of a run about their origins, in the coordinates of its line.
+  static func rotation(of run: PlacedTextRun) -> CGAffineTransform {
+    // The y-axis of the line points up, so a clockwise rotation in the user space is counterclockwise here.
+    run.rotation.map { CGAffineTransform(rotationAngle: -$0 * .pi / 180) } ?? .identity
   }
 
   /// The outlines of the glyphs of the elements.
@@ -197,8 +205,7 @@ struct TextLayout {
   /// The outlines of the glyphs of a run, in the coordinates of its line.
   private static func glyphs(of run: PlacedTextRun) -> CGMutablePath {
     let letters = CGMutablePath()
-    // The y-axis of the line points up, so a clockwise rotation in the user space is counterclockwise here.
-    let rotation = run.rotation.map { CGAffineTransform(rotationAngle: -$0 * .pi / 180) } ?? .identity
+    let rotation = rotation(of: run)
     let glyphRuns = CTLineGetGlyphRuns(run.line)
     for i in 0..<CFArrayGetCount(glyphRuns) {
       let glyphRun = unsafeBitCast(CFArrayGetValueAtIndex(glyphRuns, i), to: CTRun.self)
