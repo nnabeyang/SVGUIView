@@ -68,8 +68,11 @@ package final class SVGParser: NSObject {
     let localName: String
     let attributes: [String: String]
     var children: [DocumentElement] = []
-    /// The text content so far, which only `<text>` and `<style>` keep.
-    var text = ""
+    /// The character data so far before each child and after the last one, which only `<text>` and `<style>`
+    /// keep.
+    var texts = [""]
+
+    var keepsText: Bool { name == .text || name == .style }
   }
 
   private var rules: [CSSRule] = []
@@ -124,6 +127,10 @@ extension SVGParser: XMLParserDelegate {
 
   package func parser(_: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
     let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
+    // The character data after this child goes after it.
+    if !stack.isEmpty {
+      stack[stack.count - 1].texts.append("")
+    }
     stack.append(OpenElement(id: ElementID(rawValue: elementCount), name: name, localName: elementName, attributes: attributeDict))
     elementCount += 1
   }
@@ -150,7 +157,7 @@ extension SVGParser: XMLParserDelegate {
     guard let open = stack.popLast() else { return }
     precondition(name == open.name)
     if open.name == .style {
-      let parseInput = ParserInput(input: open.text)
+      let parseInput = ParserInput(input: open.texts.joined())
       let input = Parser(input: parseInput)
       var parser = CSSParser(input: input)
       // Number the rules in document order across `<style>` elements, so that a later rule wins a tie.
@@ -169,7 +176,7 @@ extension SVGParser: XMLParserDelegate {
     }
     let element = DocumentElement(
       id: open.id, name: open.name, localName: open.localName, attributes: filter(attributes: open.attributes),
-      text: open.text, children: open.children)
+      texts: open.texts, children: open.children)
     if stack.isEmpty {
       root = element
     } else {
@@ -178,12 +185,8 @@ extension SVGParser: XMLParserDelegate {
   }
 
   package func parser(_: XMLParser, foundCharacters fragment: String) {
-    switch stack.last?.name {
-    case .text, .style:
-      stack[stack.count - 1].text.append(fragment)
-    default:
-      break
-    }
+    guard let last = stack.indices.last, stack[last].keepsText else { return }
+    stack[last].texts[stack[last].texts.count - 1].append(fragment)
   }
 
   package func parser(_: XMLParser, parseErrorOccurred parseError: any Error) {

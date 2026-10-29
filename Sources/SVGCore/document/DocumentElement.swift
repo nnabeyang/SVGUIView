@@ -24,20 +24,35 @@ final class DocumentElement: Sendable {
   let localName: String
   /// The attributes, with the `href` of the XLink namespace as `href` and other prefixed attributes left out.
   let attributes: [String: String]
-  /// The text content of `<text>` and `<style>`, and an empty string for other elements.
-  let text: String
+  /// The character data of `<text>`, `<tspan>` and `<style>` before each child and after the last one, one more
+  /// than the children, which are empty for other elements.
+  let texts: [String]
   let children: [DocumentElement]
 
+  /// The character data of the element itself, without its children's.
+  var text: String { texts.joined() }
+
   init(
-    id: ElementID, name: SVGElementName, localName: String, attributes: [String: String], text: String,
+    id: ElementID, name: SVGElementName, localName: String, attributes: [String: String], texts: [String],
     children: [DocumentElement]
   ) {
+    precondition(texts.count == children.count + 1)
     self.id = id
     self.name = name
     self.localName = localName
     self.attributes = attributes
-    self.text = text
+    self.texts = texts
     self.children = children
+  }
+
+  /// An element whose character data is all before its children.
+  convenience init(
+    id: ElementID, name: SVGElementName, localName: String, attributes: [String: String], text: String,
+    children: [DocumentElement]
+  ) {
+    self.init(
+      id: id, name: name, localName: localName, attributes: attributes,
+      texts: [text] + Array(repeating: "", count: children.count), children: children)
   }
 
   /// The element with its descendant at `path`, a list of child positions from this element, replaced. The elements
@@ -47,7 +62,7 @@ final class DocumentElement: Sendable {
     var children = children
     children[index] = children[index].replacingDescendant(at: path.dropFirst(), with: replacement)
     return DocumentElement(
-      id: id, name: name, localName: localName, attributes: attributes, text: text, children: children)
+      id: id, name: name, localName: localName, attributes: attributes, texts: texts, children: children)
   }
 }
 
@@ -104,7 +119,7 @@ package struct DocumentTree: Sendable {
       root = root.replacingDescendant(
         at: path[...],
         with: DocumentElement(
-          id: id, name: element.name, localName: element.localName, attributes: attributes, text: element.text,
+          id: id, name: element.name, localName: element.localName, attributes: attributes, texts: element.texts,
           children: element.children))
     }
     return DocumentTree(root: root, paths: paths)

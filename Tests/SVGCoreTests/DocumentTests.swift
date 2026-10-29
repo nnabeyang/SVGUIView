@@ -70,6 +70,7 @@ struct DocumentTests {
       """#
     let root = try #require(SVGParser.parse(data: Data(svg.utf8)).document.root)
     #expect(root.children[0].text == "Hello!")
+    #expect(root.children[0].texts == ["Hello", "!"])
     #expect(root.children[0].children[0].text == "")
   }
 
