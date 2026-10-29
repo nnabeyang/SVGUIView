@@ -339,8 +339,8 @@ struct RenderTreeBuilderTests {
         of: try await renderTree(
           #"<text x="2" y="10" font-size="4" text-decoration="underline">ab</text>"#)
       ).first)
-    #expect(try bounds(of: plain).maxY <= 10.01)
-    #expect(try bounds(of: decorated).maxY > 10.1)
+    // The glyphs go a little below the baseline, and the underline further.
+    #expect(try bounds(of: decorated).maxY > bounds(of: plain).maxY + 0.2)
     #expect(try bounds(of: decorated).minX <= bounds(of: plain).minX)
   }
 
@@ -354,7 +354,7 @@ struct RenderTreeBuilderTests {
     #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[0, 1, 0, 1], [0, 0, 1, 1]])
     // The underline of the text goes under the glyphs of the tspan too.
     #expect(try bounds(of: shapes[0]).maxX >= bounds(of: shapes[1]).maxX - 0.5)
-    #expect(try bounds(of: shapes[0]).maxY > 10.1)
+    #expect(try bounds(of: shapes[0]).maxY > bounds(of: shapes[1]).maxY + 0.2)
   }
 
   @Test("a line through text is drawn after all the glyphs, with the paints of the element that declares it")
@@ -377,7 +377,9 @@ struct RenderTreeBuilderTests {
       #"<text x="2" y="10" font-size="4" text-decoration="underline">a<tspan dy="5">b</tspan></text>"#)
     let shapes = shapes(of: try children(of: tree))
     try #require(shapes.count == 2)
-    #expect(try bounds(of: shapes[0]).maxY > 15.1)
+    // The underline of the text goes under the glyph that dy moves down by 5.
+    #expect(try bounds(of: shapes[0]).maxY > bounds(of: shapes[1]).maxY + 0.2)
+    #expect(try bounds(of: shapes[1]).minY > 10)
   }
 
   /// Text, and the part of its width that its `text-anchor` moves it left by.
