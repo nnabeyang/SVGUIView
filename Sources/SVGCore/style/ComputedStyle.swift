@@ -26,6 +26,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case clipRule = "clip-rule"
   case textAnchor = "text-anchor"
   case whiteSpace = "white-space"
+  case textDecoration = "text-decoration"
   case visibility
   case colorInterpolation = "color-interpolation"
   case colorInterpolationFilters = "color-interpolation-filters"
@@ -90,6 +91,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .clipRule: visitor.visit(ClipRuleProperty.self)
     case .textAnchor: visitor.visit(TextAnchorProperty.self)
     case .whiteSpace: visitor.visit(WhiteSpaceProperty.self)
+    case .textDecoration: visitor.visit(TextDecorationProperty.self)
     case .visibility: visitor.visit(VisibilityProperty.self)
     case .colorInterpolation: visitor.visit(ColorInterpolationProperty.self)
     case .colorInterpolationFilters: visitor.visit(ColorInterpolationFiltersProperty.self)
@@ -158,6 +160,8 @@ struct ComputedStyle: Sendable, Equatable {
   var clipRule: FillRule
   var textAnchor: TextAnchor
   var whiteSpace: CSSWhiteSpace
+  /// The lines of `text-decoration` of the element and its ancestors, which the lines decorate the text of.
+  var textDecoration: TextDecorationLines
   var visibility: CSSVisibility
   var colorInterpolation: SVGColorInterpolation?
   var colorInterpolationFilters: SVGColorInterpolation?
@@ -205,7 +209,7 @@ struct ComputedStyle: Sendable, Equatable {
     strokeLinejoin: StrokeLinejoinProperty.initial, strokeMiterlimit: StrokeMiterlimitProperty.initial,
     strokeDasharray: StrokeDasharrayProperty.initial, strokeDashoffset: StrokeDashoffsetProperty.initial,
     clipRule: ClipRuleProperty.initial, textAnchor: TextAnchorProperty.initial,
-    whiteSpace: WhiteSpaceProperty.initial,
+    whiteSpace: WhiteSpaceProperty.initial, textDecoration: TextDecorationProperty.initial,
     visibility: VisibilityProperty.initial, colorInterpolation: ColorInterpolationProperty.initial,
     colorInterpolationFilters: ColorInterpolationFiltersProperty.initial, opacity: OpacityProperty.initial,
     transform: TransformProperty.initial, transformOrigin: TransformOriginProperty.initial,
@@ -307,7 +311,7 @@ struct ComputedStyle: Sendable, Equatable {
     color: SVGColor, fill: Paint, fillOpacity: Double, fillRule: FillRule, stroke: Paint, strokeOpacity: Double,
     strokeWidth: SVGLength, strokeLinecap: CGLineCap, strokeLinejoin: CGLineJoin, strokeMiterlimit: Double,
     strokeDasharray: [CGFloat], strokeDashoffset: CGFloat, clipRule: FillRule, textAnchor: TextAnchor,
-    whiteSpace: CSSWhiteSpace,
+    whiteSpace: CSSWhiteSpace, textDecoration: TextDecorationLines,
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
     colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
     transformOrigin: TransformOrigin, transformBox: TransformBox,
@@ -339,6 +343,7 @@ struct ComputedStyle: Sendable, Equatable {
     self.clipRule = clipRule
     self.textAnchor = textAnchor
     self.whiteSpace = whiteSpace
+    self.textDecoration = textDecoration
     self.visibility = visibility
     self.colorInterpolation = colorInterpolation
     self.colorInterpolationFilters = colorInterpolationFilters

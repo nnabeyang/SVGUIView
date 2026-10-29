@@ -377,6 +377,35 @@ struct StyleTests {
     #expect(value.processed(text) == processed)
   }
 
+  /// Values of `text-decoration`, and the lines that they declare, or `nil` for a value that isn't valid.
+  private static let textDecorations: [(String, TextDecorationLines?)] = [
+    ("underline", .underline),
+    ("overline", .overline),
+    ("line-through", .lineThrough),
+    (" underline  overline line-through ", [.underline, .overline, .lineThrough]),
+    ("none", []),
+    ("underline,overline", nil),
+    ("underlineoverline", nil),
+    ("underline underline", nil),
+    ("", nil),
+  ]
+
+  @Test("text-decoration is none or lines separated by white space, each at most once", arguments: textDecorations)
+  func textDecoration(text: String, lines: TextDecorationLines?) {
+    #expect(TextDecorationProperty.parse(text, origin: .attribute) == lines)
+  }
+
+  @Test("the lines of text-decoration add up with the lines of the ancestors")
+  func textDecorationOfAncestors() {
+    let parent = style([PropertyDeclaration(TextDecorationProperty.self, .value(.underline))])
+    let child = style([PropertyDeclaration(TextDecorationProperty.self, .value(.lineThrough))], parent: parent)
+    let grandchild = style([], parent: child)
+    #expect(child.textDecoration == [.underline, .lineThrough])
+    #expect(grandchild.textDecoration == [.underline, .lineThrough])
+    let none = style([PropertyDeclaration(TextDecorationProperty.self, .value([]))], parent: child)
+    #expect(none.textDecoration == [.underline, .lineThrough])
+  }
+
   @Test("xml:space declares white-space before the white-space attribute, which overrides it")
   func xmlSpace() {
     func whiteSpace(_ attributes: [String: String]) -> CSSWhiteSpace? {

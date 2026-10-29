@@ -29,6 +29,43 @@ enum CSSVisibility: String, CaseIterable, Sendable {
   case collapse
 }
 
+/// The lines of `text-decoration`.
+struct TextDecorationLines: OptionSet, Hashable, Sendable {
+  let rawValue: UInt8
+
+  static let underline = Self(rawValue: 1 << 0)
+  static let overline = Self(rawValue: 1 << 1)
+  static let lineThrough = Self(rawValue: 1 << 2)
+
+  init(rawValue: UInt8) {
+    self.rawValue = rawValue
+  }
+
+  /// The lines of a value, which is `none` or keywords of lines separated by white space, each at most once, or
+  /// `nil` if it isn't valid.
+  init?(_ text: String, caseInsensitive: Bool) {
+    let keywords = text.split(whereSeparator: \.isWhitespace).map { caseInsensitive ? $0.lowercased() : String($0) }
+    if keywords == ["none"] {
+      self = []
+      return
+    }
+    var lines: Self = []
+    for keyword in keywords {
+      let line: Self
+      switch keyword {
+      case "underline": line = .underline
+      case "overline": line = .overline
+      case "line-through": line = .lineThrough
+      default: return nil
+      }
+      guard !lines.contains(line) else { return nil }
+      lines.insert(line)
+    }
+    guard !lines.isEmpty else { return nil }
+    self = lines
+  }
+}
+
 /// The `white-space` property, which decides how the white space in the content of text is drawn.
 enum CSSWhiteSpace: String, CaseIterable, Sendable {
   case normal
