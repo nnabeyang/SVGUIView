@@ -74,6 +74,20 @@ struct DocumentTests {
     #expect(root.children[0].children[0].text == "")
   }
 
+  @Test("text and tspan keep their character data before, between and after their children")
+  func textAroundTSpans() throws {
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg"><text>a<tspan>b<tspan>c</tspan>d</tspan>e<tspan/>f</text></svg>
+      """#
+    let root = try #require(SVGParser.parse(data: Data(svg.utf8)).document.root)
+    let text = root.children[0]
+    #expect(text.texts == ["a", "e", "f"])
+    #expect(text.children[0].name == .tspan)
+    #expect(text.children[0].texts == ["b", "d"])
+    #expect(text.children[0].children[0].texts == ["c"])
+    #expect(text.children[1].texts == [""])
+  }
+
   @Test("every element of a document has its own identifier")
   func identifiersAreUnique() throws {
     let svg = #"<svg xmlns="http://www.w3.org/2000/svg"><g><rect/><foo/></g><circle/></svg>"#

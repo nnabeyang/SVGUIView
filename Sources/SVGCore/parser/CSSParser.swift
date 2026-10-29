@@ -47,18 +47,23 @@ enum CSSWhiteSpace: String, CaseIterable, Sendable {
     }
   }
 
-  /// The characters of text with its white space processed, as SVG draws them on one line.
-  ///
-  /// Line breaks and tabs become spaces, since SVG text doesn't wrap. Spaces are then collapsed into one, and
-  /// removed from the start and the end, unless the value preserves them.
-  func processed(_ text: String) -> String {
-    let spaced = String(
+  /// Text with its line breaks and tabs turned into spaces, since SVG text doesn't wrap.
+  static func spaced(_ text: String) -> String {
+    String(
       text.unicodeScalars.map { scalar -> Character in
         switch scalar {
         case "\n", "\r", "\t": " "
         default: Character(scalar)
         }
       })
+  }
+
+  /// The characters of text with its white space processed, as SVG draws them on one line.
+  ///
+  /// Line breaks and tabs become spaces, since SVG text doesn't wrap. Spaces are then collapsed into one, and
+  /// removed from the start and the end, unless the value preserves them.
+  func processed(_ text: String) -> String {
+    let spaced = Self.spaced(text)
     guard collapsesSpaces else { return spaced }
     return spaced.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
   }

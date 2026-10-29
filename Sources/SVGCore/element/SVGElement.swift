@@ -65,7 +65,9 @@ final class SVGBaseElement: Sendable {
   /// The identifier of the element in its document, which the nodes of the render tree that it makes keep.
   let elementID: ElementID
   let name: SVGElementName
-  let text: String
+  /// The character data of `<text>`, `<tspan>` and `<style>` before each `<tspan>` child and after the last one,
+  /// which is one more than the `<tspan>` children.
+  let texts: [String]
   let id: String?
   var index: ObjectIdentifier { ObjectIdentifier(self) }
   let className: String?
@@ -75,13 +77,16 @@ final class SVGBaseElement: Sendable {
   /// The computed values of the element's properties.
   let style: ComputedStyle
 
+  /// The character data of the element itself, without its children's.
+  var text: String { texts.joined() }
+
   init(
-    elementID: ElementID, name: SVGElementName, text: String, attributes: [String: String], cascaded: CascadedValues,
-    style: ComputedStyle
+    elementID: ElementID, name: SVGElementName, texts: [String], attributes: [String: String],
+    cascaded: CascadedValues, style: ComputedStyle
   ) {
     self.elementID = elementID
     self.name = name
-    self.text = text
+    self.texts = texts
     self.attributes = attributes
     self.cascaded = cascaded
     self.style = style
@@ -97,7 +102,7 @@ final class SVGBaseElement: Sendable {
   ///   - animations: The animations of the document at its time, or `nil` for no animations.
   func restyled(parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?) -> SVGBaseElement {
     SVGBaseElement(
-      elementID: elementID, name: name, text: text, attributes: attributes, cascaded: cascaded,
+      elementID: elementID, name: name, texts: texts, attributes: attributes, cascaded: cascaded,
       style: ComputedStyle(
         cascaded: cascaded, parent: parent, root: root, animations: animations,
         smil: animations?.smilEffects[elementID] ?? [], element: elementID))
@@ -204,11 +209,26 @@ extension ElementCursor {
     let style = ComputedStyle(
       cascaded: cascaded, parent: parent, root: root, animations: animations,
       smil: animations?.smilEffects[element.id] ?? [], element: element.id)
-    let contents = element.children.indices.compactMap {
-      child(at: $0).makeElement(with: css, parent: style, root: root ?? style, animations: animations)
+    let isText = name == .text || name == .tspan
+    var contents = [any SVGElement]()
+    // The character data of text before each `<tspan>` child and after the last one. The other children of text
+    // aren't rendered, so the character data around them goes together.
+    var texts = [element.texts[0]]
+    for index in element.children.indices {
+      // A `<tspan>` is rendered only in text, and text renders only its `<tspan>` children.
+      if isText == (element.children[index].name == .tspan),
+        let child = child(at: index).makeElement(with: css, parent: style, root: root ?? style, animations: animations)
+      {
+        contents.append(child)
+        if isText {
+          texts.append("")
+        }
+      }
+      texts[texts.count - 1] += element.texts[index + 1]
     }
     let base = SVGBaseElement(
-      elementID: element.id, name: name, text: element.text, attributes: element.attributes, cascaded: cascaded, style: style)
+      elementID: element.id, name: name, texts: texts, attributes: element.attributes, cascaded: cascaded,
+      style: style)
     let rendered: any SVGElement =
       switch name {
       case .svg:
@@ -237,6 +257,8 @@ extension ElementCursor {
         SVGFeMergeNodeElement(base: base, contents: contents)
       case .text:
         SVGTextElement(base: base, contents: contents)
+      case .tspan:
+        SVGTSpanElement(base: base, contents: contents)
       case .image:
         SVGImageElement(base: base, contents: contents)
       case .line:

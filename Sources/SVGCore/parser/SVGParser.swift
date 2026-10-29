@@ -6,6 +6,7 @@ enum SVGElementName: String, Equatable {
   case svg
   case g
   case text
+  case tspan
   case image
   case line
   case circle
@@ -68,11 +69,11 @@ package final class SVGParser: NSObject {
     let localName: String
     let attributes: [String: String]
     var children: [DocumentElement] = []
-    /// The character data so far before each child and after the last one, which only `<text>` and `<style>`
-    /// keep.
+    /// The character data so far before each child and after the last one, which only `<text>`, `<tspan>` and
+    /// `<style>` keep.
     var texts = [""]
 
-    var keepsText: Bool { name == .text || name == .style }
+    var keepsText: Bool { name == .text || name == .tspan || name == .style }
   }
 
   private var rules: [CSSRule] = []
