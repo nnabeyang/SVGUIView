@@ -155,6 +155,35 @@ struct RenderTreeBuilderTests {
     #expect(try #require(rect.geometry).frame == CGRect(x: 0, y: 0, width: 5, height: 5))
   }
 
+  /// Text, and the part of its width that its `text-anchor` moves it left by.
+  private static let textAnchors: [(String, CGFloat)] = [
+    (#"<text x="10" y="10" font-size="4">Text</text>"#, 0),
+    (#"<text x="10" y="10" font-size="4" text-anchor="middle">Text</text>"#, 0.5),
+    (#"<text x="10" y="10" font-size="4" text-anchor="end">Text</text>"#, 1),
+    (#"<text x="10" y="10" font-size="4" style="text-anchor: end">Text</text>"#, 1),
+    (#"<g text-anchor="end"><text x="10" y="10" font-size="4">Text</text></g>"#, 1),
+  ]
+
+  @Test("text-anchor moves the bounds and the glyphs of text so that its start, middle or end is at x", arguments: textAnchors)
+  func textAnchor(text: String, part: CGFloat) async throws {
+    let tree = try await renderTree(#"<text x="10" y="10" font-size="4">Text</text>"# + text)
+    let start = try #require(try shape(try children(of: tree).first).geometry)
+    var anchored = try children(of: tree).last
+    if case .group(let group) = anchored {
+      anchored = group.children.first
+    }
+    let geometry = try #require(try shape(anchored).geometry)
+    let offset = -start.frame.width * part
+    #expect(start.frame.width > 0)
+    #expect(abs(start.frame.minX - 10) < 0.001)
+    #expect(abs(geometry.frame.minX - (10 + offset)) < 0.001)
+    #expect(abs(geometry.frame.width - start.frame.width) < 0.001)
+    let startGlyphs = start.path.cgPath.boundingBoxOfPath
+    let glyphs = geometry.path.cgPath.boundingBoxOfPath
+    #expect(abs(glyphs.minX - (startGlyphs.minX + offset)) < 0.001)
+    #expect(abs(glyphs.width - startGlyphs.width) < 0.001)
+  }
+
   @Test("a group with a clip path finds its bounds without the shapes of patterns and masks")
   func clippedGroupWithPattern() async throws {
     let tree = try await renderTree(
