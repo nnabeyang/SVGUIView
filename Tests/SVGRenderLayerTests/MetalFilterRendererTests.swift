@@ -7,7 +7,7 @@ import Testing
 @testable import SVGCore
 @testable import SVGRenderLayer
 
-private let renderer = MetalFilterRenderer()
+private let renderer = MetalFilterRenderer.shared
 
 /// The filtered nodes of a document with the content, rendered into a rectangle of 100 by 100 at the scale.
 private func filteredNodes(_ content: String, scale: CGFloat) async throws -> [FilteredNode] {
@@ -147,6 +147,22 @@ struct MetalFilterRendererTests {
   func sameResults(content: String, scale: Double) async throws {
     let difference = try #require(await largestDifference(content, scale: scale))
     #expect(difference <= 2)
+    for filtered in try await filteredNodes(content, scale: scale) {
+      #expect(MetalFilterRenderer.supports(filtered, scale: scale))
+    }
+  }
+
+  @Test("an image of a filter run on the GPU is the result of the CPU", arguments: documents)
+  func images(content: String) async throws {
+    let renderer = try #require(renderer)
+    let painter = CGPainter(scale: 3)
+    for filtered in try await filteredNodes(content, scale: 3) {
+      let source = try #require(await painter.sourceImage(of: filtered))
+      let expected = try bytes(of: try #require(await painter.filterResult(of: filtered, source: source)))
+      let actual = try bytes(of: try #require(await renderer.filterImage(of: filtered, painter: painter)))
+      try #require(actual.count == expected.count)
+      #expect(zip(actual, expected).allSatisfy { abs(Int($0) - Int($1)) <= 2 })
+    }
   }
 
   /// Filters that the GPU doesn't run.
@@ -164,5 +180,59 @@ struct MetalFilterRendererTests {
   @Test("the GPU doesn't run a filter whose results it can't make the same", arguments: unsupported)
   func unsupportedFilters(content: String) async throws {
     #expect(try await largestDifference(content, scale: 1) == nil)
+    for filtered in try await filteredNodes(content, scale: 1) {
+      #expect(!MetalFilterRenderer.supports(filtered, scale: 1))
+      #expect(await renderer?.filterImage(of: filtered, painter: CGPainter(scale: 1)) == nil)
+    }
   }
+
+  @Test(
+    "a layer of an element whose filter changes runs the filter on the GPU where it gives the results of the CPU",
+    arguments: [(changingBlur, true), (changingBoxes, false)])
+  func filterLayers(content: String, runsOnGPU: Bool) async throws {
+    let renderer = try #require(renderer)
+    let gpu = try await paintedContents(content, filters: renderer)
+    let cpu = try await paintedContents(content, filters: nil)
+    // The rectangle before the element with the filter, and the element in its layer.
+    try #require(gpu.count == 2 && cpu.count == 2)
+    #expect(gpu.map(\.filteredOnGPU) == [false, runsOnGPU])
+    #expect(cpu.allSatisfy { !$0.filteredOnGPU })
+    for (gpu, cpu) in zip(gpu, cpu) {
+      let actual = try bytes(of: try #require(gpu.image))
+      let expected = try bytes(of: try #require(cpu.image))
+      #expect(zip(actual, expected).allSatisfy { abs(Int($0) - Int($1)) <= 2 })
+    }
+  }
+}
+
+/// A rectangle, and a rectangle with a filter whose blur by Gaussian kernels changes.
+private let changingBlur = ##"""
+  <filter id="p"><feGaussianBlur stdDeviation="1"><animate attributeName="stdDeviation" to="2" dur="1s"/></feGaussianBlur>
+  </filter>
+  <rect width="20" height="20"/>
+  <rect x="40" y="40" width="20" height="20" fill="#c06030" filter="url(#p)"/>
+  """##
+
+/// A rectangle, and a rectangle with a filter whose blur, by different standard deviations, blurs a direction with
+/// three boxes, which the GPU doesn't run.
+private let changingBoxes = ##"""
+  <filter id="p"><feGaussianBlur stdDeviation="1 10"><animate attributeName="stdDeviation" to="2 10" dur="1s"/>
+  </feGaussianBlur></filter>
+  <rect width="20" height="20"/>
+  <rect x="40" y="40" width="20" height="20" fill="#c06030" filter="url(#p)"/>
+  """##
+
+/// The contents of the painted layers of a document with the content at the time 0, at the scale 3, with the filters
+/// of the layers run by a renderer.
+private func paintedContents(_ content: String, filters: MetalFilterRenderer?) async throws -> [PaintedContents] {
+  let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"# + content + "</svg>"
+  let base = SVGParser.parse(data: Data(svg.utf8))
+  let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
+  let fit = ContentFit(
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+  let tree = try #require(await RenderTreeBuilder(base: base.at(time: 0), viewPort: rect, scale: 3).build(fit: fit))
+  let planner = LayerPlanner(
+    promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: 3)
+  let layers = try #require(await planner.plan(tree, in: rect).painted(scale: 3, filters: filters))
+  return layers.paintedContents
 }
