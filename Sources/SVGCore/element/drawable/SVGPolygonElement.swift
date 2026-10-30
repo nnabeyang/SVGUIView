@@ -21,6 +21,10 @@ final class SVGPolygonElement: ShapeGeometry {
   func path(in context: any GeometryContext) -> CGPath? {
     points.polygon?.applying(scale(context: context))
   }
+
+  func markerPath(in _: any GeometryContext) -> PathData? {
+    points.pathData(isClosed: true)
+  }
 }
 
 extension SVGPolygonElement: Encodable {

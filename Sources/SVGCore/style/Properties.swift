@@ -737,6 +737,56 @@ enum FilterProperty: StyleProperty {
   }
 }
 
+/// A property of the marker at some vertices of a shape, which is inherited.
+protocol MarkerProperty: StyleProperty where Specified == SVGMarkerReference, Computed == SVGMarkerReference {}
+
+extension MarkerProperty {
+  static var isInherited: Bool { true }
+  static var initial: SVGMarkerReference { .none }
+
+  static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGMarkerReference? {
+    SVGMarkerReference(description: text.trimmingCharacters(in: .whitespacesAndNewlines))
+  }
+}
+
+enum MarkerStartProperty: MarkerProperty {
+  static let id = PropertyID.markerStart
+  static let computed = \ComputedStyle.markerStart
+}
+
+enum MarkerMidProperty: MarkerProperty {
+  static let id = PropertyID.markerMid
+  static let computed = \ComputedStyle.markerMid
+}
+
+enum MarkerEndProperty: MarkerProperty {
+  static let id = PropertyID.markerEnd
+  static let computed = \ComputedStyle.markerEnd
+}
+
+/// The shorthand `marker`, which sets the markers at every vertex. It's a property of CSS only, so the attribute
+/// `marker` isn't read.
+enum MarkerShorthand {
+  static let name = "marker"
+
+  static var longhands: [any StyleProperty.Type] {
+    [MarkerStartProperty.self, MarkerMidProperty.self, MarkerEndProperty.self]
+  }
+
+  /// The declarations of the longhands, or `nil` if the value is invalid.
+  static func declarations(css input: inout _CSSParser.Parser) -> [PropertyDeclaration]? {
+    if let keyword = wideKeyword(&input) {
+      return keywordDeclarations(keyword, of: longhands)
+    }
+    guard let marker = MarkerStartProperty.parse(css: &input) else { return nil }
+    return [
+      PropertyDeclaration(MarkerStartProperty.self, .value(marker)),
+      PropertyDeclaration(MarkerMidProperty.self, .value(marker)),
+      PropertyDeclaration(MarkerEndProperty.self, .value(marker)),
+    ]
+  }
+}
+
 enum DisplayProperty: StyleProperty {
   static let id = PropertyID.display
   static let isInherited = false

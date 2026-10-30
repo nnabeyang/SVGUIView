@@ -18,6 +18,10 @@ final class SVGPathElement: ShapeGeometry {
     data = base.style.d
   }
 
+  func markerPath(in _: any GeometryContext) -> PathData? {
+    data
+  }
+
   func path(in context: any GeometryContext) -> CGPath? {
     let pathContext = SVGPathContext()
     for command in data.commands {

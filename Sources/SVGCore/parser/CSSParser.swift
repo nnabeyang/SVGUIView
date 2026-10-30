@@ -382,6 +382,8 @@ struct CSSDeclarationParser: DeclarationParser {
           AnimationShorthand.declarations(css: &input)
         } else if name == TransitionShorthand.name {
           TransitionShorthand.declarations(css: &input)
+        } else if name == MarkerShorthand.name {
+          MarkerShorthand.declarations(css: &input)
         } else {
           nil
         }

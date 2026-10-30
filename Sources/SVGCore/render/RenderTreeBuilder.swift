@@ -122,7 +122,7 @@ package struct RenderTreeBuilder {
     }
   }
 
-  private func renderID(of element: some SVGElement, instance: [ElementID]) -> RenderID {
+  func renderID(of element: some SVGElement, instance: [ElementID]) -> RenderID {
     RenderID(element: element.base.elementID, instance: instance)
   }
 
@@ -184,10 +184,28 @@ package struct RenderTreeBuilder {
         content = .vector(fill: fill, stroke: stroke, fillRule: element.pathFillRule)
       }
     }
-    return .shape(
-      ShapeNode(
-        id: renderID(of: element, instance: instance), transform: transform, geometry: geometry, clip: clip,
-        mask: mask, opacity: element.opacity, content: content))
+    let id = renderID(of: element, instance: instance)
+    let isClipped = if case .clipToZero = mask { true } else { false }
+    let markers: [RenderNode] =
+      if !isClipped, let shape = element as? any ShapeGeometry {
+        await markerNodes(of: shape, context: context, guard: references, instance: instance)
+      } else {
+        []
+      }
+    guard !markers.isEmpty else {
+      return .shape(
+        ShapeNode(
+          id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: element.opacity,
+          content: content))
+    }
+    // The markers are drawn after the shape, with its effects.
+    let shape = ShapeNode(
+      id: id, transform: .identity, geometry: geometry, clip: nil, mask: .none, opacity: 1, content: content)
+    let groupMask: MaskEffect? = if case .mask(let effect) = mask { effect } else { nil }
+    return .group(
+      GroupNode(
+        id: id, transform: transform, opacity: element.opacity, clip: clip, mask: groupMask,
+        children: [.shape(shape)] + markers))
   }
 
   /// The node of text whose `<tspan>` descendants have glyphs: a group with the effects of the text, and a shape

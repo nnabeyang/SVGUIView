@@ -655,6 +655,75 @@ struct RenderTreeBuilderTests {
     #expect(color == CGColor.opaqueBlack)
   }
 
+  /// The markers of a shape with markers, which is a group of the shape and the viewports of its markers.
+  private func markers(_ content: String) async throws -> [ViewportNode] {
+    let tree = try await renderTree(
+      #"<marker id="m" markerWidth="2" markerHeight="4"><rect width="1" height="1"/></marker>"# + content)
+    guard case .group(let group) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
+    #expect(group.children.first.map { if case .shape = $0 { true } else { false } } == true)
+    return group.children.dropFirst().compactMap { if case .viewport(let marker) = $0 { marker } else { nil } }
+  }
+
+  private func expectClose(
+    _ a: CGAffineTransform, _ b: CGAffineTransform, sourceLocation: SourceLocation = #_sourceLocation
+  ) {
+    let values = [a.a - b.a, a.b - b.b, a.c - b.c, a.d - b.d, a.tx - b.tx, a.ty - b.ty]
+    #expect(values.allSatisfy { abs($0) < 0.001 }, "\(a) isn't \(b)", sourceLocation: sourceLocation)
+  }
+
+  @Test("markers are drawn after a shape at the first vertex, the vertices between and the last vertex")
+  func markerVertices() async throws {
+    let markers = try await markers(
+      #"<path d="M 2 2 L 10 2 L 10 10" marker-start="url(#m)" marker-mid="url(#m)" marker-end="url(#m)"/>"#)
+    #expect(markers.map { CGPoint(x: $0.transform.tx, y: $0.transform.ty) } == [CGPoint(x: 2, y: 2), CGPoint(x: 10, y: 2), CGPoint(x: 10, y: 10)])
+    let ends = try await self.markers(
+      #"<polyline points="2,2 10,2 10,10" marker-end="url(#m)" style="marker-start: url(#m)"/>"#)
+    #expect(ends.count == 2)
+    // A line of zero length has markers too.
+    #expect(try await self.markers(#"<line x1="5" y1="5" x2="5" y2="5" marker-end="url(#m)"/>"#).count == 1)
+  }
+
+  @Test("a marker turns by orient, scales by the stroke width, and puts its reference point at the vertex")
+  func markerTransform() async throws {
+    let auto = try await markers(
+      #"<marker id="a" refX="1" orient="auto"/><path d="M 0 0 L 10 0 L 10 10" stroke-width="2" marker-mid="url(#a)"/>"#)
+    expectClose(
+      try #require(auto.first).transform,
+      CGAffineTransform(translationX: 10, y: 0).rotated(by: .pi / 4).scaledBy(x: 2, y: 2).translatedBy(x: -1, y: 0))
+    let fixed = try await markers(
+      #"<marker id="f" orient="90" markerUnits="userSpaceOnUse"/><path d="M 0 0 L 10 0" stroke-width="2" marker-start="url(#f)"/>"#)
+    expectClose(try #require(fixed.first).transform, CGAffineTransform(translationX: 0, y: 0).rotated(by: .pi / 2))
+    let reversed = try await markers(
+      #"<marker id="r" orient="auto-start-reverse"/><path d="M 0 0 L 10 0" marker-start="url(#r)" marker-end="url(#r)"/>"#)
+    expectClose(try #require(reversed.first).transform, CGAffineTransform(rotationAngle: .pi))
+    expectClose(try #require(reversed.last).transform, CGAffineTransform(translationX: 10, y: 0))
+  }
+
+  @Test("a marker clips its content to its viewport unless its overflow is visible, and maps its viewBox there")
+  func markerViewport() async throws {
+    let hidden = try #require(try await markers(#"<path d="M 0 0 L 10 0" marker-start="url(#m)"/>"#).first)
+    #expect(hidden.content?.overflowClip == CGRect(x: 0, y: 0, width: 2, height: 4))
+    let visible = try #require(
+      try await markers(
+        #"<marker id="v" overflow="visible" viewBox="0 0 10 10" markerWidth="5" markerHeight="5"/>"#
+          + #"<path d="M 0 0 L 10 0" marker-start="url(#v)"/>"#
+      ).first)
+    #expect(visible.content?.overflowClip == nil)
+    expectClose(try #require(visible.content).viewBoxTransform, CGAffineTransform(scaleX: 0.5, y: 0.5))
+  }
+
+  @Test("a marker that its content references again isn't drawn there, and a shape without markers is a shape")
+  func markerCycle() async throws {
+    let markers = try await markers(
+      #"<marker id="c"><path d="M 0 0 L 1 0" marker-end="url(#c)"/></marker>"#
+        + #"<path d="M 0 0 L 10 0" marker-end="url(#c)"/>"#)
+    let marker = try #require(markers.first)
+    let content = try #require(marker.content).children
+    #expect(try shape(content.first).geometry != nil)
+    let tree = try await renderTree(#"<path d="M 0 0 L 10 0" marker-end="url(#missing)"/>"#)
+    #expect(try shape(try children(of: tree).last).geometry != nil)
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),

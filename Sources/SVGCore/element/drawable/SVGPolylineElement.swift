@@ -21,6 +21,10 @@ final class SVGPolylineElement: ShapeGeometry {
   func path(in context: any GeometryContext) -> CGPath? {
     points.polyline?.applying(scale(context: context))
   }
+
+  func markerPath(in _: any GeometryContext) -> PathData? {
+    points.pathData(isClosed: false)
+  }
 }
 
 extension SVGPolylineElement: Encodable {

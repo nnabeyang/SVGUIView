@@ -24,6 +24,15 @@ struct SVGUIPoints: Encodable {
     mutablePolyline
   }
 
+  /// The path data of the points, as a polyline or a polygon, or `nil` with fewer than two points.
+  func pathData(isClosed: Bool) -> PathData? {
+    guard points.count >= 2 else { return nil }
+    let commands = points.enumerated().map { index, point in
+      PathCommand(type: index == 0 ? .M : .L, values: [point.x, point.y])
+    }
+    return PathData(commands: commands + (isClosed ? [PathCommand(type: .Z, values: [])] : []))
+  }
+
   private var mutablePolyline: CGMutablePath? {
     guard points.count >= 2, let first = points.first else { return nil }
     let path = CGMutablePath()
