@@ -616,16 +616,18 @@ package struct RenderTreeBuilder {
   }
 
   /// The gradient with the attributes of the gradients that it references, which it doesn't have.
+  ///
+  /// A reference to a gradient that's already been followed ends the references, and the gradient has the
+  /// attributes of the ones before it.
   private func gradientPaint(
     of server: any SVGGradientServer, context: ResolveContext, opacity: CGFloat
   ) -> GradientPaint? {
-    if let id = server.parentId,
-      let parent = base.pservers[id],
-      let merged = server.merged(other: parent)
-    {
-      return gradientPaint(of: merged, context: context, opacity: opacity)
+    var merged = server
+    var followed: Set<String> = server.id.map { [$0] } ?? []
+    while let id = merged.parentId, followed.insert(id).inserted, let parent = base.pservers[id] {
+      merged = merged.merged(other: parent)
     }
-    return server.paint(context: context, opacity: opacity)
+    return merged.paint(context: context, opacity: opacity)
   }
 
   /// The stroke of an element, or `nil` if it paints none.

@@ -99,6 +99,24 @@ struct RenderTreeBuilderTests {
     #expect(gradient.y2 == 1)
   }
 
+  @Test("a cycle of gradient references ends at the gradient that's already been followed")
+  func gradientReferenceCycle() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <linearGradient id="a" href="#b"/>
+      <linearGradient id="b" href="#c"><stop offset="0" stop-color="lime"/><stop offset="1" stop-color="blue"/></linearGradient>
+      <linearGradient id="c" href="#a" x2="0"/>
+      <rect width="20" height="20" fill="url(#c)"/>
+      """##)
+    let rect = try shape(try children(of: tree).last)
+    guard case .vector(.gradient(.linear(let gradient)), _, _) = rect.content else {
+      Issue.record("The rectangle isn't filled with a linear gradient")
+      return
+    }
+    #expect(gradient.locations == [0, 1])
+    #expect(gradient.x2 == 0)
+  }
+
   /// Stops, and the locations of the colors of the gradient with them.
   private static let stopOffsets: [(String, [CGFloat])] = [
     (#"<stop offset="-1" stop-color="lime"/><stop offset="2" stop-color="blue"/>"#, [0, 1]),

@@ -12,16 +12,16 @@ protocol SVGGradientServer: SVGElement {
   var parentIds: [String] { get }
   var id: String? { get }
   var children: [any SVGElement] { get }
-  func merged(other: any SVGGradientServer) -> (any SVGGradientServer)?
+  func merged(other: any SVGGradientServer) -> any SVGGradientServer
   func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint?
   func stops(context: any SVGLengthContext) -> [SVGStopElement]
   var gradientTransform: TransformList? { get }
-  init?(lhs: Self, rhs: SVGLinearGradientServer)
-  init?(lhs: Self, rhs: SVGRadialGradientServer)
+  init(lhs: Self, rhs: SVGLinearGradientServer)
+  init(lhs: Self, rhs: SVGRadialGradientServer)
 }
 
 extension SVGGradientServer {
-  func merged(other: any SVGGradientServer) -> (any SVGGradientServer)? {
+  func merged(other: any SVGGradientServer) -> any SVGGradientServer {
     switch other {
     case let other as SVGLinearGradientServer:
       return Self(lhs: self, rhs: other)
@@ -109,13 +109,8 @@ final class SVGLinearGradientServer: SVGGradientServer {
     }
   }
 
-  init?(lhs: SVGLinearGradientServer, rhs: SVGLinearGradientServer) {
-    if let id = lhs.id {
-      guard !rhs.parentIds.contains(id) else { return nil }
-      parentIds = lhs.parentIds + rhs.parentIds
-    } else {
-      parentIds = lhs.parentIds
-    }
+  init(lhs: SVGLinearGradientServer, rhs: SVGLinearGradientServer) {
+    parentIds = lhs.parentIds
     id = lhs.id
     self.base = lhs.base
     x1 = lhs.x1 ?? rhs.x1
@@ -129,13 +124,8 @@ final class SVGLinearGradientServer: SVGGradientServer {
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
   }
 
-  init?(lhs: SVGLinearGradientServer, rhs: SVGRadialGradientServer) {
-    if let id = lhs.id {
-      guard !lhs.parentIds.contains(id) else { return nil }
-      parentIds = lhs.parentIds + rhs.parentIds
-    } else {
-      parentIds = lhs.parentIds
-    }
+  init(lhs: SVGLinearGradientServer, rhs: SVGRadialGradientServer) {
+    parentIds = lhs.parentIds
     id = lhs.id
     base = lhs.base
     x1 = lhs.x1
@@ -230,16 +220,15 @@ final class SVGRadialGradientServer: SVGGradientServer {
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
     gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
 
-    parentIds = []
+    if let parentId = parentId {
+      parentIds = [parentId]
+    } else {
+      parentIds = []
+    }
   }
 
-  init?(lhs: SVGRadialGradientServer, rhs: SVGRadialGradientServer) {
-    if let id = rhs.id {
-      guard !lhs.parentIds.contains(id) else { return nil }
-      parentIds = lhs.parentIds + [id]
-    } else {
-      parentIds = lhs.parentIds
-    }
+  init(lhs: SVGRadialGradientServer, rhs: SVGRadialGradientServer) {
+    parentIds = lhs.parentIds
     id = lhs.id
     base = lhs.base
     cx = lhs.cx ?? rhs.cx
@@ -255,13 +244,8 @@ final class SVGRadialGradientServer: SVGGradientServer {
     gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
   }
 
-  init?(lhs: SVGRadialGradientServer, rhs: SVGLinearGradientServer) {
-    if let id = rhs.id {
-      guard !lhs.parentIds.contains(id) else { return nil }
-      parentIds = lhs.parentIds + [id]
-    } else {
-      parentIds = lhs.parentIds
-    }
+  init(lhs: SVGRadialGradientServer, rhs: SVGLinearGradientServer) {
+    parentIds = lhs.parentIds
     id = lhs.id
     base = lhs.base
     cx = lhs.cx

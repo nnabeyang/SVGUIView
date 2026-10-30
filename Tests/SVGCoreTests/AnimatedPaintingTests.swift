@@ -73,6 +73,11 @@ struct AnimatedPaintingTests {
       ["t", "k", "r"]
     ),
     (
+      #"<radialGradient id="l"><stop id="t" offset="0" stop-color="red"><animate attributeName="stop-color" to="lime" dur="1s"/></stop></radialGradient>"#
+        + ##"<radialGradient id="k" href="#l" r="0.2"/><rect id="r" width="10" height="10" fill="url(#k)"/>"##,
+      ["t", "k", "r"]
+    ),
+    (
       #"<filter id="f"><feGaussianBlur id="b" stdDeviation="1"><animate attributeName="stdDeviation" to="8" dur="1s"/></feGaussianBlur></filter>"#
         + ##"<mask id="m"><rect id="s" width="5" height="5" fill="white" filter="url(#f)"/></mask>"##
         + ##"<rect id="r" width="10" height="10" mask="url(#m)"/>"##,
