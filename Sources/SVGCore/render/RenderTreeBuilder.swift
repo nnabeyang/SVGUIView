@@ -294,7 +294,8 @@ package struct RenderTreeBuilder {
       ? await transform(of: svg, context: context, frame: nil, guard: references) : .identity
     let (translation, layout) = viewport(of: svg, context: context)
     guard let layout else {
-      return .viewport(ViewportNode(id: id, transform: transform, translation: translation, content: nil))
+      return .viewport(
+        ViewportNode(id: id, transform: transform, translation: translation, opacity: svg.opacity, content: nil))
     }
     let inner = layout.context
     var overflowClip: CGRect?
@@ -319,7 +320,7 @@ package struct RenderTreeBuilder {
     }
     return .viewport(
       ViewportNode(
-        id: id, transform: transform, translation: translation,
+        id: id, transform: transform, translation: translation, opacity: svg.opacity,
         content: ViewportContent(
           viewBoxTransform: layout.viewBoxTransform, overflowClip: overflowClip, clip: clip, mask: mask,
           children: children)))
@@ -431,8 +432,10 @@ package struct RenderTreeBuilder {
     case let shape as any ShapeGeometry:
       return shape.path(in: context)
     case let use as SVGUseElement:
+      // An element with display none isn't rendered, also where a use element references it.
       let path = await withReferencedElement(of: use, context: context, guard: references) { element, references in
-        await self.path(of: element, context: context.styled(by: element), guard: references)
+        element.display == CSSDisplay.none
+          ? nil : await self.path(of: element, context: context.styled(by: element), guard: references)
       }
       var translation = translation(of: use, context: context)
       return path.flatMap { $0 }.flatMap { $0.copy(using: &translation) }

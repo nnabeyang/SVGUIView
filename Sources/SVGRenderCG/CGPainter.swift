@@ -281,8 +281,8 @@ package struct CGPainter {
       await apply(mask, to: graphics)
     }
     let isClipped = isClipped || content.overflowClip != nil || content.mask != nil
-    let hasLayer = needsLayer(opacity: 1, isClipped: isClipped, childCount: content.children.count)
-    await inLayer(opacity: 1, isNeeded: hasLayer, of: graphics) {
+    let hasLayer = needsLayer(opacity: viewport.opacity, isClipped: isClipped, childCount: content.children.count)
+    await inLayer(opacity: viewport.opacity, isNeeded: hasLayer, of: graphics) {
       // The clip path applies to each child.
       if let clip = content.clip {
         await apply(clip, to: graphics)

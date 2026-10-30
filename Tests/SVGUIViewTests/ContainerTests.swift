@@ -74,4 +74,16 @@ struct ContainerTests {
     #expect(abs(Int(pixel[1]) - 128) < 8)
     #expect(abs(Int(pixel[3]) - 128) < 8)
   }
+
+  @Test("the root svg element and a nested one composite their content with their opacity")
+  func svgOpacity() async throws {
+    for svg in [
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" opacity="0.5"><rect width="20" height="20" fill="lime"/></svg>"#,
+      document(#"<svg width="20" height="20" opacity="0.5"><rect width="20" height="20" fill="lime"/></svg>"#),
+    ] {
+      let pixel = try await pixel(svg, x: 10, y: 10)
+      #expect(abs(Int(pixel[1]) - 128) < 8, "\(pixel)")
+      #expect(abs(Int(pixel[3]) - 128) < 8, "\(pixel)")
+    }
+  }
 }
