@@ -68,4 +68,14 @@ struct StrokePaintTests {
     #expect(edge[0] > 230 && edge[2] < 25, "\(edge)")
     #expect(try await pixel(content, x: 1, y: 10) == [255, 0, 0, 255])
   }
+
+  @Test("a fill painted after the stroke covers the inner half of the stroke")
+  func strokeFirst() async throws {
+    let rect = #"<rect x="4" y="4" width="12" height="12" fill="lime" stroke="blue" stroke-width="4" "#
+    // The pixel is inside the rectangle, in the inner half of the stroke.
+    let normal = try await pixel(rect + "/>", x: 4, y: 10)
+    let strokeFirst = try await pixel(rect + #"paint-order="stroke"/>"#, x: 4, y: 10)
+    #expect(normal[2] > 245 && normal[1] < 10, "\(normal)")
+    #expect(strokeFirst[1] > 245 && strokeFirst[2] < 10, "\(strokeFirst)")
+  }
 }

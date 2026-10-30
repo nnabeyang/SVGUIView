@@ -193,20 +193,53 @@ package struct RenderTreeBuilder {
       } else {
         []
       }
-    guard !markers.isEmpty else {
+    let order = element.style.paintOrder
+    // The fill and the stroke are painted as shapes of their own when the stroke is painted first, or the markers
+    // between them.
+    let parts: (fill: ShapeContent, stroke: ShapeContent)? =
+      if case .vector(let fill, let stroke, let fillRule)? = content,
+        order.strokesFirst || (!markers.isEmpty && order.layers[1] == .markers)
+      {
+        (.vector(fill: fill, stroke: nil, fillRule: fillRule), .vector(fill: nil, stroke: stroke, fillRule: fillRule))
+      } else {
+        nil
+      }
+    guard !markers.isEmpty || parts != nil else {
       return .shape(
         ShapeNode(
           id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: element.opacity,
           content: content))
     }
-    // The markers are drawn after the shape, with its effects.
-    let shape = ShapeNode(
-      id: id, transform: .identity, geometry: geometry, clip: nil, mask: .none, opacity: 1, content: content)
+    // The shape and the markers are drawn in the paint order, with the effects of the shape.
+    var shapeCount = 0
+    func shape(_ content: ShapeContent?) -> RenderNode {
+      defer { shapeCount += 1 }
+      return .shape(
+        ShapeNode(
+          id: partID(id, part: shapeCount), transform: .identity, geometry: geometry, clip: nil, mask: .none,
+          opacity: 1, content: content))
+    }
+    var children = [RenderNode]()
+    for layer in order.layers {
+      switch (layer, parts) {
+      case (.markers, _): children += markers
+      case (.fill, let parts?): children.append(shape(parts.fill))
+      case (.stroke, let parts?): children.append(shape(parts.stroke))
+      case (.fill, nil): children.append(shape(content))
+      case (.stroke, nil): break
+      }
+    }
     let groupMask: MaskEffect? = if case .mask(let effect) = mask { effect } else { nil }
     return .group(
       GroupNode(
-        id: id, transform: transform, opacity: element.opacity, clip: clip, mask: groupMask,
-        children: [.shape(shape)] + markers))
+        id: id, transform: transform, opacity: element.opacity, clip: clip, mask: groupMask, children: children))
+  }
+
+  /// The identity of a part of the shape of an element that's painted as shapes of its own: the first part has the
+  /// identity of the element, and the instance chain tells the others apart, as it does the copies of markers.
+  private func partID(_ id: RenderID, part: Int) -> RenderID {
+    guard part > 0 else { return id }
+    return RenderID(element: id.element, instance: id.instance + [id.element, ElementID(rawValue: Int.min + part)])
   }
 
   /// The node of text whose `<tspan>` descendants have glyphs: a group with the effects of the text, and a shape
@@ -227,22 +260,29 @@ package struct RenderTreeBuilder {
     for span in spans {
       let element = span.element
       let context = context.styled(by: element)
-      var content: ShapeContent?
+      var contents: [ShapeContent?] = [nil]
       if element.style.visibility == .visible {
         let fill = await fillPaint(
           of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance)
-        content = .vector(
-          fill: fill,
-          stroke: await stroke(
-            of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance),
-          fillRule: element.pathFillRule)
+        let stroke = await stroke(
+          of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance)
+        // A stroke that's painted first is a shape of its own, before the fill.
+        contents =
+          element.style.paintOrder.strokesFirst
+          ? [
+            .vector(fill: nil, stroke: stroke, fillRule: element.pathFillRule),
+            .vector(fill: fill, stroke: nil, fillRule: element.pathFillRule),
+          ] : [.vector(fill: fill, stroke: stroke, fillRule: element.pathFillRule)]
       }
-      children.append(
-        .shape(
-          ShapeNode(
-            id: renderID(of: element, instance: instance), transform: .identity,
-            geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
-            content: content)))
+      let id = renderID(of: element, instance: instance)
+      for (part, content) in contents.enumerated() {
+        children.append(
+          .shape(
+            ShapeNode(
+              id: partID(id, part: part), transform: .identity,
+              geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
+              content: content)))
+      }
     }
     return .group(
       GroupNode(

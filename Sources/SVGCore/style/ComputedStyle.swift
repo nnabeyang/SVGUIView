@@ -23,6 +23,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case strokeMiterlimit = "stroke-miterlimit"
   case strokeDasharray = "stroke-dasharray"
   case strokeDashoffset = "stroke-dashoffset"
+  case paintOrder = "paint-order"
   case clipRule = "clip-rule"
   case textAnchor = "text-anchor"
   case whiteSpace = "white-space"
@@ -96,6 +97,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .strokeMiterlimit: visitor.visit(StrokeMiterlimitProperty.self)
     case .strokeDasharray: visitor.visit(StrokeDasharrayProperty.self)
     case .strokeDashoffset: visitor.visit(StrokeDashoffsetProperty.self)
+    case .paintOrder: visitor.visit(PaintOrderProperty.self)
     case .clipRule: visitor.visit(ClipRuleProperty.self)
     case .textAnchor: visitor.visit(TextAnchorProperty.self)
     case .whiteSpace: visitor.visit(WhiteSpaceProperty.self)
@@ -173,6 +175,7 @@ struct ComputedStyle: Sendable, Equatable {
   var strokeMiterlimit: Double
   var strokeDasharray: [SVGLength]
   var strokeDashoffset: SVGLength
+  var paintOrder: PaintOrder
   var clipRule: FillRule
   var textAnchor: TextAnchor
   var whiteSpace: CSSWhiteSpace
@@ -234,6 +237,7 @@ struct ComputedStyle: Sendable, Equatable {
     strokeWidth: StrokeWidthProperty.initial, strokeLinecap: StrokeLinecapProperty.initial,
     strokeLinejoin: StrokeLinejoinProperty.initial, strokeMiterlimit: StrokeMiterlimitProperty.initial,
     strokeDasharray: StrokeDasharrayProperty.initial, strokeDashoffset: StrokeDashoffsetProperty.initial,
+    paintOrder: PaintOrderProperty.initial,
     clipRule: ClipRuleProperty.initial, textAnchor: TextAnchorProperty.initial,
     whiteSpace: WhiteSpaceProperty.initial, textDecoration: TextDecorationProperty.initial,
     letterSpacing: LetterSpacingProperty.initial, wordSpacing: WordSpacingProperty.initial,
@@ -340,7 +344,7 @@ struct ComputedStyle: Sendable, Equatable {
     fontFamily: String, fontSize: SVGUIFont.Size, fontWeight: SVGUIFont.Weight, writingMode: WritingMode,
     color: SVGColor, fill: Paint, fillOpacity: Double, fillRule: FillRule, stroke: Paint, strokeOpacity: Double,
     strokeWidth: SVGLength, strokeLinecap: CGLineCap, strokeLinejoin: CGLineJoin, strokeMiterlimit: Double,
-    strokeDasharray: [SVGLength], strokeDashoffset: SVGLength, clipRule: FillRule, textAnchor: TextAnchor,
+    strokeDasharray: [SVGLength], strokeDashoffset: SVGLength, paintOrder: PaintOrder, clipRule: FillRule, textAnchor: TextAnchor,
     whiteSpace: CSSWhiteSpace, textDecoration: TextDecorationLines,
     letterSpacing: SVGLength, wordSpacing: SVGLength, dominantBaseline: DominantBaseline,
     alignmentBaseline: AlignmentBaseline, baselineShift: BaselineShift, markerStart: SVGMarkerReference,
@@ -373,6 +377,7 @@ struct ComputedStyle: Sendable, Equatable {
     self.strokeMiterlimit = strokeMiterlimit
     self.strokeDasharray = strokeDasharray
     self.strokeDashoffset = strokeDashoffset
+    self.paintOrder = paintOrder
     self.clipRule = clipRule
     self.textAnchor = textAnchor
     self.whiteSpace = whiteSpace

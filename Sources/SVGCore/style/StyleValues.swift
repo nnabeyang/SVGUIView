@@ -52,3 +52,25 @@ enum FillRule: String, CaseIterable, Sendable {
   case nonzero
   case evenodd
 }
+
+/// The order in which a shape or text paints its fill, its stroke and its markers.
+struct PaintOrder: Equatable, Sendable {
+  enum Layer: Sendable {
+    case fill, stroke, markers
+  }
+
+  /// The fill, the stroke and the markers in the order that they're painted.
+  let layers: [Layer]
+
+  static let normal = PaintOrder(first: [])
+
+  /// The order that paints the given layers first, and the others after them in their normal order.
+  init(first: [Layer]) {
+    layers = first + [Layer.fill, .stroke, .markers].filter { !first.contains($0) }
+  }
+
+  /// Whether the stroke is painted before the fill.
+  var strokesFirst: Bool {
+    (layers.firstIndex(of: .stroke) ?? 0) < (layers.firstIndex(of: .fill) ?? 0)
+  }
+}
