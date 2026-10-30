@@ -36,6 +36,12 @@ package struct RadialGradientPaint: Sendable {
   package let cx: CGFloat
   package let cy: CGFloat
   package let r: CGFloat
+  /// The center of the focal circle, where the gradient starts.
+  package let fx: CGFloat
+  package let fy: CGFloat
+  /// The radius of the focal circle.
+  package let fr: CGFloat
+  package let spreadMethod: SpreadMethod
   /// The colors of the stops that have one, and the offsets of all the stops.
   package let colors: [CGColor]
   package let locations: [CGFloat]

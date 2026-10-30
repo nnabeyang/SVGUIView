@@ -192,6 +192,8 @@ final class SVGRadialGradientServer: SVGGradientServer {
   let cy: SVGLength?
   let fx: SVGLength?
   let fy: SVGLength?
+  /// The radius of the focal circle, which is a point without it.
+  let fr: SVGLength?
   let r: SVGLength?
 
   private enum CodingKeys: String, CodingKey {
@@ -207,6 +209,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     cy = SVGLength(attributes["cy"])
     fx = SVGLength(attributes["fx"])
     fy = SVGLength(attributes["fy"])
+    fr = SVGLength(attributes["fr"])
     r = SVGLength(attributes["r"])
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
     parentId = Self.parseLink(description: attributes["href"])
@@ -229,6 +232,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     cy = lhs.cy ?? rhs.cy
     fx = lhs.fx ?? rhs.fx
     fy = lhs.fy ?? rhs.fy
+    fr = lhs.fr ?? rhs.fr
     r = lhs.r ?? rhs.r
     children = lhs.children.isEmpty ? rhs.children : lhs.children
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
@@ -250,6 +254,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     cy = lhs.cy
     fx = lhs.fx
     fy = lhs.fy
+    fr = lhs.fr
     r = lhs.r
     children = lhs.children.isEmpty ? rhs.children : lhs.children
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
@@ -276,14 +281,19 @@ final class SVGRadialGradientServer: SVGGradientServer {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
-    let cy = (cy ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
-    let r = (r ?? .percent(50)).value(context: context, mode: .height, unitType: gradientUnits)
+    let cy = (cy ?? .percent(50)).value(context: context, mode: .height, unitType: gradientUnits)
+    let r = (r ?? .percent(50)).value(context: context, mode: .other, unitType: gradientUnits)
+    // The focal point is the center unless it's given.
+    let fx = fx?.value(context: context, mode: .width, unitType: gradientUnits) ?? cx
+    let fy = fy?.value(context: context, mode: .height, unitType: gradientUnits) ?? cy
+    // A negative radius of the focal circle is an error, which leaves the circle a point.
+    let fr = max((fr ?? .percent(0)).value(context: context, mode: .other, unitType: gradientUnits), 0)
     let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
     guard !colors.isEmpty else { return nil }
     return .radial(
       RadialGradientPaint(
-        units: gradientUnits, transform: transform(context: context), cx: cx, cy: cy, r: r, colors: colors,
-        locations: stops.map(\.offset.value)))
+        units: gradientUnits, transform: transform(context: context), cx: cx, cy: cy, r: r, fx: fx, fy: fy, fr: fr,
+        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: stops.map(\.offset.value)))
   }
 }
 

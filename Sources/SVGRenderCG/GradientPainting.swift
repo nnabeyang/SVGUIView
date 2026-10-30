@@ -76,9 +76,45 @@ extension RadialGradientPaint {
     graphics.clip()
     graphics.concatenate(transform)
     let center = CGPoint(x: cx, y: cy)
-    graphics.drawRadialGradient(
-      gradient, startCenter: center, startRadius: 0, endCenter: center, endRadius: r,
-      options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+    let focus = CGPoint(x: fx, y: fy)
+    // The circle at t goes from the focal circle at 0 to the end circle at 1, and on with the same steps.
+    func circle(_ t: CGFloat) -> (center: CGPoint, radius: CGFloat) {
+      (CGPoint(x: fx + (cx - fx) * t, y: fy + (cy - fy) * t), fr + (r - fr) * t)
+    }
+    // A circle covers a point when its radius is larger than the distance of the point from the focus and of the
+    // center from the focus, which grow by `growth` with t. A focal circle that the end circle doesn't contain
+    // makes a cone, which isn't repeated.
+    let growth = r - fr - hypot(cx - fx, cy - fy)
+    let inverse = transform.inverted()
+    let bounds = path.boundingBoxOfPath
+    let farthest =
+      [
+        CGPoint(x: bounds.minX, y: bounds.minY), CGPoint(x: bounds.maxX, y: bounds.minY),
+        CGPoint(x: bounds.minX, y: bounds.maxY), CGPoint(x: bounds.maxX, y: bounds.maxY),
+      ].map {
+        let point = $0.applying(inverse)
+        return hypot(point.x - focus.x, point.y - focus.y)
+      }.max() ?? 0
+    let last = growth > 0 ? ((farthest - fr) / growth).rounded(.up) : 0
+    // A gradient that doesn't grow, or with too many bands to draw, is padded.
+    guard spreadMethod != .pad, growth > 0, last <= 10_000 else {
+      graphics.drawRadialGradient(
+        gradient, startCenter: focus, startRadius: fr, endCenter: center, endRadius: r,
+        options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+      return
+    }
+    let reflected =
+      spreadMethod == .reflect
+      ? CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations.reversed()) : nil
+    for band in 0..<max(Int(last), 1) {
+      let start = circle(CGFloat(band))
+      let end = circle(CGFloat(band + 1))
+      let bandGradient = band.isMultiple(of: 2) ? gradient : (reflected ?? gradient)
+      // The inside of the focal circle takes the color at its start.
+      graphics.drawRadialGradient(
+        bandGradient, startCenter: start.center, startRadius: start.radius, endCenter: end.center,
+        endRadius: end.radius, options: band == 0 ? [.drawsBeforeStartLocation] : [])
+    }
   }
 }
 
