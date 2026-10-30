@@ -947,6 +947,22 @@ struct RenderTreeBuilderTests {
     #expect(abs(paint.r - sqrt((40 * 40 + 20 * 20) / 2) / 2) < 0.001)
   }
 
+  @Test("a radial gradient has its focal circle and its spread method, which it takes from the one it references")
+  func radialGradientFocus() async throws {
+    let paint = try await radialGradient(
+      ##"""
+      <radialGradient id="a" gradientUnits="userSpaceOnUse" fx="5" fy="4" fr="2" spreadMethod="reflect"/>
+      <radialGradient id="g" href="#a"><stop stop-color="red"/></radialGradient>
+      """##)
+    #expect([paint.fx, paint.fy, paint.fr] == [5, 4, 2])
+    #expect(paint.spreadMethod == .reflect)
+    let centered = try await radialGradient(#"<radialGradient id="g"><stop stop-color="red"/></radialGradient>"#)
+    #expect([centered.fx, centered.fy, centered.fr] == [0.5, 0.5, 0])
+    #expect(centered.spreadMethod == .pad)
+    let negative = try await radialGradient(#"<radialGradient id="g" fr="-1"><stop stop-color="red"/></radialGradient>"#)
+    #expect(negative.fr == 0)
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),
