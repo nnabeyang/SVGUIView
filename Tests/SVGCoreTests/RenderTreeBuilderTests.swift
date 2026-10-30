@@ -897,6 +897,18 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  @Test("the root svg element and a nested one composite their content with their opacity")
+  func viewportOpacity() async throws {
+    let tree = try await renderTree(
+      #"<svg width="10" height="10" opacity="0.25"><rect width="10" height="10"/></svg>"#, attributes: #"opacity="0.5""#)
+    guard case .viewport(let root) = tree.root, case .viewport(let nested) = try children(of: tree).first else {
+      Issue.record("The svg elements aren't viewports")
+      return
+    }
+    #expect(root.opacity == 0.5)
+    #expect(nested.opacity == 0.25)
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),

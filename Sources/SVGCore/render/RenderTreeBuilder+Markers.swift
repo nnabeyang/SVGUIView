@@ -93,7 +93,7 @@ extension RenderTreeBuilder {
     }
     return .viewport(
       ViewportNode(
-        id: renderID(of: marker, instance: instance), transform: transform, translation: .identity,
+        id: renderID(of: marker, instance: instance), transform: transform, translation: .identity, opacity: 1,
         content: ViewportContent(
           viewBoxTransform: viewBoxTransform, overflowClip: overflowClip, clip: nil, mask: nil, children: children)))
   }

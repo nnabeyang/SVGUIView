@@ -147,7 +147,8 @@ package struct LayerPlanner: Sendable {
           ]
         } ?? layers(of: content.children, in: inner)
       return ContainerLayer(
-        id: viewport.id, transform: transform, opacity: 1, clip: nil, children: clipped, key: inner.key)
+        id: viewport.id, transform: transform, opacity: viewport.opacity, clip: nil, children: clipped,
+        key: inner.key)
     default:
       // A promoted node that paints as one image, or a shape, is painted in its own coordinates in its layer.
       let inner = context.inside(node.transform, isFixed: false, key: key)

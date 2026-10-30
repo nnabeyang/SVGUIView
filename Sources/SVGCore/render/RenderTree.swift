@@ -128,6 +128,8 @@ package struct ViewportNode: Sendable {
   package let transform: CGAffineTransform
   /// The translation by `x` and `y`.
   package let translation: CGAffineTransform
+  /// The opacity that the content is composited with, after the overflow is clipped and the mask applies.
+  package let opacity: CGFloat
   /// The content, or `nil` if the viewport has no area.
   package let content: ViewportContent?
 }
