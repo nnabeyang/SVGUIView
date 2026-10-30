@@ -99,6 +99,51 @@ struct RenderTreeBuilderTests {
     #expect(gradient.y2 == 1)
   }
 
+  @Test("a cycle of gradient references ends at the gradient that's already been followed")
+  func gradientReferenceCycle() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <linearGradient id="a" href="#b"/>
+      <linearGradient id="b" href="#c"><stop offset="0" stop-color="lime"/><stop offset="1" stop-color="blue"/></linearGradient>
+      <linearGradient id="c" href="#a" x2="0"/>
+      <rect width="20" height="20" fill="url(#c)"/>
+      """##)
+    let rect = try shape(try children(of: tree).last)
+    guard case .vector(.gradient(.linear(let gradient)), _, _) = rect.content else {
+      Issue.record("The rectangle isn't filled with a linear gradient")
+      return
+    }
+    #expect(gradient.locations == [0, 1])
+    #expect(gradient.x2 == 0)
+  }
+
+  /// Stops, and the locations of the colors of the gradient with them.
+  private static let stopOffsets: [(String, [CGFloat])] = [
+    (#"<stop offset="-1" stop-color="lime"/><stop offset="2" stop-color="blue"/>"#, [0, 1]),
+    (#"<stop offset="-10%" stop-color="lime"/><stop offset="50%" stop-color="blue"/>"#, [0, 0.5]),
+    // An offset smaller than the one before it, or a missing one, which is 0, is the offset before it.
+    (
+      #"<stop offset="0" stop-color="red"/><stop offset="0.7" stop-color="lime"/><stop offset="0.1" stop-color="blue"/>"#,
+      [0, 0.7, 0.7]
+    ),
+    (#"<stop offset="0.1" stop-color="red"/><stop stop-color="lime"/><stop offset="1" stop-color="blue"/>"#, [0.1, 0.1, 1]),
+    // A single stop paints its color everywhere.
+    (#"<stop offset="0.6" stop-color="lime"/>"#, [0, 1]),
+  ]
+
+  @Test("the offsets of stops are clamped to 0...1 and to the offset before them", arguments: stopOffsets)
+  func stopLocations(stops: String, locations: [CGFloat]) async throws {
+    let tree = try await renderTree(
+      #"<linearGradient id="g">\#(stops)</linearGradient><rect width="20" height="20" fill="url(#g)"/>"#)
+    let rect = try shape(try children(of: tree).last)
+    guard case .vector(.gradient(.linear(let gradient)), _, _) = rect.content else {
+      Issue.record("The rectangle isn't filled with a linear gradient")
+      return
+    }
+    #expect(gradient.locations == locations)
+    #expect(gradient.colors.count == locations.count)
+  }
+
   /// Gradients, and the transform of the gradient that the last rectangle is filled with.
   private static let gradientTransforms: [(String, CGAffineTransform)] = [
     (
