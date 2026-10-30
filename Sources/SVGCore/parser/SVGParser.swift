@@ -23,6 +23,7 @@ enum SVGElementName: String, Equatable {
   case defs
   case clipPath
   case mask
+  case marker
   case pattern
   case filter
   case feGaussianBlur

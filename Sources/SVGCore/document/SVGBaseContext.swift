@@ -39,6 +39,7 @@ package struct SVGBaseContext: Sendable {
   var masks = [String: SVGMaskElement]()
   var patterns = [String: SVGPatternElement]()
   var filters = [String: SVGFilterElement]()
+  private(set) var markers = [String: SVGMarkerElement]()
 
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.
@@ -74,6 +75,10 @@ package struct SVGBaseContext: Sendable {
       case let pserver as any SVGGradientServer:
         if let id = pserver.id, pservers[id] == nil {
           pservers[id] = pserver
+        }
+      case let marker as SVGMarkerElement:
+        if let id = marker.id, markers[id] == nil {
+          markers[id] = marker
         }
       default:
         break
@@ -185,6 +190,7 @@ package struct SVGBaseContext: Sendable {
     masks = context.masks.mapValues(replaced)
     patterns = context.patterns.mapValues(replaced)
     filters = context.filters.mapValues(replaced)
+    markers = context.markers.mapValues(replaced)
   }
 
   /// The context with the computed values of every element computed again at the given time, which `at(time:)` does

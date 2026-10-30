@@ -75,6 +75,7 @@ struct ReferenceGuard: Sendable {
   var clipPaths: Set<String>?
   var masks: Set<String>?
   var patterns: Set<String>?
+  var markers: Set<String>?
 
   struct Kinds: OptionSet {
     let rawValue: Int
@@ -82,7 +83,8 @@ struct ReferenceGuard: Sendable {
     static let clipPaths = Kinds(rawValue: 1 << 1)
     static let masks = Kinds(rawValue: 1 << 2)
     static let patterns = Kinds(rawValue: 1 << 3)
-    static let all: Kinds = [.uses, .clipPaths, .masks, .patterns]
+    static let markers = Kinds(rawValue: 1 << 4)
+    static let all: Kinds = [.uses, .clipPaths, .masks, .patterns, .markers]
   }
 
   /// The guard with a new, empty level of the given kinds.
@@ -92,6 +94,7 @@ struct ReferenceGuard: Sendable {
     if kinds.contains(.clipPaths) { copy.clipPaths = [] }
     if kinds.contains(.masks) { copy.masks = [] }
     if kinds.contains(.patterns) { copy.patterns = [] }
+    if kinds.contains(.markers) { copy.markers = [] }
     return copy
   }
 
@@ -113,6 +116,11 @@ struct ReferenceGuard: Sendable {
   /// Adds the ID of a `<pattern>` element, or returns `false` if it's already being followed or no level is begun.
   mutating func insert(pattern id: String) -> Bool {
     Self.insert(id, into: &patterns)
+  }
+
+  /// Adds the ID of a `<marker>` element, or returns `false` if it's already being followed or no level is begun.
+  mutating func insert(marker id: String) -> Bool {
+    Self.insert(id, into: &markers)
   }
 
   private static func insert<T>(_ member: T, into set: inout Set<T>?) -> Bool {

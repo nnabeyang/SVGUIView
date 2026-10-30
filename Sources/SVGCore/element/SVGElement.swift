@@ -246,6 +246,8 @@ extension ElementCursor {
         SVGClipPathElement(base: base, contents: contents)
       case .mask:
         SVGMaskElement(base: base, contents: contents)
+      case .marker:
+        SVGMarkerElement(base: base, contents: contents)
       case .pattern:
         SVGPatternElement(base: base, contents: contents)
       case .filter:
