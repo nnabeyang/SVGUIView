@@ -301,8 +301,9 @@ struct SVGHexColor: SVGUIColor {
   let value: UInt64
   let isShort: Bool
   let hasAlpha: Bool
+  /// A color of 3, 4, 6 or 8 hexadecimal digits, or `nil` for other digits.
   init?(hex: String) {
-    guard let value = UInt64(hex, radix: 16) else { return nil }
+    guard [3, 4, 6, 8].contains(hex.count), let value = UInt64(hex, radix: 16) else { return nil }
     self.hex = hex
     self.value = value
     let count = hex.count

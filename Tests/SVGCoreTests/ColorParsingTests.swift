@@ -67,10 +67,19 @@ struct ColorParsingTests {
     arguments: [
       "hsl(120, 100, 25%)", "hsl(120 100% 25%, 0.5)", "rgb(0 128 0, 0.5)", "rgb(0, 128 0)", "rgb(0, 128, none)",
       "hwb(120, 0%, 50%)", "hsl(120, 100%, 25%", "hsl(120px 100% 50%)", "hsl(120 100% 50% / 0.5 0.5)",
+      "#aaz", "#aa", "#12345", "rgba(0, 50%, 0, 0.5)", "rgb(0, 50%, 0)",
     ])
   func invalidColors(text: String) {
     #expect(Paint(text) == nil)
     #expect(ColorValue(text) == nil)
+  }
+
+  @Test("hex colors have 3, 4, 6 or 8 digits and nothing after them, and the modern rgb() mixes numbers and percentages")
+  func hexColorsAndMixedValues() {
+    for text in ["#abc", "#abcd", "#aabbcc", "#aabbccdd", "rgb(0 50% 0)"] {
+      #expect(Paint(text) != nil, "\(text)")
+    }
+    #expect(Paint("#aaaaz") == nil)
   }
 
   @Test("a function that isn't supported isn't a color, and paints black as a name that isn't a color does")

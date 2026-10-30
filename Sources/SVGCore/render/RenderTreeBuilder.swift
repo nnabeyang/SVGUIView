@@ -601,8 +601,10 @@ package struct RenderTreeBuilder {
               pattern, frame: frame, opacity: opacity, context: context, mode: mode, guard: references,
               instance: instance + [element.base.elementID]))
         }
+        return .color(CGColor.opaqueBlack)
       }
-      return .color(CGColor.opaqueBlack)
+      // A reference to an element that doesn't exist or isn't a paint server paints the fallback, or nothing.
+      return fallbackPaint
     case .currentColor:
       preconditionFailure("currentColor is resolved")
     }

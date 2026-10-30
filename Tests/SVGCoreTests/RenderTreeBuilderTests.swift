@@ -781,6 +781,36 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  @Test("a reference to an element that doesn't exist or isn't a paint server paints the fallback, or nothing")
+  func invalidReference() async throws {
+    let elements = #"<rect id="r" width="1" height="1"/><linearGradient id="empty"/>"#
+    func content(_ attributes: String) async throws -> ShapeContent? {
+      let tree = try await renderTree(elements + #"<rect width="10" height="10" color="lime" "# + attributes + "/>")
+      return try shape(try children(of: tree).last).content
+    }
+    func fill(_ attributes: String) async throws -> FillPaint? {
+      guard case .vector(let fill, _, _)? = try await content(attributes) else { return nil }
+      return fill
+    }
+    func color(_ paint: FillPaint?) -> [CGFloat]? {
+      if case .color(let color)? = paint { color.components } else { nil }
+    }
+    #expect(color(try await fill(#"fill="url(#missing) lime""#)) == [0, 1, 0, 1])
+    #expect(color(try await fill(#"fill="url(#missing) currentColor""#)) == [0, 1, 0, 1])
+    #expect(color(try await fill(#"fill="url(#r) lime""#)) == [0, 1, 0, 1])
+    #expect(try await fill(#"fill="url(#missing) none""#) == nil)
+    #expect(try await fill(#"fill="url(#missing)""#) == nil)
+    guard case .vector(_, nil, _)? = try await content(#"stroke="url(#missing)""#) else {
+      Issue.record("A stroke that references nothing is painted")
+      return
+    }
+    // A gradient without stops is a paint server, which paints nothing instead of the fallback.
+    guard case .gradient(nil)? = try await fill(#"fill="url(#empty) lime""#) else {
+      Issue.record("A gradient without stops doesn't paint nothing")
+      return
+    }
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),
