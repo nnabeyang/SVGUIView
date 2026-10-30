@@ -87,8 +87,8 @@ struct RestyleScope: Sendable {
     if case .url(let name) = style.clipPath { names.append(name) }
     if case .url(let name) = style.mask { names.append(name) }
     if case .url(let name) = style.filter { names.append(name) }
-    if case .url(let name) = style.fill { names.append(name) }
-    if case .url(let name) = style.stroke { names.append(name) }
+    if case .url(let name, _) = style.fill { names.append(name) }
+    if case .url(let name, _) = style.stroke { names.append(name) }
     names.append(contentsOf: [style.markerStart, style.markerMid, style.markerEnd].compactMap(\.id))
     switch element {
     case let use as SVGUseElement:

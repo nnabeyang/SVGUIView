@@ -1,13 +1,14 @@
 import Foundation
 
 /// The value of `fill` or `stroke`.
-enum Paint: Sendable, Equatable {
+indirect enum Paint: Sendable, Equatable {
   case none
   case color(SVGColor)
   /// The value of `color`, which stays a keyword in computed values and is resolved where it's used.
   case currentColor
-  /// A paint server, such as a gradient or a pattern, by its ID.
-  case url(String)
+  /// A paint server, such as a gradient or a pattern, by its ID, and the paint used instead where the server can't
+  /// paint: `none`, a color or `currentColor`.
+  case url(String, fallback: Paint?)
 
   init?(_ text: String) {
     var data = text
@@ -17,7 +18,12 @@ enum Paint: Sendable, Equatable {
       return scanner.scanPaint()
     }
     // A name that isn't a color, or a function that isn't supported, such as `lab()`, is invalid.
-    if case .color(let color) = paint, color.toCGColor(opacity: 1) == nil { return nil }
+    switch paint {
+    case .color(let color), .url(_, .color(let color)?):
+      if color.toCGColor(opacity: 1) == nil { return nil }
+    default:
+      break
+    }
     guard let paint else { return nil }
     self = paint
   }

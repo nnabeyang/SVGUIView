@@ -571,14 +571,30 @@ package struct RenderTreeBuilder {
     case .color(let color):
       // A color that isn't known, such as a misspelled name, paints nothing.
       return color.toCGColor(opacity: opacity).map { .color($0) }
-    case .url(let id):
+    case .url(let id, let fallback):
+      // An element without width or height has no bounding box for a paint server with objectBoundingBox units,
+      // which paints the fallback instead.
+      let bounds = path.boundingBoxOfPath
+      let isEmpty = bounds.width == 0 || bounds.height == 0
+      let fallbackPaint: FillPaint? =
+        if case .color(let color)? = fallback { color.toCGColor(opacity: opacity).map { .color($0) } } else { nil }
       if let server = base.pservers[id] {
         // Display doesn't apply to paint servers, which are never rendered themselves.
-        return .gradient(gradientPaint(of: server, context: context, opacity: opacity))
+        let gradient = gradientPaint(of: server, context: context, opacity: opacity)
+        if isEmpty, gradient?.units == .objectBoundingBox { return fallbackPaint }
+        return .gradient(gradient)
       } else if let pattern = base.patterns[id] {
         // A cycle of patterns stops the pattern, which paints black.
         var references = references
         if references.insert(pattern: id) {
+          if isEmpty {
+            let merged = mergedPattern(pattern, guard: references).pattern
+            if merged.patternUnits ?? .objectBoundingBox == .objectBoundingBox
+              || merged.patternContentUnits == .objectBoundingBox
+            {
+              return fallbackPaint
+            }
+          }
           let frame = await frame(of: element, context: context, path: path, guard: references)
           return .pattern(
             await patternPaint(

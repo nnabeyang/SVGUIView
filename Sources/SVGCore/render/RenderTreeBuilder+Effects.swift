@@ -122,10 +122,11 @@ extension RenderTreeBuilder {
   ///   - mode: How the filled element is drawn.
   ///   - references: The guard with the ID of the pattern added.
   ///   - instance: The identity of the content of the pattern, for the filled element.
-  func patternPaint(
-    _ pattern: SVGPatternElement, frame: CGRect, opacity: CGFloat, context: ResolveContext, mode: DrawMode,
-    guard references: ReferenceGuard, instance: [ElementID]
-  ) async -> PatternPaint? {
+  /// The pattern with the attributes and the content of the patterns that it references, which it doesn't have,
+  /// and the references with those patterns added.
+  func mergedPattern(
+    _ pattern: SVGPatternElement, guard references: ReferenceGuard
+  ) -> (pattern: SVGPatternElement, references: ReferenceGuard) {
     var pattern = pattern
     var references = references
     while let parentId = pattern.parentId,
@@ -134,6 +135,14 @@ extension RenderTreeBuilder {
     {
       pattern = SVGPatternElement(lhs: pattern, rhs: parent)
     }
+    return (pattern, references)
+  }
+
+  func patternPaint(
+    _ pattern: SVGPatternElement, frame: CGRect, opacity: CGFloat, context: ResolveContext, mode: DrawMode,
+    guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> PatternPaint? {
+    let (pattern, references) = mergedPattern(pattern, guard: references)
     let transform = pattern.patternTransform?.matrix(box: context.viewBoxSize, context: context) ?? .identity
     let tileSize = pattern.size(frame: frame, context: context).applying(transform.scale)
     guard CGContext.bitmapLayout(size: tileSize, scale: scale) != nil else { return nil }

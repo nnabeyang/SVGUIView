@@ -5,6 +5,14 @@ import Foundation
 package enum GradientPaint: Sendable {
   case linear(LinearGradientPaint)
   case radial(RadialGradientPaint)
+
+  /// The units of the coordinates of the gradient.
+  package var units: SVGUnitType {
+    switch self {
+    case .linear(let gradient): gradient.units
+    case .radial(let gradient): gradient.units
+    }
+  }
 }
 
 package struct LinearGradientPaint: Sendable {

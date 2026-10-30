@@ -110,6 +110,24 @@ struct ColorParsingTests {
     #expect(rgba(of: Paint("transparent")) == [0, 0, 0, 0])
   }
 
+  @Test("a paint server reference takes a fallback of none, a color or currentColor, and nothing else after it")
+  func paintServerFallbacks() {
+    #expect(Paint("url(#a)") == .url("a", fallback: nil))
+    #expect(Paint("url(#a) green") == .url("a", fallback: Paint("green")))
+    #expect(Paint("url(#a) #0f0") == .url("a", fallback: Paint("#0f0")))
+    #expect(Paint("url(#a)  none ") == .url("a", fallback: Paint.none))
+    #expect(Paint("url(#a) currentColor") == .url("a", fallback: .currentColor))
+    // SVG 2 has no ICC colors, so a value with one is invalid.
+    for text in [
+      "url(#a) url(#b)", "url(#a) foo", "url(#a) green blue", "url(#a) green icc-color(acmecmyk, 0.11, 0.48)",
+    ] {
+      #expect(Paint(text) == nil, "\(text)")
+    }
+    #expect(
+      ComputedStyle.initial.resolved(.url("a", fallback: .currentColor))
+        == .url("a", fallback: .color(ComputedStyle.initial.color)))
+  }
+
   @Test("stop-color, flood-color and style sheets read the same colors")
   func otherProperties() throws {
     let green = try #require(SVGAttributeScanner.parseColor(description: "rgb(0 127.5 0 / 0.5)"))

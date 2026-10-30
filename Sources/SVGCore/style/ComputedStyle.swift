@@ -428,8 +428,11 @@ struct ComputedStyle: Sendable, Equatable {
 
   /// The paint with `currentColor` resolved.
   func resolved(_ paint: Paint) -> Paint {
-    if case .currentColor = paint { return .color(color) }
-    return paint
+    switch paint {
+    case .currentColor: .color(color)
+    case .url(let id, let fallback?): .url(id, fallback: resolved(fallback))
+    default: paint
+    }
   }
 
   /// The color with `currentColor` resolved.

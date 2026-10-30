@@ -210,7 +210,11 @@ extension SVGAttributeScanner {
       consumeWhitespaceIfNext(UInt8(ascii: "#"))
       guard let id = scanIdentity() else { return nil }
       guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return .url(id)
+      // The fallback is the rest of the value: a paint other than a paint server, with nothing after it.
+      guard reader.consumeWhitespace() != nil else { return .url(id, fallback: nil) }
+      guard let fallback = scanPaint(), reader.isEOF else { return nil }
+      if case .url = fallback { return nil }
+      return .url(id, fallback: fallback)
     }
   }
 
