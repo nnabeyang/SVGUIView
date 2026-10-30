@@ -909,6 +909,25 @@ struct RenderTreeBuilderTests {
     #expect(nested.opacity == 0.25)
   }
 
+  @Test("an element with display none that a use element references has no shape in a clip path or a mask")
+  func referencedDisplayNone() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <defs><rect id="n" width="20" height="20" display="none"/><use id="u" href="#n"/></defs>
+      <clipPath id="c"><use href="#n"/></clipPath>
+      <mask id="m"><use href="#u" fill="white"/></mask>
+      <rect width="20" height="20" clip-path="url(#c)"/>
+      <rect width="20" height="20" mask="url(#m)"/>
+      """##)
+    let shapes = shapes(of: try children(of: tree))
+    #expect(try #require(shapes.dropLast().last?.clip).shapes.isEmpty)
+    guard case .mask(let mask) = try #require(shapes.last).mask else {
+      Issue.record("The rectangle isn't masked")
+      return
+    }
+    #expect(mask.contents.isEmpty)
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),
