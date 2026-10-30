@@ -27,7 +27,7 @@ final class SVGPathElement: ShapeGeometry {
     for command in data.commands {
       pathContext.apply(command)
     }
-    return pathContext.path?.applying(scale(context: context))
+    return pathContext.path
   }
 }
 

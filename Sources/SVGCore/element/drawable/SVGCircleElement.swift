@@ -39,7 +39,7 @@ final class SVGCircleElement: ShapeGeometry {
     // Core Graphics names directions in a coordinate space whose y-axis points up, so this is the clockwise
     // circle of UIKit.
     path.addArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: 0, endAngle: CGFloat(Double.pi) * 2, clockwise: false)
-    return path.applying(scale(context: context))
+    return path
   }
 }
 

@@ -42,7 +42,7 @@ final class SVGEllipseElement: ShapeGeometry {
       ellipseIn: CGRect(
         origin: CGPoint(x: center.x - radii.width, y: center.y - radii.height),
         size: CGSize(width: 2 * radii.width, height: 2 * radii.height)), transform: nil)
-    return path.applying(scale(context: context))
+    return path
   }
 
   func markerPath(in context: any GeometryContext) -> PathData? {

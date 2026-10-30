@@ -159,12 +159,14 @@ extension RenderTreeBuilder {
         viewBox = context.viewBox
       }
     case .objectBoundingBox:
-      viewBox = frame
+      // The coordinates of the content are fractions of the bounding box, which scales the content with its strokes
+      // and its text, and 100% is the whole box.
+      viewBoxTransform = CGAffineTransform(scaleX: frame.width, y: frame.height)
+      viewBox = CGRect(x: 0, y: 0, width: 1, height: 1)
     }
     // The content is drawn in a context of its own, which shares the references of patterns. Other references have
     // a level only for an element drawn as the root.
-    let tileContext = ResolveContext(
-      base: base, viewPort: viewPort, scale: scale, viewBox: viewBox, patternContentUnit: contentUnits)
+    let tileContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: viewBox)
     var tileReferences = ReferenceGuard()
     tileReferences.patterns = references.patterns
     if mode == .root || mode == .filter(isRoot: true) {
@@ -174,7 +176,6 @@ extension RenderTreeBuilder {
     for child in pattern.children {
       guard !Task.isCancelled else { break }
       guard let child = child as? (any SVGDrawableElement),
-        !(child is SVGGroupElement || child is SVGLineElement),
         child.visibility != .hidden,
         child.display != CSSDisplay.none
       else { continue }

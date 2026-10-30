@@ -10,23 +10,19 @@ protocol SVGLengthContext {
   var writingMode: WritingMode? { get }
 }
 
-/// What the geometry of an element depends on: lengths, and the box that `patternContentUnits` of
-/// `objectBoundingBox` scales shapes by.
+/// What the geometry of an element depends on: lengths, and the box that percentages are relative to.
 protocol GeometryContext: SVGLengthContext {
   var viewBox: CGRect { get }
-  var patternContentUnit: SVGUnitType? { get }
 }
 
 /// What resolving lengths and building geometry reads while a render tree is built: the rendered rectangle and
-/// scale, the viewBox and the content units of a pattern of the element, and the computed values that lengths
-/// relative to fonts use.
+/// scale, the viewBox, and the computed values that lengths relative to fonts use.
 struct ResolveContext: GeometryContext {
   let base: SVGBaseContext
   let viewPort: CGRect
   /// The scale of the image being rendered.
   let scale: CGFloat
   var viewBox: CGRect
-  var patternContentUnit: SVGUnitType?
   var style = ComputedStyle.initial
 
   var viewBoxSize: CGSize {

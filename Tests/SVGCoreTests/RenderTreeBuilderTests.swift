@@ -811,6 +811,78 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  @Test("a pattern without width or height paints the fallback, and one that references another takes its own children")
+  func patternFallbackAndChildren() async throws {
+    func fill(_ content: String) async throws -> FillPaint? {
+      guard case .vector(let fill, _, _)? = try shape(try children(of: try await renderTree(content)).last).content
+      else { return nil }
+      return fill
+    }
+    let empty = #"<pattern id="z" width="0" height="1"><rect width="1" height="1"/></pattern>"#
+    guard case .color(let color)? = try await fill(empty + #"<rect width="10" height="10" fill="url(#z) lime"/>"#)
+    else {
+      Issue.record("A pattern without width doesn't paint the fallback")
+      return
+    }
+    #expect(color.components == [0, 1, 0, 1])
+    #expect(try await fill(empty + #"<rect width="10" height="10" fill="url(#z)"/>"#) == nil)
+    let referencing = #"""
+      <pattern id="a" patternUnits="userSpaceOnUse" width="10" height="10"><rect width="10" height="10" fill="red"/></pattern>
+      <pattern id="b" href="#a"><rect width="10" height="10" fill="lime"/></pattern>
+      <rect width="10" height="10" fill="url(#b)"/>
+      """#
+    guard case .pattern(let paint?)? = try await fill(referencing) else {
+      Issue.record("The rectangle isn't filled with a pattern")
+      return
+    }
+    #expect(paint.tileSize == CGSize(width: 10, height: 10))
+    #expect(fillColor(of: try shape(paint.content.first))?.components == [0, 1, 0, 1])
+  }
+
+  @Test("the content of a pattern with objectBoundingBox content units is scaled by the box with its strokes")
+  func patternContentUnits() async throws {
+    let tree = try await renderTree(
+      #"""
+      <pattern id="p" width="1" height="1" patternContentUnits="objectBoundingBox">
+        <line x2="1" y2="1" stroke="black" stroke-width="0.1"/>
+      </pattern>
+      <rect x="2" y="2" width="10" height="16" fill="url(#p)"/>
+      """#)
+    guard case .vector(.pattern(let paint?), _, _) = try shape(try children(of: tree).last).content else {
+      Issue.record("The rectangle isn't filled with a pattern")
+      return
+    }
+    #expect(paint.viewBoxTransform == CGAffineTransform(scaleX: 10, y: 16))
+    // The line is in the units of the box, which the transform scales with its stroke.
+    let line = try shape(paint.content.first)
+    #expect(line.geometry?.path.cgPath.boundingBoxOfPath == CGRect(x: 0, y: 0, width: 1, height: 1))
+    guard case .vector(_, let stroke?, _)? = line.content else {
+      Issue.record("The line has no stroke")
+      return
+    }
+    #expect(stroke.width == 0.1)
+  }
+
+  @Test("groups and lines in a pattern are drawn")
+  func patternGroupsAndLines() async throws {
+    let tree = try await renderTree(
+      #"""
+      <pattern id="p" patternUnits="userSpaceOnUse" width="10" height="10">
+        <g><rect width="5" height="5"/></g><line x2="10" y2="10" stroke="black"/>
+      </pattern>
+      <rect width="10" height="10" fill="url(#p)"/>
+      """#)
+    guard case .vector(.pattern(let paint?), _, _) = try shape(try children(of: tree).last).content else {
+      Issue.record("The rectangle isn't filled with a pattern")
+      return
+    }
+    try #require(paint.content.count == 2)
+    guard case .group = paint.content[0], case .shape = paint.content[1] else {
+      Issue.record("The group and the line aren't drawn")
+      return
+    }
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),

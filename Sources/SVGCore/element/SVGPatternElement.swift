@@ -52,8 +52,10 @@ final class SVGPatternElement: SVGDrawableElement {
     parentId = Self.parseLink(description: attributes["href"])
   }
 
+  /// The pattern `lhs` with the attributes and the children of the pattern `rhs` that it references where it has
+  /// none of its own.
   init(lhs: SVGPatternElement, rhs: SVGPatternElement) {
-    base = rhs.base
+    base = lhs.base
     colorInterpolation = lhs.colorInterpolation ?? rhs.colorInterpolation
     x = lhs.x ?? rhs.x
     y = lhs.y ?? rhs.y
@@ -65,11 +67,7 @@ final class SVGPatternElement: SVGDrawableElement {
     preserveAspectRatio = lhs.preserveAspectRatio ?? rhs.preserveAspectRatio
     viewBox = lhs.viewBox ?? rhs.viewBox
     parentId = rhs.parentId
-    if !rhs.children.isEmpty {
-      children = rhs.children
-    } else {
-      children = lhs.children
-    }
+    children = lhs.children.isEmpty ? rhs.children : lhs.children
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {

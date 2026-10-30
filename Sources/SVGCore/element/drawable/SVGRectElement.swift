@@ -48,7 +48,7 @@ final class SVGRectElement: ShapeGeometry {
     guard let (rect, corner) = geometry(in: context) else { return nil }
     let path = CGMutablePath()
     path.addRoundedRect(rect, cornerSize: corner)
-    return path.applying(scale(context: context))
+    return path
   }
 
   /// The path of SVG 2 for a rectangle, which starts at the end of the arc of the top left corner and goes
