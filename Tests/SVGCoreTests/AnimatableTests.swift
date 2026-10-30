@@ -124,7 +124,15 @@ struct AnimatableTests {
 
   @Test("dash arrays repeat to a common length and are interpolated one by one", arguments: dashArrays)
   func dashArrayInterpolation(from: [CGFloat], to: [CGFloat], halfway: [CGFloat]?) {
-    #expect(from.interpolated(to: to, progress: 0.5) == halfway)
+    #expect(
+      from.map { SVGLength.number($0) }.interpolated(to: to.map { .number($0) }, progress: 0.5)
+        == halfway?.map { .number($0) })
+  }
+
+  @Test("dash arrays with lengths in units that can't be interpolated together change discretely")
+  func dashArraysInUnits() {
+    #expect([SVGLength.pixel(2), .percent(10)].interpolated(to: [.pixel(4), .percent(20)], progress: 0.5) == [.pixel(3), .percent(15)])
+    #expect([SVGLength.pixel(2)].interpolated(to: [.percent(20)], progress: 0.5) == nil)
   }
 
   @Test("visibility stays visible between visible and another value")
@@ -282,7 +290,9 @@ struct AnimatableTests {
     #expect(OpacityProperty.added(-0.5, to: 0.2, in: resolver) == 0)
     #expect(StrokeWidthProperty.added(.pixel(-5), to: .pixel(2), in: resolver) == .pixel(0))
     #expect(StrokeMiterlimitProperty.added(-3, to: 2, in: resolver) == 1)
-    #expect(StrokeDasharrayProperty.added([-5, 2], to: [1, 1], in: resolver) == [0, 3])
+    #expect(
+      StrokeDasharrayProperty.added([.number(-5), .number(2)], to: [.number(1), .number(1)], in: resolver)
+        == [.number(0), .number(3)])
     // Properties whose values can't be added have no sum.
     #expect(FillRuleProperty.added(.evenodd, to: .nonzero, in: resolver) == nil)
   }

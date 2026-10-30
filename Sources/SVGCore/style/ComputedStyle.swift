@@ -171,8 +171,8 @@ struct ComputedStyle: Sendable, Equatable {
   var strokeLinecap: CGLineCap
   var strokeLinejoin: CGLineJoin
   var strokeMiterlimit: Double
-  var strokeDasharray: [CGFloat]
-  var strokeDashoffset: CGFloat
+  var strokeDasharray: [SVGLength]
+  var strokeDashoffset: SVGLength
   var clipRule: FillRule
   var textAnchor: TextAnchor
   var whiteSpace: CSSWhiteSpace
@@ -340,7 +340,7 @@ struct ComputedStyle: Sendable, Equatable {
     fontFamily: String, fontSize: SVGUIFont.Size, fontWeight: SVGUIFont.Weight, writingMode: WritingMode,
     color: SVGColor, fill: Paint, fillOpacity: Double, fillRule: FillRule, stroke: Paint, strokeOpacity: Double,
     strokeWidth: SVGLength, strokeLinecap: CGLineCap, strokeLinejoin: CGLineJoin, strokeMiterlimit: Double,
-    strokeDasharray: [CGFloat], strokeDashoffset: CGFloat, clipRule: FillRule, textAnchor: TextAnchor,
+    strokeDasharray: [SVGLength], strokeDashoffset: SVGLength, clipRule: FillRule, textAnchor: TextAnchor,
     whiteSpace: CSSWhiteSpace, textDecoration: TextDecorationLines,
     letterSpacing: SVGLength, wordSpacing: SVGLength, dominantBaseline: DominantBaseline,
     alignmentBaseline: AlignmentBaseline, baselineShift: BaselineShift, markerStart: SVGMarkerReference,

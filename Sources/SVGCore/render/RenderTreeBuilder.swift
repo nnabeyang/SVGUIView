@@ -645,10 +645,11 @@ package struct RenderTreeBuilder {
   ) -> StrokeStyle? {
     let style = element.style
     if case .none = style.stroke { return nil }
+    let dashes = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
     return StrokeStyle(
       paint: paint,
-      dashes: style.strokeDasharray.contains { $0 > 0 } ? style.strokeDasharray : nil,
-      dashOffset: style.strokeDashoffset,
+      dashes: dashes.contains { $0 > 0 } ? dashes : nil,
+      dashOffset: style.strokeDashoffset.value(context: context, mode: .other),
       width: style.strokeWidth.value(context: context, mode: .other),
       cap: style.strokeLinecap,
       join: style.strokeLinejoin,
