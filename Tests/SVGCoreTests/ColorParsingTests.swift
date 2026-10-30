@@ -79,6 +79,37 @@ struct ColorParsingTests {
     #expect(Paint("lab(50 0 0)") == Paint("black"))
   }
 
+  /// The named colors of CSS Color 4.
+  private static let cssColorNames: Set<String> = [
+    "aliceblue", "antiquewhite", "aqua", "aquamarine", "azure", "beige", "bisque", "black",
+    "blanchedalmond", "blue", "blueviolet", "brown", "burlywood", "cadetblue", "chartreuse", "chocolate",
+    "coral", "cornflowerblue", "cornsilk", "crimson", "cyan", "darkblue", "darkcyan", "darkgoldenrod",
+    "darkgray", "darkgreen", "darkgrey", "darkkhaki", "darkmagenta", "darkolivegreen", "darkorange", "darkorchid",
+    "darkred", "darksalmon", "darkseagreen", "darkslateblue", "darkslategray", "darkslategrey", "darkturquoise", "darkviolet",
+    "deeppink", "deepskyblue", "dimgray", "dimgrey", "dodgerblue", "firebrick", "floralwhite", "forestgreen",
+    "fuchsia", "gainsboro", "ghostwhite", "gold", "goldenrod", "gray", "green", "greenyellow",
+    "grey", "honeydew", "hotpink", "indianred", "indigo", "ivory", "khaki", "lavender",
+    "lavenderblush", "lawngreen", "lemonchiffon", "lightblue", "lightcoral", "lightcyan", "lightgoldenrodyellow", "lightgray",
+    "lightgreen", "lightgrey", "lightpink", "lightsalmon", "lightseagreen", "lightskyblue", "lightslategray", "lightslategrey",
+    "lightsteelblue", "lightyellow", "lime", "limegreen", "linen", "magenta", "maroon", "mediumaquamarine",
+    "mediumblue", "mediumorchid", "mediumpurple", "mediumseagreen", "mediumslateblue", "mediumspringgreen", "mediumturquoise", "mediumvioletred",
+    "midnightblue", "mintcream", "mistyrose", "moccasin", "navajowhite", "navy", "oldlace", "olive",
+    "olivedrab", "orange", "orangered", "orchid", "palegoldenrod", "palegreen", "paleturquoise", "palevioletred",
+    "papayawhip", "peachpuff", "peru", "pink", "plum", "powderblue", "purple", "rebeccapurple",
+    "red", "rosybrown", "royalblue", "saddlebrown", "salmon", "sandybrown", "seagreen", "seashell",
+    "sienna", "silver", "skyblue", "slateblue", "slategray", "slategrey", "snow", "springgreen",
+    "steelblue", "tan", "teal", "thistle", "tomato", "turquoise", "violet", "wheat",
+    "white", "whitesmoke", "yellow", "yellowgreen",
+  ]
+
+  @Test("the named colors are the ones of CSS Color and transparent, and other names aren't colors")
+  func namedColors() {
+    #expect(SVGColorName.names == Self.cssColorNames.union(["transparent"]))
+    #expect(isClose(rgba(of: Paint("MediumVioletRed")), [199, 21, 133, 1]))
+    #expect(rgba(of: Paint("violetred")) == nil)
+    #expect(rgba(of: Paint("transparent")) == [0, 0, 0, 0])
+  }
+
   @Test("stop-color, flood-color and style sheets read the same colors")
   func otherProperties() throws {
     let green = try #require(SVGAttributeScanner.parseColor(description: "rgb(0 127.5 0 / 0.5)"))
