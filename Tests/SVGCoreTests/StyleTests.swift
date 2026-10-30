@@ -181,6 +181,39 @@ struct StyleTests {
     #expect(ComputedStyle.initial.transformOrigin == .zero)
   }
 
+  /// Values of `paint-order`, and the order that they paint in, or `nil` if they aren't valid.
+  private static let paintOrders: [(String, [PaintOrder.Layer]?)] = [
+    ("normal", [.fill, .stroke, .markers]),
+    ("stroke", [.stroke, .fill, .markers]),
+    ("markers", [.markers, .fill, .stroke]),
+    (" markers  stroke ", [.markers, .stroke, .fill]),
+    ("fill markers stroke", [.fill, .markers, .stroke]),
+    ("invalid", nil),
+    ("stroke invalid", nil),
+    ("stroke stroke", nil),
+    ("stroke markers fill qwe", nil),
+    ("normal stroke", nil),
+    ("Stroke", nil),
+    ("", nil),
+  ]
+
+  @Test(
+    "paint-order paints the layers that it names first, and the others after them in their normal order",
+    arguments: paintOrders)
+  func paintOrder(text: String, layers: [PaintOrder.Layer]?) {
+    #expect(PaintOrderProperty.parse(text, origin: .attribute)?.layers == layers)
+  }
+
+  @Test("paint-order is inherited, and is normal initially")
+  func paintOrderInheritance() throws {
+    let declared = try #require(declared(PaintOrderProperty.self, css: "STROKE"))
+    let parent = style([PropertyDeclaration(PaintOrderProperty.self, declared)])
+    #expect(parent.paintOrder.strokesFirst)
+    #expect(style([], parent: parent).paintOrder == parent.paintOrder)
+    #expect(ComputedStyle.initial.paintOrder == .normal)
+    #expect(!PaintOrder.normal.strokesFirst)
+  }
+
   @Test("inherited properties take the value of the parent, and others the initial value")
   func inheritance() {
     let parent = style([

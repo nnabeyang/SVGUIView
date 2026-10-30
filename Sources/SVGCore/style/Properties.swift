@@ -451,6 +451,35 @@ enum StrokeDashoffsetProperty: StyleProperty {
   }
 }
 
+enum PaintOrderProperty: StyleProperty {
+  static let id = PropertyID.paintOrder
+  static let isInherited = true
+  static let initial = PaintOrder.normal
+  static let computed = \ComputedStyle.paintOrder
+
+  /// `normal`, or the fill, the stroke and the markers that are painted first, each at most once.
+  static func parse(_ text: String, origin: DeclarationOrigin) -> PaintOrder? {
+    let words = text.split(whereSeparator: \.isWhitespace).map { keyword(String($0), origin: origin) as Word? }
+    if words == [.normal] { return .normal }
+    let layers = words.compactMap(\.?.layer)
+    guard !layers.isEmpty, layers.count == words.count, Set(layers).count == layers.count else { return nil }
+    return PaintOrder(first: layers)
+  }
+
+  private enum Word: String, CaseIterable {
+    case normal, fill, stroke, markers
+
+    var layer: PaintOrder.Layer? {
+      switch self {
+      case .normal: nil
+      case .fill: .fill
+      case .stroke: .stroke
+      case .markers: .markers
+      }
+    }
+  }
+}
+
 enum ClipRuleProperty: StyleProperty {
   static let id = PropertyID.clipRule
   static let isInherited = true
