@@ -724,6 +724,20 @@ struct RenderTreeBuilderTests {
     #expect(try shape(try children(of: tree).last).geometry != nil)
   }
 
+  @Test("the dashes of a stroke are resolved with the viewport, which percentages are relative to")
+  func dashLengths() async throws {
+    let tree = try await renderTree(
+      #"<rect width="10" height="10" stroke="black" stroke-dasharray="10% 1mm" stroke-dashoffset="5%"/>"#)
+    guard case .vector(_, let stroke?, _)? = try shape(try children(of: tree).last).content else {
+      Issue.record("The rectangle has no stroke")
+      return
+    }
+    // The viewport of 20 by 20 makes 100% 20, and 1mm is 96 / 25.4 pixels.
+    let dashes = try #require(stroke.dashes)
+    #expect(dashes.count == 2 && abs(dashes[0] - 2) < 0.001 && abs(dashes[1] - 96 / 25.4) < 0.001, "\(dashes)")
+    #expect(abs(stroke.dashOffset - 1) < 0.001)
+  }
+
   @Test("a stroke takes a gradient or a pattern as a fill does, with its opacity, also on the glyphs of tspans")
   func strokePaints() async throws {
     let servers = #"""

@@ -469,6 +469,24 @@ struct StyleTests {
     #expect(child.baselineShift == .baseline)
   }
 
+  @Test("stroke-dasharray and stroke-dashoffset are lengths with units, and em is resolved with the font size")
+  func dashLengths() {
+    #expect(StrokeDasharrayProperty.parse("15%,5%,30%", origin: .attribute) == [.percent(15), .percent(5), .percent(30)])
+    #expect(StrokeDasharrayProperty.parse("1mm, 2mm", origin: .attribute) == [.millimeters(1), .millimeters(2)])
+    #expect(StrokeDasharrayProperty.parse("none", origin: .attribute) == [])
+    #expect(StrokeDasharrayProperty.parse("10 -5", origin: .attribute) == nil)
+    #expect(StrokeDasharrayProperty.parse("10 foo", origin: .attribute) == nil)
+    #expect(StrokeDashoffsetProperty.parse("1.5mm", origin: .attribute) == .millimeters(1.5))
+    let parent = style([PropertyDeclaration(FontSizeProperty.self, .value(.length(.pixel(20))))])
+    let dashed = style(
+      [
+        PropertyDeclaration(StrokeDasharrayProperty.self, .value([.ems(1), .ems(0.5)])),
+        PropertyDeclaration(StrokeDashoffsetProperty.self, .value(.ems(1.5))),
+      ], parent: parent)
+    #expect(dashed.strokeDasharray == [.pixel(20), .pixel(10)])
+    #expect(dashed.strokeDashoffset == .pixel(30))
+  }
+
   @Test("marker-start, marker-mid and marker-end are inherited, and the marker shorthand of CSS sets all of them")
   func markers() {
     #expect(MarkerStartProperty.parse("url(#m)", origin: .attribute) == .url("m"))

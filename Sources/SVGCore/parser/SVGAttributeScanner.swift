@@ -149,17 +149,6 @@ extension SVGAttributeScanner {
 
 // for stroke attribute
 extension SVGAttributeScanner {
-  mutating func scanDashes() -> [CGFloat] {
-    var dashes = [CGFloat]()
-    guard reader.consumeWhitespace() != nil else { return dashes }
-    while !reader.isEOF {
-      guard let r = scanNumber() else { return dashes }
-      dashes.append(CGFloat(r))
-      consumeWhitespaceIfNext(UInt8(ascii: ","))
-    }
-    return dashes
-  }
-
   mutating func scanHex() -> String? {
     guard consume(ascii: UInt8(ascii: "#")) else { return nil }
     let start = reader.readIndex

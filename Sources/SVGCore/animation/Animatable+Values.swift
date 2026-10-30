@@ -182,24 +182,29 @@ extension Paint: Animatable {
 /// The lengths of `stroke-dasharray` are animated as a repeatable list: both lists repeat to the least common
 /// multiple of their lengths, and the lengths are interpolated one by one. An empty list is `none`, which isn't
 /// animated.
-extension [CGFloat]: Animatable {
-  func interpolated(to other: [CGFloat], progress: Double) -> [CGFloat]? {
+extension [SVGLength]: Animatable {
+  /// The lists interpolated length by length, or `nil` if a pair of lengths can't be interpolated.
+  func interpolated(to other: [SVGLength], progress: Double) -> [SVGLength]? {
     guard let (from, to) = Self.repeated(self, other) else { return nil }
-    return zip(from, to).map { $0 + ($1 - $0) * progress }
+    let lengths = zip(from, to).map { $0.interpolated(to: $1, progress: progress) }
+    return lengths.contains(nil) ? nil : lengths.compactMap(\.self)
   }
 
-  func adding(_ other: [CGFloat]) -> [CGFloat]? {
+  func adding(_ other: [SVGLength]) -> [SVGLength]? {
     guard !isEmpty, count == other.count else { return nil }
-    return zip(self, other).map(+)
+    let lengths = zip(self, other).map { $0.adding($1) }
+    return lengths.contains(nil) ? nil : lengths.compactMap(\.self)
   }
 
-  func pacedDistance(to other: [CGFloat]) -> Double? {
+  func pacedDistance(to other: [SVGLength]) -> Double? {
     guard let (from, to) = Self.repeated(self, other) else { return nil }
-    return sqrt(zip(from, to).reduce(0) { $0 + Double(($1.1 - $1.0) * ($1.1 - $1.0)) })
+    let distances = zip(from, to).map { $0.pacedDistance(to: $1) }
+    guard !distances.contains(nil) else { return nil }
+    return sqrt(distances.compactMap(\.self).reduce(0) { $0 + $1 * $1 })
   }
 
   /// Both lists repeated to the least common multiple of their lengths, or `nil` if either is empty.
-  private static func repeated(_ a: [CGFloat], _ b: [CGFloat]) -> ([CGFloat], [CGFloat])? {
+  private static func repeated(_ a: [SVGLength], _ b: [SVGLength]) -> ([SVGLength], [SVGLength])? {
     guard !a.isEmpty, !b.isEmpty else { return nil }
     func gcd(_ a: Int, _ b: Int) -> Int { b == 0 ? a : gcd(b, a % b) }
     let count = a.count / gcd(a.count, b.count) * b.count

@@ -400,35 +400,50 @@ enum StrokeMiterlimitProperty: StyleProperty {
 enum StrokeDasharrayProperty: StyleProperty {
   static let id = PropertyID.strokeDasharray
   static let isInherited = true
-  static let initial: [CGFloat] = []
+  static let initial: [SVGLength] = []
   static let computed = \ComputedStyle.strokeDasharray
 
-  /// The dashes, or no dashes for `none`.
-  static func parse(_ text: String, origin _: DeclarationOrigin) -> [CGFloat]? {
+  /// The lengths of the dashes, separated by commas or white space, or no dashes for `none`. A length that isn't
+  /// valid or is negative makes the whole list invalid.
+  static func parse(_ text: String, origin _: DeclarationOrigin) -> [SVGLength]? {
     if keyword(text) == "none" { return [] }
-    let dashes = scanning(text) { $0.scanDashes() }
-    return dashes.isEmpty ? nil : dashes
+    let dashes = text.split { $0 == "," || $0.isWhitespace }.map { SVGLength(String($0)) }
+    let lengths = dashes.compactMap(\.self)
+    guard !lengths.isEmpty, lengths.count == dashes.count, lengths.allSatisfy({ $0 == $0.nonNegative }) else {
+      return nil
+    }
+    return lengths
+  }
+
+  static func compute(_ dashes: [SVGLength], in resolver: StyleResolver) -> [SVGLength] {
+    dashes.map { resolvingFontRelative($0, in: resolver) }
   }
 
   /// The dashes between two lists of dashes, which aren't negative.
-  static func interpolated(_ from: [CGFloat], _ to: [CGFloat], progress: Double, in _: StyleResolver) -> [CGFloat] {
-    from.animated(to: to, progress: progress).map { max($0, 0) }
+  static func interpolated(
+    _ from: [SVGLength], _ to: [SVGLength], progress: Double, in _: StyleResolver
+  ) -> [SVGLength] {
+    from.animated(to: to, progress: progress).map(\.nonNegative)
   }
 
   /// The sum of two lists of dashes, which aren't negative.
-  static func added(_ value: [CGFloat], to underlying: [CGFloat], in _: StyleResolver) -> [CGFloat]? {
-    underlying.adding(value)?.map { max($0, 0) }
+  static func added(_ value: [SVGLength], to underlying: [SVGLength], in _: StyleResolver) -> [SVGLength]? {
+    underlying.adding(value)?.map(\.nonNegative)
   }
 }
 
 enum StrokeDashoffsetProperty: StyleProperty {
   static let id = PropertyID.strokeDashoffset
   static let isInherited = true
-  static let initial: CGFloat = 0
+  static let initial = SVGLength.number(0)
   static let computed = \ComputedStyle.strokeDashoffset
 
-  static func parse(_ text: String, origin _: DeclarationOrigin) -> CGFloat? {
-    number(text).map { CGFloat($0) }
+  static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGLength? {
+    SVGLength(text)
+  }
+
+  static func compute(_ offset: SVGLength, in resolver: StyleResolver) -> SVGLength {
+    resolvingFontRelative(offset, in: resolver)
   }
 }
 
