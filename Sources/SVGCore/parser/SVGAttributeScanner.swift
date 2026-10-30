@@ -186,7 +186,10 @@ extension SVGAttributeScanner {
   mutating func scanPaint() -> Paint? {
     guard let ascii = reader.consumeWhitespace() else { return nil }
     if ascii == UInt8(ascii: "#") {
-      guard let hex = scanHex(), let color = SVGHexColor(hex: hex) else { return nil }
+      // Nothing but hexadecimal digits makes the color.
+      guard let hex = scanHex(), let color = SVGHexColor(hex: hex), reader.consumeWhitespace() == nil else {
+        return nil
+      }
       return .color(.hex(color))
     }
 
@@ -238,7 +241,10 @@ extension SVGAttributeScanner {
   private mutating func scanColor(type: SVGFillType) -> SVGColor? {
     switch type {
     case .rgb, .rgba:
-      guard let (channels, alpha, _) = scanColorArguments(first: { $0.scanColorComponent() }) else { return nil }
+      // The legacy syntax with commas takes numbers or percentages, but not both.
+      guard let (channels, alpha, isLegacy) = scanColorArguments(first: { $0.scanColorComponent() }),
+        !isLegacy || channels.allSatisfy(\.isPercentage) || channels.allSatisfy(\.isNumber)
+      else { return nil }
       // Each channel is a number from 0 to 255 or a percentage, which the color keeps.
       let dimensions = channels.map { channel -> ColorDimension in
         switch channel {
@@ -296,6 +302,10 @@ extension SVGAttributeScanner {
 
     var isPercentage: Bool {
       if case .percentage = self { true } else { false }
+    }
+
+    var isNumber: Bool {
+      if case .number = self { true } else { false }
     }
 
     /// The value as an alpha from 0 to 1.
