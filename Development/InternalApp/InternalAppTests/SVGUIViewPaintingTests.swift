@@ -59,6 +59,11 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(in: "basic", "painting", "paint-order"))
+    func paintOrder(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(in: "basic", "painting", "shape-rendering"))
     func shapeRendering(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
