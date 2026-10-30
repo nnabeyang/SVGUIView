@@ -24,7 +24,8 @@ final class SVGEllipseElement: ShapeGeometry {
     ry = SVGLength(attributes["ry"])
   }
 
-  func path(in context: any GeometryContext) -> CGPath? {
+  /// The center and the radii, or `nil` without an area.
+  private func geometry(in context: any GeometryContext) -> (center: CGPoint, radii: CGSize)? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
     let _rx = (rx?.value(context: context, mode: .width)).flatMap { $0 < 0 ? nil : $0 }
@@ -32,8 +33,20 @@ final class SVGEllipseElement: ShapeGeometry {
     let rx: CGFloat = _rx ?? _ry ?? 0
     let ry: CGFloat = _ry ?? _rx ?? 0
     guard rx > 0, ry > 0 else { return nil }
-    let path = CGPath(ellipseIn: CGRect(origin: CGPoint(x: cx - rx, y: cy - ry), size: CGSize(width: 2 * rx, height: 2 * ry)), transform: nil)
+    return (CGPoint(x: cx, y: cy), CGSize(width: rx, height: ry))
+  }
+
+  func path(in context: any GeometryContext) -> CGPath? {
+    guard let (center, radii) = geometry(in: context) else { return nil }
+    let path = CGPath(
+      ellipseIn: CGRect(
+        origin: CGPoint(x: center.x - radii.width, y: center.y - radii.height),
+        size: CGSize(width: 2 * radii.width, height: 2 * radii.height)), transform: nil)
     return path.applying(scale(context: context))
+  }
+
+  func markerPath(in context: any GeometryContext) -> PathData? {
+    geometry(in: context).map { PathData.ellipse(center: $0.center, radii: $0.radii) }
   }
 }
 

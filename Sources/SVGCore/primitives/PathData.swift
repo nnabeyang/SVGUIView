@@ -64,6 +64,18 @@ extension PathData {
 }
 
 extension PathData {
+  /// The path of SVG 2 for an ellipse, which starts at the point on the right and goes clockwise with four arcs.
+  static func ellipse(center c: CGPoint, radii r: CGSize) -> PathData {
+    func arc(to x: CGFloat, _ y: CGFloat) -> PathCommand {
+      PathCommand(type: .A, values: [r.width, r.height, 0, 0, 1, x, y])
+    }
+    return PathData(commands: [
+      PathCommand(type: .M, values: [c.x + r.width, c.y]), arc(to: c.x, c.y + r.height),
+      arc(to: c.x - r.width, c.y), arc(to: c.x, c.y - r.height), arc(to: c.x + r.width, c.y),
+      PathCommand(type: .Z, values: []),
+    ])
+  }
+
   /// The path data with every command in its absolute form, which draws the same path. Commands before the first
   /// moveto draw nothing, and stay as they are.
   func absolute() -> PathData {

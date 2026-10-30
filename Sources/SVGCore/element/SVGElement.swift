@@ -147,9 +147,16 @@ protocol ShapeGeometry: SVGDrawableElement {
   func path(in context: any GeometryContext) -> CGPath?
   /// The bounds that units relative to the element use.
   func frame(in context: any GeometryContext, path: CGPath?) -> CGRect
+  /// The path data whose vertices markers are drawn at, or `nil` for an element without markers. Shapes other than
+  /// paths have the path data of the same shape that SVG 2 specifies, whose vertices are the ends of their arcs.
+  func markerPath(in context: any GeometryContext) -> PathData?
 }
 
 extension ShapeGeometry {
+  func markerPath(in _: any GeometryContext) -> PathData? {
+    nil
+  }
+
   func frame(in _: any GeometryContext, path: CGPath?) -> CGRect {
     path?.boundingBoxOfPath ?? .zero
   }

@@ -24,6 +24,17 @@ final class SVGLineElement: ShapeGeometry {
     y2 = .init(attributes["y2"])
   }
 
+  func markerPath(in context: any GeometryContext) -> PathData? {
+    PathData(commands: [
+      PathCommand(
+        type: .M,
+        values: [x1?.value(context: context, mode: .width) ?? 0, y1?.value(context: context, mode: .height) ?? 0]),
+      PathCommand(
+        type: .L,
+        values: [x2?.value(context: context, mode: .width) ?? 0, y2?.value(context: context, mode: .height) ?? 0]),
+    ])
+  }
+
   func path(in context: any GeometryContext) -> CGPath? {
     let x1 = x1?.value(context: context, mode: .width) ?? 0
     let y1 = y1?.value(context: context, mode: .height) ?? 0

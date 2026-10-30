@@ -22,6 +22,14 @@ final class SVGCircleElement: ShapeGeometry {
     r = .init(attributes["r"])
   }
 
+  func markerPath(in context: any GeometryContext) -> PathData? {
+    let r = r?.value(context: context, mode: .other) ?? 0
+    guard r > 0 else { return nil }
+    return .ellipse(
+      center: CGPoint(x: cx?.value(context: context, mode: .width) ?? 0, y: cy?.value(context: context, mode: .height) ?? 0),
+      radii: CGSize(width: r, height: r))
+  }
+
   func path(in context: any GeometryContext) -> CGPath? {
     let cx = cx?.value(context: context, mode: .width) ?? 0
     let cy = cy?.value(context: context, mode: .height) ?? 0
