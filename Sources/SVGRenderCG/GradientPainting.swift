@@ -3,23 +3,25 @@ import Foundation
 import SVGCore
 
 extension GradientPaint {
-  /// Paints the inside of a path with the gradient.
-  func paint(_ path: CGPath, in graphics: CGContext) {
+  /// Paints the inside of a path with the gradient, whose `objectBoundingBox` units are `frame`.
+  func paint(_ path: CGPath, frame: CGRect, in graphics: CGContext) {
     switch self {
-    case .linear(let gradient): gradient.paint(path, in: graphics)
-    case .radial(let gradient): gradient.paint(path, in: graphics)
+    case .linear(let gradient): gradient.paint(path, frame: frame, in: graphics)
+    case .radial(let gradient): gradient.paint(path, frame: frame, in: graphics)
     }
   }
 }
 
 extension LinearGradientPaint {
-  func paint(_ path: CGPath, in graphics: CGContext) {
+  func paint(_ path: CGPath, frame units: CGRect, in graphics: CGContext) {
     let space = CGColorSpaceCreateDeviceRGB()
     guard let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else {
       return
     }
+    // The bands of a repeated gradient cover the bounds of what's painted, which a stroke makes larger than the
+    // bounds of its units.
     let frame = path.boundingBoxOfPath
-    guard let transform = gradientTransform(self.transform, units: units, frame: frame) else { return }
+    guard let transform = gradientTransform(self.transform, units: self.units, frame: units) else { return }
     graphics.saveGState()
     defer { graphics.restoreGState() }
     graphics.addPath(path)
@@ -62,12 +64,12 @@ extension LinearGradientPaint {
 }
 
 extension RadialGradientPaint {
-  func paint(_ path: CGPath, in graphics: CGContext) {
+  func paint(_ path: CGPath, frame: CGRect, in graphics: CGContext) {
     let space = CGColorSpaceCreateDeviceRGB()
     guard let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else {
       return
     }
-    guard let transform = gradientTransform(self.transform, units: units, frame: path.boundingBoxOfPath) else { return }
+    guard let transform = gradientTransform(self.transform, units: units, frame: frame) else { return }
     graphics.saveGState()
     defer { graphics.restoreGState() }
     graphics.addPath(path)

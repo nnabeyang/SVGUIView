@@ -724,6 +724,38 @@ struct RenderTreeBuilderTests {
     #expect(try shape(try children(of: tree).last).geometry != nil)
   }
 
+  @Test("a stroke takes a gradient or a pattern as a fill does, with its opacity, also on the glyphs of tspans")
+  func strokePaints() async throws {
+    let servers = #"""
+      <linearGradient id="g"><stop stop-color="red"/></linearGradient>
+      <pattern id="p" width="1" height="1"><rect width="1" height="1"/></pattern>
+      """#
+    func stroke(_ content: String) async throws -> StrokeStyle? {
+      let shapes = shapes(of: try children(of: try await renderTree(servers + content)))
+      guard case .vector(_, let stroke, _)? = try #require(shapes.last).content else { return nil }
+      return stroke
+    }
+    let gradient = try #require(try await stroke(#"<rect width="10" height="10" stroke="url(#g)"/>"#))
+    guard case .gradient(.some) = gradient.paint else {
+      Issue.record("The stroke isn't a gradient")
+      return
+    }
+    let pattern = try #require(
+      try await stroke(#"<rect width="10" height="10" stroke="url(#p)" stroke-opacity="0.5"/>"#))
+    guard case .pattern(let paint?) = pattern.paint else {
+      Issue.record("The stroke isn't a pattern")
+      return
+    }
+    #expect(paint.opacity == 0.5)
+    let span = try #require(
+      try await stroke(#"<text x="2" y="10" font-size="4">a<tspan stroke="url(#g)">b</tspan></text>"#))
+    guard case .gradient(.some) = span.paint else {
+      Issue.record("The stroke of the tspan isn't a gradient")
+      return
+    }
+    #expect(try await stroke(#"<rect width="10" height="10" stroke="none"/>"#) == nil)
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),

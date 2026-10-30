@@ -175,7 +175,8 @@ package struct RenderTreeBuilder {
       ? await transform(of: element, context: context, frame: geometry?.frame ?? .zero, guard: references) : .identity
     var content: ShapeContent?
     if let path, element.style.visibility == .visible {
-      let stroke = strokeStyle(of: element, context: context)
+      let stroke = await stroke(
+        of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
       if let image = element as? SVGImageElement {
         content = .image(image.decodedImage(), stroke: stroke)
       } else {
@@ -231,7 +232,10 @@ package struct RenderTreeBuilder {
         let fill = await fillPaint(
           of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance)
         content = .vector(
-          fill: fill, stroke: strokeStyle(of: element, context: context), fillRule: element.pathFillRule)
+          fill: fill,
+          stroke: await stroke(
+            of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance),
+          fillRule: element.pathFillRule)
       }
       children.append(
         .shape(
@@ -487,7 +491,9 @@ package struct RenderTreeBuilder {
     switch element {
     case let shape as any ShapeGeometry:
       let frame = shape.frame(in: context, path: path)
-      guard includesStroke, !(shape is SVGTextElement), let path, let stroke = strokeStyle(of: shape, context: context)
+      // The bounds don't depend on what the stroke is painted with.
+      guard includesStroke, !(shape is SVGTextElement), let path,
+        let stroke = strokeStyle(of: shape, context: context, paint: .color(CGColor.opaqueBlack))
       else { return frame }
       let strokePath = path.copy(
         strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)
@@ -547,9 +553,19 @@ package struct RenderTreeBuilder {
     of element: any SVGDrawableElement, path: CGPath, context: ResolveContext, mode: DrawMode,
     guard references: ReferenceGuard, instance: [ElementID]
   ) async -> FillPaint? {
+    await paint(
+      element.style.fill, opacity: element.style.fillOpacity, of: element, path: path, context: context, mode: mode,
+      guard: references, instance: instance)
+  }
+
+  /// What a value of `fill` or `stroke` paints with, or `nil` if it paints nothing. The units of a paint server
+  /// are the bounds of the element without its stroke, for its fill and its stroke alike.
+  private func paint(
+    _ value: Paint, opacity: CGFloat, of element: any SVGDrawableElement, path: CGPath, context: ResolveContext,
+    mode: DrawMode, guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> FillPaint? {
     let style = element.style
-    let opacity = style.fillOpacity
-    switch style.resolved(style.fill) {
+    switch style.resolved(value) {
     case .none:
       return nil
     case .color(let color):
@@ -590,21 +606,27 @@ package struct RenderTreeBuilder {
   }
 
   /// The stroke of an element, or `nil` if it paints none.
-  private func strokeStyle(of element: any SVGDrawableElement, context: ResolveContext) -> StrokeStyle? {
+  private func stroke(
+    of element: any SVGDrawableElement, path: CGPath, context: ResolveContext, mode: DrawMode,
+    guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> StrokeStyle? {
     let style = element.style
-    let color: CGColor?
-    switch style.resolved(style.stroke) {
-    case .none:
-      return nil
-    case .url:
-      color = nil
-    case .color(let strokeColor):
-      color = strokeColor.toCGColor(opacity: style.strokeOpacity) ?? CGColor.transparent
-    case .currentColor:
-      preconditionFailure("currentColor is resolved")
-    }
+    guard
+      let paint = await paint(
+        style.stroke, opacity: style.strokeOpacity, of: element, path: path, context: context, mode: mode,
+        guard: references, instance: instance)
+    else { return nil }
+    return strokeStyle(of: element, context: context, paint: paint)
+  }
+
+  /// The stroke of an element with what it's painted with, or `nil` if the element has no stroke.
+  private func strokeStyle(
+    of element: any SVGDrawableElement, context: ResolveContext, paint: FillPaint
+  ) -> StrokeStyle? {
+    let style = element.style
+    if case .none = style.stroke { return nil }
     return StrokeStyle(
-      color: color,
+      paint: paint,
       dashes: style.strokeDasharray.contains { $0 > 0 } ? style.strokeDasharray : nil,
       dashOffset: style.strokeDashoffset,
       width: style.strokeWidth.value(context: context, mode: .other),
