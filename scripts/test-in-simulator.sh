@@ -25,8 +25,9 @@
 # <results> is $TEST_RESULTS_DIR.
 #
 # The simulator sometimes fails to start the test runner, and xcodebuild reports "The test runner hung before
-# establishing connection." instead of running a test target. When that is the only failure, the tests run once
-# more, as <name>-retry. A test that fails is never run again, so that flaky tests still fail.
+# establishing connection." instead of running a test target, or loses the connection to the runner before it runs
+# a test, and reports "Failed to establish communication with the test runner." When that is the only failure, the
+# tests run once more, as <name>-retry. A test that fails is never run again, so that flaky tests still fail.
 
 set -uo pipefail
 
@@ -93,11 +94,13 @@ run_tests() {
     | xcpretty
 }
 
-# Succeeds when every failure in the result bundle is a test runner that didn't start.
+# Succeeds when every failure in the result bundle is a test runner that didn't start or lost its connection
+# before it ran a test.
 only_runner_failed_to_start() {
   xcrun xcresulttool get test-results summary --path "$1" \
     | jq -e '(.testFailures | length) > 0
-      and all(.testFailures[]; .failureText | test("hung before establishing connection"))' \
+      and all(.testFailures[]; .failureText
+        | test("hung before establishing connection|Failed to establish communication with the test runner"))' \
       > /dev/null
 }
 
@@ -106,5 +109,5 @@ status=$?
 [[ ${status} -eq 0 ]] && exit 0
 only_runner_failed_to_start "${results}/${name}.xcresult" || exit "${status}"
 
-echo "::warning title=Tests run again::The test runner didn't start in the simulator, so the tests of ${name} run again."
+echo "::warning title=Tests run again::The test runner didn't start in the simulator or lost its connection, so the tests of ${name} run again."
 run_tests "${name}-retry" "$@"
