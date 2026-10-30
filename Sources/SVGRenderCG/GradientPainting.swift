@@ -51,8 +51,7 @@ extension LinearGradientPaint {
       return
     }
     let reflected =
-      spreadMethod == .reflect
-      ? CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations.reversed()) : nil
+      spreadMethod == .reflect ? reflectedGradient(colors: colors, locations: locations, space: space) : nil
     for band in Int(first)..<Int(last) {
       let offset = CGFloat(band)
       let bandStart = CGPoint(x: start.x + vector.dx * offset, y: start.y + vector.dy * offset)
@@ -104,8 +103,7 @@ extension RadialGradientPaint {
       return
     }
     let reflected =
-      spreadMethod == .reflect
-      ? CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations.reversed()) : nil
+      spreadMethod == .reflect ? reflectedGradient(colors: colors, locations: locations, space: space) : nil
     for band in 0..<max(Int(last), 1) {
       let start = circle(CGFloat(band))
       let end = circle(CGFloat(band + 1))
@@ -116,6 +114,12 @@ extension RadialGradientPaint {
         endRadius: end.radius, options: band == 0 ? [.drawsBeforeStartLocation] : [])
     }
   }
+}
+
+/// The gradient that goes from the end to the start of a gradient with the colors at the locations, which the odd
+/// bands of a reflected gradient are painted with.
+private func reflectedGradient(colors: [CGColor], locations: [CGFloat], space: CGColorSpace) -> CGGradient? {
+  CGGradient(colorsSpace: space, colors: colors.reversed() as CFArray, locations: locations.reversed().map { 1 - $0 })
 }
 
 /// The transform from the coordinates of a gradient to user space, or `nil` if it can't be inverted, such as for
