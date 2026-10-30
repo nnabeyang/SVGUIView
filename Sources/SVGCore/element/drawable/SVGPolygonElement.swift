@@ -18,8 +18,8 @@ final class SVGPolygonElement: ShapeGeometry {
     points = .init(description: attributes["points", default: ""])
   }
 
-  func path(in context: any GeometryContext) -> CGPath? {
-    points.polygon?.applying(scale(context: context))
+  func path(in _: any GeometryContext) -> CGPath? {
+    points.polygon
   }
 
   func markerPath(in _: any GeometryContext) -> PathData? {

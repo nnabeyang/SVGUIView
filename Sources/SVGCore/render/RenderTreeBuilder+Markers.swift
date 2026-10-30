@@ -16,7 +16,7 @@ extension RenderTreeBuilder {
     guard ids.start != nil || ids.mid != nil || ids.end != nil, let data = element.markerPath(in: context) else {
       return []
     }
-    let vertices = MarkerVertices.vertices(of: data, transform: element.scale(context: context))
+    let vertices = MarkerVertices.vertices(of: data)
     let strokeWidth = style.strokeWidth.value(context: context, mode: .other)
     var references = references
     if references.markers == nil {

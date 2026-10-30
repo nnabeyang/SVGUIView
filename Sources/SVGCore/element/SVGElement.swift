@@ -183,18 +183,6 @@ extension SVGDrawableElement {
     self.init(base: base, text: base.text, attributes: base.attributes)
   }
 
-  /// The transform that `patternContentUnits` of `objectBoundingBox` scales the element's shape by.
-  func scale(context: any GeometryContext) -> CGAffineTransform {
-    let contentUnit = context.patternContentUnit ?? .userSpaceOnUse
-    switch contentUnit {
-    case .userSpaceOnUse:
-      return .identity
-    case .objectBoundingBox:
-      let size = context.viewBox.size
-      return CGAffineTransform(scaleX: size.width, y: size.height)
-    }
-  }
-
 }
 
 extension ElementCursor {

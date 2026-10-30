@@ -38,7 +38,7 @@ final class SVGImageElement: ShapeGeometry {
       return nil
     }
     let path = CGPath(rect: .init(x: x, y: y, width: width, height: height), transform: nil)
-    return path.applying(scale(context: context))
+    return path
   }
 
   /// The image of the data, or `nil` if the data isn't an image.

@@ -18,8 +18,8 @@ final class SVGPolylineElement: ShapeGeometry {
     points = .init(description: attributes["points", default: ""])
   }
 
-  func path(in context: any GeometryContext) -> CGPath? {
-    points.polyline?.applying(scale(context: context))
+  func path(in _: any GeometryContext) -> CGPath? {
+    points.polyline
   }
 
   func markerPath(in _: any GeometryContext) -> PathData? {

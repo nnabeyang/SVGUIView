@@ -587,15 +587,17 @@ package struct RenderTreeBuilder {
         // A cycle of patterns stops the pattern, which paints black.
         var references = references
         if references.insert(pattern: id) {
-          if isEmpty {
-            let merged = mergedPattern(pattern, guard: references).pattern
-            if merged.patternUnits ?? .objectBoundingBox == .objectBoundingBox
+          let merged = mergedPattern(pattern, guard: references).pattern
+          if isEmpty,
+            merged.patternUnits ?? .objectBoundingBox == .objectBoundingBox
               || merged.patternContentUnits == .objectBoundingBox
-            {
-              return fallbackPaint
-            }
+          {
+            return fallbackPaint
           }
           let frame = await frame(of: element, context: context, path: path, guard: references)
+          // A pattern without width or height, such as one that references nothing for them, paints the fallback.
+          let size = merged.size(frame: frame, context: context)
+          guard size.width > 0, size.height > 0 else { return fallbackPaint }
           return .pattern(
             await patternPaint(
               pattern, frame: frame, opacity: opacity, context: context, mode: mode, guard: references,
