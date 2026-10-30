@@ -382,8 +382,12 @@ enum StrokeMiterlimitProperty: StyleProperty {
   static let initial = 4.0
   static let computed = \ComputedStyle.strokeMiterlimit
 
+  /// A number of at least 1, with nothing after it, since the limit isn't a length.
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
-    number(text)
+    scanning(text) { scanner in
+      guard let limit = scanner.scanNumber(), limit >= 1, scanner.reader.consumeWhitespace() == nil else { return nil }
+      return limit
+    }
   }
 
   /// The limit between two limits, which is at least 1.

@@ -469,6 +469,15 @@ struct StyleTests {
     #expect(child.baselineShift == .baseline)
   }
 
+  @Test("stroke-miterlimit is a number of at least 1 without a unit")
+  func miterLimit() {
+    #expect(StrokeMiterlimitProperty.parse("5", origin: .attribute) == 5)
+    #expect(StrokeMiterlimitProperty.parse(" 1 ", origin: .attribute) == 1)
+    for text in ["5mm", "20%", "0.5"] {
+      #expect(StrokeMiterlimitProperty.parse(text, origin: .attribute) == nil, "\(text)")
+    }
+  }
+
   @Test("stroke-dasharray and stroke-dashoffset are lengths with units, and em is resolved with the font size")
   func dashLengths() {
     #expect(StrokeDasharrayProperty.parse("15%,5%,30%", origin: .attribute) == [.percent(15), .percent(5), .percent(30)])
