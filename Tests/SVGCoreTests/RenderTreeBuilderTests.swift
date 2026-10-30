@@ -756,6 +756,31 @@ struct RenderTreeBuilderTests {
     #expect(try await stroke(#"<rect width="10" height="10" stroke="none"/>"#) == nil)
   }
 
+  @Test("a line without height paints the fallback of a paint server with objectBoundingBox units, or nothing")
+  func emptyBoundingBox() async throws {
+    let servers = #"""
+      <linearGradient id="o"><stop stop-color="red"/></linearGradient>
+      <linearGradient id="u" gradientUnits="userSpaceOnUse"><stop stop-color="red"/></linearGradient>
+      <pattern id="p" width="1" height="1"><rect width="1" height="1"/></pattern>
+      """#
+    func stroke(_ attributes: String) async throws -> StrokeStyle? {
+      let tree = try await renderTree(servers + #"<line x1="2" y1="10" x2="18" y2="10" "# + attributes + "/>")
+      guard case .vector(_, let stroke, _)? = try shape(try children(of: tree).last).content else { return nil }
+      return stroke
+    }
+    func color(_ stroke: StrokeStyle?) -> [CGFloat]? {
+      if case .color(let color)? = stroke?.paint { color.components } else { nil }
+    }
+    #expect(color(try await stroke(#"stroke="url(#o) lime""#)) == [0, 1, 0, 1])
+    #expect(color(try await stroke(#"stroke="url(#p) lime" stroke-opacity="0.5""#)) == [0, 1, 0, 0.5])
+    #expect(try await stroke(#"stroke="url(#o)""#) == nil)
+    #expect(try await stroke(#"stroke="url(#o) none""#) == nil)
+    guard case .gradient(.some)? = try await stroke(#"stroke="url(#u) lime""#)?.paint else {
+      Issue.record("A gradient with userSpaceOnUse units isn't used")
+      return
+    }
+  }
+
   /// Attributes of a flood, and its color, premultiplied, in the order of the pixels of the bitmap.
   private static let floodColors: [(String, [Int])] = [
     (#"flood-color="lime""#, [0, 255, 0, 255]),
