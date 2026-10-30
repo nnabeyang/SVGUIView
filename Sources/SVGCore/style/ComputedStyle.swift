@@ -32,6 +32,9 @@ enum PropertyID: String, CaseIterable, Sendable {
   case dominantBaseline = "dominant-baseline"
   case alignmentBaseline = "alignment-baseline"
   case baselineShift = "baseline-shift"
+  case markerStart = "marker-start"
+  case markerMid = "marker-mid"
+  case markerEnd = "marker-end"
   case visibility
   case colorInterpolation = "color-interpolation"
   case colorInterpolationFilters = "color-interpolation-filters"
@@ -102,6 +105,9 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .dominantBaseline: visitor.visit(DominantBaselineProperty.self)
     case .alignmentBaseline: visitor.visit(AlignmentBaselineProperty.self)
     case .baselineShift: visitor.visit(BaselineShiftProperty.self)
+    case .markerStart: visitor.visit(MarkerStartProperty.self)
+    case .markerMid: visitor.visit(MarkerMidProperty.self)
+    case .markerEnd: visitor.visit(MarkerEndProperty.self)
     case .visibility: visitor.visit(VisibilityProperty.self)
     case .colorInterpolation: visitor.visit(ColorInterpolationProperty.self)
     case .colorInterpolationFilters: visitor.visit(ColorInterpolationFiltersProperty.self)
@@ -179,6 +185,9 @@ struct ComputedStyle: Sendable, Equatable {
   var dominantBaseline: DominantBaseline
   var alignmentBaseline: AlignmentBaseline
   var baselineShift: BaselineShift
+  var markerStart: SVGMarkerReference
+  var markerMid: SVGMarkerReference
+  var markerEnd: SVGMarkerReference
   var visibility: CSSVisibility
   var colorInterpolation: SVGColorInterpolation?
   var colorInterpolationFilters: SVGColorInterpolation?
@@ -229,7 +238,8 @@ struct ComputedStyle: Sendable, Equatable {
     whiteSpace: WhiteSpaceProperty.initial, textDecoration: TextDecorationProperty.initial,
     letterSpacing: LetterSpacingProperty.initial, wordSpacing: WordSpacingProperty.initial,
     dominantBaseline: DominantBaselineProperty.initial, alignmentBaseline: AlignmentBaselineProperty.initial,
-    baselineShift: BaselineShiftProperty.initial,
+    baselineShift: BaselineShiftProperty.initial, markerStart: MarkerStartProperty.initial,
+    markerMid: MarkerMidProperty.initial, markerEnd: MarkerEndProperty.initial,
     visibility: VisibilityProperty.initial, colorInterpolation: ColorInterpolationProperty.initial,
     colorInterpolationFilters: ColorInterpolationFiltersProperty.initial, opacity: OpacityProperty.initial,
     transform: TransformProperty.initial, transformOrigin: TransformOriginProperty.initial,
@@ -333,7 +343,8 @@ struct ComputedStyle: Sendable, Equatable {
     strokeDasharray: [CGFloat], strokeDashoffset: CGFloat, clipRule: FillRule, textAnchor: TextAnchor,
     whiteSpace: CSSWhiteSpace, textDecoration: TextDecorationLines,
     letterSpacing: SVGLength, wordSpacing: SVGLength, dominantBaseline: DominantBaseline,
-    alignmentBaseline: AlignmentBaseline, baselineShift: BaselineShift,
+    alignmentBaseline: AlignmentBaseline, baselineShift: BaselineShift, markerStart: SVGMarkerReference,
+    markerMid: SVGMarkerReference, markerEnd: SVGMarkerReference,
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
     colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
     transformOrigin: TransformOrigin, transformBox: TransformBox,
@@ -371,6 +382,9 @@ struct ComputedStyle: Sendable, Equatable {
     self.dominantBaseline = dominantBaseline
     self.alignmentBaseline = alignmentBaseline
     self.baselineShift = baselineShift
+    self.markerStart = markerStart
+    self.markerMid = markerMid
+    self.markerEnd = markerEnd
     self.visibility = visibility
     self.colorInterpolation = colorInterpolation
     self.colorInterpolationFilters = colorInterpolationFilters

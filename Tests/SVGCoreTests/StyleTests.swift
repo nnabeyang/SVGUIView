@@ -469,6 +469,23 @@ struct StyleTests {
     #expect(child.baselineShift == .baseline)
   }
 
+  @Test("marker-start, marker-mid and marker-end are inherited, and the marker shorthand of CSS sets all of them")
+  func markers() {
+    #expect(MarkerStartProperty.parse("url(#m)", origin: .attribute) == .url("m"))
+    #expect(MarkerMidProperty.parse("none", origin: .attribute) == SVGMarkerReference.none)
+    #expect(MarkerEndProperty.parse("m", origin: .attribute) == nil)
+    let parent = style([PropertyDeclaration(MarkerEndProperty.self, .value(.url("m")))])
+    #expect(style([], parent: parent).markerEnd == .url("m"))
+    let shorthand = CascadedValues(SVGUIInlineStyle(description: "marker: url(#m)").declarations.map(\.declaration))
+    #expect(shorthand.declared(MarkerStartProperty.self) == .url("m"))
+    #expect(shorthand.declared(MarkerMidProperty.self) == .url("m"))
+    #expect(shorthand.declared(MarkerEndProperty.self) == .url("m"))
+    let attribute = CascadedValues(
+      CascadedValues.presentationAttributes(of: .path, attributes: ["marker": "url(#m)", "marker-mid": "url(#n)"]))
+    #expect(attribute.declared(MarkerStartProperty.self) == nil)
+    #expect(attribute.declared(MarkerMidProperty.self) == .url("n"))
+  }
+
   @Test("xml:space declares white-space before the white-space attribute, which overrides it")
   func xmlSpace() {
     func whiteSpace(_ attributes: [String: String]) -> CSSWhiteSpace? {
