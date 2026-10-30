@@ -427,6 +427,63 @@ struct RenderTreeBuilderTests {
     #expect(try bounds(of: shapes[1]).minY > 10)
   }
 
+  /// Text with baselines and shifts, and text with the same glyphs placed by `dy`.
+  private static let shiftedTexts: [(String, String)] = [
+    (
+      #"<text x="2" y="10">a<tspan baseline-shift="5">b</tspan>c</text>"#,
+      #"<text x="2" y="10">a<tspan dy="-5">b</tspan><tspan dy="5">c</tspan></text>"#
+    ),
+    (#"<text x="2" y="10">a<tspan baseline-shift="50%">b</tspan></text>"#, #"<text x="2" y="10">a<tspan dy="-2">b</tspan></text>"#),
+    // The shifts of nested tspans add up.
+    (
+      #"<text x="2" y="10">a<tspan baseline-shift="2">b<tspan baseline-shift="3">c</tspan></tspan></text>"#,
+      #"<text x="2" y="10">a<tspan dy="-2">b</tspan><tspan dy="-3">c</tspan></text>"#
+    ),
+    // The shift of text itself and an invalid shift don't move the glyphs.
+    (#"<text x="2" y="10" baseline-shift="5">ab</text>"#, #"<text x="2" y="10">ab</text>"#),
+    (#"<text x="2" y="10">a<tspan baseline-shift="qwe">b</tspan></text>"#, #"<text x="2" y="10">ab</text>"#),
+    // alignment-baseline aligns only the characters of its element.
+    (
+      #"<text x="2" y="10">a<tspan alignment-baseline="text-before-edge">b</tspan>c</text>"#,
+      #"<text x="2" y="10">a<tspan dominant-baseline="text-before-edge">b</tspan>c</text>"#
+    ),
+    (
+      #"<text x="2" y="10" dominant-baseline="middle">a<tspan dominant-baseline="no-change">b</tspan></text>"#,
+      #"<text x="2" y="10" dominant-baseline="middle">ab</text>"#
+    ),
+  ]
+
+  @Test("baseline-shift moves the glyphs of tspans up, and baselines align only the glyphs of their elements", arguments: shiftedTexts)
+  func baselineShift(text: String, same: String) async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+      return try shapes(of: children(of: tree)).map { try #require($0.geometry).path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    let actual = try await glyphBounds(text)
+    let expected = try await glyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.01, "\(actual) isn't \(expected)")
+    }
+  }
+
+  @Test("text aligned by its text-before-edge is below y, and by its text-after-edge above the alphabetic baseline")
+  func textEdges() async throws {
+    func glyphBounds(_ baseline: String) async throws -> CGRect {
+      try bounds(
+        of: try shape(
+          try children(
+            of: try await renderTree(
+              #"<text x="2" y="10" font-size="4" dominant-baseline="\#(baseline)">bg</text>"#)
+          ).first))
+    }
+    // The ascent of the font is above the tops of the glyphs.
+    #expect(try await glyphBounds("text-before-edge").minY >= 10 - 0.01)
+    // The glyphs go up by the descent of the font, which a glyph can go further down than.
+    #expect(try await glyphBounds("text-after-edge").maxY < glyphBounds("alphabetic").maxY - 0.2)
+  }
+
   /// Text, and the part of its width that its `text-anchor` moves it left by.
   private static let textAnchors: [(String, CGFloat)] = [
     (#"<text x="10" y="10" font-size="4">Text</text>"#, 0),

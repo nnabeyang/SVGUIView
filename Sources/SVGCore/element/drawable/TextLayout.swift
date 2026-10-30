@@ -107,11 +107,13 @@ struct TextLayout {
   /// - Parameters:
   ///   - characters: The characters, with their white space processed.
   ///   - anchors: The `text-anchor` of each element of the text.
+  ///   - baselineOffsets: How far down the glyphs of each element of the text are drawn from the current text
+  ///     position, in the user space, for its baselines and its `baseline-shift`.
   ///   - line: Makes the line of a run of characters of an element, with the space after its last character, or
   ///     returns `nil` if they aren't drawn. The space after the last character of a chunk doesn't count in its
   ///     width, which it's anchored with.
   init?(
-    characters: [TextCharacter], anchors: [TextAnchor], textScale: CGFloat,
+    characters: [TextCharacter], anchors: [TextAnchor], baselineOffsets: [CGFloat], textScale: CGFloat,
     line: (String, Int) -> (line: CTLine, trailingSpace: CGFloat)?
   ) {
     // The runs, with the index of their first character.
@@ -157,7 +159,9 @@ struct TextLayout {
       // The offset of the first run of a chunk is 0, so that text without positions is laid out as one line.
       let offset = chunks[chunk].runs.isEmpty ? 0 : (x - chunks[chunk].x) * textScale
       chunks[chunk].runs.append(
-        Run(line: runLine, owner: first.owner, width: width, y: y, offset: offset, rotation: first.rotate))
+        Run(
+          line: runLine, owner: first.owner, width: width, y: y + baselineOffsets[first.owner], offset: offset,
+          rotation: first.rotate))
       chunks[chunk].width = offset + width - trailingSpace
       x += width / textScale
     }

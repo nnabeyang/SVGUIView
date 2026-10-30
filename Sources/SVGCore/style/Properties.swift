@@ -521,6 +521,58 @@ enum WordSpacingProperty: StyleProperty {
   }
 }
 
+/// `dominant-baseline`, which SVG 2 inherits.
+enum DominantBaselineProperty: StyleProperty {
+  static let id = PropertyID.dominantBaseline
+  static let isInherited = true
+  static let initial = DominantBaseline.auto
+  static let computed = \ComputedStyle.dominantBaseline
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> DominantBaseline? {
+    keyword(text, origin: origin)
+  }
+
+  /// The baseline, where `no-change` and `reset-size` of SVG 1.1 keep the one of the parent.
+  static func compute(_ baseline: DominantBaseline, in resolver: StyleResolver) -> DominantBaseline {
+    switch baseline {
+    case .noChange, .resetSize: resolver.parent.dominantBaseline
+    default: baseline
+    }
+  }
+}
+
+enum AlignmentBaselineProperty: StyleProperty {
+  static let id = PropertyID.alignmentBaseline
+  static let isInherited = false
+  static let initial = AlignmentBaseline.auto
+  static let computed = \ComputedStyle.alignmentBaseline
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> AlignmentBaseline? {
+    keyword(text, origin: origin)
+  }
+}
+
+enum BaselineShiftProperty: StyleProperty {
+  static let id = PropertyID.baselineShift
+  static let isInherited = false
+  static let initial = BaselineShift.baseline
+  static let computed = \ComputedStyle.baselineShift
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> BaselineShift? {
+    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    switch origin == .css ? text.lowercased() : text {
+    case "baseline": return .baseline
+    case "sub": return .sub
+    case "super": return .super
+    default: return SVGLength(text).map { .length($0) }
+    }
+  }
+
+  static func compute(_ shift: BaselineShift, in resolver: StyleResolver) -> BaselineShift {
+    if case .length(let length) = shift { .length(resolvingFontRelative(length, in: resolver)) } else { shift }
+  }
+}
+
 enum VisibilityProperty: StyleProperty {
   static let id = PropertyID.visibility
   static let isInherited = true

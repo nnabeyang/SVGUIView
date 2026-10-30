@@ -68,7 +68,8 @@ final class SVGTextElement: ShapeGeometry {
     }
     let owners = owners
     return TextLayout(
-      characters: characters, anchors: owners.map(\.style.textAnchor), textScale: context.textScale
+      characters: characters, anchors: owners.map(\.style.textAnchor),
+      baselineOffsets: baselineOffsets(context: context), textScale: context.textScale
     ) { text, owner in
       Self.line(of: text, style: owners[owner].style, context: context)
     }
@@ -150,16 +151,76 @@ final class SVGTextElement: ShapeGeometry {
   /// The position of the line through text above the baseline, and its thickness, from the OS/2 table of a font,
   /// or `nil` if the font has none. Core Text gives the underline of a font, but not this line.
   private static func strikeout(of font: CTFont) -> (position: CGFloat, thickness: CGFloat)? {
-    guard let table = CTFontCopyTable(font, CTFontTableTag(kCTFontTableOS2), []) as Data?, table.count >= 30 else {
-      return nil
+    // yStrikeoutPosition and yStrikeoutSize.
+    guard let position = os2Value(of: font, at: 28), let thickness = os2Value(of: font, at: 26) else { return nil }
+    return (position, thickness)
+  }
+
+  /// A value of the OS/2 table of a font, an `FWORD` at a byte offset, in the coordinates of the font, or `nil` if
+  /// the font has no such table.
+  private static func os2Value(of font: CTFont, at offset: Int) -> CGFloat? {
+    guard let table = CTFontCopyTable(font, CTFontTableTag(kCTFontTableOS2), []) as Data?, table.count >= offset + 2
+    else { return nil }
+    let start = table.startIndex + offset
+    let value = Int16(bitPattern: UInt16(table[start]) << 8 | UInt16(table[start + 1]))
+    return CGFloat(value) * CTFontGetSize(font) / CGFloat(CTFontGetUnitsPerEm(font))
+  }
+
+  /// How far down the glyphs of each owner are drawn from the current text position, in the user space: the
+  /// position of the baseline that it aligns by, minus the sum of the `baseline-shift` of the tspans from the text
+  /// to the owner.
+  private func baselineOffsets(context: any GeometryContext) -> [CGFloat] {
+    let owners = owners
+    let textScale = context.textScale
+    var shifts = [CGFloat]()
+    var offsets = [CGFloat]()
+    for owner in owners.indices {
+      let style = owners[owner].style
+      guard let font = Self.font(of: style, context: context) else {
+        shifts.append(parents[owner].map { shifts[$0] } ?? 0)
+        offsets.append(0)
+        continue
+      }
+      // The baseline-shift of a tspan adds to the ones of the tspans that it's in.
+      var shift = parents[owner].map { shifts[$0] } ?? 0
+      if owner != 0 {
+        switch style.baselineShift {
+        case .baseline:
+          break
+        case .sub:
+          // Half of the height of the font, as browsers do. The subscript offset of the font is much smaller.
+          shift -= (CTFontGetAscent(font) + CTFontGetDescent(font)) / 2 / textScale
+        case .super:
+          shift += (CTFontGetAscent(font) + CTFontGetDescent(font)) / 2 / textScale
+        case .length(.percent(let percent)):
+          shift += percent / 100 * CTFontGetSize(font) / textScale
+        case .length(let length):
+          shift += length.value(context: context, mode: .other)
+        }
+      }
+      shifts.append(shift)
+      let baseline = style.alignmentBaseline.baseline ?? style.dominantBaseline.baseline
+      offsets.append(Self.position(of: baseline, in: font) / textScale - shift)
     }
-    let scale = CTFontGetSize(font) / CGFloat(CTFontGetUnitsPerEm(font))
-    func value(at offset: Int) -> CGFloat {
-      let start = table.startIndex + offset
-      return CGFloat(Int16(bitPattern: UInt16(table[start]) << 8 | UInt16(table[start + 1]))) * scale
+    return offsets
+  }
+
+  /// The position of a baseline above the alphabetic baseline, in the coordinates of a font.
+  ///
+  /// Core Text gives the ascent, the descent and the x-height, and the other baselines are placed from them as
+  /// browsers do: the hanging baseline at 0.8 of the ascent, and the mathematical baseline at half of it.
+  private static func position(of baseline: TextBaseline, in font: CTFont) -> CGFloat {
+    let ascent = CTFontGetAscent(font)
+    let descent = CTFontGetDescent(font)
+    return switch baseline {
+    case .alphabetic: 0
+    case .ideographic, .textAfterEdge: -descent
+    case .textBeforeEdge: ascent
+    case .hanging: ascent * 0.8
+    case .mathematical: ascent / 2
+    case .central: (ascent - descent) / 2
+    case .middle: CTFontGetXHeight(font) / 2
     }
-    // yStrikeoutSize and yStrikeoutPosition, in font units.
-    return (position: value(at: 28), thickness: value(at: 26))
   }
 
   /// The element that draws a line of `text-decoration` on the characters of an element: the closest element of

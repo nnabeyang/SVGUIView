@@ -433,6 +433,42 @@ struct StyleTests {
     #expect(child.wordSpacing == .number(5))
   }
 
+  /// Values of `baseline-shift`, and their shifts, or `nil` for a value that isn't valid.
+  private static let baselineShifts: [(String, BaselineShift?)] = [
+    ("baseline", .baseline),
+    ("sub", .sub),
+    ("super", .super),
+    ("10", .length(.number(10))),
+    ("-50%", .length(.percent(-50))),
+    ("2mm", .length(.millimeters(2))),
+    ("high", nil),
+  ]
+
+  @Test("baseline-shift is baseline, sub, super, a length or a percentage", arguments: baselineShifts)
+  func baselineShift(text: String, shift: BaselineShift?) {
+    #expect(BaselineShiftProperty.parse(text, origin: .attribute) == shift)
+  }
+
+  @Test("dominant-baseline and alignment-baseline read the baselines, and dominant-baseline is inherited")
+  func baselines() {
+    #expect(DominantBaselineProperty.parse("hanging", origin: .attribute)?.baseline == .hanging)
+    #expect(DominantBaselineProperty.parse("use-script", origin: .attribute)?.baseline == .alphabetic)
+    #expect(DominantBaselineProperty.parse("before-edge", origin: .attribute) == nil)
+    #expect(AlignmentBaselineProperty.parse("before-edge", origin: .attribute)?.baseline == .textBeforeEdge)
+    #expect(AlignmentBaselineProperty.parse("baseline", origin: .attribute)?.baseline == nil)
+    let parent = style([
+      PropertyDeclaration(DominantBaselineProperty.self, .value(.central)),
+      PropertyDeclaration(AlignmentBaselineProperty.self, .value(.hanging)),
+      PropertyDeclaration(BaselineShiftProperty.self, .value(.super)),
+    ])
+    let child = style([], parent: parent)
+    #expect(child.dominantBaseline == .central)
+    let unchanged = style([PropertyDeclaration(DominantBaselineProperty.self, .value(.noChange))], parent: parent)
+    #expect(unchanged.dominantBaseline == .central)
+    #expect(child.alignmentBaseline == .auto)
+    #expect(child.baselineShift == .baseline)
+  }
+
   @Test("xml:space declares white-space before the white-space attribute, which overrides it")
   func xmlSpace() {
     func whiteSpace(_ attributes: [String: String]) -> CSSWhiteSpace? {

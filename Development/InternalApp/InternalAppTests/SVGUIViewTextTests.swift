@@ -53,5 +53,20 @@ extension SnapshotTests {
     func tspan(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "baseline-shift"))
+    func baselineShift(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "dominant-baseline"))
+    func dominantBaseline(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "alignment-baseline"))
+    func alignmentBaseline(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

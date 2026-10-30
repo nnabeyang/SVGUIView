@@ -29,6 +29,89 @@ enum CSSVisibility: String, CaseIterable, Sendable {
   case collapse
 }
 
+/// A baseline of the font of text, which `dominant-baseline` and `alignment-baseline` align the text by.
+enum TextBaseline: Sendable {
+  case alphabetic
+  case ideographic
+  case hanging
+  case mathematical
+  case central
+  case middle
+  case textBeforeEdge
+  case textAfterEdge
+}
+
+/// `dominant-baseline`, the baseline that text and the tspans in it align by.
+enum DominantBaseline: String, CaseIterable, Sendable {
+  case auto
+  case useScript = "use-script"
+  case noChange = "no-change"
+  case resetSize = "reset-size"
+  case alphabetic
+  case ideographic
+  case hanging
+  case mathematical
+  case central
+  case middle
+  case textAfterEdge = "text-after-edge"
+  case textBeforeEdge = "text-before-edge"
+
+  /// The baseline. SVG 2 doesn't have `use-script` of SVG 1.1, which picks a baseline by the script, and is the
+  /// alphabetic baseline like `auto`. `no-change` and `reset-size` compute to the value of the parent.
+  var baseline: TextBaseline {
+    switch self {
+    case .auto, .useScript, .noChange, .resetSize, .alphabetic: .alphabetic
+    case .ideographic: .ideographic
+    case .hanging: .hanging
+    case .mathematical: .mathematical
+    case .central: .central
+    case .middle: .middle
+    case .textAfterEdge: .textAfterEdge
+    case .textBeforeEdge: .textBeforeEdge
+    }
+  }
+}
+
+/// `alignment-baseline`, the baseline that a tspan aligns by instead of the dominant baseline.
+enum AlignmentBaseline: String, CaseIterable, Sendable {
+  case auto
+  case baseline
+  case beforeEdge = "before-edge"
+  case textBeforeEdge = "text-before-edge"
+  case middle
+  case central
+  case afterEdge = "after-edge"
+  case textAfterEdge = "text-after-edge"
+  case ideographic
+  case alphabetic
+  case hanging
+  case mathematical
+
+  /// The baseline, or `nil` for the dominant baseline.
+  var baseline: TextBaseline? {
+    switch self {
+    case .auto, .baseline: nil
+    case .beforeEdge, .textBeforeEdge: .textBeforeEdge
+    case .middle: .middle
+    case .central: .central
+    case .afterEdge, .textAfterEdge: .textAfterEdge
+    case .ideographic: .ideographic
+    case .alphabetic: .alphabetic
+    case .hanging: .hanging
+    case .mathematical: .mathematical
+    }
+  }
+}
+
+/// `baseline-shift`, how far a tspan moves up from the baseline of its parent.
+enum BaselineShift: Equatable, Sendable {
+  case baseline
+  case sub
+  case `super`
+  /// A length, or a percentage of the size of the font.
+  case length(SVGLength)
+}
+
 /// The lines of `text-decoration`.
 struct TextDecorationLines: OptionSet, Hashable, Sendable {
   let rawValue: UInt8
