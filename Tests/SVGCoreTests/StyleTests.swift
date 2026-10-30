@@ -86,7 +86,7 @@ struct StyleTests {
       case .none: "none"
       case .currentColor: "currentColor"
       case .color(let color): color.description
-      case .url(let id): "url(\(id))"
+      case .url(let id, _): "url(\(id))"
       }
     }
     #expect(describe(declared(FillProperty.self, css: "none")) == "none")

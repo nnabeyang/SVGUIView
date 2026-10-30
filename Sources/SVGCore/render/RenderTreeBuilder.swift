@@ -571,7 +571,7 @@ package struct RenderTreeBuilder {
     case .color(let color):
       // A color that isn't known, such as a misspelled name, paints nothing.
       return color.toCGColor(opacity: opacity).map { .color($0) }
-    case .url(let id):
+    case .url(let id, _):
       if let server = base.pservers[id] {
         // Display doesn't apply to paint servers, which are never rendered themselves.
         return .gradient(gradientPaint(of: server, context: context, opacity: opacity))

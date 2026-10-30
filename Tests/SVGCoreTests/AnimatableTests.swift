@@ -15,7 +15,7 @@ private func color(_ text: String) throws -> SVGColor {
 
 /// Whether the paint is a paint server with the ID.
 private func isURL(_ paint: Paint, _ id: String) -> Bool {
-  if case .url(id) = paint { true } else { false }
+  if case .url(id, _) = paint { true } else { false }
 }
 
 /// Whether the color has the components, from 0 to 1.
@@ -41,8 +41,8 @@ struct AnimatableTests {
 
   @Test("values that can't be interpolated step halfway")
   func discreteSteps() {
-    #expect(!isURL(Paint.none.animated(to: .url("#a"), progress: 0.49), "#a"))
-    #expect(isURL(Paint.none.animated(to: .url("#a"), progress: 0.5), "#a"))
+    #expect(!isURL(Paint.none.animated(to: .url("#a", fallback: nil), progress: 0.49), "#a"))
+    #expect(isURL(Paint.none.animated(to: .url("#a", fallback: nil), progress: 0.5), "#a"))
   }
 
   /// Lengths and their interpolations halfway, or `nil` where they can't be interpolated.
@@ -108,7 +108,7 @@ struct AnimatableTests {
       return
     }
     #expect(matches(halfway, (0.5, 0, 0.5, 1)))
-    #expect(red.interpolated(to: .url("#a"), progress: 0.5) == nil)
+    #expect(red.interpolated(to: .url("#a", fallback: nil), progress: 0.5) == nil)
     #expect(red.interpolated(to: .none, progress: 0.5) == nil)
     #expect(red.interpolated(to: .currentColor, progress: 0.5) == nil)
     #expect(ColorValue.color(try color("red")).interpolated(to: .currentColor, progress: 0.5) == nil)
