@@ -117,9 +117,11 @@ struct SVGColorName: SVGUIColor {
     return (red: red, green: green, blue: blue, alpha: alpha)
   }
 
+  /// The names of the colors, which are the named colors of CSS Color and `transparent`.
+  static var names: Set<String> { Set(colors.keys) }
+
   private static let colors: [String: UInt64] = [
     "aliceblue": 0xF0F8_FF00,
-    "alpha": 0x0000_00FF,
     "antiquewhite": 0xFAEB_D700,
     "aqua": 0x00FF_FF00,
     "aquamarine": 0x7FFF_D400,
@@ -197,7 +199,6 @@ struct SVGColorName: SVGUIColor {
     "lightsalmon": 0xFFA0_7A00,
     "lightseagreen": 0x20B2_AA00,
     "lightskyblue": 0x87CE_FA00,
-    "lightslateblue": 0x8470_FF00,
     "lightslategray": 0x7788_9900,
     "lightslategrey": 0x7788_9900,
     "lightsteelblue": 0xB0C4_DE00,
@@ -264,7 +265,6 @@ struct SVGColorName: SVGUIColor {
     "transparent": 0x0000_00FF,
     "turquoise": 0x40E0_D000,
     "violet": 0xEE82_EE00,
-    "violetred": 0xD020_9000,
     "wheat": 0xF5DE_B300,
     "white": 0xFFFF_FF00,
     "whitesmoke": 0xF5F5_F500,
