@@ -709,6 +709,64 @@ struct RenderTreeBuilderTests {
     return group.children.dropFirst().compactMap { if case .viewport(let marker) = $0 { marker } else { nil } }
   }
 
+  /// What the nodes paint, in their order: `fill` or `stroke` for a shape that paints only that, `shape` for one that
+  /// paints both, and `marker` for a marker.
+  private func layers(of nodes: [RenderNode]) -> [String] {
+    nodes.map {
+      switch $0 {
+      case .shape(let shape):
+        switch shape.content {
+        case .vector(_?, nil, _)?: "fill"
+        case .vector(nil, _?, _)?: "stroke"
+        default: "shape"
+        }
+      case .viewport: "marker"
+      default: "other"
+      }
+    }
+  }
+
+  /// Values of `paint-order` on a path with a marker at each of its two vertices, and what it paints in its order.
+  private static let paintOrderLayers: [(String, [String])] = [
+    ("normal", ["shape", "marker", "marker"]),
+    ("stroke", ["stroke", "fill", "marker", "marker"]),
+    ("markers", ["marker", "marker", "shape"]),
+    ("fill markers stroke", ["fill", "marker", "marker", "stroke"]),
+    ("stroke markers", ["stroke", "marker", "marker", "fill"]),
+  ]
+
+  @Test("a shape paints its fill, its stroke and its markers in its paint order", arguments: paintOrderLayers)
+  func paintOrder(order: String, expected: [String]) async throws {
+    let tree = try await renderTree(
+      #"<marker id="m" markerWidth="2" markerHeight="4"><rect width="1" height="1"/></marker>"#
+        + #"<path d="M 2 2 L 18 18" fill="lime" stroke="blue" marker-start="url(#m)" marker-end="url(#m)" "#
+        + #"paint-order="\#(order)"/>"#)
+    guard case .group(let group) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
+    #expect(layers(of: group.children) == expected)
+    let ids = group.children.compactMap { if case .shape(let shape) = $0 { shape.id } else { nil } }
+    #expect(Set(ids).count == ids.count)
+    #expect(ids.first == group.id)
+  }
+
+  @Test("a shape without markers whose stroke is painted first paints it as a shape of its own")
+  func strokeFirst() async throws {
+    let tree = try await renderTree(#"<rect width="10" height="10" fill="lime" stroke="blue" paint-order="stroke"/>"#)
+    guard case .group(let group) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
+    #expect(layers(of: group.children) == ["stroke", "fill"])
+    let plain = try await renderTree(#"<rect width="10" height="10" fill="lime" stroke="blue" paint-order="fill"/>"#)
+    #expect(layers(of: try children(of: plain)) == ["shape"])
+  }
+
+  @Test("the glyphs of a tspan element are painted in its own paint order")
+  func tspanPaintOrder() async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4" fill="lime" stroke="blue">A<tspan paint-order="stroke">B</tspan></text>"#)
+    guard case .group(let text) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
+    #expect(layers(of: text.children) == ["shape", "stroke", "fill"])
+    let ids = text.children.compactMap { if case .shape(let shape) = $0 { shape.id } else { nil } }
+    #expect(Set(ids).count == ids.count)
+  }
+
   private func expectClose(
     _ a: CGAffineTransform, _ b: CGAffineTransform, sourceLocation: SourceLocation = #_sourceLocation
   ) {
