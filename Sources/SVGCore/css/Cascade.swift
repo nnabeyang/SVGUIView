@@ -30,9 +30,9 @@ func collectDeclarations(matches: [RuleMatch], inlineStyle declarations: [CSSDec
   return allDeclarations
 }
 
-/// The cascaded values of an element: its presentation attributes, then the rules of the style sheet that match
-/// it, then its `style` attribute, each overriding the ones before, and important declarations overriding the
-/// others.
+/// The cascaded values of an element: the user agent's style sheet, its presentation attributes, then the rules of
+/// the style sheet that match it, then its `style` attribute, each overriding the ones before, and important
+/// declarations overriding the others.
 func cascade(element: ElementCursor, stylesheet: Stylesheet) -> CascadedValues {
   let attributes = element.element.attributes
   let inlineStyle = attributes["style"].map { SVGUIInlineStyle(description: $0).declarations } ?? []
@@ -42,6 +42,7 @@ func cascade(element: ElementCursor, stylesheet: Stylesheet) -> CascadedValues {
   // important one that wins.
   let important = Set(declarations.filter { $0.importance == .important }.map(\.id))
   return CascadedValues(
-    CascadedValues.presentationAttributes(of: element.element.name, attributes: attributes)
+    CascadedValues.userAgentDeclarations(of: element.element.name, isRoot: element.parent == nil)
+      + CascadedValues.presentationAttributes(of: element.element.name, attributes: attributes)
       + declarations.map(\.declaration), important: important)
 }

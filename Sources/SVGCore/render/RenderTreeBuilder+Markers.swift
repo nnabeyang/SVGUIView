@@ -79,7 +79,7 @@ extension RenderTreeBuilder {
       .scaledBy(x: scale, y: scale)
       .translatedBy(x: -reference.x, y: -reference.y)
     let overflowClip: CGRect? =
-      switch marker.overflow ?? .hidden {
+      switch marker.overflow {
       case .visible, .auto: nil
       default: CGRect(origin: .zero, size: size).applying(viewBoxTransform.inverted())
       }

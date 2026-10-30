@@ -339,7 +339,9 @@ package struct RenderTreeBuilder {
     }
     let inner = layout.context
     var overflowClip: CGRect?
-    switch svg.overflow ?? .hidden {
+    // The view shows the viewport of the root element, which clips it whatever its overflow is.
+    let isRoot = svg.base.elementID == base.root?.base.elementID
+    switch isRoot ? .hidden : svg.overflow {
     case .visible, .auto:
       break
     default:

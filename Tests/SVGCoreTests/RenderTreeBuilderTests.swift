@@ -815,6 +815,15 @@ struct RenderTreeBuilderTests {
     expectClose(try #require(visible.content).viewBoxTransform, CGAffineTransform(scaleX: 0.5, y: 0.5))
   }
 
+  @Test("a marker that inherits its overflow from the root element without one doesn't clip its content")
+  func markerOverflowInherit() async throws {
+    let marker = try #require(
+      try await markers(
+        #"<marker id="i" overflow="inherit"/><path d="M 0 0 L 10 0" marker-start="url(#i)"/>"#
+      ).first)
+    #expect(marker.content?.overflowClip == nil)
+  }
+
   @Test("a marker that its content references again isn't drawn there, and a shape without markers is a shape")
   func markerCycle() async throws {
     let markers = try await markers(

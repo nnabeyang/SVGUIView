@@ -58,7 +58,7 @@ final class SVGMarkerElement: SVGElement {
   let orientation: Orientation
   let viewBox: SVGElementRect?
   let preserveAspectRatio: PreserveAspectRatio?
-  let overflow: SVGOverflow?
+  let overflow: SVGOverflow
 
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
