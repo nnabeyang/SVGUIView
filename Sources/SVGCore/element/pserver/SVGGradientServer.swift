@@ -36,6 +36,22 @@ extension SVGGradientServer {
     children.compactMap { $0 as? SVGStopElement }
   }
 
+  /// The colors of the stops at their locations, or `nil` if no stop has a color, which paints none.
+  ///
+  /// An offset is clamped to 0...1 and to the offset of the stop before it, and a single stop paints its color
+  /// everywhere.
+  func colorStops(context: any SVGLengthContext, opacity: Double) -> (colors: [CGColor], locations: [CGFloat])? {
+    var colors = [CGColor]()
+    var locations = [CGFloat]()
+    for stop in stops(context: context) {
+      guard let color = stop.color.toCGColor(opacity: stop.opacity * opacity) else { continue }
+      colors.append(color)
+      locations.append(max(min(stop.offset.value, 1), locations.last ?? 0))
+    }
+    guard let color = colors.first else { return nil }
+    return colors.count == 1 ? ([color, color], [0, 1]) : (colors, locations)
+  }
+
   /// The transform from the coordinates of the gradient to the coordinates of its units.
   func transform(context: any SVGLengthContext) -> CGAffineTransform {
     gradientTransform?.matrix(box: context.viewBoxSize, context: context) ?? .identity
@@ -148,18 +164,16 @@ final class SVGLinearGradientServer: SVGGradientServer {
 
   /// The gradient with its lengths resolved, or `nil` if it has no stop with a color.
   func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint? {
-    let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let x1 = (x1 ?? .percent(0)).value(context: context, mode: .width, unitType: gradientUnits)
     let y1 = (y1 ?? .percent(0)).value(context: context, mode: .height, unitType: gradientUnits)
     let x2 = (x2 ?? .percent(100)).value(context: context, mode: .width, unitType: gradientUnits)
     let y2 = (y2 ?? .percent(0)).value(context: context, mode: .height, unitType: gradientUnits)
-    let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
-    guard !colors.isEmpty else { return nil }
+    guard let (colors, locations) = colorStops(context: context, opacity: opacity) else { return nil }
     return .linear(
       LinearGradientPaint(
         units: gradientUnits, transform: transform(context: context), x1: x1, y1: y1, x2: x2, y2: y2,
-        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: stops.map(\.offset.value)))
+        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: locations))
   }
 }
 
@@ -278,7 +292,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
 
   /// The gradient with its lengths resolved, or `nil` if it has no stop with a color.
   func paint(context: any SVGLengthContext, opacity: Double) -> GradientPaint? {
-    let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
     let cy = (cy ?? .percent(50)).value(context: context, mode: .height, unitType: gradientUnits)
@@ -288,12 +301,11 @@ final class SVGRadialGradientServer: SVGGradientServer {
     let fy = fy?.value(context: context, mode: .height, unitType: gradientUnits) ?? cy
     // A negative radius of the focal circle is an error, which leaves the circle a point.
     let fr = max((fr ?? .percent(0)).value(context: context, mode: .other, unitType: gradientUnits), 0)
-    let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
-    guard !colors.isEmpty else { return nil }
+    guard let (colors, locations) = colorStops(context: context, opacity: opacity) else { return nil }
     return .radial(
       RadialGradientPaint(
         units: gradientUnits, transform: transform(context: context), cx: cx, cy: cy, r: r, fx: fx, fy: fy, fr: fr,
-        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: stops.map(\.offset.value)))
+        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: locations))
   }
 }
 
