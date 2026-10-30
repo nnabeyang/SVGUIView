@@ -276,8 +276,8 @@ final class SVGRadialGradientServer: SVGGradientServer {
     let stops = stops(context: context)
     let gradientUnits = gradientUnits ?? .objectBoundingBox
     let cx = (cx ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
-    let cy = (cy ?? .percent(50)).value(context: context, mode: .width, unitType: gradientUnits)
-    let r = (r ?? .percent(50)).value(context: context, mode: .height, unitType: gradientUnits)
+    let cy = (cy ?? .percent(50)).value(context: context, mode: .height, unitType: gradientUnits)
+    let r = (r ?? .percent(50)).value(context: context, mode: .other, unitType: gradientUnits)
     let colors = stops.compactMap { $0.color.toCGColor(opacity: $0.opacity * opacity) }
     guard !colors.isEmpty else { return nil }
     return .radial(
