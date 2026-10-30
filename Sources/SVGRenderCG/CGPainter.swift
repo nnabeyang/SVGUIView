@@ -74,14 +74,15 @@ package struct CGPainter {
       await apply(mask, to: graphics)
       isClipped = true
     }
-    if let path = shape.geometry?.path.cgPath, let content = shape.content {
+    if let geometry = shape.geometry, let content = shape.content {
+      let path = geometry.path.cgPath
       if isPaintedOnce(content) {
         // The opacity and the clips apply to the one drawing as they would to a layer.
         graphics.setAlpha(shape.opacity)
-        await paint(content, path: path, into: graphics)
+        await paint(content, path: path, frame: geometry.frame, into: graphics)
       } else {
         await inLayer(opacity: shape.opacity, isNeeded: isClipped, of: graphics) {
-          await paint(content, path: path, into: graphics)
+          await paint(content, path: path, frame: geometry.frame, into: graphics)
         }
       }
     }
@@ -91,8 +92,10 @@ package struct CGPainter {
   /// Whether the content is painted by one drawing of a color, so that its opacity can apply to that drawing.
   private func isPaintedOnce(_ content: ShapeContent) -> Bool {
     switch content {
-    case .vector(fill: .color?, stroke: nil, _), .vector(fill: nil, stroke: .some, _):
+    case .vector(fill: .color?, stroke: nil, _):
       true
+    case .vector(fill: nil, stroke: .some(let stroke), _):
+      if case .color = stroke.paint { true } else { false }
     default:
       false
     }
@@ -115,25 +118,33 @@ package struct CGPainter {
     graphics.endTransparencyLayer()
   }
 
-  private func paint(_ content: ShapeContent, path: CGPath, into graphics: CGContext) async {
+  /// Paints the content of a shape whose bounds without its stroke are `frame`, which the units of its paints use.
+  private func paint(_ content: ShapeContent, path: CGPath, frame: CGRect, into graphics: CGContext) async {
     switch content {
     case .vector(let fill, let stroke, let fillRule):
       if let fill {
-        await paint(fill, path: path, fillRule: fillRule, into: graphics)
+        await paint(fill, path: path, frame: path.boundingBoxOfPath, fillRule: fillRule, into: graphics)
       }
-      stroke.map { paint($0, path: path, into: graphics) }
+      if let stroke {
+        await paint(stroke, path: path, frame: frame, into: graphics)
+      }
     case .image(let image, let stroke):
       image.map { paintImage($0, in: path, graphics: graphics) }
-      stroke.map { paint($0, path: path, into: graphics) }
+      if let stroke {
+        await paint(stroke, path: path, frame: frame, into: graphics)
+      }
     }
   }
 
-  private func paint(_ fill: FillPaint, path: CGPath, fillRule: CGPathDrawingMode, into graphics: CGContext) async {
+  /// Paints the inside of a path, with the units of a gradient in `frame`.
+  private func paint(
+    _ fill: FillPaint, path: CGPath, frame: CGRect, fillRule: CGPathDrawingMode, into graphics: CGContext
+  ) async {
     switch fill {
     case .color(let color):
       graphics.setFillColor(color)
     case .gradient(let gradient):
-      gradient?.paint(path, in: graphics)
+      gradient?.paint(path, frame: frame, in: graphics)
       return
     case .pattern(let pattern):
       guard let pattern else { return }
@@ -148,10 +159,20 @@ package struct CGPainter {
     graphics.drawPath(using: fillRule)
   }
 
-  private func paint(_ stroke: StrokeStyle, path: CGPath, into graphics: CGContext) {
-    if let color = stroke.color {
-      graphics.setStrokeColor(color)
+  /// Paints the stroke of a path. A stroke with a gradient or a pattern paints the outline of the stroke, with the
+  /// units of its paint in the bounds of the shape without its stroke.
+  private func paint(_ stroke: StrokeStyle, path: CGPath, frame: CGRect, into graphics: CGContext) async {
+    guard case .color(let color) = stroke.paint else {
+      var outline = path
+      if let dashes = stroke.dashes {
+        outline = outline.copy(dashingWithPhase: stroke.dashOffset, lengths: dashes)
+      }
+      outline = outline.copy(
+        strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)
+      await paint(stroke.paint, path: outline, frame: frame, fillRule: .fill, into: graphics)
+      return
     }
+    graphics.setStrokeColor(color)
     if let dashes = stroke.dashes {
       graphics.setLineDash(phase: stroke.dashOffset, lengths: dashes)
     }
@@ -326,7 +347,8 @@ package struct CGPainter {
       if let mask = content.mask {
         await apply(mask, to: graphics)
       }
-      await paint(content.fill, path: content.path.cgPath, into: graphics)
+      await paint(
+        content.fill, path: content.path.cgPath, frame: content.path.cgPath.boundingBoxOfPath, into: graphics)
       graphics.restoreGState()
     }
     return graphics.makeImage().flatMap(luminanceToAlpha)

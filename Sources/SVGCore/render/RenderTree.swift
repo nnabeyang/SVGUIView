@@ -95,9 +95,8 @@ package enum FillPaint: Sendable {
 }
 
 package struct StrokeStyle: Sendable {
-  /// The color of the stroke, or `nil` for a paint server, which isn't supported on strokes and keeps the stroke
-  /// color of the context.
-  package let color: CGColor?
+  /// What the stroke is painted with: a color, or a gradient or a pattern, which paints the outline of the stroke.
+  package let paint: FillPaint
   /// The dashes, or `nil` if none of them has a length.
   package let dashes: [CGFloat]?
   package let dashOffset: CGFloat
