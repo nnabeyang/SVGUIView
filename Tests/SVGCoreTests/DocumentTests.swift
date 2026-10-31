@@ -57,8 +57,8 @@ struct DocumentTests {
     #expect(root.children.map(\.name) == [.style, .unknown, .unknown, .rect])
     #expect(root.children[1].children.map(\.localName) == ["rect"])
     #expect(root.children[0].text == "rect { fill: red; }")
-    // Only the last rectangle is rendered.
-    #expect(context.root?.children.map(\.type) == [.rect])
+    // The unknown elements are made, though they aren't rendered, so that the elements in them can be referenced.
+    #expect(context.root?.children.map(\.type) == [.unknown, .unknown, .rect])
   }
 
   @Test("the text of a text element around its children stays with it")

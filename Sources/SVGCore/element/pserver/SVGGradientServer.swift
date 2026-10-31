@@ -117,7 +117,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     y1 = lhs.y1 ?? rhs.y1
     x2 = lhs.x2 ?? rhs.x2
     y2 = lhs.y2 ?? rhs.y2
-    children = lhs.children.isEmpty ? rhs.children : lhs.children
+    children = lhs.knownChildren.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
     gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
@@ -132,7 +132,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     y1 = lhs.y1
     x2 = lhs.x2
     y2 = lhs.y2
-    children = lhs.children.isEmpty ? rhs.children : lhs.children
+    children = lhs.knownChildren.isEmpty ? rhs.children : lhs.children
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
     gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
@@ -237,7 +237,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     fy = lhs.fy ?? rhs.fy
     fr = lhs.fr ?? rhs.fr
     r = lhs.r ?? rhs.r
-    children = lhs.children.isEmpty ? rhs.children : lhs.children
+    children = lhs.knownChildren.isEmpty ? rhs.children : lhs.children
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
@@ -254,7 +254,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     fy = lhs.fy
     fr = lhs.fr
     r = lhs.r
-    children = lhs.children.isEmpty ? rhs.children : lhs.children
+    children = lhs.knownChildren.isEmpty ? rhs.children : lhs.children
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits

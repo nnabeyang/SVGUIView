@@ -98,7 +98,7 @@ extension SVGBaseContext {
   func elementsNotRendered() -> Set<ElementID> {
     var elements = Set<ElementID>()
     func visit(_ element: any SVGElement, isHidden: Bool) {
-      let isHidden = isHidden || element.style.display == .none
+      let isHidden = isHidden || element.style.display == .none || element is SVGUnknownElement
       if isHidden { elements.insert(element.base.elementID) }
       for child in element.children {
         visit(child, isHidden: isHidden)

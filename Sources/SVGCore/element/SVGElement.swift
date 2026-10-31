@@ -28,6 +28,12 @@ extension SVGElement {
     []
   }
 
+  /// The children without the unknown elements, which are made only so that the elements in them can be
+  /// referenced, and count as children nowhere else.
+  var knownChildren: [any SVGElement] {
+    children.filter { !($0 is SVGUnknownElement) }
+  }
+
   var elements: [any SVGElement] {
     var elements = [any SVGElement]()
     elements.append(self)
@@ -190,9 +196,9 @@ extension SVGDrawableElement {
 }
 
 extension ElementCursor {
-  /// Makes the element to render, with the values of the cascade applied, or `nil` for an element that isn't
-  /// rendered, such as `<style>`, an unknown element or an animation element, whose descendants aren't rendered
-  /// either.
+  /// Makes the element to render, with the values of the cascade applied, or `nil` for `<style>` or an animation
+  /// element, whose descendants aren't made either. An unknown element is made with its descendants, which aren't
+  /// rendered but can be referenced.
   ///
   /// - Parameters:
   ///   - languages: The languages of the user, in the order of preference, which `systemLanguage` matches.
@@ -294,7 +300,9 @@ extension ElementCursor {
         SVGDefsElement(base: base, contents: contents)
       case .symbol:
         SVGSymbolElement(base: base, contents: contents)
-      case .style, .unknown, .animate, .set, .animateTransform, .animateMotion, .mpath:
+      case .unknown:
+        SVGUnknownElement(base: base, contents: contents)
+      case .style, .animate, .set, .animateTransform, .animateMotion, .mpath:
         preconditionFailure("\(name.rawValue) isn't rendered")
       }
     return rendered
