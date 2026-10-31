@@ -91,12 +91,20 @@ package enum ShapeContent: Sendable {
 
 /// An image placed in the rectangle of its element by its `preserveAspectRatio`.
 package struct ImagePaint: Sendable {
-  package let image: CGImage
-  /// Where the image is drawn, in the coordinates of its element.
+  package let content: ImageContent
+  /// Where the image is drawn, in the coordinates of its element: the bitmap, or the view box of the SVG image.
   package let rect: CGRect
   /// The rectangle of the element, which clips the image where its overflow is hidden and the image overflows it,
   /// or `nil` if nothing clips it.
   package let clip: CGRect?
+}
+
+/// What an image is drawn from.
+package enum ImageContent: Sendable {
+  /// A bitmap, which is drawn in the rectangle of its paint.
+  case bitmap(CGImage)
+  /// The node of the root element of an SVG image, which places the image in the rectangle of its element.
+  case document(RenderNode)
 }
 
 package enum FillPaint: Sendable {

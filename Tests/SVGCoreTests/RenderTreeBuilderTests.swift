@@ -109,6 +109,81 @@ struct RenderTreeBuilderTests {
     #expect(image.clip == clip)
   }
 
+  /// An `<image>` element in the rectangle of 10 by 10 at 5, 5 with an SVG image of the data, and more attributes.
+  private func svgImage(_ data: String, _ attributes: String = "") -> String {
+    #"<image x="5" y="5" width="10" height="10" href="\#(data)" "# + attributes + "/>"
+  }
+
+  /// The data URL of an SVG image whose view box is 2 by 1 at 1, 1, with the content.
+  private func svgImageURL(_ content: String = #"<rect x="1" y="1" width="2" height="1"/>"#) -> String {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 2 1">"# + content + "</svg>"
+    return "data:image/svg+xml;base64," + Data(svg.utf8).base64EncodedString()
+  }
+
+  /// The image that the first child of a document shows.
+  private func imagePaint(of tree: RenderTree) throws -> ImagePaint {
+    guard case .image(let image?, _)? = try shape(try children(of: tree).first).content else {
+      throw NodeError.unexpected(try children(of: tree).first)
+    }
+    return image
+  }
+
+  @Test(
+    "an SVG image is placed in its rectangle by the preserveAspectRatio of the image element, and clipped there",
+    arguments: imagePlacements)
+  func svgImagePlacement(attributes: String, rect: CGRect, clip: CGRect?) async throws {
+    let image = try imagePaint(of: try await renderTree(svgImage(svgImageURL(), attributes)))
+    #expect(image.rect == rect)
+    #expect(image.clip == clip)
+    guard case .document(.viewport(let root)) = image.content, let content = root.content else {
+      Issue.record("The image isn't a document")
+      return
+    }
+    // The root of the image places the corner of its view box at the corner of the rectangle where it's drawn.
+    let corner = CGPoint(x: 1, y: 1).applying(content.viewBoxTransform).applying(root.translation)
+    #expect(abs(corner.x - rect.minX) < 1e-9 && abs(corner.y - rect.minY) < 1e-9, "\(corner)")
+    #expect(content.overflowClip == nil)
+    #expect(shapes(of: content.children).count == 1)
+  }
+
+  /// SVG images of the same document of 2 by 1: gzipped, and without a media type.
+  private static let svgImageURLs = [
+    "data:image/svg+xml;base64,H4sICAAAAAAC/2ltYWdlLnN2ZwAVy8ENgzAMBdBVrD8ANumtinPoKiVNIqVQBQszPvT+XtyPQue3r7uimv2ezO4"
+      + "++WPaRuEgInwL0NGyv7ZTISQUaEaKI7+NvC1WFQFUcyvVFDPo03pXjLyAU/z/dAGZZzLZZwAAAA==",
+    "data:;base64,"
+      + Data(#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 1"><rect width="2" height="1"/></svg>"#.utf8)
+      .base64EncodedString(),
+  ]
+
+  @Test("an SVG image is read gzipped, or without a media type", arguments: svgImageURLs)
+  func svgImageData(url: String) async throws {
+    let image = try imagePaint(of: try await renderTree(svgImage(url)))
+    #expect(image.rect == CGRect(x: 5, y: 7.5, width: 10, height: 5))
+    guard case .document = image.content else {
+      Issue.record("The image isn't a document")
+      return
+    }
+  }
+
+  @Test("SVG images in SVG images are drawn three deep")
+  func svgImageDepth() async throws {
+    // Each image shows the next one, deeper than the images that are drawn.
+    var url = svgImageURL()
+    for _ in 0..<4 {
+      url = svgImageURL(#"<image x="1" y="1" width="2" height="1" href="\#(url)"/>"#)
+    }
+    var depth = 0
+    var paint: ImagePaint? = try imagePaint(of: try await renderTree(svgImage(url)))
+    while let image = paint {
+      depth += 1
+      guard case .document(.viewport(let root)) = image.content, let first = root.content?.children.first,
+        case .image(let next, _)? = try shape(first).content
+      else { break }
+      paint = next
+    }
+    #expect(depth == 3)
+  }
+
   @Test("each use element makes its own copy of the content, which keeps the identity of the element")
   func useInstances() async throws {
     let tree = try await renderTree(
