@@ -16,6 +16,7 @@ extension CGPainter {
   /// The result covers the pixels of the filter bitmap, which can go past the filter region by part of a pixel.
   package func draw(_ result: CGImage, of filtered: FilteredNode, into cgContext: CGContext) {
     cgContext.saveGState()
+    cgContext.setBlendMode(filtered.blendMode)
     cgContext.concatenate(filtered.transform)
     cgContext.clip(to: filtered.effectRect)
     cgContext.draw(result, in: bitmapRect(of: filtered))

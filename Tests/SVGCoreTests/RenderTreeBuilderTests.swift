@@ -804,6 +804,20 @@ struct RenderTreeBuilderTests {
     return group.children.dropFirst().compactMap { if case .viewport(let marker) = $0 { marker } else { nil } }
   }
 
+  @Test("shapes and groups blend with mix-blend-mode, and groups isolate with isolation")
+  func blending() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <rect width="10" height="10" style="mix-blend-mode: multiply"/>
+      <g style="mix-blend-mode: screen; isolation: isolate"><rect width="10" height="10"/></g>
+      <g><rect width="10" height="10"/></g>
+      """##)
+    let nodes = try children(of: tree)
+    #expect(nodes.map(\.blendMode) == [.multiply, .screen, .normal])
+    let groups = nodes.compactMap { if case .group(let group) = $0 { group } else { nil } }
+    #expect(groups.map(\.isolates) == [true, false])
+  }
+
   /// Content, and whether its last shape is antialiased.
   private static let shapeRenderings: [(String, Bool)] = [
     (#"<circle r="5" shape-rendering="crispEdges"/>"#, false),

@@ -72,6 +72,13 @@ struct LayerPlannerTests {
       spin + #"<rect id="a" width="10" height="10"/>"# + spinning("r") + #"<rect id="b" width="10" height="10"/>"#,
       "clip(-(svg([a] r([r]) [b])))"
     ),
+    // An element that blends with what's behind it makes the whole tree one painted layer, though another element
+    // moves.
+    (
+      spin + #"<rect id="a" width="10" height="10"/>"# + spinning("r")
+        + #"<rect id="b" width="10" height="10" style="mix-blend-mode: multiply"/>"#,
+      "clip(-([svg]))"
+    ),
     // A group around it becomes a container with its opacity.
     (
       spin + #"<g id="g" opacity="0.5"><rect id="a" width="10" height="10"/>"# + spinning("r") + "</g>",

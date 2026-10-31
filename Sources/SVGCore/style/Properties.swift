@@ -491,6 +491,38 @@ enum ShapeRenderingProperty: StyleProperty {
   }
 }
 
+/// How an element blends with what's behind it. It isn't a presentation attribute.
+enum MixBlendModeProperty: StyleProperty {
+  static let id = PropertyID.mixBlendMode
+  static let isInherited = false
+  static let initial = MixBlendMode.normal
+  static let computed = \ComputedStyle.mixBlendMode
+
+  static func accepts(attributeOn _: SVGElementName) -> Bool {
+    false
+  }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> MixBlendMode? {
+    keyword(text, origin: origin)
+  }
+}
+
+/// Whether an element makes an isolation group. It isn't a presentation attribute.
+enum IsolationProperty: StyleProperty {
+  static let id = PropertyID.isolation
+  static let isInherited = false
+  static let initial = Isolation.auto
+  static let computed = \ComputedStyle.isolation
+
+  static func accepts(attributeOn _: SVGElementName) -> Bool {
+    false
+  }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> Isolation? {
+    keyword(text, origin: origin)
+  }
+}
+
 enum ClipRuleProperty: StyleProperty {
   static let id = PropertyID.clipRule
   static let isInherited = true

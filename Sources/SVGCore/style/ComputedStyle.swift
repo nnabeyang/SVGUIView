@@ -41,6 +41,8 @@ enum PropertyID: String, CaseIterable, Sendable {
   case colorInterpolation = "color-interpolation"
   case colorInterpolationFilters = "color-interpolation-filters"
   case opacity
+  case mixBlendMode = "mix-blend-mode"
+  case isolation
   case transform
   case transformOrigin = "transform-origin"
   case transformBox = "transform-box"
@@ -116,6 +118,8 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .colorInterpolation: visitor.visit(ColorInterpolationProperty.self)
     case .colorInterpolationFilters: visitor.visit(ColorInterpolationFiltersProperty.self)
     case .opacity: visitor.visit(OpacityProperty.self)
+    case .mixBlendMode: visitor.visit(MixBlendModeProperty.self)
+    case .isolation: visitor.visit(IsolationProperty.self)
     case .transform: visitor.visit(TransformProperty.self)
     case .transformOrigin: visitor.visit(TransformOriginProperty.self)
     case .transformBox: visitor.visit(TransformBoxProperty.self)
@@ -198,6 +202,8 @@ struct ComputedStyle: Sendable, Equatable {
   var colorInterpolation: SVGColorInterpolation?
   var colorInterpolationFilters: SVGColorInterpolation?
   var opacity: Double
+  var mixBlendMode: MixBlendMode
+  var isolation: Isolation
   var transform: TransformList
   var transformOrigin: TransformOrigin
   var transformBox: TransformBox
@@ -249,6 +255,7 @@ struct ComputedStyle: Sendable, Equatable {
     markerMid: MarkerMidProperty.initial, markerEnd: MarkerEndProperty.initial,
     visibility: VisibilityProperty.initial, colorInterpolation: ColorInterpolationProperty.initial,
     colorInterpolationFilters: ColorInterpolationFiltersProperty.initial, opacity: OpacityProperty.initial,
+    mixBlendMode: MixBlendModeProperty.initial, isolation: IsolationProperty.initial,
     transform: TransformProperty.initial, transformOrigin: TransformOriginProperty.initial,
     transformBox: TransformBoxProperty.initial, clipPath: ClipPathProperty.initial, mask: MaskProperty.initial,
     filter: FilterProperty.initial, display: DisplayProperty.initial, overflow: OverflowProperty.initial,
@@ -354,7 +361,8 @@ struct ComputedStyle: Sendable, Equatable {
     alignmentBaseline: AlignmentBaseline, baselineShift: BaselineShift, markerStart: SVGMarkerReference,
     markerMid: SVGMarkerReference, markerEnd: SVGMarkerReference,
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
-    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
+    colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, mixBlendMode: MixBlendMode,
+    isolation: Isolation, transform: TransformList,
     transformOrigin: TransformOrigin, transformBox: TransformBox,
     clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow,
     stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
@@ -399,6 +407,8 @@ struct ComputedStyle: Sendable, Equatable {
     self.colorInterpolation = colorInterpolation
     self.colorInterpolationFilters = colorInterpolationFilters
     self.opacity = opacity
+    self.mixBlendMode = mixBlendMode
+    self.isolation = isolation
     self.transform = transform
     self.transformOrigin = transformOrigin
     self.transformBox = transformBox

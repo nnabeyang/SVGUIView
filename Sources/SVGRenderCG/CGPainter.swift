@@ -78,11 +78,12 @@ package struct CGPainter {
     if let geometry = shape.geometry, let content = shape.content {
       let path = geometry.path.cgPath
       if isPaintedOnce(content) {
-        // The opacity and the clips apply to the one drawing as they would to a layer.
+        // The opacity, the blend mode and the clips apply to the one drawing as they would to a layer.
         graphics.setAlpha(shape.opacity)
+        graphics.setBlendMode(shape.blendMode)
         await paint(content, path: path, frame: geometry.frame, into: graphics)
       } else {
-        await inLayer(opacity: shape.opacity, isNeeded: isClipped, of: graphics) {
+        await inLayer(opacity: shape.opacity, blendMode: shape.blendMode, isNeeded: isClipped, of: graphics) {
           await paint(content, path: path, frame: geometry.frame, into: graphics)
         }
       }
@@ -103,17 +104,23 @@ package struct CGPainter {
   }
 
   /// Paints with `body` in a transparency layer, which composites what it paints together, only where the layer
-  /// changes the result: when the opacity is less than 1, or when `isNeeded`, such as when a clip or a mask applies
-  /// to what `body` paints composited together. Elsewhere `body` paints into the context directly, whose opacity is
-  /// 1 there, since an element with a smaller opacity paints its content in a layer.
+  /// changes the result: when the opacity is less than 1, when the layer blends with what's behind it, or when
+  /// `isNeeded`, such as when a clip or a mask applies to what `body` paints composited together, or the layer is an
+  /// isolation group. Elsewhere `body` paints into the context directly, whose opacity is 1 there, since an element
+  /// with a smaller opacity paints its content in a layer.
+  ///
+  /// The layer is composited with the blend mode that the context has when it begins, and what `body` paints in it
+  /// starts with the normal blend mode, so it blends only with what's in the layer.
   private func inLayer(
-    opacity: CGFloat, isNeeded: Bool, of graphics: CGContext, _ body: () async -> Void
+    opacity: CGFloat, blendMode: CGBlendMode = .normal, isNeeded: Bool, of graphics: CGContext,
+    _ body: () async -> Void
   ) async {
-    guard isNeeded || opacity != 1 else {
+    guard isNeeded || opacity != 1 || blendMode != .normal else {
       await body()
       return
     }
     graphics.setAlpha(opacity)
+    graphics.setBlendMode(blendMode)
     graphics.beginTransparencyLayer(auxiliaryInfo: nil)
     await body()
     graphics.endTransparencyLayer()
@@ -249,8 +256,10 @@ package struct CGPainter {
       await apply(mask, to: graphics)
     }
     let isClipped = isClipped || group.mask != nil
-    let hasLayer = needsLayer(opacity: group.opacity, isClipped: isClipped, childCount: group.children.count)
-    await inLayer(opacity: group.opacity, isNeeded: hasLayer, of: graphics) {
+    let hasLayer =
+      needsLayer(opacity: group.opacity, isClipped: isClipped, childCount: group.children.count)
+      || group.isolates || group.blendMode != .normal
+    await inLayer(opacity: group.opacity, blendMode: group.blendMode, isNeeded: hasLayer, of: graphics) {
       // The clip path applies to each child.
       if let clip = group.clip {
         await apply(clip, to: graphics)
@@ -282,8 +291,10 @@ package struct CGPainter {
       await apply(mask, to: graphics)
     }
     let isClipped = isClipped || content.overflowClip != nil || content.mask != nil
-    let hasLayer = needsLayer(opacity: viewport.opacity, isClipped: isClipped, childCount: content.children.count)
-    await inLayer(opacity: viewport.opacity, isNeeded: hasLayer, of: graphics) {
+    let hasLayer =
+      needsLayer(opacity: viewport.opacity, isClipped: isClipped, childCount: content.children.count)
+      || viewport.isolates || viewport.blendMode != .normal
+    await inLayer(opacity: viewport.opacity, blendMode: viewport.blendMode, isNeeded: hasLayer, of: graphics) {
       // The clip path applies to each child.
       if let clip = content.clip {
         await apply(clip, to: graphics)
@@ -312,8 +323,10 @@ package struct CGPainter {
     graphics.concatenate(instance.translation)
     guard let content = instance.content else { return }
     let isClipped = isClipped || use.clip != nil || use.mask != nil
-    let hasLayer = needsLayer(opacity: instance.opacity, isClipped: isClipped, childCount: 1)
-    await inLayer(opacity: instance.opacity, isNeeded: hasLayer, of: graphics) {
+    let hasLayer =
+      needsLayer(opacity: instance.opacity, isClipped: isClipped, childCount: 1) || use.isolates
+      || use.blendMode != .normal
+    await inLayer(opacity: instance.opacity, blendMode: use.blendMode, isNeeded: hasLayer, of: graphics) {
       await paint(content, into: graphics, isClipped: isClipped && !hasLayer)
     }
   }

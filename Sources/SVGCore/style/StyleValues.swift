@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// The value of `fill` or `stroke`.
@@ -51,6 +52,43 @@ enum ColorValue: Sendable, Equatable {
 enum FillRule: String, CaseIterable, Sendable {
   case nonzero
   case evenodd
+}
+
+/// How an element blends with what's behind it in its isolation group.
+enum MixBlendMode: String, CaseIterable, Sendable {
+  case normal, multiply, screen, overlay, darken, lighten
+  case colorDodge = "color-dodge"
+  case colorBurn = "color-burn"
+  case hardLight = "hard-light"
+  case softLight = "soft-light"
+  case difference, exclusion, hue, saturation, color, luminosity
+
+  /// The blend mode of Core Graphics, whose formulas are the ones of the specification.
+  var cgBlendMode: CGBlendMode {
+    switch self {
+    case .normal: .normal
+    case .multiply: .multiply
+    case .screen: .screen
+    case .overlay: .overlay
+    case .darken: .darken
+    case .lighten: .lighten
+    case .colorDodge: .colorDodge
+    case .colorBurn: .colorBurn
+    case .hardLight: .hardLight
+    case .softLight: .softLight
+    case .difference: .difference
+    case .exclusion: .exclusion
+    case .hue: .hue
+    case .saturation: .saturation
+    case .color: .color
+    case .luminosity: .luminosity
+    }
+  }
+}
+
+/// Whether an element makes an isolation group, which what it contains blends in.
+enum Isolation: String, CaseIterable, Sendable {
+  case auto, isolate
 }
 
 /// What a shape is rendered for, which trades the precision of its edges for speed or crispness.

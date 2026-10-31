@@ -16,6 +16,9 @@ import SVGCore
 /// A node with a clip path, a mask or a filter composites what it paints as one image, so the nodes in it are painted
 /// with it, and none of them gets a layer of its own.
 ///
+/// A node that blends with what's behind it blends only with what's painted into its layer, so a tree with one is
+/// painted into one layer.
+///
 /// A painted layer whose nodes don't change with the time can show the contents of another time.
 package struct LayerPlanner: Sendable {
   /// The elements whose nodes get layers of their own, which are the ones whose compositing is animated.
@@ -47,9 +50,14 @@ package struct LayerPlanner: Sendable {
     let context = Context(
       transform: fit, restingTransform: fit, view: rect, isFixed: true, isChanging: false,
       key: LayerKey(components: [.index(0), .index(0)]))
+    let nodes = tree.root.map { [$0] } ?? []
+    let blends = nodes.contains { node in ([node] + node.descendants).contains { $0.blendMode != .normal } }
+    let children =
+      blends
+      ? painted(nodes, in: context, changes: nodes.contains(where: changes)).map { [PlannedLayer.painted($0)] } ?? []
+      : layers(of: nodes, in: context)
     let content = ContainerLayer(
-      id: nil, transform: fit, opacity: 1, clip: nil,
-      children: tree.root.map { layers(of: [$0], in: context) } ?? [], key: context.key)
+      id: nil, transform: fit, opacity: 1, clip: nil, children: children, key: context.key)
     return ContainerLayer(
       id: nil, transform: .identity, opacity: 1, clip: rect, children: [.container(content)],
       key: LayerKey(components: [.index(0)]))

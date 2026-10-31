@@ -22,6 +22,8 @@ package struct FilteredNode: Sendable {
   package let primitives: [FilterStep]
   /// The element without its filter.
   package let source: RenderNode?
+  /// How the result blends with what's behind the element in its isolation group.
+  package var blendMode = CGBlendMode.normal
 }
 
 /// A primitive of a filter, with what it shares with the others.

@@ -37,6 +37,17 @@ extension RenderNode {
     }
   }
 
+  /// How the node blends with what's behind it in its isolation group.
+  package var blendMode: CGBlendMode {
+    switch self {
+    case .shape(let shape): shape.blendMode
+    case .group(let group): group.blendMode
+    case .viewport(let viewport): viewport.blendMode
+    case .use(let use): use.blendMode
+    case .filtered(let filtered): filtered.blendMode
+    }
+  }
+
   /// The node without its transform and its group opacity, which paints in its own coordinates what a layer with
   /// the transform and the opacity composites.
   package var withoutCompositing: RenderNode {
