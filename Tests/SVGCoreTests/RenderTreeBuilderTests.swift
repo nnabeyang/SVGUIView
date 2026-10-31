@@ -668,6 +668,49 @@ struct RenderTreeBuilderTests {
     return mask
   }
 
+  /// The mask of the first content of a mask, or `nil` if it has none.
+  private func contentMask(of mask: MaskEffect) throws -> MaskEffect? {
+    if case .mask(let effect) = try shape(mask.contents.first).mask { effect } else { nil }
+  }
+
+  @Test("an element in a mask whose mask leads back to the mask is drawn without its mask, wherever it's drawn")
+  func maskCycles() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <mask id="m1"><rect id="r1" width="20" height="20" fill="white" mask="url(#m2)"/></mask>
+      <mask id="m2"><rect id="r2" width="20" height="20" fill="white" mask="url(#m1)"/></mask>
+      <rect width="20" height="10" mask="url(#m1)"/>
+      <rect y="10" width="20" height="10" mask="url(#m2)"/>
+      """##)
+    let rects = shapes(of: try children(of: tree)).map { shape -> MaskEffect? in
+      if case .mask(let mask) = shape.mask { mask } else { nil }
+    }
+    #expect(rects.count == 2)
+    let first = try #require(rects.first ?? nil)
+    let last = try #require(rects.last ?? nil)
+    // The first mask comes first in the document, so the element in it drops its mask, which closes the cycle.
+    #expect(try contentMask(of: first) == nil)
+    let second = try #require(try contentMask(of: last))
+    #expect(try contentMask(of: second) == nil)
+  }
+
+  @Test("an element in a mask that it masks is drawn without its mask, and masks without a cycle stay")
+  func selfMaskCycle() async throws {
+    let cyclic = try await lastMask(
+      ##"""
+      <mask id="m"><rect width="20" height="20" fill="white" mask="url(#m)"/></mask>
+      <rect width="20" height="20" mask="url(#m)"/>
+      """##)
+    #expect(try contentMask(of: cyclic) == nil)
+    let nested = try await lastMask(
+      ##"""
+      <mask id="m1"><rect width="20" height="20" fill="white"/></mask>
+      <mask id="m2"><rect width="20" height="20" fill="white" mask="url(#m1)"/></mask>
+      <rect width="20" height="20" mask="url(#m2)"/>
+      """##)
+    #expect(try contentMask(of: nested) != nil)
+  }
+
   @Test("the children of a mask are nodes of any kind, which keep their strokes")
   func maskContentNodes() async throws {
     let mask = try await lastMask(
