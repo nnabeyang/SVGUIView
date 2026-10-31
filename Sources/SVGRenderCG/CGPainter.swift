@@ -137,7 +137,9 @@ package struct CGPainter {
         await paint(stroke, path: path, frame: frame, into: graphics)
       }
     case .image(let image, let stroke):
-      image.map { paintImage($0, graphics: graphics) }
+      if let image {
+        await paintImage(image, graphics: graphics)
+      }
       if let stroke {
         await paint(stroke, path: path, frame: frame, into: graphics)
       }
