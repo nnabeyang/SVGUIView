@@ -53,6 +53,22 @@ enum FillRule: String, CaseIterable, Sendable {
   case evenodd
 }
 
+/// What a shape is rendered for, which trades the precision of its edges for speed or crispness.
+enum ShapeRendering: String, CaseIterable, Sendable {
+  case auto
+  case optimizeSpeed
+  case crispEdges
+  case geometricPrecision
+
+  /// Whether the edges of a shape rendered for it are antialiased.
+  var antialiases: Bool {
+    switch self {
+    case .auto, .geometricPrecision: true
+    case .optimizeSpeed, .crispEdges: false
+    }
+  }
+}
+
 /// The order in which a shape or text paints its fill, its stroke and its markers.
 struct PaintOrder: Equatable, Sendable {
   enum Layer: Sendable {

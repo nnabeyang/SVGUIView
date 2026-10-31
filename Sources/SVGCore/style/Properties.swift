@@ -480,6 +480,17 @@ enum PaintOrderProperty: StyleProperty {
   }
 }
 
+enum ShapeRenderingProperty: StyleProperty {
+  static let id = PropertyID.shapeRendering
+  static let isInherited = true
+  static let initial = ShapeRendering.auto
+  static let computed = \ComputedStyle.shapeRendering
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> ShapeRendering? {
+    keyword(text, origin: origin)
+  }
+}
+
 enum ClipRuleProperty: StyleProperty {
   static let id = PropertyID.clipRule
   static let isInherited = true
