@@ -17,6 +17,8 @@ final class SVGImageElement: ShapeGeometry {
   let y: SVGLength?
   let width: SVGLength?
   let height: SVGLength?
+  /// How the image is placed in the rectangle of `x`, `y`, `width` and `height`.
+  let preserveAspectRatio: PreserveAspectRatio
 
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
@@ -26,6 +28,8 @@ final class SVGImageElement: ShapeGeometry {
     y = SVGLength(attributes["y"]) ?? .pixel(0)
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
+    preserveAspectRatio =
+      PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""]) ?? PreserveAspectRatio()
   }
 
   func path(in context: any GeometryContext) -> CGPath? {
