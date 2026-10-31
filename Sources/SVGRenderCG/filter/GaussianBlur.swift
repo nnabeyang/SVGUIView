@@ -8,8 +8,7 @@ extension GaussianBlurPrimitive {
 
   /// The size of the three boxes that approximate a Gaussian blur of a standard deviation in pixels, as the
   /// specification computes it. Where the size is even, the specification uses two boxes of the size that are offset by
-  /// half a pixel and a centered box one pixel larger, while the boxes of the same standard deviation in both
-  /// directions are made odd and centered, since vImage, and `MPSImageBox` on the GPU, only have centered odd boxes.
+  /// half a pixel and a centered box one pixel larger.
   package static func clampedToKernelSize(value: CGFloat, scale: CGFloat) -> UInt32 {
     let calculatedRadius = max(floor(value * 3.0 * sqrt(2 * .pi) / 4 + 0.5), 2 * scale)
     return min(Self.maxKernelSize, UInt32(calculatedRadius))
@@ -121,7 +120,7 @@ extension GaussianBlurPrimitive {
   /// black outside the edges, and returns `false` if the blur failed.
   private func applyIso(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, deviation: CGFloat, scale: CGFloat) -> Bool {
     guard Self.isGaussian(deviation) else {
-      let kernelSize = Self.clampedToKernelSize(value: deviation, scale: scale) | 1
+      let kernelSize = Self.clampedToKernelSize(value: deviation, scale: scale)
       return applyAccelerated(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelSize: kernelSize)
     }
     let kernel = Self.gaussianKernel(deviation: deviation)
@@ -158,52 +157,34 @@ extension GaussianBlurPrimitive {
       [0, 0, 0, 0], vImage_Flags(kvImageBackgroundColorFill)) == kvImageNoError
   }
 
-  /// Blurs `srcBuffer` into `destBuffer` with three boxes, with transparent black outside the edges, and returns
-  /// `false` if the temporary buffer couldn't be allocated.
+  /// Blurs `srcBuffer` into `destBuffer` with the three boxes of a size, with transparent black outside the edges, and
+  /// returns `false` if the temporary buffer couldn't be allocated. The passes use both buffers.
+  ///
+  /// Two boxes of an even size that are offset by half a pixel to each side make a centered tent of twice the size
+  /// less one, so an even size blurs with the tent and the centered box one pixel larger, which vImage, and MPS on the
+  /// GPU, have.
   private func applyAccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSize: UInt32) -> Bool {
-    let tmpBufferSize = vImageBoxConvolve_ARGB8888(
-      &srcBuffer,
-      &destBuffer,
-      nil,
-      0,
-      0,
-      kernelSize,
-      kernelSize,
-      [0, 0, 0, 0],
-      vImage_Flags(kvImageBackgroundColorFill | kvImageGetTempBufferSize))
+    let passes: [(isTent: Bool, size: UInt32)] =
+      kernelSize.isMultiple(of: 2)
+      ? [(true, 2 * kernelSize - 1), (false, kernelSize + 1)] : Array(repeating: (false, kernelSize), count: 3)
+    func convolve(_ pass: (isTent: Bool, size: UInt32), tmpBuffer: UnsafeMutableRawPointer?, flags: vImage_Flags) -> vImage_Error {
+      pass.isTent
+        ? vImageTentConvolve_ARGB8888(
+          &srcBuffer, &destBuffer, tmpBuffer, 0, 0, pass.size, pass.size, [0, 0, 0, 0], flags)
+        : vImageBoxConvolve_ARGB8888(
+          &srcBuffer, &destBuffer, tmpBuffer, 0, 0, pass.size, pass.size, [0, 0, 0, 0], flags)
+    }
+    let tmpBufferSizes = passes.map {
+      convolve($0, tmpBuffer: nil, flags: vImage_Flags(kvImageBackgroundColorFill | kvImageGetTempBufferSize))
+    }
     // A negative size is an error code.
-    guard tmpBufferSize >= 0, let tmpBuffer = malloc(tmpBufferSize) else { return false }
-    vImageBoxConvolve_ARGB8888(
-      &srcBuffer,
-      &destBuffer,
-      tmpBuffer,
-      0,
-      0,
-      kernelSize,
-      kernelSize,
-      [0, 0, 0, 0],
-      vImage_Flags(kvImageBackgroundColorFill))
-    vImageBoxConvolve_ARGB8888(
-      &destBuffer,
-      &srcBuffer,
-      tmpBuffer,
-      0,
-      0,
-      kernelSize,
-      kernelSize,
-      [0, 0, 0, 0],
-      vImage_Flags(kvImageBackgroundColorFill))
-    vImageBoxConvolve_ARGB8888(
-      &srcBuffer,
-      &destBuffer,
-      tmpBuffer,
-      0,
-      0,
-      kernelSize,
-      kernelSize,
-      [0, 0, 0, 0],
-      vImage_Flags(kvImageBackgroundColorFill))
-    free(tmpBuffer)
+    guard tmpBufferSizes.allSatisfy({ $0 >= 0 }), let tmpBuffer = malloc(tmpBufferSizes.max() ?? 0) else { return false }
+    defer { free(tmpBuffer) }
+    for (index, pass) in passes.enumerated() {
+      // Each pass blurs the result of the one before.
+      if index > 0 { swap(&srcBuffer, &destBuffer) }
+      _ = convolve(pass, tmpBuffer: tmpBuffer, flags: vImage_Flags(kvImageBackgroundColorFill))
+    }
     return true
   }
 

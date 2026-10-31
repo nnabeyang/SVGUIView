@@ -60,6 +60,20 @@ private func boxes(from start: Int, to end: Int, size: Int) -> [Double] {
   return row
 }
 
+/// The share of a row of pixels from `start` to `end` that is in each pixel after the three boxes of an even size of
+/// the specification: a box of the size that ends in the middle of the pixel, one that starts there, and a centered
+/// box one pixel larger, with nothing outside the row.
+private func evenBoxes(from start: Int, to end: Int, size: Int) -> [Double] {
+  var row = (0..<100).map { (start..<end).contains($0) ? 1.0 : 0 }
+  for (first, last, count) in [(-size / 2, size / 2 - 1, size), (-size / 2 + 1, size / 2, size), (-size / 2, size / 2, size + 1)] {
+    row = (0..<100).map { x in
+      (first...last).reduce(0) { sum, offset in sum + ((0..<100).contains(x + offset) ? row[x + offset] : 0) }
+        / Double(count)
+    }
+  }
+  return row
+}
+
 /// The standard deviation of the slope of the rising edge in the first 60 of a row of alpha values, which is the
 /// standard deviation of the blur of the edge.
 private func spread(of alpha: [Int]) -> Double {
@@ -112,6 +126,17 @@ struct GaussianBlurTests {
     }
     #expect(maximum <= 3)
     #expect(alpha[50][0] < 200)
+  }
+
+  @Test("a large standard deviation whose boxes have an even size blurs with boxes offset by half a pixel")
+  func evenBoxBlurs() async throws {
+    let alpha = try await blurredAlpha(stdDeviation: "8.5")
+    let expected = evenBoxes(from: 30, to: 70, size: 16)
+    var maximum = 0
+    for y in 0..<100 {
+      maximum = max(maximum, difference(alpha[y], expected.map { $0 * expected[y] }))
+    }
+    #expect(maximum <= 2)
   }
 
   @Test("a standard deviation of 0 doesn't blur in its direction")

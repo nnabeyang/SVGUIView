@@ -465,7 +465,7 @@ private struct FilterRun {
     case .hetero(let deviation, _), .iso(let deviation):
       let pixels = deviation * scale
       guard GaussianBlurPrimitive.isGaussian(pixels) else {
-        let size = Int(GaussianBlurPrimitive.clampedToKernelSize(value: pixels, scale: scale) | 1)
+        let size = Int(GaussianBlurPrimitive.clampedToKernelSize(value: pixels, scale: scale))
         return boxes(selected, size: size)
       }
       let kernel = GaussianBlurPrimitive.gaussianKernel(deviation: pixels)
@@ -490,15 +490,24 @@ private struct FilterRun {
     return FilterImage(texture: output, space: image.space)
   }
 
-  /// Three box blurs of a size in both directions, with transparent black outside the edges, as vImage blurs them.
+  /// The three box blurs of a size in both directions, with transparent black outside the edges, as vImage blurs
+  /// them: an even size blurs with a tent of twice the size less one and a box one pixel larger.
   private func boxes(_ image: FilterImage, size: Int) -> FilterImage? {
     guard let first = makeTexture(), let second = makeTexture() else { return nil }
-    let box = MPSImageBox(device: renderer.device, kernelWidth: size, kernelHeight: size)
-    box.edgeMode = .zero
-    box.encode(commandBuffer: buffer, sourceTexture: image.texture, destinationTexture: first)
-    box.encode(commandBuffer: buffer, sourceTexture: first, destinationTexture: second)
-    box.encode(commandBuffer: buffer, sourceTexture: second, destinationTexture: first)
-    return FilterImage(texture: first, space: image.space)
+    let filters: [MPSUnaryImageKernel] =
+      size.isMultiple(of: 2)
+      ? [
+        MPSImageTent(device: renderer.device, kernelWidth: 2 * size - 1, kernelHeight: 2 * size - 1),
+        MPSImageBox(device: renderer.device, kernelWidth: size + 1, kernelHeight: size + 1),
+      ] : Array(repeating: MPSImageBox(device: renderer.device, kernelWidth: size, kernelHeight: size), count: 3)
+    var source = image.texture
+    for (index, filter) in filters.enumerated() {
+      filter.edgeMode = .zero
+      let destination = index.isMultiple(of: 2) ? first : second
+      filter.encode(commandBuffer: buffer, sourceTexture: source, destinationTexture: destination)
+      source = destination
+    }
+    return FilterImage(texture: source, space: image.space)
   }
 
   // MARK: Kernels
