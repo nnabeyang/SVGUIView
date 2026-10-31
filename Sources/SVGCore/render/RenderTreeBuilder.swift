@@ -87,6 +87,7 @@ package struct RenderTreeBuilder {
     // Building hardly ever suspends otherwise, so let other tasks run on this thread of the cooperative thread
     // pool between elements.
     await Task.yield()
+    guard element.base.passesConditions else { return nil }
     switch element {
     case let svg as SVGSVGElement:
       if svg.display == CSSDisplay.none { return nil }
@@ -329,7 +330,7 @@ package struct RenderTreeBuilder {
       ? await transform(of: group, context: context, frame: frame, guard: references) : .identity
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
-    for child in group.children {
+    for child in renderedChildren(of: group) {
       guard let child = child as? (any SVGDrawableElement) else { continue }
       if let node = await node(of: child, context: context, mode: childMode, guard: references, instance: instance) {
         children.append(node)
@@ -340,6 +341,25 @@ package struct RenderTreeBuilder {
         id: renderID(of: group, instance: instance), transform: transform, opacity: group.opacity, clip: clip,
         mask: mask, children: children, blendMode: blendMode(of: group, mode: mode),
         isolates: group.style.isolation == .isolate))
+  }
+
+  /// The children of a group that it renders. A `<switch>` renders only its first child whose conditional processing
+  /// attributes evaluate to true, even if `display` hides that child. Its children that can't be rendered directly,
+  /// such as `<defs>` and `<clipPath>`, aren't chosen, and neither are the elements that SVGUIView doesn't render,
+  /// such as `<foreignObject>`, so that a later child is the fallback for them.
+  private func renderedChildren(of group: SVGGroupElement) -> [any SVGElement] {
+    guard group.base.name == .switch else { return group.children }
+    let chosen = group.children.first { child in
+      switch child {
+      case is SVGDefsElement, is SVGMaskElement, is SVGPatternElement, is SVGSymbolElement, is SVGFilterElement:
+        false
+      case let child as any SVGDrawableElement:
+        child.base.passesConditions
+      default:
+        false
+      }
+    }
+    return chosen.map { [$0] } ?? []
   }
 
   private func viewportNode(
@@ -580,8 +600,8 @@ package struct RenderTreeBuilder {
         strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)
       return CGRectUnion(frame, strokePath.boundingBoxOfPath)
     case let group as SVGGroupElement:
-      return await frame(of: group.children, context: context, includesStroke: includesStroke, guard: references)
-        ?? .zero
+      return await frame(
+        of: renderedChildren(of: group), context: context, includesStroke: includesStroke, guard: references) ?? .zero
     case let svg as SVGSVGElement:
       // The bounds of the children, each with its transform, in the coordinates that the viewport is placed in.
       let (translation, layout) = viewport(
@@ -612,7 +632,7 @@ package struct RenderTreeBuilder {
   ) async -> CGRect? {
     var rect: CGRect?
     for child in children {
-      guard let child = child as? (any SVGDrawableElement) else { continue }
+      guard let child = child as? (any SVGDrawableElement), child.base.passesConditions else { continue }
       if case .none = child.display ?? .inline {
         continue
       }

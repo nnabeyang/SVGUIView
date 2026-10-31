@@ -23,6 +23,7 @@ enum SVGElementName: String, Equatable {
   case use
   case defs
   case symbol
+  case `switch`
   case clipPath
   case mask
   case marker
@@ -88,23 +89,27 @@ package final class SVGParser: NSObject {
 
   private static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "parser")
 
-  package static func parse(data: Data) -> SVGBaseContext {
+  /// Parses a document.
+  ///
+  /// - Parameter languages: The languages of the user, in the order of preference, which `systemLanguage` matches.
+  package static func parse(data: Data, languages: [String] = Locale.preferredLanguages) -> SVGBaseContext {
     let parser = SVGParser()
-    return parser.parse(data: data)
+    return parser.parse(data: data, languages: languages)
   }
 
-  private func parse(parser: XMLParser) -> SVGBaseContext {
+  private func parse(parser: XMLParser, languages: [String]) -> SVGBaseContext {
     parser.delegate = self
     parser.parse()
     return SVGBaseContext(
-      document: DocumentTree(root: root), stylesheet: Stylesheet(rules: rules, keyframes: keyframes))
+      document: DocumentTree(root: root, languages: languages),
+      stylesheet: Stylesheet(rules: rules, keyframes: keyframes))
   }
 
-  private func parse(data: Data) -> SVGBaseContext {
+  private func parse(data: Data, languages: [String]) -> SVGBaseContext {
     let parser = XMLParser(data: data)
     parser.shouldProcessNamespaces = true
     parser.shouldReportNamespacePrefixes = true
-    return parse(parser: parser)
+    return parse(parser: parser, languages: languages)
   }
 }
 

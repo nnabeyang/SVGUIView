@@ -76,13 +76,15 @@ final class SVGBaseElement: Sendable {
   let cascaded: CascadedValues
   /// The computed values of the element's properties.
   let style: ComputedStyle
+  /// Whether the conditional processing attributes of the element evaluate to true, which renders it.
+  let passesConditions: Bool
 
   /// The character data of the element itself, without its children's.
   var text: String { texts.joined() }
 
   init(
     elementID: ElementID, name: SVGElementName, texts: [String], attributes: [String: String],
-    cascaded: CascadedValues, style: ComputedStyle
+    cascaded: CascadedValues, style: ComputedStyle, passesConditions: Bool
   ) {
     self.elementID = elementID
     self.name = name
@@ -90,6 +92,7 @@ final class SVGBaseElement: Sendable {
     self.attributes = attributes
     self.cascaded = cascaded
     self.style = style
+    self.passesConditions = passesConditions
     id = attributes["id"]?.trimmingCharacters(in: .whitespaces)
     className = attributes["class"]?.trimmingCharacters(in: .whitespaces)
   }
@@ -105,7 +108,8 @@ final class SVGBaseElement: Sendable {
       elementID: elementID, name: name, texts: texts, attributes: attributes, cascaded: cascaded,
       style: ComputedStyle(
         cascaded: cascaded, parent: parent, root: root, animations: animations,
-        smil: animations?.smilEffects[elementID] ?? [], element: elementID))
+        smil: animations?.smilEffects[elementID] ?? [], element: elementID),
+      passesConditions: passesConditions)
   }
 }
 
@@ -191,11 +195,12 @@ extension ElementCursor {
   /// either.
   ///
   /// - Parameters:
+  ///   - languages: The languages of the user, in the order of preference, which `systemLanguage` matches.
   ///   - parent: The computed values of the parent element, or `nil` for the root element.
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
   ///   - animations: The animations of the document at its time, or `nil` for no animations.
   func makeElement(
-    with css: Stylesheet, parent: ComputedStyle? = nil, root: ComputedStyle? = nil,
+    with css: Stylesheet, languages: [String], parent: ComputedStyle? = nil, root: ComputedStyle? = nil,
     animations: DocumentAnimations? = nil
   ) -> (any SVGElement)? {
     let name = element.name
@@ -213,7 +218,8 @@ extension ElementCursor {
       // A `<tspan>` is rendered only in text, and text renders only its spans: `<tspan>` and `<a>` children.
       let childName = element.children[index].name
       if isText ? (childName == .tspan || childName == .a) : childName != .tspan,
-        let child = child(at: index).makeElement(with: css, parent: style, root: root ?? style, animations: animations)
+        let child = child(at: index).makeElement(
+          with: css, languages: languages, parent: style, root: root ?? style, animations: animations)
       {
         contents.append(child)
         if isText {
@@ -224,12 +230,12 @@ extension ElementCursor {
     }
     let base = SVGBaseElement(
       elementID: element.id, name: name, texts: texts, attributes: element.attributes, cascaded: cascaded,
-      style: style)
+      style: style, passesConditions: ConditionalProcessing.passes(attributes: element.attributes, languages: languages))
     let rendered: any SVGElement =
       switch name {
       case .svg:
         SVGSVGElement(base: base, contents: contents)
-      case .g:
+      case .g, .switch:
         SVGGroupElement(base: base, contents: contents)
       case .a:
         // An `<a>` is a span in text, and a group elsewhere.

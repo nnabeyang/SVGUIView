@@ -23,7 +23,7 @@ struct DocumentTests {
         [
           documentElement(1, "g", [:], [documentElement(2, "rect"), documentElement(3, "circle")]),
           documentElement(4, "g", [:], [documentElement(5, "path")]),
-        ]))
+        ]), languages: [])
     let replacement = documentElement(3, "circle", ["r": "5"])
     let changed = document.replacingElement(at: [0, 1], with: replacement)
 

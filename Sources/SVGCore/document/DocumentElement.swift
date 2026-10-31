@@ -75,8 +75,10 @@ package struct DocumentTree: Sendable {
   let root: DocumentElement?
   /// The positions of the elements, as lists of child positions from the root. Changes to attributes keep them.
   private let paths: [ElementID: [Int]]
+  /// The languages of the user, in the order of preference, which `systemLanguage` matches.
+  let languages: [String]
 
-  init(root: DocumentElement?) {
+  init(root: DocumentElement?, languages: [String]) {
     var paths = [ElementID: [Int]]()
     func visit(_ element: DocumentElement, path: [Int]) {
       paths[element.id] = path
@@ -87,12 +89,13 @@ package struct DocumentTree: Sendable {
     if let root {
       visit(root, path: [])
     }
-    self.init(root: root, paths: paths)
+    self.init(root: root, paths: paths, languages: languages)
   }
 
-  private init(root: DocumentElement?, paths: [ElementID: [Int]]) {
+  private init(root: DocumentElement?, paths: [ElementID: [Int]], languages: [String]) {
     self.root = root
     self.paths = paths
+    self.languages = languages
   }
 
   /// The document with the given attributes of its elements replaced.
@@ -122,12 +125,12 @@ package struct DocumentTree: Sendable {
           id: id, name: element.name, localName: element.localName, attributes: attributes, texts: element.texts,
           children: element.children))
     }
-    return DocumentTree(root: root, paths: paths)
+    return DocumentTree(root: root, paths: paths, languages: languages)
   }
 
   /// The document with the element at `path`, a list of child positions from the root, replaced.
   func replacingElement(at path: [Int], with replacement: DocumentElement) -> DocumentTree {
-    DocumentTree(root: root?.replacingDescendant(at: path[...], with: replacement))
+    DocumentTree(root: root?.replacingDescendant(at: path[...], with: replacement), languages: languages)
   }
 
   // MARK: - Finding elements

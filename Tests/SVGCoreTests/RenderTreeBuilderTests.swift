@@ -8,11 +8,15 @@ import Testing
 struct RenderTreeBuilderTests {
   /// The render tree of a document rendered into a rectangle of 20 by 20 at a scale of 1, at the time in seconds.
   ///
-  /// - Parameter attributes: More attributes of the root `<svg>` element.
-  private func renderTree(_ content: String, at time: Double = 0, attributes: String = "") async throws -> RenderTree {
+  /// - Parameters:
+  ///   - attributes: More attributes of the root `<svg>` element.
+  ///   - languages: The languages of the user, which `systemLanguage` matches.
+  private func renderTree(
+    _ content: String, at time: Double = 0, attributes: String = "", languages: [String] = ["en-US"]
+  ) async throws -> RenderTree {
     let svg =
       #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" "# + attributes + ">" + content + "</svg>"
-    let base = SVGParser.parse(data: Data(svg.utf8)).at(time: time)
+    let base = SVGParser.parse(data: Data(svg.utf8), languages: languages).at(time: time)
     let builder = RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 20, height: 20), scale: 1)
     return try #require(
       await builder.build(
@@ -353,6 +357,100 @@ struct RenderTreeBuilderTests {
   /// The color that a shape is filled with, or `nil` if it isn't filled with a color.
   private func fillColor(of shape: ShapeNode) -> CGColor? {
     if case .vector(.color(let color), _, _) = shape.content { color } else { nil }
+  }
+
+  /// The red components of the fills of the shapes of a document, which tell the red shapes from the blue ones.
+  private func reds(_ content: String, languages: [String] = ["en-US"]) async throws -> [CGFloat?] {
+    let tree = try await renderTree(content, languages: languages)
+    return shapes(of: try children(of: tree)).map { fillColor(of: $0)?.components?.first }
+  }
+
+  @Test("a switch element renders its first child whose conditions are true, with its own attributes")
+  func switchChild() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <switch fill="blue" transform="scale(2)">
+        <rect width="1" height="1" fill="red" requiredExtensions="http://example.org/bogus"/>
+        <rect width="2" height="2" requiredFeatures="http://www.w3.org/TR/SVG11/feature#Shape"/>
+        <rect width="3" height="3" fill="red"/>
+      </switch>
+      """##)
+    guard case .group(let group) = try children(of: tree).first else {
+      Issue.record("The switch element isn't a group")
+      return
+    }
+    #expect(group.transform == CGAffineTransform(scaleX: 2, y: 2))
+    let shapes = shapes(of: group.children)
+    #expect(shapes.count == 1)
+    #expect(shapes.first.flatMap(fillColor(of:))?.components == [0, 0, 1, 1])
+  }
+
+  @Test("a switch element renders nothing if display hides the child that it chooses")
+  func switchHiddenChild() async throws {
+    #expect(try await reds(#"<switch><rect width="1" height="1" display="none"/><rect width="1" height="1"/></switch>"#).isEmpty)
+  }
+
+  /// Children of a switch element that it doesn't choose.
+  private static let skippedSwitchChildren = [
+    #"<defs><rect width="1" height="1"/></defs>"#, #"<foreignObject width="1" height="1"/>"#,
+  ]
+
+  @Test(
+    "a switch element skips the children that aren't rendered directly, and the ones that SVGUIView doesn't render",
+    arguments: skippedSwitchChildren)
+  func switchSkippedChildren(child: String) async throws {
+    #expect(try await reds("<switch>" + child + #"<rect width="1" height="1" fill="blue"/></switch>"#) == [0])
+  }
+
+  /// The values of `systemLanguage` and whether they match a user of `en-US`.
+  private static let systemLanguages: [(String, Bool)] = [
+    ("en", true), ("en-US", true), ("EN-us", true), ("en-GB", true), ("ru, en", true), ("ru-RU", false), ("is", false),
+    ("", false), (" , ", false),
+  ]
+
+  @Test("systemLanguage is true if one of its languages matches the language of the user", arguments: systemLanguages)
+  func systemLanguage(value: String, matches: Bool) async throws {
+    let content = #"<rect width="1" height="1" systemLanguage="\#(value)"/>"#
+    #expect(try await reds(content).count == (matches ? 1 : 0))
+  }
+
+  @Test("requiredExtensions is false with any value, and requiredFeatures is ignored")
+  func requiredAttributes() async throws {
+    #expect(try await reds(#"<rect width="1" height="1" requiredExtensions=""/>"#).isEmpty)
+    #expect(try await reds(#"<rect width="1" height="1" requiredFeatures=""/>"#).count == 1)
+    #expect(try await reds(#"<rect width="1" height="1" requiredFeatures="INVALID"/>"#).count == 1)
+  }
+
+  @Test("the conditions of an element stop rendering it and its descendants, but not references to them")
+  func conditionsAndReferences() async throws {
+    let content = ##"""
+      <g systemLanguage="ru"><rect id="inGroup" width="1" height="1" fill="red"/></g>
+      <rect id="hidden" width="1" height="1" fill="red" systemLanguage="ru"/>
+      <defs systemLanguage="ru">
+        <linearGradient id="lg"><stop stop-color="blue"/><stop offset="1" stop-color="white"/></linearGradient>
+      </defs>
+      <clipPath id="clip" systemLanguage="ru"><rect width="1" height="1"/></clipPath>
+      <use href="#inGroup" fill="blue"/>
+      <use href="#hidden"/>
+      <rect width="2" height="2" fill="url(#lg)" clip-path="url(#clip)"/>
+      """##
+    let tree = try await renderTree(content)
+    let nodes = try children(of: tree)
+    #expect(try use(nodes[nodes.count - 3]).instance?.content != nil)
+    #expect(try use(nodes[nodes.count - 2]).instance?.content == nil)
+    let rect = try shape(nodes.last)
+    #expect(rect.clip != nil)
+    guard case .vector(fill: .gradient(.some), _, _)? = rect.content else {
+      Issue.record("The rect isn't filled with the gradient")
+      return
+    }
+  }
+
+  @Test("a tspan whose conditions are false renders no characters")
+  func conditionalTSpan() async throws {
+    let tree = try await renderTree(
+      #"<text y="10" font-size="4"><tspan fill="blue">T</tspan><tspan fill="red" systemLanguage="ru">T</tspan></text>"#)
+    #expect(shapes(of: try children(of: tree)).compactMap { fillColor(of: $0)?.components?.first } == [0])
   }
 
   @Test("a tspan is a shape of its own in the group of its text, with its fill and the fill that it inherits")

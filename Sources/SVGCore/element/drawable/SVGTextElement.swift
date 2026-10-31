@@ -364,7 +364,9 @@ private struct TextCollector {
         characters.append(TextCharacter(character: character, owner: owner))
         afterSpace = character == " "
       }
-      if index < children.count, let tspan = children[index] as? SVGTSpanElement, tspan.display != CSSDisplay.none {
+      if index < children.count, let tspan = children[index] as? SVGTSpanElement, tspan.base.passesConditions,
+        tspan.display != CSSDisplay.none
+      {
         collect(base: tspan.base, children: tspan.children, owner: tspan)
       }
     }
