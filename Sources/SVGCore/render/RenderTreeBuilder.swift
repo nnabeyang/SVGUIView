@@ -166,7 +166,10 @@ package struct RenderTreeBuilder {
       let lineWidth = element.style.strokeWidth.value(context: context, mode: .other)
       if case .url = element.style.mask, element.type == .line, frame.width == lineWidth || frame.height == lineWidth {
         mask = .clipToZero
-      } else if let effect = await maskEffect(element.mask, frame: frame, context: context, guard: references) {
+      } else if let effect = await maskEffect(
+        element.mask, frame: frame, context: context, guard: references,
+        instance: instance + [element.base.elementID])
+      {
         mask = .mask(effect)
       }
     }
@@ -252,7 +255,8 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let frame = spans.reduce(CGRect.null) { $0.union($1.frame) }
     let clip = await clipEffect(text.clipPath, frame: frame, context: context, guard: references)
-    let mask = await maskEffect(text.mask, frame: frame, context: context, guard: references)
+    let mask = await maskEffect(
+      text.mask, frame: frame, context: context, guard: references, instance: instance + [text.base.elementID])
     let transform =
       mode != .filter(isRoot: true)
       ? await transform(of: text, context: context, frame: frame, guard: references) : .identity
@@ -302,7 +306,9 @@ package struct RenderTreeBuilder {
     if group.clipPath != nil || group.mask != nil {
       let groupFrame = await self.frame(of: group, context: context, path: nil, guard: references)
       clip = await clipEffect(group.clipPath, frame: groupFrame, context: context, guard: references)
-      mask = await maskEffect(group.mask, frame: groupFrame, context: context, guard: references)
+      mask = await maskEffect(
+        group.mask, frame: groupFrame, context: context, guard: references,
+        instance: instance + [group.base.elementID])
       frame = groupFrame
     }
     let transform =
@@ -351,7 +357,8 @@ package struct RenderTreeBuilder {
     }
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
     let clip = await clipEffect(svg.clipPath, frame: inner.viewBox, context: inner, guard: references)
-    let mask = await maskEffect(svg.mask, frame: inner.viewBox, context: inner, guard: references)
+    let mask = await maskEffect(
+      svg.mask, frame: inner.viewBox, context: inner, guard: references, instance: instance + [svg.base.elementID])
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
     for child in svg.children {
@@ -412,7 +419,8 @@ package struct RenderTreeBuilder {
     if use.clipPath != nil || use.mask != nil {
       let useFrame = await self.frame(of: use, context: context, path: nil, guard: references)
       clip = await clipEffect(use.clipPath, frame: useFrame, context: context, guard: references)
-      mask = await maskEffect(use.mask, frame: useFrame, context: context, guard: references)
+      mask = await maskEffect(
+        use.mask, frame: useFrame, context: context, guard: references, instance: instance + [use.base.elementID])
       frame = useFrame
     }
     let transform =

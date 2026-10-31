@@ -42,11 +42,12 @@ package final class MaskEffect: Sendable {
   package let region: CGRect
   package let contentUnits: SVGUnitType
   package let colorInterpolation: SVGColorInterpolation
-  package let contents: [MaskContent]
+  /// The nodes of the children of the `<mask>` element, in the units of its content.
+  package let contents: [RenderNode]
 
   init(
     frame: CGRect, region: CGRect, contentUnits: SVGUnitType, colorInterpolation: SVGColorInterpolation,
-    contents: [MaskContent]
+    contents: [RenderNode]
   ) {
     self.frame = frame
     self.region = region
@@ -54,18 +55,6 @@ package final class MaskEffect: Sendable {
     self.colorInterpolation = colorInterpolation
     self.contents = contents
   }
-}
-
-/// A child of a `<mask>` element, which paints its fill and no stroke.
-package struct MaskContent: Sendable {
-  package let path: RenderPath
-  package let transform: CGAffineTransform
-  /// The clip path of the child, built for the bounds of the masked element.
-  package let clip: ClipPathEffect?
-  /// The mask of the child, built for the bounds of the masked element.
-  package let mask: MaskEffect?
-  /// The fill, without a stroke.
-  package let fill: ShapeContent
 }
 
 /// A pattern, built for the element that it fills.

@@ -65,8 +65,10 @@ extension RenderTreeBuilder {
   /// - Parameters:
   ///   - frame: The bounds of the masked element.
   ///   - context: The context of the masked element, styled by it.
+  ///   - instance: The identity of the content of the mask, for the masked element.
   func maskEffect(
-    _ mask: SVGMask?, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard
+    _ mask: SVGMask?, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard,
+    instance: [ElementID]
   ) async -> MaskEffect? {
     var references = references
     guard case .url(let id) = mask,
@@ -74,33 +76,25 @@ extension RenderTreeBuilder {
       let element = base.masks[id],
       CGContext.bitmapLayout(size: frame.size, scale: scale) != nil
     else { return nil }
-    // The content is filled in a context of its own, with the viewBox and nothing else of the context. References
-    // in it continue the ones of the masked element, so that a cycle of patterns stops there.
-    let fillContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
-    var contents = [MaskContent]()
+    let contentUnits = element.maskContentUnits ?? .userSpaceOnUse
+    // The content is drawn in a context of its own, with the viewBox of the context, or the bounding box of the
+    // masked element as 100% in its units. References in it continue the ones of the masked element, so that a
+    // cycle of masks or patterns stops there.
+    let contentContext = ResolveContext(
+      base: base, viewPort: viewPort, scale: scale,
+      viewBox: contentUnits == .objectBoundingBox ? CGRect(x: 0, y: 0, width: 1, height: 1) : context.viewBox)
+    var contents = [RenderNode]()
     for child in element.children {
       guard !Task.isCancelled else { break }
-      guard let content = child as? (any SVGDrawableElement),
-        !(content is SVGGroupElement || content is SVGLineElement),
-        content.visibility != .hidden,
-        content.display != CSSDisplay.none,
-        let path = await path(of: content, context: context.styled(by: content), guard: references)
+      guard let child = child as? (any SVGDrawableElement),
+        child.visibility != .hidden,
+        child.display != CSSDisplay.none
       else { continue }
-      let fill: ShapeContent
-      if let image = content as? SVGImageElement {
-        fill = .image(image.decodedImage(), stroke: nil)
-      } else {
-        fill = .vector(
-          fill: await fillPaint(
-            of: content, path: path, context: fillContext, mode: .root, guard: references, instance: []),
-          stroke: nil, fillRule: content.pathFillRule)
+      if let node = await node(
+        of: child, context: contentContext, mode: .normal, guard: references, instance: instance)
+      {
+        contents.append(node)
       }
-      contents.append(
-        MaskContent(
-          path: RenderPath(path),
-          transform: await transform(of: content, context: context.styled(by: content), frame: nil, guard: references),
-          clip: await clipEffect(content.clipPath, frame: frame, context: context, guard: references),
-          mask: await maskEffect(content.mask, frame: frame, context: context, guard: references), fill: fill))
     }
     let region = CGRect(
       x: (element.x ?? .percent(-10)).value(context: context, mode: .width),
@@ -108,7 +102,7 @@ extension RenderTreeBuilder {
       width: (element.width ?? .percent(120)).value(context: context, mode: .width),
       height: (element.height ?? .percent(120)).value(context: context, mode: .height))
     return MaskEffect(
-      frame: frame, region: region, contentUnits: element.maskContentUnits ?? .userSpaceOnUse,
+      frame: frame, region: region, contentUnits: contentUnits,
       colorInterpolation: element.colorInterpolation ?? .sRGB, contents: contents)
   }
 
