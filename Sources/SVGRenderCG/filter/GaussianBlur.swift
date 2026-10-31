@@ -117,15 +117,15 @@ extension GaussianBlurPrimitive {
     return weights.map { Float($0 / sum) }
   }
 
-  /// Blurs `srcBuffer` into `destBuffer` by the same standard deviation in pixels in both directions, extending the
-  /// pixels on the edges, and returns `false` if the temporary buffer couldn't be allocated.
+  /// Blurs `srcBuffer` into `destBuffer` by the same standard deviation in pixels in both directions, with transparent
+  /// black outside the edges, and returns `false` if the blur failed.
   private func applyIso(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, deviation: CGFloat, scale: CGFloat) -> Bool {
     guard Self.isGaussian(deviation) else {
       let kernelSize = Self.clampedToKernelSize(value: deviation, scale: scale) | 1
       return applyAccelerated(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelSize: kernelSize)
     }
     let kernel = Self.gaussianKernel(deviation: deviation)
-    return applyGaussian(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelX: kernel, kernelY: kernel, extendsEdges: true)
+    return applyGaussian(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelX: kernel, kernelY: kernel)
   }
 
   /// Blurs `srcBuffer` into `destBuffer` by different standard deviations in pixels, with transparent black outside
@@ -138,7 +138,7 @@ extension GaussianBlurPrimitive {
     if kernelSizeX == 0 || kernelSizeY == 0 {
       let kernelX: [Float] = kernelSizeX == 0 ? Self.gaussianKernel(deviation: deviationX) : [1]
       let kernelY: [Float] = kernelSizeY == 0 ? Self.gaussianKernel(deviation: deviationY) : [1]
-      guard applyGaussian(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelX: kernelX, kernelY: kernelY, extendsEdges: false)
+      guard applyGaussian(srcBuffer: &srcBuffer, destBuffer: &destBuffer, kernelX: kernelX, kernelY: kernelY)
       else { return false }
       guard kernelSizeX != 0 || kernelSizeY != 0 else { return true }
       // The boxes blur the other direction of the result.
@@ -148,18 +148,18 @@ extension GaussianBlurPrimitive {
     return true
   }
 
-  /// Blurs `srcBuffer` into `destBuffer` with the Gaussian kernels of the two directions in one pass, and returns
-  /// `false` if the blur failed.
+  /// Blurs `srcBuffer` into `destBuffer` with the Gaussian kernels of the two directions in one pass, with transparent
+  /// black outside the edges, and returns `false` if the blur failed.
   private func applyGaussian(
-    srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelX: [Float], kernelY: [Float], extendsEdges: Bool
+    srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelX: [Float], kernelY: [Float]
   ) -> Bool {
-    let flags = vImage_Flags(extendsEdges ? kvImageEdgeExtend : kvImageBackgroundColorFill)
-    return vImageSepConvolve_ARGB8888(
+    vImageSepConvolve_ARGB8888(
       &srcBuffer, &destBuffer, nil, 0, 0, kernelX, UInt32(kernelX.count), kernelY, UInt32(kernelY.count), 0,
-      [0, 0, 0, 0], flags) == kvImageNoError
+      [0, 0, 0, 0], vImage_Flags(kvImageBackgroundColorFill)) == kvImageNoError
   }
 
-  /// Blurs `srcBuffer` into `destBuffer`, and returns `false` if the temporary buffer couldn't be allocated.
+  /// Blurs `srcBuffer` into `destBuffer` with three boxes, with transparent black outside the edges, and returns
+  /// `false` if the temporary buffer couldn't be allocated.
   private func applyAccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSize: UInt32) -> Bool {
     let tmpBufferSize = vImageBoxConvolve_ARGB8888(
       &srcBuffer,
@@ -169,8 +169,8 @@ extension GaussianBlurPrimitive {
       0,
       kernelSize,
       kernelSize,
-      nil,
-      vImage_Flags(kvImageEdgeExtend | kvImageGetTempBufferSize))
+      [0, 0, 0, 0],
+      vImage_Flags(kvImageBackgroundColorFill | kvImageGetTempBufferSize))
     // A negative size is an error code.
     guard tmpBufferSize >= 0, let tmpBuffer = malloc(tmpBufferSize) else { return false }
     vImageBoxConvolve_ARGB8888(
@@ -181,8 +181,8 @@ extension GaussianBlurPrimitive {
       0,
       kernelSize,
       kernelSize,
-      nil,
-      vImage_Flags(kvImageEdgeExtend))
+      [0, 0, 0, 0],
+      vImage_Flags(kvImageBackgroundColorFill))
     vImageBoxConvolve_ARGB8888(
       &destBuffer,
       &srcBuffer,
@@ -191,8 +191,8 @@ extension GaussianBlurPrimitive {
       0,
       kernelSize,
       kernelSize,
-      nil,
-      vImage_Flags(kvImageEdgeExtend))
+      [0, 0, 0, 0],
+      vImage_Flags(kvImageBackgroundColorFill))
     vImageBoxConvolve_ARGB8888(
       &srcBuffer,
       &destBuffer,
@@ -201,8 +201,8 @@ extension GaussianBlurPrimitive {
       0,
       kernelSize,
       kernelSize,
-      nil,
-      vImage_Flags(kvImageEdgeExtend))
+      [0, 0, 0, 0],
+      vImage_Flags(kvImageBackgroundColorFill))
     free(tmpBuffer)
     return true
   }

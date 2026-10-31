@@ -46,12 +46,15 @@ private func gaussian(from start: Int, to end: Int, deviation: Double) -> [Doubl
   }
 }
 
-/// The share of a row of pixels from `start` to `end` that is in each pixel after three centered boxes of a size.
+/// The share of a row of pixels from `start` to `end` that is in each pixel after three centered boxes of a size,
+/// with nothing outside the row.
 private func boxes(from start: Int, to end: Int, size: Int) -> [Double] {
   var row = (0..<100).map { (start..<end).contains($0) ? 1.0 : 0 }
   for _ in 0..<3 {
     row = (0..<100).map { x in
-      (-(size / 2)...(size / 2)).reduce(0) { sum, offset in sum + row[min(max(x + offset, 0), 99)] } / Double(size)
+      (-(size / 2)...(size / 2)).reduce(0) { sum, offset in
+        sum + ((0..<100).contains(x + offset) ? row[x + offset] : 0)
+      } / Double(size)
     }
   }
   return row
@@ -94,6 +97,21 @@ struct GaussianBlurTests {
       maximum = max(maximum, difference(alpha[y], expected.map { $0 * expected[y] }))
     }
     #expect(maximum <= 3)
+  }
+
+  @Test(
+    "a blur of the whole filter region has transparent black outside the region, with a Gaussian kernel or boxes",
+    arguments: [(2.0, nil), (10.0, 19)] as [(Double, Int?)])
+  func edges(deviation: Double, boxSize: Int?) async throws {
+    let alpha = try await blurredAlpha(rect: #"width="100" height="100""#, stdDeviation: "\(deviation)")
+    let expected =
+      boxSize.map { boxes(from: 0, to: 100, size: $0) } ?? gaussian(from: 0, to: 100, deviation: deviation)
+    var maximum = 0
+    for y in 0..<100 {
+      maximum = max(maximum, difference(alpha[y], expected.map { $0 * expected[y] }))
+    }
+    #expect(maximum <= 3)
+    #expect(alpha[50][0] < 200)
   }
 
   @Test("a standard deviation of 0 doesn't blur in its direction")
