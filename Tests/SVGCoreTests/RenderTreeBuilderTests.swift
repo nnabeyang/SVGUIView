@@ -67,6 +67,18 @@ struct RenderTreeBuilderTests {
     #expect(content.overflowClip == CGRect(x: 0, y: 0, width: 10, height: 10))
   }
 
+  @Test("x and y move a nested svg element, and not the root element, which the view places")
+  func rootPosition() async throws {
+    let tree = try await renderTree(
+      #"<svg x="5" y="5" width="10" height="10"><rect width="10" height="10"/></svg>"#, attributes: #"x="3" y="3""#)
+    guard case .viewport(let root) = tree.root, case .viewport(let nested)? = try children(of: tree).first else {
+      Issue.record("The root and its child aren't viewports")
+      return
+    }
+    #expect(root.translation == .identity)
+    #expect(nested.translation == CGAffineTransform(translationX: 5, y: 5))
+  }
+
   /// Attributes of an image of 2 by 1 in a rectangle of 10 by 10 at 5, 5, where the image is drawn, and the rectangle
   /// that clips it.
   private static let imagePlacements: [(String, CGRect, CGRect?)] = [

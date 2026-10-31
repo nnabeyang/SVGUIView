@@ -348,12 +348,13 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: svg)
     let id = renderID(of: svg, instance: instance)
+    let isRoot = svg.base.elementID == base.root?.base.elementID
     // The root element is placed by the view, and its transform isn't supported yet. The viewport of a symbol has
     // no transform of its own, as SVG 1.1 has, and as WebKit draws it.
     let transform =
-      mode != .filter(isRoot: true) && svg.base.elementID != base.root?.base.elementID && svg.base.name != .symbol
+      mode != .filter(isRoot: true) && !isRoot && svg.base.name != .symbol
       ? await transform(of: svg, context: context, frame: nil, guard: references) : .identity
-    let (translation, layout) = viewport(of: svg, context: context)
+    let (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
     guard let layout else {
       return .viewport(
         ViewportNode(id: id, transform: transform, translation: translation, opacity: svg.opacity, content: nil))
@@ -361,7 +362,6 @@ package struct RenderTreeBuilder {
     let inner = layout.context
     var overflowClip: CGRect?
     // The view shows the viewport of the root element, which clips it whatever its overflow is.
-    let isRoot = svg.base.elementID == base.root?.base.elementID
     switch isRoot ? .hidden : svg.overflow {
     case .visible, .auto:
       break
@@ -402,13 +402,18 @@ package struct RenderTreeBuilder {
   }
 
   /// The translation of a viewport by `x` and `y`, and its content, or `nil` if it has no area, in a context styled by
-  /// the `svg` element.
+  /// the `svg` element. The view places the viewport of the root element, so its `x` and `y` don't apply.
   private func viewport(
-    of svg: SVGSVGElement, context: ResolveContext
+    of svg: SVGSVGElement, context: ResolveContext, isRoot: Bool
   ) -> (translation: CGAffineTransform, layout: ViewportLayout?) {
-    let x = (svg.x ?? .pixel(0)).value(context: context, mode: .width)
-    let y = (svg.y ?? .pixel(0)).value(context: context, mode: .height)
-    let translation = CGAffineTransform(translationX: x, y: y)
+    let translation: CGAffineTransform =
+      if isRoot {
+        .identity
+      } else {
+        CGAffineTransform(
+          translationX: (svg.x ?? .pixel(0)).value(context: context, mode: .width),
+          y: (svg.y ?? .pixel(0)).value(context: context, mode: .height))
+      }
     let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
     let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
     guard height > 0, width > 0 else { return (translation, nil) }
@@ -579,7 +584,8 @@ package struct RenderTreeBuilder {
         ?? .zero
     case let svg as SVGSVGElement:
       // The bounds of the children, each with its transform, in the coordinates that the viewport is placed in.
-      let (translation, layout) = viewport(of: svg, context: context)
+      let (translation, layout) = viewport(
+        of: svg, context: context, isRoot: svg.base.elementID == base.root?.base.elementID)
       guard let layout,
         let frame = await frame(
           of: svg.children, context: layout.context, includesStroke: includesStroke, guard: references)
