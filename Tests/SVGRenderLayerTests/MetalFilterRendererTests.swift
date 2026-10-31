@@ -120,6 +120,8 @@ struct MetalFilterRendererTests {
     filter(#"<feGaussianBlur stdDeviation="1"/>"#),
     filter(#"<feGaussianBlur stdDeviation="2"/>"#, space: "sRGB"),
     filter(#"<feGaussianBlur stdDeviation="5"/>"#),
+    // Boxes of an even size at the scales 1 and 3.
+    filter(#"<feGaussianBlur stdDeviation="8.5"/>"#),
     filter(#"<feGaussianBlur stdDeviation="1 2"/>"#),
     filter(#"<feGaussianBlur stdDeviation="2 0"/>"#),
     filter(#"<feGaussianBlur stdDeviation="0"/>"#),
