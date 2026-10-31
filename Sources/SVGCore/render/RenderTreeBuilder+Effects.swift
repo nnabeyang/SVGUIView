@@ -59,6 +59,60 @@ extension RenderTreeBuilder {
 
   // MARK: - Masks
 
+  /// The mask of an element, or `nil` if it has none or its mask closes a cycle of masks.
+  func mask(of element: some SVGElement) -> SVGMask? {
+    guard case .url = element.style.mask, !cyclicMasks.contains(element.base.elementID) else { return nil }
+    return element.style.mask
+  }
+
+  /// The elements in masks whose masks close cycles of masks.
+  ///
+  /// The masks are taken in the order of the document, and an element in a mask whose mask leads back to the mask,
+  /// through the masks of the elements in the masks that it leads to, closes a cycle. The element is drawn without
+  /// its mask wherever it's drawn, so that its cycle is removed as a whole, as resvg removes it. The masks of the
+  /// elements in a later mask of the cycle still apply.
+  static func findCyclicMasks(in base: SVGBaseContext) -> Set<ElementID> {
+    var masks = [SVGMaskElement]()
+    func collectMasks(in element: any SVGElement) {
+      if let mask = element as? SVGMaskElement, let id = mask.id,
+        base.masks[id]?.base.elementID == mask.base.elementID
+      {
+        masks.append(mask)
+      }
+      element.children.forEach(collectMasks)
+    }
+    if let root = base.root { collectMasks(in: root) }
+    var cyclic = Set<ElementID>()
+    // The elements in a mask with masks that are still drawn, and the IDs of their masks.
+    func maskedElements(in element: any SVGElement) -> [(element: any SVGElement, id: String)] {
+      element.children.flatMap { child -> [(element: any SVGElement, id: String)] in
+        var elements = maskedElements(in: child)
+        if case .url(let id) = child.style.mask, !cyclic.contains(child.base.elementID) {
+          elements.insert((child, id), at: 0)
+        }
+        return elements
+      }
+    }
+    // Whether the mask of an ID leads to the mask of another one.
+    func leads(from id: String, to target: String) -> Bool {
+      var visited = Set<String>()
+      var pending = [id]
+      while let id = pending.popLast() {
+        guard id != target else { return true }
+        guard visited.insert(id).inserted, let mask = base.masks[id] else { continue }
+        pending += maskedElements(in: mask).map(\.id)
+      }
+      return false
+    }
+    for mask in masks {
+      guard let id = mask.id else { continue }
+      for (element, target) in maskedElements(in: mask) where leads(from: target, to: id) {
+        cyclic.insert(element.base.elementID)
+      }
+    }
+    return cyclic
+  }
+
   /// The mask of an element, or `nil` if it masks nothing: for no mask, a cycle of masks, or bounds that have no
   /// pixel.
   ///
