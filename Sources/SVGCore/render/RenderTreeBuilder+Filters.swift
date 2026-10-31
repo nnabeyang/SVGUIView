@@ -45,7 +45,7 @@ extension RenderTreeBuilder {
           frame: frame, effectRect: effectRect(of: filter, frame: frame, context: context),
           colorInterpolation: filter.colorInterpolation ?? .sRGB,
           colorInterpolationFilters: filter.colorInterpolationFilters ?? .linearRGB, opacity: element.opacity,
-          primitives: primitives, source: source)))
+          primitives: primitives, source: source, blendMode: element.style.mixBlendMode.cgBlendMode)))
   }
 
   /// The filter region.

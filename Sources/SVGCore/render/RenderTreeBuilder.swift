@@ -217,7 +217,7 @@ package struct RenderTreeBuilder {
       return .shape(
         ShapeNode(
           id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: element.opacity,
-          content: content, antialiases: antialiases))
+          content: content, antialiases: antialiases, blendMode: blendMode(of: element, mode: mode)))
     }
     // The shape and the markers are drawn in the paint order, with the effects of the shape.
     var shapeCount = 0
@@ -241,7 +241,13 @@ package struct RenderTreeBuilder {
     let groupMask: MaskEffect? = if case .mask(let effect) = mask { effect } else { nil }
     return .group(
       GroupNode(
-        id: id, transform: transform, opacity: element.opacity, clip: clip, mask: groupMask, children: children))
+        id: id, transform: transform, opacity: element.opacity, clip: clip, mask: groupMask, children: children,
+        blendMode: blendMode(of: element, mode: mode)))
+  }
+
+  /// How an element blends with what's behind it, which the filter of an element drawn as its source does instead.
+  private func blendMode(of element: some SVGElement, mode: DrawMode) -> CGBlendMode {
+    mode == .filter(isRoot: true) ? .normal : element.style.mixBlendMode.cgBlendMode
   }
 
   /// The identity of a part of the shape of an element that's painted as shapes of its own: the first part has the
@@ -298,7 +304,7 @@ package struct RenderTreeBuilder {
     return .group(
       GroupNode(
         id: renderID(of: text, instance: instance), transform: transform, opacity: text.opacity, clip: clip,
-        mask: mask, children: children))
+        mask: mask, children: children, blendMode: blendMode(of: text, mode: mode)))
   }
 
   private func groupNode(
@@ -332,7 +338,8 @@ package struct RenderTreeBuilder {
     return .group(
       GroupNode(
         id: renderID(of: group, instance: instance), transform: transform, opacity: group.opacity, clip: clip,
-        mask: mask, children: children))
+        mask: mask, children: children, blendMode: blendMode(of: group, mode: mode),
+        isolates: group.style.isolation == .isolate))
   }
 
   private func viewportNode(
@@ -380,7 +387,7 @@ package struct RenderTreeBuilder {
         id: id, transform: transform, translation: translation, opacity: svg.opacity,
         content: ViewportContent(
           viewBoxTransform: layout.viewBoxTransform, overflowClip: overflowClip, clip: clip, mask: mask,
-          children: children)))
+          children: children), blendMode: blendMode(of: svg, mode: mode), isolates: svg.style.isolation == .isolate))
   }
 
   /// The content of a viewport, which has an area.
@@ -443,7 +450,8 @@ package struct RenderTreeBuilder {
     }
     return .use(
       UseNode(
-        id: renderID(of: use, instance: instance), transform: transform, clip: clip, mask: mask, instance: content))
+        id: renderID(of: use, instance: instance), transform: transform, clip: clip, mask: mask, instance: content,
+        blendMode: blendMode(of: use, mode: mode), isolates: use.style.isolation == .isolate))
   }
 
   // MARK: - `<use>`

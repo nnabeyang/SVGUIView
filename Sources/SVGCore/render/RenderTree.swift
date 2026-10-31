@@ -72,6 +72,8 @@ package struct ShapeNode: Sendable {
   package let content: ShapeContent?
   /// Whether the edges of what the shape paints are antialiased, which `shape-rendering` turns off for shapes.
   package var antialiases = true
+  /// How the shape blends with what's behind it in its isolation group.
+  package var blendMode = CGBlendMode.normal
 }
 
 package struct Geometry: Sendable {
@@ -122,6 +124,10 @@ package struct GroupNode: Sendable {
   package let clip: ClipPathEffect?
   package let mask: MaskEffect?
   package let children: [RenderNode]
+  /// How the group blends with what's behind it in its isolation group.
+  package var blendMode = CGBlendMode.normal
+  /// Whether the group is an isolation group, which what it contains blends in, though nothing else makes it one.
+  package var isolates = false
 }
 
 package struct ViewportNode: Sendable {
@@ -134,6 +140,10 @@ package struct ViewportNode: Sendable {
   package let opacity: CGFloat
   /// The content, or `nil` if the viewport has no area.
   package let content: ViewportContent?
+  /// How the viewport blends with what's behind it in its isolation group.
+  package var blendMode = CGBlendMode.normal
+  /// Whether the viewport is an isolation group, though nothing else makes it one.
+  package var isolates = false
 }
 
 package struct ViewportContent: Sendable {
@@ -151,6 +161,10 @@ package struct UseNode: Sendable {
   package let mask: MaskEffect?
   /// The referenced content, or `nil` if there is none or showing it would make a cycle.
   package let instance: UseInstance?
+  /// How the element blends with what's behind it in its isolation group.
+  package var blendMode = CGBlendMode.normal
+  /// Whether the element is an isolation group, though nothing else makes it one.
+  package var isolates = false
 }
 
 package struct UseInstance: Sendable {
