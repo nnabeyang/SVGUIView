@@ -181,6 +181,7 @@ struct StyleTests {
     #expect(overflow(.svg) == .hidden)
     #expect(overflow(.marker) == .hidden)
     #expect(overflow(.pattern) == .hidden)
+    #expect(overflow(.symbol) == .hidden)
     #expect(overflow(.g) == .visible)
     #expect(overflow(.marker, attributes: ["overflow": "visible"]) == .visible)
     // A marker that inherits its overflow from the root element without one shows its overflow.

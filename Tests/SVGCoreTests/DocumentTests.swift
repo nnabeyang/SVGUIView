@@ -46,14 +46,14 @@ struct DocumentTests {
     let svg = #"""
       <svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://example.com/x" viewBox="0 0 20 20">
         <style>rect { fill: red; }</style>
-        <symbol id="s"><rect width="10" height="10"/></symbol>
+        <unknown id="s"><rect width="10" height="10"/></unknown>
         <x:foo/>
         <rect width="20" height="20"/>
       </svg>
       """#
     let context = SVGParser.parse(data: Data(svg.utf8))
     let root = try #require(context.document.root)
-    #expect(root.children.map(\.localName) == ["style", "symbol", "foo", "rect"])
+    #expect(root.children.map(\.localName) == ["style", "unknown", "foo", "rect"])
     #expect(root.children.map(\.name) == [.style, .unknown, .unknown, .rect])
     #expect(root.children[1].children.map(\.localName) == ["rect"])
     #expect(root.children[0].text == "rect { fill: red; }")
