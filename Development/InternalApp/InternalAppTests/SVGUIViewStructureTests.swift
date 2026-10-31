@@ -34,6 +34,21 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "switch"))
+    func `switch`(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "symbol"))
+    func symbol(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "systemLanguage"))
+    func systemLanguage(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(in: "basic", "structure", "transform"))
     func transform(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
