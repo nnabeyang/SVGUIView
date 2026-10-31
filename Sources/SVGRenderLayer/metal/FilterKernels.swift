@@ -163,19 +163,15 @@ let filterKernelSource = #"""
     writePixel(destination, result, position);
   }
 
-  /// The weights of a Gaussian kernel along one axis, and whether the pixels on the edges are extended, rather than
-  /// transparent black outside them.
+  /// The weights of a Gaussian kernel along one axis.
   struct GaussianPass {
     int radius;
     int2 step;
-    uint extendsEdges;
   };
 
-  static float4 readEdge(texture2d<float, access::read> texture, int2 position, bool extendsEdges) {
+  /// A pixel of a texture, or transparent black outside it.
+  static float4 readEdge(texture2d<float, access::read> texture, int2 position) {
     int2 size = int2(texture.get_width(), texture.get_height());
-    if (extendsEdges) {
-      return texture.read(uint2(clamp(position, int2(0), size - 1)));
-    }
     if (any(position < 0) || any(position >= size)) {
       return float4(0);
     }
@@ -193,7 +189,7 @@ let filterKernelSource = #"""
     }
     float4 sum = float4(0);
     for (int i = -pass.radius; i <= pass.radius; i++) {
-      sum += weights[i + pass.radius] * readEdge(source, int2(position) + i * pass.step, pass.extendsEdges != 0);
+      sum += weights[i + pass.radius] * readEdge(source, int2(position) + i * pass.step);
     }
     destination.write(rounds != 0 ? rint(clamp(sum, 0.0, 1.0) * 255) / 255 : sum, position);
   }

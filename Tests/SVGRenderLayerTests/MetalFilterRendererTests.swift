@@ -125,6 +125,9 @@ struct MetalFilterRendererTests {
     filter(#"<feGaussianBlur stdDeviation="0"/>"#),
     filter(#"<feGaussianBlur stdDeviation="-1"/>"#),
     filter(#"<feGaussianBlur in="SourceAlpha" stdDeviation="1"/>"#),
+    // Blurs of a flood of the whole region, with transparent black outside its edges.
+    filter(#"<feFlood flood-color="gold"/><feGaussianBlur stdDeviation="2"/>"#),
+    filter(#"<feFlood flood-color="gold"/><feGaussianBlur stdDeviation="8"/>"#),
     // A blur of part of the region, and the opacity of the element.
     filter(#"<feGaussianBlur stdDeviation="1" x="20" y="30" width="50" height="40"/>"#, opacity: "0.5"),
     // Offsets, also clipped by the region of the primitive before.

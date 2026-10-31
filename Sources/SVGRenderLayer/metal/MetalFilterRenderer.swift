@@ -197,7 +197,6 @@ private struct DrawArea {
 private struct GaussianPass {
   var radius: Int32
   var step: SIMD2<Int32>
-  var extendsEdges: UInt32
 }
 
 /// An image of a filter on the GPU, and the color space that its pixels are in.
@@ -462,7 +461,7 @@ private struct FilterRun {
       }
       return gaussian(
         selected, kernelX: GaussianBlurPrimitive.gaussianKernel(deviation: deviationX),
-        kernelY: GaussianBlurPrimitive.gaussianKernel(deviation: deviationY), extendsEdges: false)
+        kernelY: GaussianBlurPrimitive.gaussianKernel(deviation: deviationY))
     case .hetero(let deviation, _), .iso(let deviation):
       let pixels = deviation * scale
       guard GaussianBlurPrimitive.isGaussian(pixels) else {
@@ -470,14 +469,14 @@ private struct FilterRun {
         return boxes(selected, size: size)
       }
       let kernel = GaussianBlurPrimitive.gaussianKernel(deviation: pixels)
-      return gaussian(selected, kernelX: kernel, kernelY: kernel, extendsEdges: true)
+      return gaussian(selected, kernelX: kernel, kernelY: kernel)
     }
   }
 
-  private func gaussian(_ image: FilterImage, kernelX: [Float], kernelY: [Float], extendsEdges: Bool) -> FilterImage? {
+  private func gaussian(_ image: FilterImage, kernelX: [Float], kernelY: [Float]) -> FilterImage? {
     guard let floats = makeTexture(format: .rgba32Float), let output = makeTexture() else { return nil }
     func pass(_ kernel: [Float], from: MTLTexture, to: MTLTexture, step: SIMD2<Int32>, rounds: Bool) -> Bool {
-      var pass = GaussianPass(radius: Int32(kernel.count / 2), step: step, extendsEdges: extendsEdges ? 1 : 0)
+      var pass = GaussianPass(radius: Int32(kernel.count / 2), step: step)
       var rounds: UInt32 = rounds ? 1 : 0
       return dispatch(.gaussianPass, textures: [from, to]) { encoder in
         encoder.setBytes(kernel, length: kernel.count * MemoryLayout<Float>.stride, index: 0)
@@ -491,11 +490,11 @@ private struct FilterRun {
     return FilterImage(texture: output, space: image.space)
   }
 
-  /// Three box blurs of a size in both directions, extending the pixels on the edges, as vImage blurs them.
+  /// Three box blurs of a size in both directions, with transparent black outside the edges, as vImage blurs them.
   private func boxes(_ image: FilterImage, size: Int) -> FilterImage? {
     guard let first = makeTexture(), let second = makeTexture() else { return nil }
     let box = MPSImageBox(device: renderer.device, kernelWidth: size, kernelHeight: size)
-    box.edgeMode = .clamp
+    box.edgeMode = .zero
     box.encode(commandBuffer: buffer, sourceTexture: image.texture, destinationTexture: first)
     box.encode(commandBuffer: buffer, sourceTexture: first, destinationTexture: second)
     box.encode(commandBuffer: buffer, sourceTexture: second, destinationTexture: first)
