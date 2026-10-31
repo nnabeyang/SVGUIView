@@ -2,18 +2,19 @@ import CoreGraphics
 import Foundation
 
 /// A `<tspan>`: a span of the text of a `<text>` with styles and positions of its own, which `SVGTextElement` lays
-/// out. It's rendered only in text.
+/// out. It's rendered only in text. An `<a>` in text is a span too.
 final class SVGTSpanElement: SVGDrawableElement {
   static var type: SVGElementName {
     .tspan
   }
 
+  /// `tspan`, or `a` for an `<a>` in text.
   var type: SVGElementName {
-    .tspan
+    base.name
   }
 
   let base: SVGBaseElement
-  /// The `<tspan>` children.
+  /// The `<tspan>` and `<a>` children.
   let children: [any SVGElement]
   let positions: CharacterPositions
 

@@ -50,6 +50,16 @@ extension ElementCursor: Element {
     return ElementCursor(element: parent.element, ancestors: Array(ancestors.dropLast()))
   }
 
+  /// Whether the element is a span of text: a `<tspan>` or an `<a>` whose ancestors up to a `<text>` are spans.
+  var isInText: Bool {
+    var cursor = self
+    while cursor.element.name == .tspan || cursor.element.name == .a, let parent = cursor.parent {
+      if parent.element.name == .text { return true }
+      cursor = parent
+    }
+    return false
+  }
+
   var prevSibling: ElementCursor? {
     sibling(offset: -1)
   }

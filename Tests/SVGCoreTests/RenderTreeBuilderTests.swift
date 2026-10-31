@@ -310,6 +310,46 @@ struct RenderTreeBuilderTests {
     #expect(Set(shapes.map { $0.geometry?.frame.width ?? 0 }).count == 1)
   }
 
+  @Test("an a element outside text is a group with its transform, whose children take its fill")
+  func aGroup() async throws {
+    let tree = try await renderTree(
+      #"<a href="https://example.com" transform="translate(5)" fill="lime"><rect width="10" height="10"/></a>"#)
+    guard case .group(let group) = try children(of: tree).first else {
+      Issue.record("The a isn't a group")
+      return
+    }
+    #expect(group.transform == CGAffineTransform(translationX: 5, y: 0))
+    let shapes = shapes(of: group.children)
+    #expect(shapes.count == 1)
+    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[0, 1, 0, 1]])
+  }
+
+  @Test("an a element in text or in a tspan is a span of the text with its own fill")
+  func aSpans() async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4" fill="red">a<a fill="lime">b</a><tspan>c<a fill="blue">d</a></tspan></text>"#)
+    guard case .group(let text) = try children(of: tree).first else {
+      Issue.record("The text isn't a group")
+      return
+    }
+    #expect(
+      shapes(of: text.children).map { fillColor(of: $0)?.components ?? [] }
+        == [[1, 0, 0, 1], [0, 1, 0, 1], [1, 0, 0, 1], [0, 0, 1, 1]])
+  }
+
+  @Test("an animation of an a element changes what its children inherit")
+  func aAnimation() async throws {
+    let tree = try await renderTree(
+      #"<a fill="red"><set attributeName="fill" to="lime" dur="1s"/><rect width="10" height="10"/></a>"#, at: 0.5)
+    #expect(shapes(of: try children(of: tree)).map { fillColor(of: $0)?.components ?? [] } == [[0, 1, 0, 1]])
+  }
+
+  @Test("a style sheet selects a elements")
+  func aSelector() async throws {
+    let tree = try await renderTree(#"<style>a { fill: lime }</style><a><rect width="10" height="10"/></a>"#)
+    #expect(shapes(of: try children(of: tree)).map { fillColor(of: $0)?.components ?? [] } == [[0, 1, 0, 1]])
+  }
+
   /// Text with tspans, and texts that draw the same glyphs.
   private static let tspanTexts: [(String, String)] = [
     // White space collapses across the elements.
@@ -322,6 +362,8 @@ struct RenderTreeBuilderTests {
     // The positions of a tspan win over the positions of its text.
     (#"<text x="2 8" y="10">a<tspan x="20">b</tspan></text>"#, #"<text x="2" y="10">a</text><text x="20" y="10">b</text>"#),
     (#"<text x="2" y="10">a<tspan display="none">b</tspan>c</text>"#, #"<text x="2" y="10">ac</text>"#),
+    // An a element in text is a span, whose white space collapses with the text around it.
+    (##"<text x="2" y="10">a <a href="#x"> b </a> c</text>"##, #"<text x="2" y="10">a b c</text>"#),
     (
       #"<text x="2 8" y="10">a<tspan font-size="8">b</tspan></text>"#,
       #"<text x="2" y="10">a</text><text x="8" y="10" font-size="8">b</text>"#

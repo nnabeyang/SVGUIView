@@ -6,8 +6,9 @@ final class SVGGroupElement: SVGDrawableElement {
     .g
   }
 
+  /// `g`, or `a` for an `<a>` outside text, which is a group too.
   var type: SVGElementName {
-    .g
+    base.name
   }
 
   let base: SVGBaseElement

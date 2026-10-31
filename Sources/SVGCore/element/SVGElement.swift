@@ -204,14 +204,15 @@ extension ElementCursor {
     let style = ComputedStyle(
       cascaded: cascaded, parent: parent, root: root, animations: animations,
       smil: animations?.smilEffects[element.id] ?? [], element: element.id)
-    let isText = name == .text || name == .tspan
+    let isText = name == .text || isInText
     var contents = [any SVGElement]()
-    // The character data of text before each `<tspan>` child and after the last one. The other children of text
-    // aren't rendered, so the character data around them goes together.
+    // The character data of text before each span child and after the last one. The other children of text aren't
+    // rendered, so the character data around them goes together.
     var texts = [element.texts[0]]
     for index in element.children.indices {
-      // A `<tspan>` is rendered only in text, and text renders only its `<tspan>` children.
-      if isText == (element.children[index].name == .tspan),
+      // A `<tspan>` is rendered only in text, and text renders only its spans: `<tspan>` and `<a>` children.
+      let childName = element.children[index].name
+      if isText ? (childName == .tspan || childName == .a) : childName != .tspan,
         let child = child(at: index).makeElement(with: css, parent: style, root: root ?? style, animations: animations)
       {
         contents.append(child)
@@ -230,6 +231,9 @@ extension ElementCursor {
         SVGSVGElement(base: base, contents: contents)
       case .g:
         SVGGroupElement(base: base, contents: contents)
+      case .a:
+        // An `<a>` is a span in text, and a group elsewhere.
+        isInText ? SVGTSpanElement(base: base, contents: contents) : SVGGroupElement(base: base, contents: contents)
       case .clipPath:
         SVGClipPathElement(base: base, contents: contents)
       case .mask:
