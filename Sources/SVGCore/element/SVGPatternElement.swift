@@ -67,7 +67,7 @@ final class SVGPatternElement: SVGDrawableElement {
     preserveAspectRatio = lhs.preserveAspectRatio ?? rhs.preserveAspectRatio
     viewBox = lhs.viewBox ?? rhs.viewBox
     parentId = rhs.parentId
-    children = lhs.children.isEmpty ? rhs.children : lhs.children
+    children = lhs.knownChildren.isEmpty ? rhs.children : lhs.children
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {

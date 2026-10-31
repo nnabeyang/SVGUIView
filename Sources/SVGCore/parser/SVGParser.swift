@@ -50,11 +50,11 @@ enum SVGElementName: String, Equatable {
     }
   }
 
-  /// Whether the element is rendered or used by rendered elements. `<style>`, unknown elements and the elements of
-  /// SMIL animation aren't.
+  /// Whether the element is made into the tree of elements to render: rendered, used by rendered elements, or
+  /// holding elements that can be referenced. `<style>` and the elements of SMIL animation aren't.
   var isRendered: Bool {
     switch self {
-    case .style, .unknown, .animate, .set, .animateTransform, .animateMotion, .mpath: false
+    case .style, .animate, .set, .animateTransform, .animateMotion, .mpath: false
     default: true
     }
   }
@@ -165,7 +165,10 @@ extension SVGParser: XMLParserDelegate {
     let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
     guard let open = stack.popLast() else { return }
     precondition(name == open.name)
-    if open.name == .style {
+    // A style sheet whose type isn't CSS isn't read.
+    if open.name == .style,
+      ["", "text/css"].contains(open.attributes["type", default: ""].trimmingCharacters(in: .whitespaces).lowercased())
+    {
       let parseInput = ParserInput(input: open.texts.joined())
       let input = Parser(input: parseInput)
       var parser = CSSParser(input: input)

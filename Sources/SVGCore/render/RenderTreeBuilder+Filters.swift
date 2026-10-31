@@ -20,12 +20,12 @@ extension RenderTreeBuilder {
     instance: [ElementID]
   ) async -> Filtering {
     guard case .url(let id) = element.filter ?? .none, let filter = base.filters[id] else { return .none }
-    guard !filter.children.isEmpty else { return .filtered(nil) }
+    guard !filter.knownChildren.isEmpty else { return .filtered(nil) }
     let elementContext = context.styled(by: element)
     let path = await path(of: element, context: elementContext, guard: references)
     let frame = await frame(of: element, context: elementContext, path: path, guard: references)
     var primitives = [FilterStep]()
-    for (i, child) in filter.children.enumerated() {
+    for (i, child) in filter.knownChildren.enumerated() {
       guard let child = child as? (any SVGFilterPrimitiveElement) else { continue }
       primitives.append(
         FilterStep(

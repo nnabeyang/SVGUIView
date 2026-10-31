@@ -64,6 +64,22 @@ struct CascadeTests {
     #expect(base.animations.keyframes["spin"]?.keyframes.count == 1)
   }
 
+  /// The values of the `type` of a `<style>` element, and whether the style sheet in it applies.
+  private static let styleTypes: [(String?, Bool)] = [
+    (nil, true), ("", true), ("text/css", true), (" TEXT/CSS ", true), ("no-a-css", false), ("text/plain", false),
+  ]
+
+  @Test("a style element applies only if its type is CSS", arguments: styleTypes)
+  func styleType(type: String?, applies: Bool) throws {
+    let attribute = type.map { #" type="\#($0)""# } ?? ""
+    let svg =
+      #"<svg xmlns="http://www.w3.org/2000/svg"><style"# + attribute
+      + #">rect { fill: blue; }</style><rect id="r" fill="red"/></svg>"#
+    let base = SVGParser.parse(data: Data(svg.utf8))
+    let rect = try #require(base["r"])
+    #expect(fill(rect.base.cascaded) == (applies ? "blue" : "red"))
+  }
+
   @Test("of equal declarations, the later one comes later")
   func sortKeepsOrderOfEqualDeclarations() {
     let specificity = Specificity(idSelectors: 0, classLikeSelectors: 0, elementSelectors: 1)

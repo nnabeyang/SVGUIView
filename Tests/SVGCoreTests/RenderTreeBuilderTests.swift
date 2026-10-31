@@ -184,6 +184,46 @@ struct RenderTreeBuilderTests {
     #expect(depth == 3)
   }
 
+  @Test("an unknown element isn't rendered with its content, but a use element shows an element in it")
+  func unknownElementContent() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <random><rect id="r" width="10" height="10"/></random>
+      <html:div xmlns:html="http://www.w3.org/1999/xhtml"><rect id="s" width="5" height="5"/></html:div>
+      <use href="#r"/><use href="#s"/>
+      """##)
+    let nodes = try children(of: tree)
+    #expect(nodes.count == 2)
+    #expect(try shape(try #require(try use(nodes[0]).instance).content).geometry?.frame.width == 10)
+    #expect(try shape(try #require(try use(nodes[1]).instance).content).geometry?.frame.width == 5)
+  }
+
+  @Test("unknown elements don't count as the children of filters, gradients and patterns")
+  func unknownChildren() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <filter id="f"><feUnknown/></filter>
+      <linearGradient id="a"><stop stop-color="blue"/><stop offset="1" stop-color="white"/></linearGradient>
+      <linearGradient id="b" href="#a"><desc>A gradient with the stops of another</desc></linearGradient>
+      <rect width="1" height="1" filter="url(#f)"/>
+      <rect width="1" height="1" fill="url(#b)"/>
+      """##)
+    // A filter without primitives draws nothing, and a gradient without stops takes the ones that it references.
+    let drawn = shapes(of: try children(of: tree)).filter { $0.geometry != nil }
+    #expect(drawn.count == 1)
+    guard case .vector(fill: .gradient(.some), _, _)? = drawn.first?.content else {
+      Issue.record("The rect isn't filled with the gradient")
+      return
+    }
+  }
+
+  @Test("a switch element skips an unknown element with content")
+  func switchUnknownChild() async throws {
+    #expect(
+      try await reds(#"<switch><random><rect width="1" height="1"/></random><rect width="1" height="1" fill="blue"/></switch>"#)
+        == [0])
+  }
+
   @Test("each use element makes its own copy of the content, which keeps the identity of the element")
   func useInstances() async throws {
     let tree = try await renderTree(
