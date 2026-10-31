@@ -170,6 +170,9 @@ struct Pane: ViewModifier {
     GeometryReader { proxy in
       content
         .frame(width: proxy.size.width * size, height: proxy.size.height * size)
+        // The views are transparent, so the file is shown on white, as browsers show it, also in dark mode, where
+        // the background of the app is black, as the lines and the text of most files are.
+        .background(Color.white)
         .border(Color.black, width: 1)
         .overlay(alignment: .topLeading) {
           Text(title)
