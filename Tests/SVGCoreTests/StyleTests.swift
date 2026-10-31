@@ -168,6 +168,30 @@ struct StyleTests {
     #expect(cascaded[TransformBoxProperty.self] == nil)
   }
 
+  @Test("the user agent hides the overflow of the elements that establish viewports, except the root element")
+  func overflowDefaults() {
+    func overflow(_ name: SVGElementName, isRoot: Bool = false, attributes: [String: String] = [:]) -> SVGOverflow {
+      style(
+        CascadedValues.userAgentDeclarations(of: name, isRoot: isRoot)
+          + CascadedValues.presentationAttributes(of: name, attributes: attributes)
+      ).overflow
+    }
+    #expect(ComputedStyle.initial.overflow == .visible)
+    #expect(overflow(.svg, isRoot: true) == .visible)
+    #expect(overflow(.svg) == .hidden)
+    #expect(overflow(.marker) == .hidden)
+    #expect(overflow(.pattern) == .hidden)
+    #expect(overflow(.g) == .visible)
+    #expect(overflow(.marker, attributes: ["overflow": "visible"]) == .visible)
+    // A marker that inherits its overflow from the root element without one shows its overflow.
+    let root = style(CascadedValues.userAgentDeclarations(of: .svg, isRoot: true))
+    let marker = style(
+      CascadedValues.userAgentDeclarations(of: .marker, isRoot: false)
+        + CascadedValues.presentationAttributes(of: .marker, attributes: ["overflow": "inherit"]),
+      parent: root)
+    #expect(marker.overflow == .visible)
+  }
+
   @Test("transform-box of the box of CSS layout is the box of the SVG element")
   func transformBox() throws {
     let boxes: [(String, TransformBox)] = [

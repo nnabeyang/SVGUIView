@@ -52,6 +52,16 @@ struct CascadedValues: Sendable {
     if case .value(let value) = self[P.self] { value } else { nil }
   }
 
+  /// The declarations of the user agent's style sheet for an element, which every other declaration overrides.
+  ///
+  /// SVG 2 hides the overflow of the elements that establish viewports, except the root element.
+  static func userAgentDeclarations(of name: SVGElementName, isRoot: Bool) -> [PropertyDeclaration] {
+    switch name {
+    case .svg where !isRoot, .image, .marker, .pattern: [PropertyDeclaration(OverflowProperty.self, .value(.hidden))]
+    default: []
+    }
+  }
+
   /// The declarations of the presentation attributes of an element.
   static func presentationAttributes(
     of name: SVGElementName, attributes: [String: String]

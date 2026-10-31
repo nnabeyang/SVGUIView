@@ -860,11 +860,11 @@ enum DisplayProperty: StyleProperty {
 enum OverflowProperty: StyleProperty {
   static let id = PropertyID.overflow
   static let isInherited = false
-  static let initial: SVGOverflow? = nil
+  static let initial = SVGOverflow.visible
   static let computed = \ComputedStyle.overflow
 
-  static func parse(_ text: String, origin: DeclarationOrigin) -> SVGOverflow?? {
-    (keyword(text, origin: origin) as SVGOverflow?).map { .some($0) }
+  static func parse(_ text: String, origin: DeclarationOrigin) -> SVGOverflow? {
+    keyword(text, origin: origin)
   }
 }
 

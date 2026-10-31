@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-enum SVGOverflow: String, CaseIterable {
+enum SVGOverflow: String, CaseIterable, Sendable {
   case visible
   case hidden
   case scroll
@@ -30,7 +30,7 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
 
   let base: SVGBaseElement
   let preserveAspectRatio: PreserveAspectRatio?
-  let overflow: SVGOverflow?
+  let overflow: SVGOverflow
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?

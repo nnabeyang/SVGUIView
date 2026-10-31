@@ -202,7 +202,7 @@ struct ComputedStyle: Sendable, Equatable {
   var mask: SVGMask
   var filter: SVGFilter
   var display: CSSDisplay
-  var overflow: SVGOverflow?
+  var overflow: SVGOverflow
   var stopColor: ColorValue
   var stopOpacity: Double
   var floodColor: ColorValue
@@ -352,7 +352,7 @@ struct ComputedStyle: Sendable, Equatable {
     visibility: CSSVisibility, colorInterpolation: SVGColorInterpolation?,
     colorInterpolationFilters: SVGColorInterpolation?, opacity: Double, transform: TransformList,
     transformOrigin: TransformOrigin, transformBox: TransformBox,
-    clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow?,
+    clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow,
     stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
     y: SVGLength?, width: SVGLength?, height: SVGLength?, d: PathData, animationName: [AnimationName],
     animationDuration: [Double], animationTimingFunction: [EasingFunction], animationDelay: [Double],
