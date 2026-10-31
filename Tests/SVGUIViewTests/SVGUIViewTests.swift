@@ -22,6 +22,22 @@ struct SVGUIViewTests {
     return view
   }
 
+  /// A view of a large document, which is parsed off the main actor, so that the views of the tests that run at the
+  /// same time can show their renderings meanwhile. Parsing one on the main actor took more than a minute on a slow
+  /// CI machine. The documents have no text, which would need the fonts of text styles that the view installs.
+  private func makeLargeView(_ svg: String, timeoutDuration: Duration = patience) async -> SVGUIView {
+    let data = Data(svg.utf8)
+    let view = SVGUIView(
+      frame: CGRect(x: 0, y: 0, width: 20, height: 20), baseContext: await Self.parse(data), data: data)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: timeoutDuration)
+    return view
+  }
+
+  @concurrent
+  private static func parse(_ data: Data) async -> SVGBaseContext {
+    SVGParser.parse(data: data)
+  }
+
   private func makeImage() throws -> CGImage {
     let context = try #require(
       CGContext(
@@ -178,7 +194,7 @@ struct SVGUIViewTests {
   func takeSnapshotTimesOut() async {
     // Rendering checks for cancellation between elements, so many groups make it stop soon after the timeout.
     let groups = String(repeating: #"<g><rect width="20" height="20"/></g>"#, count: 10_000)
-    let view = makeView(
+    let view = await makeLargeView(
       #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">\#(groups)</svg>"#, timeoutDuration: .zero)
     await #expect(throws: SVGRenderingError.timedOut) {
       try await view.takeSnapshot()
@@ -211,7 +227,7 @@ struct SVGUIViewTests {
 
   @Test("a rendering that times out stops in the middle of a filter", .timeLimit(.minutes(1)))
   func timeoutStopsFilter() async throws {
-    let view = makeView(Self.blurs, timeoutDuration: .milliseconds(200))
+    let view = await makeLargeView(Self.blurs, timeoutDuration: .milliseconds(200))
     view.frame.size = CGSize(width: 600, height: 600)
     let counter = PrimitiveCounter()
     let error = await RenderingProgress.$onFilterPrimitive.withValue({ counter.paint() }) {
@@ -240,7 +256,7 @@ struct SVGUIViewTests {
     // Twice as many renderings as cores fill every thread of the pool, and the threads of dispatch queues of the
     // same quality of service. The views share the parsed document, which takes long to parse.
     let data = Data(svg.utf8)
-    let base = SVGParser.parse(data: data)
+    let base = await Self.parse(data)
     let views = (0..<ProcessInfo.processInfo.activeProcessorCount * 2).map { _ in
       let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), baseContext: base, data: data)
       view.configuration = SVGUIViewConfiguration(timeoutDuration: timeout)
@@ -270,7 +286,7 @@ struct SVGUIViewTests {
 
   @Test("cancelling the task that waits for a snapshot stops the rendering in the middle", .timeLimit(.minutes(1)))
   func cancellingSnapshotStopsRendering() async throws {
-    let view = makeView(Self.blurs)
+    let view = await makeLargeView(Self.blurs)
     view.frame.size = CGSize(width: 600, height: 600)
     let counter = PrimitiveCounter()
     // The rendering inherits the task-local value from the task that it renders for.
@@ -286,7 +302,7 @@ struct SVGUIViewTests {
 
   @Test("releasing a view stops its rendering in the middle", .timeLimit(.minutes(1)))
   func releasingViewStopsRendering() async throws {
-    var view: SVGUIView? = makeView(Self.blurs)
+    var view: SVGUIView? = await makeLargeView(Self.blurs)
     view?.frame.size = CGSize(width: 600, height: 600)
     let counter = PrimitiveCounter()
     try RenderingProgress.$onFilterPrimitive.withValue({ counter.paint() }) {
