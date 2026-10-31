@@ -206,6 +206,36 @@ struct StyleTests {
     #expect(ShapeRendering.allCases.filter(\.antialiases) == [.auto, .geometricPrecision])
   }
 
+  @Test("mix-blend-mode and isolation are keywords that aren't presentation attributes or inherited")
+  func blending() throws {
+    let modes: [(String, MixBlendMode?)] = [
+      ("multiply", .multiply), ("Color-Dodge", .colorDodge), ("soft-light", .softLight), ("luminosity", .luminosity),
+      ("xor", nil), ("plus-lighter", nil),
+    ]
+    for (text, mode) in modes {
+      #expect(declared(MixBlendModeProperty.self, css: text).flatMap { if case .value(let v) = $0 { v } else { nil } } == mode)
+    }
+    #expect(MixBlendMode.allCases.count == 16)
+    let cascaded = CascadedValues(
+      CascadedValues.presentationAttributes(
+        of: .rect, attributes: ["mix-blend-mode": "multiply", "isolation": "isolate"]))
+    #expect(cascaded[MixBlendModeProperty.self] == nil)
+    #expect(cascaded[IsolationProperty.self] == nil)
+    let declaredMode = try #require(declared(MixBlendModeProperty.self, css: "screen"))
+    let declaredIsolation = try #require(declared(IsolationProperty.self, css: "isolate"))
+    let parent = style([
+      PropertyDeclaration(MixBlendModeProperty.self, declaredMode),
+      PropertyDeclaration(IsolationProperty.self, declaredIsolation),
+    ])
+    #expect(parent.mixBlendMode == .screen)
+    #expect(parent.isolation == .isolate)
+    let child = style([], parent: parent)
+    #expect(child.mixBlendMode == .normal)
+    #expect(child.isolation == .auto)
+    #expect(ComputedStyle.initial.mixBlendMode == .normal)
+    #expect(ComputedStyle.initial.isolation == .auto)
+  }
+
   @Test("transform-box of the box of CSS layout is the box of the SVG element")
   func transformBox() throws {
     let boxes: [(String, TransformBox)] = [
