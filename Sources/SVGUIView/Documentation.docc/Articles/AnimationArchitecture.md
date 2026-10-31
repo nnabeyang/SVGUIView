@@ -1,33 +1,19 @@
 # Animation Architecture
 
-The planned design for playing CSS Animations, CSS Transitions and SMIL animations in SVG documents.
+How SVGUIView plays CSS Animations, CSS Transitions and SMIL animations in SVG documents.
 
 ## Overview
 
-> Important: This article describes work that is partly planned. Phase 0,
-> which splits the code into `SVGCore` and `SVGRenderCG` and into the stages of
-> the rendering pipeline, is done. Phase 1 is done too: CSS Animations are
-> parsed and applied to the computed values at a time, and
-> ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders that time. Phase 1.5
-> is done as well: the `<animate>`, `<set>`, `<animateTransform>` and
-> `<animateMotion>` elements apply to properties and attributes at the same
-> times. Phase 2 is done too: a view plays animations in a tree of layers that
-> `SVGRenderLayer` makes. Phase 2.5 is done as well:
-> ``SVGUIView/SVGUIView/document`` finds and changes the elements of a document,
-> controls its CSS animations, and begins and ends its SMIL animations, and its
-> changes start CSS Transitions. Phase 3 is done as well: a view that plays
-> animations runs the filters that change on the GPU.
-
-SVGUIView draws an SVG document as a still image. This article describes how it
-will be extended to play animations, and records the decisions made for the
-work. Each section ends with the decisions it makes, and <doc:#Open-questions>
-lists what is still undecided. <doc:#Implementation-phases> shows which phases
-are done.
+SVGUIView draws an SVG document as a still image, and plays the animations in
+it. This article describes how the package is built for both: the stages that a
+document goes through to be rendered, how animations change its values over
+time, and how a view shows the frames. Each section also notes the reasons for
+its design.
 
 ### Scope
 
 SVGUIView follows [SVG 2](https://www.w3.org/TR/SVG2/). For animation, that
-means all of the following are in scope:
+means it supports:
 
 - **CSS Animations:** `@keyframes` rules and the `animation-*` properties.
 - **CSS Transitions:** the `transition-*` properties.
@@ -40,64 +26,14 @@ the document: it can change attributes, styles and classes, and control
 animations. Changing the document through this API starts CSS Transitions, which
 otherwise would have nothing to trigger them.
 
-The public views stay ``SVGUIView/SVGUIView`` and `SVGView`. An app turns
+The public views are ``SVGUIView/SVGUIView`` and `SVGView`. An app turns
 playback on through the view's configuration, and a view that doesn't play
-animations behaves as it does today.
-
-## Current design and its limits
-
-Before phase 0, the design assumed that a document never changes after it's
-parsed. This section records its limits, and which of them phase 0 removed.
-
-- **Styles were fixed when the document was parsed.** The parser built a tree
-  of immutable element objects. The cascade picked one declaration per property
-  for each element and built a new element object with the result. Nothing
-  recorded which declarations an element's values came from, so a value couldn't
-  change over time. Phase 0 removed this limit: the document tree is persistent,
-  and each element keeps its cascaded values, from which its computed values are
-  resolved.
-- **Only a few properties took part in the cascade.** Style sheets and the
-  `style` attribute could set 13 properties: `fill`, `fill-opacity`, `stroke`,
-  `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`,
-  `transform`, `clip-path`, `x`, `y`, `width` and `height`. Every other property,
-  such as `opacity`, `display` or `filter`, could only be set as a presentation
-  attribute. Inherited values were resolved while drawing, through stacks in
-  `SVGContext`. Phase 0 removed this limit: the cascade covers every property
-  that SVGUIView supports, and inherited values are computed with the styles.
-- **Drawing state was shared through an unchecked type.** `SVGContext` was
-  marked `@unchecked Sendable` and held reference-type stacks. Code was correct
-  only because a rendering used its context from one task at a time. Phase 0
-  removed this limit: rendering builds an immutable render tree and paints it,
-  so no drawing state is shared, and `SVGContext` is gone.
-- **At-rules are dropped.** The CSS parser doesn't parse any at-rule, so
-  `@keyframes` rules are lost. Selector matching supports type, class and ID
-  selectors and combinators, but not pseudo-classes. Phase 1 removed this limit
-  for `@keyframes`: the rules are parsed and kept with the document. Other
-  at-rules are still dropped. Since 0.28.2, selector matching also supports
-  attribute selectors, the pseudo-classes of the structure of the tree, such as
-  `:root` and `:nth-child()`, and `:not()`, `:is()` and `:where()`. A selector
-  with a pseudo-class that depends on user actions or the language, such as
-  `:hover` or `:lang()`, matches no element.
-- **Every update redraws the whole document.** Drawing renders the entire
-  tree into one bitmap, which becomes the contents of the view's layer. Nothing
-  is cached between renderings, and a rendering that takes longer than
-  ``SVGUIViewConfiguration/timeoutDuration`` (10 seconds by default) is
-  cancelled. A frame of an animation has to be ready in about 16 milliseconds,
-  or 8 milliseconds at 120 Hz. Phase 2 removed this limit for playback: a view
-  that plays animations shows them in layers, and paints again only the layers
-  that change. Still images and snapshots are still rendered into one bitmap.
-- **Filters run on the CPU.** Filter primitives are implemented with Core
-  Graphics and vImage. Phase 3 runs the filters that change in a view that plays
-  animations on the GPU, while still images and snapshots still run them on the
-  CPU. See <doc:#Filters-on-Metal>.
-
-Animation needs the opposite assumptions: values that depend on time and on
-changes made through the API, and redrawing only what changed.
+animations draws a still image.
 
 ## Module structure
 
-The work stays in this package. Its code is split into new targets, so that
-computing what to draw is separate from the two ways of drawing it.
+The code is split into targets, so that computing what to draw is separate from
+the two ways of drawing it.
 
 ```
             _CSSParser   _SelectorParser
@@ -116,27 +52,25 @@ computing what to draw is separate from the two ways of drawing it.
 
 | Target | Role |
 |---|---|
-| `SVGCore` | Parsing, the document tree, the cascade and computed values, and the render tree. From phase 1, also the timeline, timing and interpolation. It uses Core Graphics and Core Text for geometry and text layout, but not UIKit. |
-| `SVGRenderCG` | Paints a render tree into a `CGContext`. It produces still images, and the contents of individual layers for `SVGRenderLayer`. Filters keep their Core Graphics and vImage implementations. |
-| `SVGRenderLayer` | Plans the layers that show a render tree and the bounds that their contents cover, paints their contents with `SVGRenderCG`, and updates a tree of `CALayer` objects with them. Since phase 3, it runs the filters of the layers that paint only an element with a filter on Metal. |
+| `SVGCore` | Parsing, the document tree, the cascade and computed values, the timeline, timing and interpolation, and the render tree. It uses Core Graphics and Core Text for geometry and text layout, but not UIKit. |
+| `SVGRenderCG` | Paints a render tree into a `CGContext`. It produces still images, and the contents of individual layers for `SVGRenderLayer`. Filters are implemented with Core Graphics and vImage. |
+| `SVGRenderLayer` | Plans the layers that show a render tree and the bounds that their contents cover, paints their contents with `SVGRenderCG`, and updates a tree of `CALayer` objects with them. It runs the filters of the layers that paint only an element with a filter on Metal. |
 | `SVGUIView` | The public `UIView`. It draws still images with `SVGRenderCG`, and plays animations with `SVGRenderLayer`. It owns the document and the clock of its animations. |
 | `SVGView` | The SwiftUI wrapper of ``SVGUIView/SVGUIView``. |
 
-Phase 0 added `SVGCore` and `SVGRenderCG`, and phase 2 added `SVGRenderLayer`.
+Design notes:
 
-Decisions:
-
-- The new targets aren't products, and `SVGUIView` doesn't re-export
-  `SVGCore`. The targets use each other's declarations with `package` access,
-  and the types that apps use, such as the document API, are declared in
-  `SVGUIView`, so `import SVGUIView` stays enough. A separate `SVGCore` product
-  can be added if someone needs it without UIKit.
+- The targets other than `SVGUIView` and `SVGView` aren't products, and
+  `SVGUIView` doesn't re-export `SVGCore`. The targets use each other's
+  declarations with `package` access, and the types that apps use, such as the
+  document API, are declared in `SVGUIView`, so `import SVGUIView` is enough. A
+  separate `SVGCore` product can be added if someone needs it without UIKit.
 - The fonts of text styles, such as `UICTFontTextStyleBody`, come from UIKit,
   so `SVGUIView` passes them to `SVGCore` before it parses a document.
 - The private interfaces in `_SPI`, `_ICU` and `_CShims` are used by the code
   that needs them, which is mostly text layout in `SVGCore`.
-- The existing branch that adds separate Metal-backed views isn't continued.
-  There is one view, and the renderer is chosen inside it.
+- There is one view for both still images and playback, and the renderer is
+  chosen inside it.
 
 ## Rendering pipeline
 
@@ -176,15 +110,20 @@ Style resolution produces three sets of values for each element:
 - **Computed values:** cascaded values with inheritance and initial values
   applied, and units resolved as far as they can be without layout.
 - **Animated values:** computed values with the animations that are active
-  at the current time applied on top. They come with phase 1. See
-  <doc:#Combining-animations>.
+  at the current time applied on top. See <doc:#Combining-animations>.
 
 Every property is described once in a property registry: its parser, its
-initial value and whether it's inherited. Adding a property to the cascade is
-adding an entry to the registry. From phase 1, the registry also says how a
-property is animated.
+initial value, whether it's inherited, and how it's animated. Adding a property
+to the cascade is adding an entry to the registry. The cascade covers every
+property that SVGUIView supports, and inheritance is resolved with the styles,
+not while drawing.
 
-Inheritance is resolved with the styles, not while drawing.
+Selector matching supports type, class and ID selectors, combinators, attribute
+selectors, the pseudo-classes of the structure of the tree, such as `:root` and
+`:nth-child()`, and `:not()`, `:is()` and `:where()`. A selector with a
+pseudo-class that depends on user actions or the language, such as `:hover` or
+`:lang()`, matches no element. Of the at-rules, only `@keyframes` rules are
+read, and they're kept with the document.
 
 ### Render tree
 
@@ -196,7 +135,8 @@ the referenced content, so that the copy can be styled and animated separately.
 
 Render tree nodes are immutable `Sendable` values. Each node keeps the identity
 of the element it came from, which lets a renderer match a new render tree with
-the previous one.
+the previous one. Since rendering builds an immutable render tree and paints
+it, no drawing state is shared between renderings.
 
 ### Painting
 
@@ -246,9 +186,9 @@ each kind of animation translates into it.
 
 ### Parsing
 
-- **CSS:** The CSS parser learns to parse `@keyframes` rules, the `animation`
-  and `transition` shorthands, and their longhand properties. Keyframes keep
-  their per-keyframe `animation-timing-function`.
+- **CSS:** The CSS parser parses `@keyframes` rules, the `animation` and
+  `transition` shorthands, and their longhand properties. Keyframes keep their
+  per-keyframe `animation-timing-function`.
 - **SMIL:** The parser builds animation elements for `<animate>`, `<set>`,
   `<animateTransform>` and `<animateMotion>` (with `<mpath>`). It reads the
   target (`href` or the parent element), `attributeName`, `from`, `to`, `by`,
@@ -341,11 +281,11 @@ protocol Animatable: Sendable {
 | `stroke-dasharray` | Element by element, after repeating both lists to a common length |
 | `visibility`, `display` and other keywords | Discrete, with the CSS rules for `visibility` |
 
-Decisions:
+Design notes:
 
 - One timing model is shared by all three kinds of animation.
-- The priority order above applies. SMIL animations are below CSS Animations,
-  as in WebKit, Chrome and Firefox, which were checked with test documents.
+- SMIL animations are below CSS Animations in the priority order, as in WebKit,
+  Chrome and Firefox, which were checked with test documents.
 
 ## Document API
 
@@ -372,7 +312,7 @@ The surface is:
 - **Changing elements:** reading, setting and removing attributes,
   changing the `style` attribute's declarations, and adding, removing and
   toggling classes. A change starts the CSS Transitions of the values that it
-  changes. Inserting and removing elements comes later.
+  changes. Elements can't be inserted or removed yet.
 - **Controlling animations:** the CSS animations of the document or of one
   element, each with ``SVGDocument/Animation/play()``,
   ``SVGDocument/Animation/pause()``, ``SVGDocument/Animation/currentTime``,
@@ -382,7 +322,7 @@ The surface is:
   their elements with ``SVGDocument/Element/beginElement()`` and
   ``SVGDocument/Element/endElement()``, which replaces event-based begin values.
 
-Decisions:
+Design notes:
 
 - The document and its elements are isolated to the main actor, like the view.
   Rendering reads snapshots, so it never waits for the main actor.
@@ -390,14 +330,12 @@ Decisions:
   document sees them at once. Several changes made in one turn of the run loop
   produce one restyle, and transitions start from the values that were current
   before the first change.
-- Creating new animations from Swift, like `Element.animate()` in Web
-  Animations, isn't part of the first version.
+- New animations can't be created from Swift, like `Element.animate()` in Web
+  Animations.
 - The element type is nested in the document type, such as `SVGDocument.Element`,
   so that it doesn't clash with the names used inside the package.
 
 ## Public API
-
-The existing API stays source compatible. New API is added next to it:
 
 ```swift
 svgView.configuration = SVGUIViewConfiguration(animation: .play)
@@ -407,11 +345,10 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 ```
 
 - **Animation mode:** ``SVGUIViewConfiguration/animation`` has three cases.
-  ``SVGUIViewConfiguration/AnimationMode/none`` draws a still image with the
-  existing renderer. ``SVGUIViewConfiguration/AnimationMode/play`` plays
-  animations with the layer renderer.
-  ``SVGUIViewConfiguration/AnimationMode/paused`` uses the layer renderer but
-  holds the timeline at its current time.
+  ``SVGUIViewConfiguration/AnimationMode/none`` draws a still image.
+  ``SVGUIViewConfiguration/AnimationMode/play`` plays animations with the layer
+  renderer. ``SVGUIViewConfiguration/AnimationMode/paused`` uses the layer
+  renderer but holds the timeline at its current time.
 - **Controlling the timeline:** ``SVGUIView/SVGUIView/play()``,
   ``SVGUIView/SVGUIView/pause()``, ``SVGUIView/SVGUIView/seek(to:)`` and
   ``SVGUIView/SVGUIView/currentTime``. Times are `Duration` values, like
@@ -420,30 +357,29 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
   app play animations that are essential to its content while Reduce Motion is
   on. See <doc:#Pausing-playback>.
 - **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)``
-  takes a time, so that any frame can be rendered as an image. This is what the
-  planned `render(at:)` API became, because it keeps one method for snapshots.
+  takes a time, so that any frame can be rendered as an image with the same
+  method as other snapshots.
 - **Reaching the document:** ``SVGUIView/SVGUIView/document`` is the
   document API. Assigning new ``SVGUIView/SVGUIView/data`` replaces the
   document.
 - **SwiftUI:** `SVGView` reads the animation mode from the same
   configuration in the environment.
 
-Decisions:
+Design notes:
 
-- `.none` stays the default while animation support is new, so updating the
-  package doesn't start animations in existing apps.
+- `.none` is the default, so that a document with animations doesn't start
+  moving in an app that doesn't ask for it.
 - With `.none`, a document that contains animations is drawn as it looks at time
-  zero. Today animation elements are ignored, so this changes the output of
-  those documents, for example when an animation sets a different value at its
-  start. Documents without animations are drawn exactly as before.
+  zero, so an animation that sets a different value at its start changes the
+  still image too.
 
 ## Rendering strategies
 
 ### Still images
 
 `.none` and snapshots render the whole render tree into one bitmap with
-`SVGRenderCG`, as today. A still image doesn't need layers, and keeping this path
-means apps that don't play animations see no change in output or performance.
+`SVGRenderCG`. A still image doesn't need layers, and a rendering that
+doesn't play animations does no work for them.
 
 ### Playback with layers
 
@@ -458,10 +394,9 @@ layer. The tree is built so that the common animations don't repaint anything:
   so that the layers are composited as the elements are.
 - An element with a clip path, a mask or a filter composites what it paints as
   one image, so the elements in it are painted with it into one layer, and none
-  of them gets a layer of its own, even when it's animated. The design first
-  gave such an element a layer of its own whether or not it's animated, but a
-  layer would only clip, mask or filter what's in it, which painting it whole
-  does as well.
+  of them gets a layer of its own, even when it's animated. A layer of its own
+  would only clip, mask or filter what's in it, which painting it whole does as
+  well.
 - An element whose filter paints differently over time is painted into a layer
   of its own. This happens when the values of the filter's primitives are
   animated, or when the elements that it filters change. Only that layer is
@@ -485,10 +420,10 @@ target timestamp, and the layers of that time are set inside a `CATransaction`
 with actions disabled, so that Core Animation's implicit animations don't
 interfere. The clock stops after the frame that passes the time after which the
 document doesn't change, so a view whose animations have ended does no work.
-Converting animations to `CAKeyframeAnimation` objects was considered and
-rejected: it can't express every timing function, SMIL timing or animations
-that depend on other animations, and it would make the visible frame hard to
-reproduce in a snapshot.
+The animations aren't converted to `CAKeyframeAnimation` objects: those can't
+express every timing function, SMIL timing or animations that depend on other
+animations, and they would make the visible frame hard to reproduce in a
+snapshot.
 
 A frame whose animated values are the same as those of the frame that the view
 shows isn't rendered: after the computed values at its time, it compares them
@@ -516,19 +451,15 @@ when rendering starts.
 
 ## Frame budget and timeouts
 
-``SVGUIViewConfiguration/timeoutDuration`` keeps its meaning for still images and
+``SVGUIViewConfiguration/timeoutDuration`` applies to still images and
 snapshots: a rendering that takes longer is cancelled. It also limits the first
 rendering when playback starts.
 
 During playback, nothing is cancelled. When the background work for a frame
 isn't finished by the next frame, the view keeps showing the previous frame and
 starts the next work from the latest time, skipping the frames in between.
-
-Two parts of the design aren't done yet. `transform` and `opacity` changes are
-to be applied without waiting for background work, so that they keep moving even
-when repainting falls behind. Today they're computed with the rest of a frame,
-in the background. And when frames are skipped repeatedly, the display link's
-frame rate is to be lowered.
+`transform` and `opacity` changes are computed with the rest of a frame, in the
+background.
 
 ## Pausing playback
 
@@ -556,8 +487,7 @@ A view that plays animations runs on the GPU the filters of the layers that
 paint only an element with a filter. Such a layer is the layer of an element
 whose filter paints differently over time, or the layer of a moving element
 with a filter. Still images, snapshots and the frames rendered while the app is
-in the background run the filters on the CPU with Core Graphics and vImage, as
-before.
+in the background run the filters on the CPU with Core Graphics and vImage.
 
 - `MetalFilterRenderer` in `SVGRenderLayer` runs the same steps as the CPU for
   each primitive, so that the results are the same up to the rounding. Each
@@ -566,9 +496,12 @@ before.
   the CPU does. The color conversions and the opacity are looked up in tables
   that Core Graphics and vImage make, so that they round as on the CPU.
 - A Gaussian blur uses a Gaussian kernel where its standard deviation is
-  smaller than 7 pixels, and three box blurs from 7 pixels, both on the CPU and
-  on the GPU, with the same kernels. The boxes on the GPU are those of Metal
-  Performance Shaders, and the Gaussian kernels are compute shaders.
+  smaller than 7 pixels, and the three box blurs of the specification from 7
+  pixels, both on the CPU and on the GPU, with the same kernels. Where the size
+  of the boxes is even, the two boxes that are offset by half a pixel are blurred
+  as one centered tent. The boxes and the tents on the GPU are those of Metal
+  Performance Shaders, and the Gaussian kernels are compute shaders. Outside the
+  filter region, a blur takes transparent black.
 - The GPU doesn't run the filters whose results it can't make the same, which
   run on the CPU instead:
   - A filter region or a subregion whose edges, or a `feOffset` whose distance,
@@ -587,8 +520,8 @@ before.
 - The layers of a frame whose filters run on the GPU are painted at the same
   time, as each other and as the other layers, so that the waits for the GPU
   overlap. Each wait is longer than the work of the GPU for a small filter, so
-  waiting for one layer after another took longer than running the filters on
-  the CPU.
+  waiting for one layer after another would take longer than running the
+  filters on the CPU.
 - The kernels are compiled from their source when the renderer is made, in the
   first frame that runs a filter on the GPU, so building the package doesn't
   need the Metal toolchain.
@@ -597,19 +530,18 @@ before.
 - In the benchmark document with filters, whose blurs change, running them on
   the GPU makes the frames shorter, and takes about half the time of the CPU.
 
-Decisions:
+Design notes:
 
 - The GPU runs a filter only where its result is the same as on the CPU, so
   that a view that plays animations shows what a snapshot shows. Still images
-  keep running the filters on the CPU, since they're rendered in the background
-  as well.
+  run the filters on the CPU, since they're rendered in the background as well.
 - Only the filters of the layers of their own elements run on the GPU. A filter
   that doesn't change is painted with the content around it once, so running it
   on the GPU would only add a layer.
-- The renderer isn't prepared before the first frame that needs it. Preparing it
-  in the background and running the filters on the CPU until it was ready made
-  the first frames longer in total, since making it takes only about as long
-  as two frames.
+- The renderer isn't prepared before the first frame that needs it. Making it
+  takes only about as long as two frames, so preparing it in the background and
+  running the filters on the CPU until it's ready would make the first frames
+  longer in total.
 - Every device that runs iOS 18 supports Metal. Without a GPU, such as in some
   virtual machines, the filters run on the CPU.
 
@@ -645,8 +577,8 @@ playback is smooth.
   scales the axes differently, since their contents have the pixels of the
   screen along each axis. The edges of a viewport's clip and of the cells of a
   pattern that fall between pixels still differ slightly. Moving layers differ
-  only at their antialiased edges, where the screen resamples them. Layers that frames
-  reuse show the same pixels as layers painted again.
+  only at their antialiased edges, where the screen resamples them. Layers that
+  frames reuse show the same pixels as layers painted again.
 - **Filters on the GPU against the CPU:** The tests of the package run the
   filters of test documents on the GPU and on the CPU, and compare their
   results. The test app renders the layers of the documents of the test suite
@@ -684,8 +616,8 @@ documents instead.
   runs simulators, don't reflect device performance, so performance isn't a
   pass-or-fail check in CI. Instruments' animation hitches template is used to
   find dropped frames.
-- Still image rendering is measured before the restructuring starts, and again
-  after each phase, so that it doesn't get slower.
+- The benchmarks also render still images, so that a change for playback
+  doesn't make still images slower.
 
 ### Visual review
 
@@ -695,40 +627,3 @@ and flicker that numbers and snapshots miss. Its animation controls make the
 same changes of classes and the same operations on CSS animations in both
 views, so that the animations and transitions that changes start can be
 compared too.
-
-## Implementation phases
-
-Each phase leaves the package releasable, and a phase only starts when the one
-before it is merged.
-
-| Phase | Work | Status |
-|---|---|---|
-| 0 | Split the code into `SVGCore` and `SVGRenderCG` and into the four pipeline stages, without changing any output. The document tree becomes persistent, so it can change later. The snapshot tests move to Swift Testing first. | Done in 0.25.0 |
-| 1 | Parse CSS Animations, implement the timing model and interpolation, and render any time with snapshots. | Done in 0.26.0 |
-| 1.5 | SMIL animation, on the timing model and interpolation from phase 1. | Done in 0.27.0 |
-| 2 | Play animations with `SVGRenderLayer`: the layer tree, the display link, the animation modes, and pausing. | Done in 0.28.0 |
-| 2.5 | The document API and CSS Transitions, which need the document API to start. | Done in 0.29.0 |
-| 3 | Filters of playing views on Metal, with the same results as on the CPU. | Done in 0.30.0 |
-
-Phase 0 kept the output of every test document the same while it moved the
-code. The bugs it found on the way were fixed after the move, so 0.25.0 also
-changes the output of the documents that those bugs affected.
-
-## Open questions
-
-- Whether still images should run filters on the GPU. They would need to run
-  the filters that the GPU doesn't run on the CPU anyway, and to render in the
-  background, where the GPU can't be used.
-- Whether the GPU should run more filters. The CPU resamples the image of a
-  filter whose region isn't on the pixels, which the GPU doesn't reproduce.
-  Painting the filters on the pixels on the CPU would change the still images
-  of those filters, and let the GPU run them.
-- Whether `.play` should become the default animation mode once animation
-  support is stable.
-- Whether the timeline should keep running while playback is stopped for being
-  off screen, for apps that expect wall-clock behavior.
-- How much of the render tree and the plan of the layers to make again for a
-  frame. Styles are computed again only for the elements that animations
-  change, but the render tree and the plan are made again for the whole
-  document, which takes most of a frame of a document with many elements that
-  don't move.
