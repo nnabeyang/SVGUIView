@@ -22,6 +22,7 @@ enum SVGElementName: String, Equatable {
   case stop
   case use
   case defs
+  case symbol
   case clipPath
   case mask
   case marker

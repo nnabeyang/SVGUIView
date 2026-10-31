@@ -57,7 +57,8 @@ struct CascadedValues: Sendable {
   /// SVG 2 hides the overflow of the elements that establish viewports, except the root element.
   static func userAgentDeclarations(of name: SVGElementName, isRoot: Bool) -> [PropertyDeclaration] {
     switch name {
-    case .svg where !isRoot, .image, .marker, .pattern: [PropertyDeclaration(OverflowProperty.self, .value(.hidden))]
+    case .svg where !isRoot, .symbol, .image, .marker, .pattern:
+      [PropertyDeclaration(OverflowProperty.self, .value(.hidden))]
     default: []
     }
   }

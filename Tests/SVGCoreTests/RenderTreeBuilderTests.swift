@@ -44,6 +44,29 @@ struct RenderTreeBuilderTests {
     case unexpected(RenderNode?)
   }
 
+  @Test("a symbol isn't drawn itself, and a use element shows it in a viewport of its size and with its opacity")
+  func symbolViewport() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <symbol id="s" viewBox="0 0 10 10" opacity="0.5" transform="skewX(30)"><rect width="10" height="10"/></symbol>
+      <use href="#s" width="5" height="5" opacity="0.8"/>
+      """##)
+    let nodes = try children(of: tree)
+    #expect(nodes.count == 1)
+    let use = try use(try #require(nodes.first))
+    #expect(use.instance?.opacity == 0.8)
+    guard case .viewport(let viewport)? = use.instance?.content, let content = viewport.content else {
+      Issue.record("The use element doesn't show a viewport")
+      return
+    }
+    #expect(viewport.opacity == 0.5)
+    // A symbol has no transform of its own.
+    #expect(viewport.transform == .identity)
+    #expect(content.viewBoxTransform == CGAffineTransform(scaleX: 0.5, y: 0.5))
+    // A symbol hides its overflow, as a nested svg element does.
+    #expect(content.overflowClip == CGRect(x: 0, y: 0, width: 10, height: 10))
+  }
+
   @Test("each use element makes its own copy of the content, which keeps the identity of the element")
   func useInstances() async throws {
     let tree = try await renderTree(

@@ -107,7 +107,7 @@ package struct RenderTreeBuilder {
         return node
       }
       return await useNode(of: use, context: context, mode: .normal, guard: references, instance: instance)
-    case is SVGMaskElement, is SVGPatternElement:
+    case is SVGMaskElement, is SVGPatternElement, is SVGSymbolElement:
       return nil
     default:
       if element.display == CSSDisplay.none { return nil }
@@ -348,9 +348,10 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: svg)
     let id = renderID(of: svg, instance: instance)
-    // The root element is placed by the view, and its transform isn't supported yet.
+    // The root element is placed by the view, and its transform isn't supported yet. The viewport of a symbol has
+    // no transform of its own, as SVG 1.1 has, and as WebKit draws it.
     let transform =
-      mode != .filter(isRoot: true) && svg.base.elementID != base.root?.base.elementID
+      mode != .filter(isRoot: true) && svg.base.elementID != base.root?.base.elementID && svg.base.name != .symbol
       ? await transform(of: svg, context: context, frame: nil, guard: references) : .identity
     let (translation, layout) = viewport(of: svg, context: context)
     guard let layout else {
@@ -477,6 +478,11 @@ package struct RenderTreeBuilder {
     let restyled = element.restyled(
       parent: use.style, root: base.root?.style ?? use.style, animations: base.isAnimated ? base.animations : nil)
     if let svg = restyled as? SVGSVGElement {
+      return await body(svg.sized(width: use.width, height: use.height), references)
+    }
+    // A symbol shows its children in a viewport, as an `<svg>` element with its attributes does.
+    if let symbol = restyled as? SVGSymbolElement {
+      let svg = SVGSVGElement(base: symbol.base, contents: symbol.children)
       return await body(svg.sized(width: use.width, height: use.height), references)
     }
     guard let restyled = restyled as? (any SVGDrawableElement) else { return nil }

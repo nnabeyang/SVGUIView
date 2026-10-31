@@ -286,6 +286,8 @@ extension ElementCursor {
         SVGRadialGradientServer(base: base, contents: contents)
       case .defs:
         SVGDefsElement(base: base, contents: contents)
+      case .symbol:
+        SVGSymbolElement(base: base, contents: contents)
       case .style, .unknown, .animate, .set, .animateTransform, .animateMotion, .mpath:
         preconditionFailure("\(name.rawValue) isn't rendered")
       }
