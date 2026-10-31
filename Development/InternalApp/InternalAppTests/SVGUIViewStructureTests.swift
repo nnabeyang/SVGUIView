@@ -4,6 +4,11 @@ extension SnapshotTests {
   @MainActor
   @Suite
   struct SVGUIViewStructureTests {
+    @Test(arguments: SVGFile.all(in: "basic", "structure", "a"))
+    func a(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(in: "basic", "structure", "defs"))
     func defs(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
