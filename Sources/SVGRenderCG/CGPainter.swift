@@ -392,19 +392,11 @@ package struct CGPainter {
     case .objectBoundingBox:
       graphics.concatenate(transform.scaledBy(x: size.width, y: size.height))
     }
-    for content in mask.contents {
+    for node in mask.contents {
       if Task.isCancelled { break }
       await Task.yield()
       graphics.saveGState()
-      graphics.concatenate(content.transform)
-      if let clip = content.clip {
-        await apply(clip, to: graphics)
-      }
-      if let mask = content.mask {
-        await apply(mask, to: graphics)
-      }
-      await paint(
-        content.fill, path: content.path.cgPath, frame: content.path.cgPath.boundingBoxOfPath, into: graphics)
+      await paint(node, into: graphics)
       graphics.restoreGState()
     }
     return graphics.makeImage().flatMap(luminanceToAlpha)

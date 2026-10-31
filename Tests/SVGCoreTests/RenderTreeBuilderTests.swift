@@ -649,7 +649,7 @@ struct RenderTreeBuilderTests {
     }
     #expect(mask.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
     #expect(mask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
-    guard case .vector(.pattern(let paint), _, _) = try #require(mask.contents.first).fill else {
+    guard case .vector(.pattern(let paint), _, _) = try shape(mask.contents.first).content else {
       Issue.record("The content of the mask isn't filled with a pattern")
       return
     }
@@ -659,6 +659,58 @@ struct RenderTreeBuilderTests {
       return
     }
     #expect(color == CGColor.opaqueBlack)
+  }
+
+  /// The mask of the last child of the root element.
+  private func lastMask(_ content: String) async throws -> MaskEffect {
+    let tree = try await renderTree(content)
+    guard case .mask(let mask) = try shape(try children(of: tree).last).mask else { throw NodeError.unexpected(nil) }
+    return mask
+  }
+
+  @Test("the children of a mask are nodes of any kind, which keep their strokes")
+  func maskContentNodes() async throws {
+    let mask = try await lastMask(
+      ##"""
+      <mask id="m">
+        <g><rect width="5" height="5" fill="white"/></g>
+        <line x1="0" y1="10" x2="20" y2="10" stroke="white" stroke-width="4"/>
+      </mask>
+      <rect width="20" height="20" mask="url(#m)"/>
+      """##)
+    #expect(mask.contents.count == 2)
+    guard case .group(let group) = mask.contents.first else { throw NodeError.unexpected(mask.contents.first) }
+    #expect(group.children.count == 1)
+    guard case .vector(_, let stroke?, _)? = try shape(mask.contents.last).content else {
+      Issue.record("The line has no stroke")
+      return
+    }
+    #expect(stroke.width == 4)
+  }
+
+  @Test("percentages in the content of a mask in objectBoundingBox units are of the bounding box")
+  func maskContentUnits() async throws {
+    let mask = try await lastMask(
+      ##"""
+      <mask id="m" maskContentUnits="objectBoundingBox"><rect width="50%" height="100%" fill="white"/></mask>
+      <rect width="10" height="20" mask="url(#m)"/>
+      """##)
+    #expect(try bounds(of: try shape(mask.contents.first)) == CGRect(x: 0, y: 0, width: 0.5, height: 1))
+  }
+
+  @Test("each masked element has its own copy of the content of the mask")
+  func maskContentInstances() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <mask id="m"><rect width="20" height="20" fill="white"/></mask>
+      <rect width="10" height="10" mask="url(#m)"/><rect x="10" width="10" height="10" mask="url(#m)"/>
+      """##)
+    let ids = try shapes(of: try children(of: tree)).map { shape in
+      guard case .mask(let mask) = shape.mask else { throw NodeError.unexpected(nil) }
+      return try self.shape(mask.contents.first).id
+    }
+    #expect(ids.count == 2)
+    #expect(Set(ids).count == 2)
   }
 
   @Test("a pattern takes the attributes and the content of the pattern that it references")
@@ -1037,7 +1089,9 @@ struct RenderTreeBuilderTests {
       Issue.record("The rectangle isn't masked")
       return
     }
-    #expect(mask.contents.isEmpty)
+    // The content shows the `<use>` element that references the one without display, which shows nothing.
+    let outer = try use(try #require(mask.contents.first))
+    #expect(try use(try #require(outer.instance?.content)).instance?.content == nil)
   }
 
   /// The radial gradient of the fill of a rectangle in an svg element with a viewBox of 40 by 20.
