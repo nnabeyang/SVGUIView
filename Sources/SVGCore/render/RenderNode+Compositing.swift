@@ -45,7 +45,7 @@ extension RenderNode {
       .shape(
         ShapeNode(
           id: shape.id, transform: .identity, geometry: shape.geometry, clip: shape.clip, mask: shape.mask, opacity: 1,
-          content: shape.content))
+          content: shape.content, antialiases: shape.antialiases))
     case .group(let group):
       .group(
         GroupNode(

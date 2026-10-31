@@ -192,6 +192,20 @@ struct StyleTests {
     #expect(marker.overflow == .visible)
   }
 
+  @Test("shape-rendering is a keyword, case-sensitive in attributes, which is inherited and is auto initially")
+  func shapeRendering() throws {
+    #expect(ShapeRenderingProperty.parse("crispEdges", origin: .attribute) == .crispEdges)
+    #expect(ShapeRenderingProperty.parse(" optimizeSpeed ", origin: .attribute) == .optimizeSpeed)
+    #expect(ShapeRenderingProperty.parse("crispedges", origin: .attribute) == nil)
+    #expect(ShapeRenderingProperty.parse("invalid", origin: .attribute) == nil)
+    let declared = try #require(declared(ShapeRenderingProperty.self, css: "CRISPEDGES"))
+    let parent = style([PropertyDeclaration(ShapeRenderingProperty.self, declared)])
+    #expect(parent.shapeRendering == .crispEdges)
+    #expect(style([], parent: parent).shapeRendering == .crispEdges)
+    #expect(ComputedStyle.initial.shapeRendering == .auto)
+    #expect(ShapeRendering.allCases.filter(\.antialiases) == [.auto, .geometricPrecision])
+  }
+
   @Test("transform-box of the box of CSS layout is the box of the SVG element")
   func transformBox() throws {
     let boxes: [(String, TransformBox)] = [

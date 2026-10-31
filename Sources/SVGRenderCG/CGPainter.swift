@@ -58,6 +58,7 @@ package struct CGPainter {
 
   private func paint(_ shape: ShapeNode, into graphics: CGContext, isClipped: Bool) async {
     graphics.saveGState()
+    graphics.setShouldAntialias(shape.antialiases)
     graphics.concatenate(shape.transform)
     var isClipped = isClipped
     if let clip = shape.clip {

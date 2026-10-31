@@ -78,4 +78,29 @@ struct StrokePaintTests {
     #expect(normal[2] > 245 && normal[1] < 10, "\(normal)")
     #expect(strokeFirst[1] > 245 && strokeFirst[2] < 10, "\(strokeFirst)")
   }
+
+  @Test("a line between the pixels covers them partly with antialiasing, and not at all or wholly without it")
+  func shapeRendering() async throws {
+    // At the scale of the screen, the edges of the line are between pixels.
+    let line = #"<line x1="0" y1="10.25" x2="20" y2="10.25" stroke="black" stroke-width="0.5" "#
+    let scale = Int(UIScreen.main.scale)
+    func alphas(_ attributes: String) async throws -> [UInt8] {
+      let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">"# + line + attributes + "/></svg>"
+      let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
+      let image = try #require(try await view.takeSnapshot().cgImage)
+      var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+      let context = try #require(
+        CGContext(
+          data: &pixels, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+      context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+      // The rows of the bitmap go from the top, as the rows of the image do.
+      return (9 * scale..<12 * scale).map { y in pixels[(y * image.width + 10 * scale) * 4 + 3] }
+    }
+    let antialiased = try await alphas("")
+    let crisp = try await alphas(#"shape-rendering="crispEdges""#)
+    #expect(antialiased.contains { $0 > 0 && $0 < 255 }, "\(antialiased)")
+    #expect(crisp.allSatisfy { $0 == 0 || $0 == 255 }, "\(crisp)")
+    #expect(crisp.contains(255), "\(crisp)")
+  }
 }
