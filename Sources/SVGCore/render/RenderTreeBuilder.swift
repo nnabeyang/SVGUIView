@@ -207,11 +207,14 @@ package struct RenderTreeBuilder {
       } else {
         nil
       }
+    // `shape-rendering` applies to shapes, and not to text or images.
+    let antialiases =
+      element is SVGTextElement || element is SVGImageElement ? true : element.style.shapeRendering.antialiases
     guard !markers.isEmpty || parts != nil else {
       return .shape(
         ShapeNode(
           id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: element.opacity,
-          content: content))
+          content: content, antialiases: antialiases))
     }
     // The shape and the markers are drawn in the paint order, with the effects of the shape.
     var shapeCount = 0
@@ -220,7 +223,7 @@ package struct RenderTreeBuilder {
       return .shape(
         ShapeNode(
           id: partID(id, part: shapeCount), transform: .identity, geometry: geometry, clip: nil, mask: .none,
-          opacity: 1, content: content))
+          opacity: 1, content: content, antialiases: antialiases))
     }
     var children = [RenderNode]()
     for layer in order.layers {

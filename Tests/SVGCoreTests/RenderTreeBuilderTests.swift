@@ -761,6 +761,24 @@ struct RenderTreeBuilderTests {
     return group.children.dropFirst().compactMap { if case .viewport(let marker) = $0 { marker } else { nil } }
   }
 
+  /// Content, and whether its last shape is antialiased.
+  private static let shapeRenderings: [(String, Bool)] = [
+    (#"<circle r="5" shape-rendering="crispEdges"/>"#, false),
+    (#"<circle r="5" shape-rendering="optimizeSpeed"/>"#, false),
+    (#"<circle r="5" shape-rendering="auto"/>"#, true),
+    (#"<circle r="5" shape-rendering="geometricPrecision"/>"#, true),
+    (#"<g shape-rendering="optimizeSpeed"><line x2="10" stroke="black"/></g>"#, false),
+    (#"<g shape-rendering="optimizeSpeed"><line x2="10" stroke="black" shape-rendering="geometricPrecision"/></g>"#, true),
+    // Text and images aren't shapes.
+    (#"<text x="2" y="10" font-size="4" shape-rendering="crispEdges">A</text>"#, true),
+  ]
+
+  @Test("shape-rendering turns antialiasing off for optimizeSpeed and crispEdges on shapes", arguments: shapeRenderings)
+  func shapeRendering(content: String, antialiases: Bool) async throws {
+    let tree = try await renderTree(content)
+    #expect(try #require(shapes(of: try children(of: tree)).last).antialiases == antialiases)
+  }
+
   /// What the nodes paint, in their order: `fill` or `stroke` for a shape that paints only that, `shape` for one that
   /// paints both, and `marker` for a marker.
   private func layers(of nodes: [RenderNode]) -> [String] {

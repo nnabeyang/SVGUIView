@@ -70,6 +70,8 @@ package struct ShapeNode: Sendable {
   package let opacity: CGFloat
   /// What the shape paints, or `nil` if it's hidden or has no shape.
   package let content: ShapeContent?
+  /// Whether the edges of what the shape paints are antialiased, which `shape-rendering` turns off for shapes.
+  package var antialiases = true
 }
 
 package struct Geometry: Sendable {
