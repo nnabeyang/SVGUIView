@@ -94,7 +94,7 @@ package struct SVGBaseContext: Sendable {
   init(document: DocumentTree, stylesheet: Stylesheet) {
     self.init(
       document: document, stylesheet: stylesheet,
-      root: document.root.flatMap { ElementCursor(root: $0).makeElement(with: stylesheet) as? SVGSVGElement },
+      root: document.root.flatMap { ElementCursor(root: $0).makeElement(with: stylesheet, languages: document.languages) as? SVGSVGElement },
       animations: DocumentAnimations(
         keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0))
   }
@@ -154,7 +154,7 @@ package struct SVGBaseContext: Sendable {
       // are made again from the document with the animated attributes.
       animated =
         document.replacingAttributes(attributes).root.flatMap {
-          ElementCursor(root: $0).makeElement(with: stylesheet, animations: animations)
+          ElementCursor(root: $0).makeElement(with: stylesheet, languages: document.languages, animations: animations)
         } as? SVGSVGElement
     }
     return SVGBaseContext(

@@ -152,7 +152,8 @@ extension SVGElement {
   ) -> (any SVGElement)? {
     let id = base.elementID
     if changed.contains(id) {
-      return document.cursor(at: id)?.makeElement(with: stylesheet, parent: parent, root: root)
+      return document.cursor(at: id)?.makeElement(
+        with: stylesheet, languages: document.languages, parent: parent, root: root)
     }
     guard containing.contains(id) else { return self }
     let style = base.style

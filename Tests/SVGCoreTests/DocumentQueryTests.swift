@@ -89,7 +89,7 @@ struct DocumentQueryTests {
     let root = try #require(document.rootElement)
     #expect(document.localName(of: root) == "svg")
     #expect(document.localName(of: try #require(document.element(id: "f"))) == "foo")
-    #expect(DocumentTree(root: nil).rootElement == nil)
+    #expect(DocumentTree(root: nil, languages: []).rootElement == nil)
   }
 
   @Test("an element that the document doesn't have has no attributes and no descendants")

@@ -24,6 +24,7 @@ extension RenderTreeBuilder {
       guard !Task.isCancelled else { break }
       guard let content = child as? (any SVGDrawableElement),
         !(content is SVGGroupElement || content is SVGLineElement || content is SVGImageElement),
+        content.base.passesConditions,
         content.visibility != .hidden,
         content.display != CSSDisplay.none,
         let path = await path(of: content, context: context.styled(by: content), guard: references)
