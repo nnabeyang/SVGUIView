@@ -67,6 +67,32 @@ struct RenderTreeBuilderTests {
     #expect(content.overflowClip == CGRect(x: 0, y: 0, width: 10, height: 10))
   }
 
+  /// Attributes of an image of 2 by 1 in a rectangle of 10 by 10 at 5, 5, where the image is drawn, and the rectangle
+  /// that clips it.
+  private static let imagePlacements: [(String, CGRect, CGRect?)] = [
+    ("", CGRect(x: 5, y: 7.5, width: 10, height: 5), nil),
+    (#"preserveAspectRatio="xMaxYMax""#, CGRect(x: 5, y: 10, width: 10, height: 5), nil),
+    (#"preserveAspectRatio="none""#, CGRect(x: 5, y: 5, width: 10, height: 10), nil),
+    (
+      #"preserveAspectRatio="xMinYMin slice""#, CGRect(x: 5, y: 5, width: 20, height: 10),
+      CGRect(x: 5, y: 5, width: 10, height: 10)
+    ),
+    (#"preserveAspectRatio="xMinYMin slice" overflow="visible""#, CGRect(x: 5, y: 5, width: 20, height: 10), nil),
+  ]
+
+  @Test("an image is placed in its rectangle by its preserveAspectRatio, and clipped there", arguments: imagePlacements)
+  func imagePlacement(attributes: String, rect: CGRect, clip: CGRect?) async throws {
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII="
+    let tree = try await renderTree(
+      #"<image x="5" y="5" width="10" height="10" href="data:image/png;base64,\#(png)" "# + attributes + "/>")
+    guard case .image(let image?, _)? = try shape(try children(of: tree).first).content else {
+      Issue.record("The image isn't decoded")
+      return
+    }
+    #expect(image.rect == rect)
+    #expect(image.clip == clip)
+  }
+
   @Test("each use element makes its own copy of the content, which keeps the identity of the element")
   func useInstances() async throws {
     let tree = try await renderTree(

@@ -86,7 +86,17 @@ package struct Geometry: Sendable {
 package enum ShapeContent: Sendable {
   case vector(fill: FillPaint?, stroke: StrokeStyle?, fillRule: CGPathDrawingMode)
   /// An image, or `nil` if its data can't be decoded.
-  case image(CGImage?, stroke: StrokeStyle?)
+  case image(ImagePaint?, stroke: StrokeStyle?)
+}
+
+/// An image placed in the rectangle of its element by its `preserveAspectRatio`.
+package struct ImagePaint: Sendable {
+  package let image: CGImage
+  /// Where the image is drawn, in the coordinates of its element.
+  package let rect: CGRect
+  /// The rectangle of the element, which clips the image where its overflow is hidden and the image overflows it,
+  /// or `nil` if nothing clips it.
+  package let clip: CGRect?
 }
 
 package enum FillPaint: Sendable {

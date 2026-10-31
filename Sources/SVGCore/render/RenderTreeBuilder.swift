@@ -184,7 +184,7 @@ package struct RenderTreeBuilder {
       let stroke = await stroke(
         of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
       if let image = element as? SVGImageElement {
-        content = .image(image.decodedImage(), stroke: stroke)
+        content = .image(imagePaint(of: image, in: path.boundingBoxOfPath), stroke: stroke)
       } else {
         let fill = await fillPaint(
           of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
@@ -701,6 +701,21 @@ package struct RenderTreeBuilder {
       merged = merged.merged(other: parent)
     }
     return merged.paint(context: context, opacity: opacity)
+  }
+
+  /// The decoded image of an `<image>` element placed in its rectangle by its `preserveAspectRatio`, or `nil` if its
+  /// data isn't an image.
+  private func imagePaint(of element: SVGImageElement, in rect: CGRect) -> ImagePaint? {
+    guard let image = element.decodedImage(), image.width > 0, image.height > 0 else { return nil }
+    let size = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+    let placed = size.applying(element.preserveAspectRatio.getTransform(viewBox: size, size: rect.size))
+      .offsetBy(dx: rect.minX, dy: rect.minY)
+    let clip: CGRect? =
+      switch element.style.overflow {
+      case .visible, .auto: nil
+      default: rect.contains(placed) ? nil : rect
+      }
+    return ImagePaint(image: image, rect: placed, clip: clip)
   }
 
   /// The stroke of an element, or `nil` if it paints none.
