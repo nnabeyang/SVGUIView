@@ -49,7 +49,7 @@ jobs:
           fi
 
   test:
-    name: Test on iOS (Xcode 27.0)
+    name: Test on iOS (Xcode 27.2)
     needs: changes
     if: needs.changes.outputs.test == 'true'
     # Xcode 27 is only available on the xcode-27 image for now.
@@ -61,10 +61,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Use Xcode 27.0
+      - name: Use Xcode 27.2
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: '27.0'
+          xcode-version: '27.2'
 
       # The simulator boots while the tests build. Its first boot on a new machine takes minutes.
       - name: Boot the simulator
@@ -130,10 +130,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Use Xcode 27.0
+      - name: Use Xcode 27.2
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: '27.0'
+          xcode-version: '27.2'
 
       - name: Build DocC documentation
         run: ./scripts/build-documentation.sh --strict
