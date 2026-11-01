@@ -22,8 +22,27 @@ package struct ContainerLayer: Sendable {
   package let opacity: CGFloat
   /// The rectangle in the coordinates of the layer outside which nothing is shown, or `nil` to show everything.
   package let clip: CGRect?
+  /// The clip of a viewport whose edges lie between the pixels of the screen, which the layers in it are composited
+  /// together and then clipped by, or `nil`.
+  package let mask: ClipMask?
   package let children: [PlannedLayer]
   /// What the layer is in the plans of all times.
+  package let key: LayerKey
+}
+
+/// The clip of a viewport, which applies once to what the layers in it show composited together, with the coverage of
+/// the pixels at its edges that a rendering into one bitmap gives them.
+///
+/// A layer that masks to its bounds clips at the pixels of the screen, without the coverage of the pixels that its
+/// edges cross, so a clip whose edges lie between the pixels clips by an image of its coverage instead.
+package struct ClipMask: Sendable {
+  /// The rectangle of the clip, in the coordinates of the container.
+  package let clip: CGRect
+  /// The rectangle that the image covers: the clip grown to the pixels of the screen that it covers.
+  package let bounds: CGRect
+  /// The pixels of the image for each unit of the coordinates along each axis.
+  package let rasterScale: CGSize
+  /// What the mask is in the plans of all times.
   package let key: LayerKey
 }
 
