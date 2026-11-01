@@ -83,16 +83,21 @@ let image = try await svgView.takeSnapshot(at: .seconds(1.5))
 
 ### Playing animations
 
-A view plays the animations of its document when its configuration's
-``SVGUIViewConfiguration/animation`` is
-``SVGUIViewConfiguration/AnimationMode/play``. With
-``SVGUIViewConfiguration/AnimationMode/paused``, it holds them at their current
-time until ``SVGUIView/SVGUIView/play()`` is called. The default,
-``SVGUIViewConfiguration/AnimationMode/none``, displays time zero, so updating
-the package doesn't start the animations in an app.
+A view plays the animations of its document by default, when its
+configuration's ``SVGUIViewConfiguration/animation`` is
+``SVGUIViewConfiguration/AnimationMode/play``, except while Reduce Motion is on.
+With ``SVGUIViewConfiguration/AnimationMode/paused``, it holds them at their
+current time until ``SVGUIView/SVGUIView/play()`` is called. With
+``SVGUIViewConfiguration/AnimationMode/none``, it displays time zero, as a still
+image.
 
 ```swift
-svgView.configuration = SVGUIViewConfiguration(animation: .play)
+svgView.configuration = SVGUIViewConfiguration(animation: .none)
+```
+
+The view controls the animations that it plays:
+
+```swift
 svgView.pause()
 svgView.seek(to: .seconds(1.5))
 svgView.play()

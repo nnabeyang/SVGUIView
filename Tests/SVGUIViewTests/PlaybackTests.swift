@@ -103,7 +103,7 @@ struct PlaybackTests {
     let (view, clock) = try await makeView()
     clock.advance(by: .seconds(2))
     try await waitForGreen(in: view) { $0 == 255 }
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience, animation: .none)
     #expect(!clock.isRunning)
     #expect(view.currentTime == .zero)
     try await waitForGreen(in: view) { $0 == 0 }
@@ -198,7 +198,7 @@ struct PlaybackTests {
     let (view, _) = try await makeView()
     #expect(view.layer.contents == nil)
     #expect(view.layer.sublayers?.isEmpty == false)
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience, animation: .none)
     let deadline = ContinuousClock.now + patience
     while view.layer.contents == nil, ContinuousClock.now < deadline {
       try await Task.sleep(for: .milliseconds(10))

@@ -28,9 +28,9 @@ let svgView = SVGUIView(contentsOf: data)!
 view.addSubView(svgView)
 ```
 
-Playing the animations of the document:
+The view plays the animations of the document by default, except while Reduce Motion is on. Showing the document as a still image instead:
 ```swift
-svgView.configuration = SVGUIViewConfiguration(animation: .play)
+svgView.configuration = SVGUIViewConfiguration(animation: .none)
 ```
 
 ## Installation
