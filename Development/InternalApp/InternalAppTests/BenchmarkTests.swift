@@ -42,6 +42,8 @@ final class BenchmarkTests: XCTestCase {
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first)
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), data: try data(of: name))
     view.contentMode = .scaleAspectFit
+    // The frames are the ones that a view that plays the document renders, at the times that the measurement seeks to.
+    view.showsStillFramesInLayers = true
     view.configuration = SVGUIViewConfiguration(animation: .paused)
     window.addSubview(view)
     defer { view.removeFromSuperview() }

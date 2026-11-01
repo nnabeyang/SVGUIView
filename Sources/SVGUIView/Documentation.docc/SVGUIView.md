@@ -111,9 +111,10 @@ the view displays time zero, unless
 ``SVGUIViewConfiguration/playsWithReduceMotion`` is `true` for animations that
 are essential to the content.
 
-While it can play animations, the view shows its document in layers of its
-layer, so that a change of the transform or the opacity of an element only
-moves or fades its layer. Snapshots are still rendered into one image.
+While its animations play, the view shows its document in layers of its layer,
+so that a change of the transform or the opacity of an element only moves or
+fades its layer. While they don't, such as when they're paused or have ended,
+the view shows the image that a snapshot of the time shows.
 
 ### Changing the document
 

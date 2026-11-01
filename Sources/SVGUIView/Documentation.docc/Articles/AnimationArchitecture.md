@@ -346,8 +346,9 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 - **Animation mode:** ``SVGUIViewConfiguration/animation`` has three cases.
   ``SVGUIViewConfiguration/AnimationMode/none`` draws a still image.
   ``SVGUIViewConfiguration/AnimationMode/play`` plays animations with the layer
-  renderer. ``SVGUIViewConfiguration/AnimationMode/paused`` uses the layer
-  renderer but holds the timeline at its current time.
+  renderer. ``SVGUIViewConfiguration/AnimationMode/paused`` holds the timeline
+  at its current time, and draws a still image of it until the animations
+  play.
 - **Controlling the timeline:** ``SVGUIView/SVGUIView/play()``,
   ``SVGUIView/SVGUIView/pause()``, ``SVGUIView/SVGUIView/seek(to:)`` and
   ``SVGUIView/SVGUIView/currentTime``. Times are `Duration` values, like
@@ -379,14 +380,19 @@ Design notes:
 
 ### Still images
 
-`.none` and snapshots render the whole render tree into one bitmap with
-`SVGRenderCG`. A still image doesn't need layers, and a rendering that
-doesn't play animations does no work for them.
+Snapshots, and a view whose animations don't play, render the whole render
+tree into one bitmap with `SVGRenderCG`: `.none`, a paused view, animations
+that have ended or that Reduce Motion holds, and a document without
+animations. A view that doesn't play its animations shows the image that a
+snapshot of its time shows, pixel for pixel. A still image doesn't need layers,
+and a rendering that doesn't play animations does no work for them. When the
+animations start or stop playing, the view renders the frame in the other way.
 
 ### Playback with layers
 
-`.play` and `.paused` render into a tree of `CALayer` objects under the view's
-layer. The tree is built so that the common animations don't repaint anything:
+While the animations play, the view renders into a tree of `CALayer` objects
+under its layer. The tree is built so that the common animations don't repaint
+anything:
 
 - An element gets its own layer when its `transform` or `opacity` is
   animated. The layer has the transform and the opacity, and its contents are
@@ -577,10 +583,11 @@ playback is smooth.
   match. This keeps playback from looking different from snapshots. Layers that
   don't move show the same pixels as the image, also under a transform that
   scales the axes differently, since their contents have the pixels of the
-  screen along each axis. The edges of a viewport's clip and of the cells of a
-  pattern that fall between pixels still differ slightly. Moving layers differ
-  only at their antialiased edges, where the screen resamples them. Layers that
-  frames reuse show the same pixels as layers painted again.
+  screen along each axis, and also at the edges of a viewport's clip and of the
+  cells of a pattern that fall between pixels. Moving layers differ only at their
+  antialiased edges, where the screen resamples them, which a view that stops
+  playing doesn't show, since it shows one image then. Layers that frames reuse
+  show the same pixels as layers painted again.
 - **Filters on the GPU against the CPU:** The tests of the package run the
   filters of test documents on the GPU and on the CPU, and compare their
   results. The test app renders the layers of the documents of the test suite

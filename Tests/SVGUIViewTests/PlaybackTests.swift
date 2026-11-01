@@ -208,6 +208,78 @@ struct PlaybackTests {
     #expect(green(in: view) == 0)
   }
 
+  /// Whether the view shows its document in layers, and not in one image.
+  private func showsLayers(_ view: SVGUIView) -> Bool {
+    view.layer.contents == nil && view.layer.sublayers?.isEmpty == false
+  }
+
+  /// Waits until the view shows its document in layers, or in one image.
+  private func wait(
+    for view: SVGUIView, inLayers: Bool, sourceLocation: SourceLocation = #_sourceLocation
+  ) async throws {
+    let deadline = ContinuousClock.now + patience
+    while showsLayers(view) != inLayers || (!inLayers && view.layer.contents == nil) {
+      guard ContinuousClock.now < deadline else {
+        Issue.record("The view doesn't show its document \(inLayers ? "in layers" : "in one image")")
+        return
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+  }
+
+  @Test("a view shows its document in layers while its animations play, and in one image while they don't")
+  func stillFramesInOneImage() async throws {
+    let (view, clock) = try await makeView()
+    try await wait(for: view, inLayers: true)
+    view.pause()
+    try await wait(for: view, inLayers: false)
+    view.play()
+    try await wait(for: view, inLayers: true)
+    // The animations end after a second.
+    clock.advance(by: .seconds(2))
+    try await wait(for: view, inLayers: false)
+    #expect(green(in: view) == 255)
+    view.seek(to: .milliseconds(500))
+    view.play()
+    try await wait(for: view, inLayers: true)
+    let (still, _) = try await makeView(Self.still)
+    try await wait(for: still, inLayers: false)
+    let (held, _) = try await makeView(animation: .play, isReduceMotionEnabled: true)
+    try await wait(for: held, inLayers: false)
+  }
+
+  /// The premultiplied RGBA pixels of an image.
+  private func pixels(of image: CGImage) -> [UInt8] {
+    var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+    pixels.withUnsafeMutableBytes { buffer in
+      let context = CGContext(
+        data: buffer.baseAddress, width: image.width, height: image.height, bitsPerComponent: 8,
+        bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+      context?.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    }
+    return pixels
+  }
+
+  @Test("a view that holds its animations shows the image that a snapshot of the time shows")
+  func stillFrameIsSnapshot() async throws {
+    // A square that moves between the pixels and turns, which a layer would show resampled.
+    let document = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <style>@keyframes m { to { transform: translate(3.3px, 1.7px) rotate(17deg) } }</style>
+        <rect width="20" height="20" fill="white"/>
+        <rect x="4" y="4" width="8" height="8" fill="blue" style="animation: m 1s linear forwards"/>
+      </svg>
+      """#
+    let (view, clock) = try await makeView(document)
+    clock.advance(by: .milliseconds(370))
+    view.pause()
+    try await wait(for: view, inLayers: false)
+    let shown = pixels(of: try #require(view.layer.contents.map { $0 as! CGImage }))
+    let snapshot = pixels(of: try #require(try await view.takeSnapshot(at: view.currentTime).cgImage))
+    #expect(shown == snapshot)
+  }
+
   @Test("a rendering into layers that fails keeps what the view shows, unless there's nothing to show")
   func failedLayers() async throws {
     let (view, clock) = try await makeView()

@@ -29,6 +29,8 @@ struct GPUFilterTests {
     view.contentMode = .scaleAspectFit
     view.runsFiltersOnGPU = onGPU
     view.paintsFiltersIntoOwnLayers = true
+    // A view whose animations don't play shows one image, and the filters of layers run on the GPU.
+    view.showsStillFramesInLayers = true
     view.configuration = SVGUIViewConfiguration(timeoutDuration: .seconds(60), animation: .paused)
     view.layoutIfNeeded()
     view.layer.displayIfNeeded()
