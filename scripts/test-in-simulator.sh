@@ -31,6 +31,8 @@
 
 set -uo pipefail
 
+# The runner image of Xcode 27.2 has no simulator of iOS 27.2, and downloading one takes minutes. The package tests
+# don't compare reference images, so they run on iOS 27.0, while the snapshot tests of the app run on iOS 27.2.
 device_name="iPhone 17e"
 runtime="com.apple.CoreSimulator.SimRuntime.iOS-27-0"
 destination="platform=iOS Simulator,name=${device_name},OS=27.0"
