@@ -87,6 +87,7 @@ struct StrokePaintTests {
     func alphas(_ attributes: String) async throws -> [UInt8] {
       let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">"# + line + attributes + "/></svg>"
       let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
+      view.configuration = SVGUIViewConfiguration(timeoutDuration: .seconds(60))
       let image = try #require(try await view.takeSnapshot().cgImage)
       var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
       let context = try #require(
