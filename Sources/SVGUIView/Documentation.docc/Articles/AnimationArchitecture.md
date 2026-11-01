@@ -142,6 +142,17 @@ it, no drawing state is shared between renderings.
 
 Painting is done by one of the two renderers. See <doc:#Rendering-strategies>.
 
+Both renderers paint with `SVGRenderCG`, so what they paint must not depend on
+where in a bitmap the painting starts: the contents of a layer start at another
+pixel than one bitmap of the whole view. A pattern whose cells lie on the
+pixels of the device is painted cell by cell, each cell in the rectangle that
+its corners round to on the pixels of the device. A Core Graphics pattern rounds
+its cells from where the drawing starts, so the same cell could lie a pixel
+apart in a layer and in one bitmap, and a tiling that doesn't round them leaves
+seams between the cells. A pattern that a rotation or a skew turns, or whose
+cells are smaller than a pixel or too many, is still painted with a Core
+Graphics pattern.
+
 ### Invalidation
 
 A new animation frame redoes only part of the work of the frame before it:
@@ -388,6 +399,18 @@ snapshot of its time shows, pixel for pixel. A still image doesn't need layers,
 and a rendering that doesn't play animations does no work for them. When the
 animations start or stop playing, the view renders the frame in the other way.
 
+### Still frames and snapshots
+
+A still frame of a view and a snapshot of the same time are the same, pixel for
+pixel, so that an app that shows a document and then saves it as an image, such
+as a preview that's exported to a PNG file, saves what it showed. A view whose
+animations don't play shows one image, as a snapshot renders it, and not its
+layers: the screen resamples the contents of a layer that an animation moves
+or rotates, even at the time when the animation holds it still, which changes
+the antialiased edges. The frames of animations that play change in every
+frame, where these edges don't show. A view renders one frame in the other way
+when its animations start or stop playing.
+
 ### Playback with layers
 
 While the animations play, the view renders into a tree of `CALayer` objects
@@ -422,6 +445,20 @@ anything:
   move shows the same pixels as a still image. Where an animation rotates a
   layer, or moves it between the pixels of the screen, the screen resamples its
   contents, which changes the antialiased edges.
+- A layer that doesn't move is clipped to the view before it's painted, as the
+  edges of one bitmap of the view clip what crosses them. Core Graphics
+  rasterizes a diagonal line that the edge of a bitmap cuts differently from one
+  that it doesn't, and the contents of a layer reach a little past what they
+  paint.
+- The clip of a viewport applies once, to what the layers in it show
+  composited together, as SVG clips the rendering of an element and as one
+  bitmap clips it. Where its edges lie on the pixels of the screen, or where a
+  rotation or a skew keeps them off the pixels, the layer of the viewport masks
+  to its bounds. Where they lie between pixels, the layer
+  is masked by an image of the coverage of the clip that Core Graphics paints,
+  since a layer that masks to its bounds clips at the pixels of the screen
+  without the coverage of the pixels that its edges cross. Clipping each layer
+  in the viewport instead would clip the edges of what overlaps there twice.
 
 The clock is a `CADisplayLink`. Each frame advances the timeline to the link's
 target timestamp, and the layers of that time are set inside a `CATransaction`
@@ -587,7 +624,10 @@ playback is smooth.
   cells of a pattern that fall between pixels. Moving layers differ only at their
   antialiased edges, where the screen resamples them, which a view that stops
   playing doesn't show, since it shows one image then. Layers that frames reuse
-  show the same pixels as layers painted again.
+  show the same pixels as layers painted again. The image of the layers is
+  checked as the screen shows it: `CALayer.render(in:)` draws some layers
+  differently from the screen, such as one that masks to bounds that lie
+  between pixels, so it doesn't stand for the screen.
 - **Filters on the GPU against the CPU:** The tests of the package run the
   filters of test documents on the GPU and on the CPU, and compare their
   results. The test app renders the layers of the documents of the test suite
