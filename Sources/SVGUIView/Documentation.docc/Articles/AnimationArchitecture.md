@@ -338,7 +338,6 @@ Design notes:
 ## Public API
 
 ```swift
-svgView.configuration = SVGUIViewConfiguration(animation: .play)
 svgView.pause()
 svgView.seek(to: .seconds(1.5))
 let frame = try await svgView.takeSnapshot(at: .seconds(2))
@@ -367,8 +366,11 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 
 Design notes:
 
-- `.none` is the default, so that a document with animations doesn't start
-  moving in an app that doesn't ask for it.
+- `.play` is the default. What is safe works without being asked for, and
+  only what can do harm, such as opening an external link, waits until an app
+  turns it on. Playing animations does no harm, and Reduce Motion still holds
+  them at time zero unless
+  ``SVGUIViewConfiguration/playsWithReduceMotion`` is `true`.
 - With `.none`, a document that contains animations is drawn as it looks at time
   zero, so an animation that sets a different value at its start changes the
   still image too.

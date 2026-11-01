@@ -29,11 +29,12 @@ ContentView()
   )
 ```
 
-The configuration also plays the animations of the documents:
+The views play the animations of their documents by default. The configuration
+shows the documents as still images instead:
 
 ```swift
 ContentView()
-  .environment(\.svgViewConfiguration, SVGUIViewConfiguration(animation: .play))
+  .environment(\.svgViewConfiguration, SVGUIViewConfiguration(animation: .none))
 ```
 
 ## Topics

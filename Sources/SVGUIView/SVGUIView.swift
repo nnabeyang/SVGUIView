@@ -165,6 +165,8 @@ public class SVGUIView: UIView {
     promoted = baseContext.elementsWithAnimatedCompositing()
     painting = baseContext.elementsWithAnimatedPainting()
     super.init(frame: frame)
+    // The default configuration plays the animations, which a change of the configuration doesn't start.
+    isPlaying = configuration.animation == .play
     backgroundColor = .clear
     startObservingClock()
     observeNotifications()

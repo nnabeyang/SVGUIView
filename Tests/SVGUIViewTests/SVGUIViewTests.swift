@@ -16,9 +16,10 @@ struct SVGUIViewTests {
   /// fast, and a CI machine sometimes stalls for many seconds, so this only catches a rendering that never ends.
   private static let patience: Duration = .seconds(60)
 
+  /// A view that shows its document as a still image, in one image, whose renderings the tests check.
   private func makeView(_ svg: String, timeoutDuration: Duration = patience) -> SVGUIView {
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: timeoutDuration)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: timeoutDuration, animation: .none)
     return view
   }
 
@@ -29,7 +30,7 @@ struct SVGUIViewTests {
     let data = Data(svg.utf8)
     let view = SVGUIView(
       frame: CGRect(x: 0, y: 0, width: 20, height: 20), baseContext: await Self.parse(data), data: data)
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: timeoutDuration)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: timeoutDuration, animation: .none)
     return view
   }
 
@@ -259,7 +260,7 @@ struct SVGUIViewTests {
     let base = await Self.parse(data)
     let views = (0..<ProcessInfo.processInfo.activeProcessorCount * 2).map { _ in
       let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), baseContext: base, data: data)
-      view.configuration = SVGUIViewConfiguration(timeoutDuration: timeout)
+      view.configuration = SVGUIViewConfiguration(timeoutDuration: timeout, animation: .none)
       return view
     }
     let clock = ContinuousClock()
@@ -327,6 +328,13 @@ struct SVGUIViewTests {
   @Test("a rendering may take ten seconds by default")
   func defaultTimeout() {
     #expect(SVGUIViewConfiguration().timeoutDuration == .seconds(10))
+  }
+
+  @Test("a view plays the animations of its document by default, and Reduce Motion holds them")
+  func defaultAnimation() {
+    #expect(SVGUIViewConfiguration().animation == .play)
+    #expect(SVGUIViewConfiguration().playsWithReduceMotion == false)
+    #expect(SVGUIView(frame: .zero).configuration.animation == .play)
   }
 
   @Test(
