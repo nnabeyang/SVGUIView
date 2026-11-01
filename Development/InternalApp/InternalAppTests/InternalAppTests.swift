@@ -62,7 +62,7 @@ struct SnapshotEnvironment: Equatable, CustomStringConvertible {
   let language: String
 
   /// The only environment that the snapshot tests run in.
-  static let expected = SnapshotEnvironment(device: "iPhone 17e", osVersion: "27.0", language: "en")
+  static let expected = SnapshotEnvironment(device: "iPhone 17e", osVersion: "27.2", language: "en")
 
   @MainActor
   static var current: SnapshotEnvironment {
@@ -73,7 +73,7 @@ struct SnapshotEnvironment: Equatable, CustomStringConvertible {
       language: Locale.preferredLanguages.first ?? "unknown")
   }
 
-  /// The name of the directory that holds the reference images, such as `iphone17e_ios27.0`.
+  /// The name of the directory that holds the reference images, such as `iphone17e_ios27.2`.
   var directoryName: String {
     let device = device.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
     return "\(device)_ios\(osVersion)"
