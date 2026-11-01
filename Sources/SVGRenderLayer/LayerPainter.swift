@@ -174,6 +174,11 @@ extension PaintedLayer {
     graphics.concatenate(
       CGAffineTransform(size.width / bounds.width, 0, 0, -size.height / bounds.height, 0, size.height))
     graphics.translateBy(x: -bounds.minX, y: -bounds.minY)
+    // A rendering into one bitmap ends at the edges of the view, which cut what crosses them, and Core Graphics
+    // rasterizes a diagonal line that an edge cuts differently from one that it doesn't.
+    if let view {
+      graphics.clip(to: view)
+    }
     let painter = CGPainter(scale: scale)
     if let filters, let filtered, let result = await filters.filterImage(of: filtered, painter: painter) {
       painter.draw(result, of: filtered, into: graphics)
