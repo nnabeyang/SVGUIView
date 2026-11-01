@@ -16,9 +16,11 @@ import os
 /// of its document, and ``play()``, ``pause()`` and ``seek(to:)`` control
 /// them. The animations don't advance while the view isn't in a window, is
 /// hidden or has no size, or while the app is in the background, and they stop
-/// after the time at which the document doesn't change any more. While it can
-/// play animations, the view shows its document in layers of its layer,
-/// instead of in one image.
+/// after the time at which the document doesn't change any more. While its
+/// animations play, the view shows its document in layers of its layer,
+/// instead of in one image. While they don't, such as when they're paused or
+/// have ended, it shows the image that ``takeSnapshot(rect:at:)`` renders for
+/// the time.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext {
     didSet {
@@ -59,10 +61,6 @@ public class SVGUIView: UIView {
   /// also moves them back to time zero.
   public var configuration: SVGUIViewConfiguration = .init() {
     didSet {
-      // A view that can play animations shows them in layers, so it renders again when it starts or stops.
-      if (configuration.animation == .none) != (oldValue.animation == .none) {
-        setNeedsDisplay()
-      }
       if configuration.animation != oldValue.animation {
         switch configuration.animation {
         case .none:
@@ -93,6 +91,8 @@ public class SVGUIView: UIView {
   private var needsFrame = false
   /// The time of the animations that the latest rendering shows.
   private var renderedTime: Duration?
+  /// Whether the latest rendering that started renders into layers, or `nil` before the first one.
+  private var renderedInLayers: Bool?
   /// The layer that shows the layers of the document while the view can play animations.
   private let layerTreeHost: CALayer = {
     let layer = CALayer()
@@ -128,6 +128,9 @@ public class SVGUIView: UIView {
   /// Whether every element with a filter is painted into a layer of its own, as if what it paints changed, which
   /// tests turn on to run all the filters of a document on the GPU.
   var paintsFiltersIntoOwnLayers = false
+  /// Whether the view shows its document in layers while its animations don't play too, which tests and benchmarks
+  /// turn on to render frames of a view that holds its animations in layers.
+  var showsStillFramesInLayers = false
   /// How many layers that the view shows ran their filters on the GPU.
   var layersFilteredOnGPU: Int {
     shownLayers?.paintedContents.count(where: \.filteredOnGPU) ?? 0
@@ -300,7 +303,10 @@ public class SVGUIView: UIView {
     renderedTime = time
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
-    let promoted = configuration.animation == .none ? nil : promoted
+    // The animations play in layers. A still frame is rendered into one image, as `takeSnapshot(rect:at:)` renders it,
+    // so that the view shows what a snapshot of the frame shows.
+    let promoted = rendersLayers ? promoted : nil
+    renderedInLayers = promoted != nil
     let painting = paintsFiltersIntoOwnLayers ? nil : painting
     let usesGPU = runsFiltersOnGPU && !isInBackground
     let previous = reusesLayers ? shownLayers : nil
@@ -439,16 +445,27 @@ public class SVGUIView: UIView {
     configuration.animation == .none || isHeldByReduceMotion ? .zero : currentTime
   }
 
-  /// Whether the animations advance: they play, they haven't ended, and the view can be seen.
-  private var advances: Bool {
+  /// Whether the animations play: the view plays them, they haven't ended, and Reduce Motion doesn't hold them.
+  private var playsAnimations: Bool {
     configuration.animation != .none && isPlaying && currentTime.seconds < animationEnd && !isHeldByReduceMotion
-      && window != nil && !isHidden && bounds.width > 0 && bounds.height > 0 && !isInBackground
   }
 
-  /// Starts or stops the clock, and renders the displayed time if it changed.
+  /// Whether the view shows its document in layers, which it does while its animations play, whether it can be seen
+  /// or not, so that it doesn't render again when it's seen again.
+  private var rendersLayers: Bool {
+    playsAnimations || showsStillFramesInLayers && configuration.animation != .none
+  }
+
+  /// Whether the animations advance: they play, and the view can be seen.
+  private var advances: Bool {
+    playsAnimations && window != nil && !isHidden && bounds.width > 0 && bounds.height > 0 && !isInBackground
+  }
+
+  /// Starts or stops the clock, and renders the displayed time if it changed, or the frame in the other way if the
+  /// animations start or stop playing.
   private func updatePlayback() {
     clock.isRunning = advances
-    if let renderedTime, renderedTime != displayedTime {
+    if let renderedTime, renderedTime != displayedTime || renderedInLayers != rendersLayers {
       renderFrame()
     }
   }
