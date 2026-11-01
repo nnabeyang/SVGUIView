@@ -187,6 +187,23 @@ struct PlaybackTests {
     #expect(clock.isRunning)
   }
 
+  @Test("the clock runs until a CSS animation that a SMIL animation applies ends")
+  func smilStartedAnimation() async throws {
+    let document = #"""
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+        <style>@keyframes a { to { fill: rgb(0, 255, 0) } } .spin { animation: a 3s linear forwards }</style>
+        <rect width="20" height="20"><set attributeName="class" to="spin" begin="2s" dur="1s" fill="freeze"/></rect>
+      </svg>
+      """#
+    let (view, clock) = try await makeView(document)
+    // The animation starts at 2 seconds, and ends at 5, so at 4 seconds it's two thirds of the way.
+    clock.advance(by: .seconds(4))
+    #expect(clock.isRunning)
+    try await waitForGreen(in: view) { (169...171).contains($0) }
+    clock.advance(by: .seconds(2))
+    #expect(!clock.isRunning)
+  }
+
   @Test("the clock doesn't run for animations that don't change the document")
   func pausedAnimation() async throws {
     let (_, clock) = try await makeView(Self.document.replacingOccurrences(of: "forwards", with: "paused"))

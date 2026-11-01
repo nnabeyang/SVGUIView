@@ -90,9 +90,10 @@ package struct AnimationPlayback: Equatable, Sendable {
 
 extension DocumentAnimations {
   /// The playback of a CSS animation, which is the one that the document keeps for it, or for an animation that it
-  /// keeps none for, one that started as the document was loaded, or that is paused at its start.
+  /// keeps none for, one that started when a SMIL animation applied it, or as the document was loaded, or that is
+  /// paused at its start.
   func playback(of id: CSSAnimationID, isPaused: Bool) -> AnimationPlayback {
-    playback[id] ?? AnimationPlayback(isPaused: isPaused)
+    playback[id] ?? AnimationPlayback(startTime: smilStarted.start(of: id, at: time) ?? 0, isPaused: isPaused)
   }
 }
 

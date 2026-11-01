@@ -63,6 +63,7 @@ extension SVGBaseContext {
         }
         return animation
       }, time: 0)
+    animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
     animations.playback = playback(of: root, at: time)
     let context = SVGBaseContext(
       document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
