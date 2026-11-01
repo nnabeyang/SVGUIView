@@ -38,6 +38,9 @@ package struct PaintedLayer: Sendable {
   /// times the scale of the transforms around the layer along the axis, so that the contents are as sharp as a
   /// rendering into one bitmap, also under a transform that scales the axes differently.
   package let rasterScale: CGSize
+  /// The rectangle of the view in the coordinates of the layer around this one, which the contents are clipped to,
+  /// or `nil` for a layer that an animation moves.
+  package let view: CGRect?
   /// Whether what the nodes paint can change with the time, so that the contents of another time can't be shown.
   package let changes: Bool
   /// What the layer is in the plans of all times, which the layers of one time are matched with the layers of

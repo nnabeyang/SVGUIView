@@ -156,6 +156,8 @@ struct LayerTreeTests {
 
   /// Documents whose edges fall between the pixels of the screen, with the attributes of their root elements.
   nonisolated private static let edges: [(String, String)] = [
+    // A diagonal line that the edge of the view cuts.
+    (#"<line x2="160" y2="180" stroke="green"/>"#, #"viewBox="0 0 200 200""#),
     // The cells of a pattern end between pixels, and the layer starts away from the origin of the view.
     (
       #"<pattern id="p" patternUnits="userSpaceOnUse" width="100" height="100" viewBox="0 0 10 10">"#

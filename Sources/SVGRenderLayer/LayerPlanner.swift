@@ -240,7 +240,8 @@ package struct LayerPlanner: Sendable {
       bounds = bounds.applying(pixels).integral.applying(pixels.inverted())
     }
     return PaintedLayer(
-      nodes: nodes, bounds: bounds, rasterScale: rasterScale, changes: changes || context.isChanging,
+      nodes: nodes, bounds: bounds, rasterScale: rasterScale,
+      view: context.isFixed ? context.view.applying(transform.inverted()) : nil, changes: changes || context.isChanging,
       key: context.key.appending(.nodes(nodes.map(\.id))))
   }
 }
