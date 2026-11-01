@@ -17,6 +17,14 @@ struct DocumentAnimations: Sendable {
   var playback = [CSSAnimationID: AnimationPlayback]()
   /// The transitions that changes of the document started, by the elements and the properties that they change.
   var transitions = [ElementID: [PropertyID: CSSTransition]]()
+  /// The CSS animations that the SMIL animations apply, and when they start.
+  var smilStarted = SMILStartedAnimations()
+
+  /// Finds the CSS animations that the SMIL animations apply in a document.
+  mutating func findSMILStartedAnimations(in document: DocumentTree, stylesheet: Stylesheet) {
+    smilStarted = SMILStartedAnimations(
+      document: document, stylesheet: stylesheet, animations: self, passes: SVGBaseContext.endPasses)
+  }
 }
 
 package struct SVGBaseContext: Sendable {
@@ -92,11 +100,13 @@ package struct SVGBaseContext: Sendable {
 
   /// The context of the elements made from a document and its style sheets, with the animations at time zero.
   init(document: DocumentTree, stylesheet: Stylesheet) {
+    var animations = DocumentAnimations(
+      keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0)
+    animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
     self.init(
       document: document, stylesheet: stylesheet,
       root: document.root.flatMap { ElementCursor(root: $0).makeElement(with: stylesheet, languages: document.languages) as? SVGSVGElement },
-      animations: DocumentAnimations(
-        keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0))
+      animations: animations)
   }
 
   /// The context with a CSS animation playing as given.
@@ -114,6 +124,7 @@ package struct SVGBaseContext: Sendable {
     guard let index = animations.smil.firstIndex(where: { $0.elementID == element }) else { return nil }
     var context = self
     context.animations.smil[index].addedBegins.append(time)
+    context.animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
     return context
   }
 
@@ -125,6 +136,7 @@ package struct SVGBaseContext: Sendable {
     guard let index = animations.smil.firstIndex(where: { $0.elementID == element }) else { return nil }
     var context = self
     context.animations.smil[index].addedEnds.append(time)
+    context.animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
     return context
   }
 

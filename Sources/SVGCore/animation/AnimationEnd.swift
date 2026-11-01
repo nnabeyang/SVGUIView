@@ -3,14 +3,15 @@ import Foundation
 extension SVGBaseContext {
   /// The most passes of the schedule that finds the end of the SMIL animations, which is how many animations a
   /// chain of syncbase values can have.
-  private static let endPasses = 100
+  static let endPasses = 100
 
   /// The time in seconds after which the computed values of the document don't change, which is 0 for a document
   /// without animations and infinite for animations that don't end.
   ///
   /// After an animation or a transition ends, it keeps its last value or has no effect, so the document looks the
-  /// same at any later time. The CSS animations are the ones that the elements run as the document is loaded: one that a SMIL
-  /// animation starts by changing `class` or `style` isn't counted.
+  /// same at any later time. The CSS animations are the ones that the elements run as the document is loaded, and the
+  /// ones that SMIL animations apply by changing `class`, `style` or other attributes, from the times that they apply
+  /// them.
   ///
   /// This finds the intervals of every SMIL animation, so a renderer calls it once for a document, not for the
   /// documents at each time.
@@ -29,6 +30,7 @@ extension SVGBaseContext {
         end = max(end, finish)
       }
     }
+    end = max(end, animations.smilStarted.end)
     for transitions in animations.transitions.values {
       for transition in transitions.values {
         end = max(end, transition.endTime)
