@@ -17,8 +17,24 @@ package struct RenderedContainer: Sendable {
   package let transform: CGAffineTransform
   package let opacity: CGFloat
   package let clip: CGRect?
+  /// The image of the clip that the layers in the container are composited together and then clipped by, or `nil`.
+  package let mask: MaskContents?
   package let children: [RenderedLayer]
   /// What the container is in the plans of all times.
+  package let key: LayerKey
+}
+
+/// The image of the coverage of a clip, whose alpha is what the layers that it masks show.
+package struct MaskContents: Sendable {
+  /// The image, or `nil` if its bitmap couldn't be allocated, in which case the mask shows nothing.
+  package let image: CGImage?
+  /// The rectangle of the clip.
+  package let clip: CGRect
+  /// The rectangle that the image covers, in the coordinates of the container.
+  package let bounds: CGRect
+  /// The pixels of the image for each unit of the coordinates along each axis.
+  package let rasterScale: CGSize
+  /// What the mask is in the plans of all times.
   package let key: LayerKey
 }
 
@@ -54,6 +70,20 @@ extension RenderedContainer {
     return paintedContents.count { contents in contents.image.map { !images.contains(ObjectIdentifier($0)) } ?? true }
   }
 
+  /// The masks of the container and the containers in it, at every depth, by their keys.
+  fileprivate var masksByKey: [LayerKey: MaskContents] {
+    var masks = [LayerKey: MaskContents]()
+    if let mask {
+      masks[mask.key] = mask
+    }
+    for child in children {
+      if case .container(let container) = child {
+        masks.merge(container.masksByKey) { $1 }
+      }
+    }
+    return masks
+  }
+
   /// The contents of the painted layers in the container, at every depth, by their keys.
   fileprivate var contentsByKey: [LayerKey: PaintedContents] {
     var contents = [LayerKey: PaintedContents]()
@@ -83,6 +113,7 @@ extension ContainerLayer {
   package func painted(
     scale: CGFloat, reusing previous: RenderedContainer? = nil, filters: MetalFilterRenderer? = nil
   ) async -> RenderedContainer? {
+    let previousMasks = previous?.masksByKey ?? [:]
     let previous = previous?.contentsByKey ?? [:]
     let layers = paintedLayers.filter { $0.reusedContents(of: previous) == nil }
     let onGPU = filters.map { filters in layers.filter { $0.runsFilterOnGPU(filters, scale: scale) } } ?? []
@@ -102,7 +133,7 @@ extension ContainerLayer {
       return await group.reduce(into: [:]) { $0.merge($1) { $1 } }
     }
     guard !Task.isCancelled else { return nil }
-    return assembled(painted: painted, reusing: previous)
+    return assembled(painted: painted, reusing: previous, masks: previousMasks)
   }
 
   /// The painted layers in the container, at every depth, in order.
@@ -117,12 +148,13 @@ extension ContainerLayer {
 
   /// The container with the contents of its painted layers, which are painted or reused.
   private func assembled(
-    painted: [LayerKey: PaintedContents], reusing previous: [LayerKey: PaintedContents]
+    painted: [LayerKey: PaintedContents], reusing previous: [LayerKey: PaintedContents],
+    masks: [LayerKey: MaskContents]
   ) -> RenderedContainer {
     let children = children.map { child -> RenderedLayer in
       switch child {
       case .container(let container):
-        .container(container.assembled(painted: painted, reusing: previous))
+        .container(container.assembled(painted: painted, reusing: previous, masks: masks))
       case .painted(let layer):
         .painted(
           layer.reusedContents(of: previous) ?? painted[layer.key]
@@ -130,8 +162,47 @@ extension ContainerLayer {
       }
     }
     return RenderedContainer(
-      id: id, transform: transform, opacity: opacity, clip: clip, children: children, key: key)
+      id: id, transform: transform, opacity: opacity, clip: clip,
+      mask: mask.map { $0.reusedContents(of: masks) ?? $0.painted() }, children: children, key: key)
   }
+}
+
+extension ClipMask {
+  /// The image of another time, if it covers the same pixels with the same clip.
+  fileprivate func reusedContents(of previous: [LayerKey: MaskContents]) -> MaskContents? {
+    guard let contents = previous[key], contents.clip == clip, contents.bounds == bounds,
+      contents.rasterScale == rasterScale
+    else { return nil }
+    return contents
+  }
+
+  /// The image of the coverage of the clip, which is filled as Core Graphics fills it, in the pixels that a painted
+  /// layer of the same bounds and scale would have.
+  fileprivate func painted() -> MaskContents {
+    let size = CGSize(width: pixels(bounds.width, rasterScale.width), height: pixels(bounds.height, rasterScale.height))
+    guard
+      let width = Int(exactly: size.width), let height = Int(exactly: size.height), width > 0, height > 0,
+      let graphics = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+        bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue)
+    else {
+      return MaskContents(image: nil, clip: clip, bounds: bounds, rasterScale: rasterScale, key: key)
+    }
+    // The first row of the bitmap is the top of the image, as in the contents of a layer.
+    graphics.concatenate(
+      CGAffineTransform(size.width / bounds.width, 0, 0, -size.height / bounds.height, 0, size.height))
+    graphics.translateBy(x: -bounds.minX, y: -bounds.minY)
+    graphics.addRect(clip)
+    graphics.fillPath()
+    return MaskContents(image: graphics.makeImage(), clip: clip, bounds: bounds, rasterScale: rasterScale, key: key)
+  }
+}
+
+/// The pixels of the contents of a length at a raster scale. Bounds on the pixels of the screen cover whole pixels, up
+/// to the error of the arithmetic that put them there.
+private func pixels(_ length: CGFloat, _ rasterScale: CGFloat) -> CGFloat {
+  let pixels = length * rasterScale
+  return abs(pixels - pixels.rounded()) < 0.01 ? pixels.rounded() : pixels.rounded(.up)
 }
 
 extension PaintedLayer {
@@ -158,11 +229,6 @@ extension PaintedLayer {
   ///
   /// The filter of a layer that paints only an element with a filter runs on the GPU when `filters` runs it.
   fileprivate func painted(scale: CGFloat, filters: MetalFilterRenderer?) async -> PaintedContents {
-    // Bounds on the pixels of the screen cover whole pixels, up to the error of the arithmetic that put them there.
-    func pixels(_ length: CGFloat, _ rasterScale: CGFloat) -> CGFloat {
-      let pixels = length * rasterScale
-      return abs(pixels - pixels.rounded()) < 0.01 ? pixels.rounded() : pixels.rounded(.up)
-    }
     let size = CGSize(
       width: pixels(bounds.width, rasterScale.width), height: pixels(bounds.height, rasterScale.height))
     // A bitmap that can't be made, such as one too large, shows nothing, as an element whose filter, mask, clip

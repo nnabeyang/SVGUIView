@@ -49,6 +49,10 @@ package final class LayerTree {
       layer.set(bounds: .zero)
       layer.masksToBounds = false
     }
+    let mask = container.mask.map { self.layer(of: $0, shown: &shown) }
+    if layer.mask !== mask {
+      layer.mask = mask
+    }
     if layer.affineTransform() != container.transform {
       layer.setAffineTransform(container.transform)
     }
@@ -80,6 +84,21 @@ package final class LayerTree {
     }
     // The image is resized to the bounds, so the scale only tells the screen how sharp it is.
     let contentsScale = max(contents.rasterScale.width, contents.rasterScale.height)
+    if layer.contentsScale != contentsScale {
+      layer.contentsScale = contentsScale
+    }
+    return layer
+  }
+
+  /// The layer that shows the image of a mask in its bounds, in the coordinates of the container that it masks.
+  private func layer(of mask: MaskContents, shown: inout [LayerKey: CALayer]) -> CALayer {
+    let layer = layers[mask.key] ?? Self.makeLayer()
+    shown[mask.key] = layer
+    layer.set(bounds: mask.bounds)
+    if (layer.contents as AnyObject?) !== mask.image {
+      layer.contents = mask.image
+    }
+    let contentsScale = max(mask.rasterScale.width, mask.rasterScale.height)
     if layer.contentsScale != contentsScale {
       layer.contentsScale = contentsScale
     }

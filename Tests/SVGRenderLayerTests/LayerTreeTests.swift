@@ -166,6 +166,14 @@ struct LayerTreeTests {
     ),
     // The viewport of the root element clips its content where the margins of the fit end, between pixels.
     (#"<rect x="-100" y="-100" width="680" height="560" fill="blue"/>"#, #"width="100%" height="100%" viewBox="0 0 480 360""#),
+    // Content whose edges lie on the clip of the viewport, before and after an element that moves, which puts the
+    // content in layers of their own. The clip applies once to the content of the layers composited together.
+    (
+      keyframes + #"<rect width="480" height="360" fill="white"/>"#
+        + #"<rect x="200" y="100" width="40" height="40" fill="green" style="animation: f 1s linear"/>"#
+        + #"<rect width="480" height="360" fill="none" stroke="black" stroke-width="2"/>"#,
+      #"width="100%" height="100%" viewBox="0 0 480 360""#
+    ),
     // The same, with an element that moves, which puts the content of the viewport in layers of their own.
     (
       keyframes + #"<rect x="-100" y="-100" width="680" height="560" fill="blue"/>"#
@@ -182,6 +190,52 @@ struct LayerTreeTests {
       let (count, largest) = differences(single, layers)
       #expect(count == 0, "\(count) pixels differ by up to \(largest) at the scale \(scale)")
     }
+  }
+
+  /// The layers of a document at the times, shown one time after another in the same host, after each time.
+  private func shownLayers(_ content: String, root: String, at times: [Double], scale: CGFloat) async throws -> [[CALayer]] {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" "# + root + ">" + content + "</svg>"
+    let base = SVGParser.parse(data: Data(svg.utf8))
+    let rect = CGRect(origin: .zero, size: size)
+    let fit = ContentFit(
+      preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    let planner = LayerPlanner(
+      promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: scale)
+    let host = CALayer()
+    let layerTree = LayerTree(host: host)
+    var previous: RenderedContainer?
+    var shown = [[CALayer]]()
+    func all(_ layer: CALayer) -> [CALayer] { [layer] + (layer.sublayers ?? []).flatMap(all) }
+    for time in times {
+      let tree = try #require(
+        await RenderTreeBuilder(base: base.at(time: time), viewPort: rect, scale: scale).build(fit: fit))
+      let contents = try #require(await planner.plan(tree, in: rect).painted(scale: scale, reusing: previous))
+      layerTree.show(contents)
+      previous = contents
+      shown.append(all(host))
+    }
+    return shown
+  }
+
+  @Test("the clip of a viewport between the pixels clips its layers once by a mask, and one on the pixels masks to bounds")
+  func viewportClips() async throws {
+    let content =
+      keyframes + #"<rect width="100%" height="100%" fill="white"/>"#
+      + #"<rect x="20" y="20" width="40" height="40" fill="green" style="animation: f 1s linear"/>"#
+    // A view box of 480 by 360 leaves margins of 12.5 points above and below.
+    let between = try await shownLayers(
+      content, root: #"width="100%" height="100%" viewBox="0 0 480 360""#, at: [0, 0.5], scale: 1)
+    let masked = between.map { $0.filter { $0.mask != nil } }
+    #expect(masked.map(\.count) == [1, 1])
+    #expect(masked[0].first?.masksToBounds == false)
+    // The mask of the next time is the same layer with the same image.
+    #expect(masked[0].first?.mask === masked[1].first?.mask)
+    #expect((masked[0].first?.mask?.contents as AnyObject?) === (masked[1].first?.mask?.contents as AnyObject?))
+    let onPixels = try await shownLayers(
+      content, root: #"width="100%" height="100%" viewBox="0 0 100 100""#, at: [0], scale: 1)
+    #expect(onPixels[0].allSatisfy { $0.mask == nil })
+    // The layer that clips to the view, and the one that clips to the viewport.
+    #expect(onPixels[0].count { $0.masksToBounds } == 2)
   }
 
   @Test("layers show what a rendering into one bitmap shows, at one time after another", arguments: documents)

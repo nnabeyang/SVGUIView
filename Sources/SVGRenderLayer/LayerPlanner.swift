@@ -57,9 +57,9 @@ package struct LayerPlanner: Sendable {
       ? painted(nodes, in: context, changes: nodes.contains(where: changes)).map { [PlannedLayer.painted($0)] } ?? []
       : layers(of: nodes, in: context)
     let content = ContainerLayer(
-      id: nil, transform: fit, opacity: 1, clip: nil, children: children, key: context.key)
+      id: nil, transform: fit, opacity: 1, clip: nil, mask: nil, children: children, key: context.key)
     return ContainerLayer(
-      id: nil, transform: .identity, opacity: 1, clip: rect, children: [.container(content)],
+      id: nil, transform: .identity, opacity: 1, clip: rect, mask: nil, children: [.container(content)],
       key: LayerKey(components: [.index(0)]))
   }
 
@@ -131,31 +131,33 @@ package struct LayerPlanner: Sendable {
     case .group(let group) where group.clip == nil && group.mask == nil:
       let inner = context.inside(group.transform, isFixed: isFixed, isChanging: isChanging, key: key)
       return ContainerLayer(
-        id: group.id, transform: group.transform, opacity: group.opacity, clip: nil,
+        id: group.id, transform: group.transform, opacity: group.opacity, clip: nil, mask: nil,
         children: layers(of: group.children, in: inner), key: inner.key)
     case .use(let use) where use.clip == nil && use.mask == nil:
       let transform = (use.instance?.translation ?? .identity).concatenating(use.transform)
       let inner = context.inside(transform, isFixed: isFixed, isChanging: isChanging, key: key)
       return ContainerLayer(
-        id: use.id, transform: transform, opacity: use.instance?.opacity ?? 1, clip: nil,
+        id: use.id, transform: transform, opacity: use.instance?.opacity ?? 1, clip: nil, mask: nil,
         children: use.instance?.content.map { layers(of: [$0], in: inner) } ?? [], key: inner.key)
     case .viewport(let viewport) where viewport.content.map({ $0.clip == nil && $0.mask == nil }) ?? true:
       guard let content = viewport.content else { return nil }
       let transform = content.viewBoxTransform.concatenating(viewport.translation).concatenating(viewport.transform)
       let inner = context.inside(transform, isFixed: isFixed, isChanging: isChanging, key: key)
-      // The overflow of a viewport is clipped in the coordinates of its content.
+      // The overflow of a viewport is clipped in the coordinates of its content, once, to what its content shows
+      // composited together.
       let clipped =
         content.overflowClip.map { clip in
           let clipped = inner.inside(.identity, key: .index(0))
+          let mask = self.mask(of: clip, in: clipped)
           return [
             PlannedLayer.container(
               ContainerLayer(
-                id: nil, transform: .identity, opacity: 1, clip: clip,
+                id: nil, transform: .identity, opacity: 1, clip: mask == nil ? clip : nil, mask: mask,
                 children: layers(of: content.children, in: clipped), key: clipped.key))
           ]
         } ?? layers(of: content.children, in: inner)
       return ContainerLayer(
-        id: viewport.id, transform: transform, opacity: viewport.opacity, clip: nil, children: clipped,
+        id: viewport.id, transform: transform, opacity: viewport.opacity, clip: nil, mask: nil, children: clipped,
         key: inner.key)
     default:
       // A promoted node that paints as one image, or a shape, is painted in its own coordinates in its layer.
@@ -166,10 +168,34 @@ package struct LayerPlanner: Sendable {
       let contentChanges =
         isChanging || node.descendants.contains { $0.id.element != node.id.element && changes($0) }
       return ContainerLayer(
-        id: node.id, transform: node.transform, opacity: node.groupOpacity, clip: nil,
+        id: node.id, transform: node.transform, opacity: node.groupOpacity, clip: nil, mask: nil,
         children: painted([node.withoutCompositing], in: inner, changes: contentChanges).map { [.painted($0)] } ?? [],
         key: inner.key)
     }
+  }
+
+  /// The mask of the clip of a viewport whose edges lie between the pixels of the screen, as the nodes of the context
+  /// are without the transforms that animations change, or `nil` for a clip whose edges lie on the pixels, or that a
+  /// rotation or a skew keeps off them, which the container masks to its bounds.
+  private func mask(of clip: CGRect, in context: Context) -> ClipMask? {
+    let resting = context.restingTransform
+    guard resting.b == 0, resting.c == 0 else { return nil }
+    let pixels = resting.concatenating(CGAffineTransform(scaleX: scale, y: scale))
+    let edges = clip.applying(pixels)
+    func isOnPixel(_ value: CGFloat) -> Bool {
+      abs(value - value.rounded()) < 1e-6
+    }
+    guard ![edges.minX, edges.minY, edges.maxX, edges.maxY].allSatisfy(isOnPixel) else { return nil }
+    let transform = context.transform
+    // The same scale as a painted layer in the context, rounded as it is.
+    func rounded(_ value: CGFloat) -> CGFloat {
+      (scale * value * 1e6).rounded() / 1e6
+    }
+    return ClipMask(
+      clip: clip, bounds: edges.integral.applying(pixels.inverted()),
+      rasterScale: CGSize(
+        width: rounded(hypot(transform.a, transform.b)), height: rounded(hypot(transform.c, transform.d))),
+      key: context.key.appending(.index(1)))
   }
 
   /// Whether a node in the node gets a layer of its own, which it doesn't inside a node that composites what it
