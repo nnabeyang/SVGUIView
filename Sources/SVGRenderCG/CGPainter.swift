@@ -447,14 +447,18 @@ package struct CGPainter {
     var callbacks = CGPatternCallbacks(version: 0, drawPattern: drawPattern, releaseInfo: releaseInfo)
     let scaleX = pattern.tileSize.width / CGFloat(tileImage.width)
     let scaleY = pattern.tileSize.height / CGFloat(tileImage.height)
+    // The transform from the space of the pattern, the pixels of the tile from the position of the pattern, to the
+    // device.
+    let matrix = pattern.transform.withoutScaling
+      .translatedBy(x: pattern.origin.x, y: pattern.origin.y)
+      .scaledBy(x: scaleX, y: scaleY)
+      .concatenating(graphics.ctm)
+    if paintCells(of: tileImage, matrix: matrix, path: path, into: graphics) { return }
     guard
       let cgPattern = CGPattern(
         info: Unmanaged.passRetained(tileImage).toOpaque(),
         bounds: CGRect(origin: .zero, size: pattern.frame.size),
-        matrix: pattern.transform.withoutScaling
-          .translatedBy(x: pattern.origin.x, y: pattern.origin.y)
-          .scaledBy(x: scaleX, y: scaleY)
-          .concatenating(graphics.ctm),
+        matrix: matrix,
         xStep: CGFloat(tileImage.width),
         yStep: CGFloat(tileImage.height),
         tiling: .constantSpacing,
@@ -468,5 +472,77 @@ package struct CGPainter {
     graphics.setFillColorSpace(patternSpace)
     graphics.setFillPattern(cgPattern, colorComponents: &alpha)
     graphics.drawPath(using: .fill)
+  }
+
+  /// The most cells of a pattern that are drawn one by one.
+  private static let maxCells = 10_000
+
+  /// Fills a path with the cells of a pattern, each drawn into the rectangle that its corners round to on the pixels
+  /// of the device, or returns `false` where the cells can't lie on the pixels: under a rotation or a skew, smaller
+  /// than a pixel, or too many to draw one by one.
+  ///
+  /// The cells touch without gaps, and round to the same pixels in every bitmap whose pixels lie on the same grid,
+  /// such as the contents of a layer, which start at another pixel. A pattern of Core Graphics rounds the cells from
+  /// where the drawing starts, so the cells of the same pattern could lie a pixel apart in a layer and in one bitmap.
+  ///
+  /// - Parameter matrix: The transform from the space of the pattern, the pixels of the tile, to the device.
+  private func paintCells(of tile: CGImage, matrix: CGAffineTransform, path: CGPath, into graphics: CGContext) -> Bool {
+    let width = CGFloat(tile.width)
+    let height = CGFloat(tile.height)
+    guard matrix.b == 0, matrix.c == 0, abs(matrix.a) * width >= 1, abs(matrix.d) * height >= 1 else { return false }
+    graphics.saveGState()
+    defer { graphics.restoreGState() }
+    graphics.addPath(path)
+    graphics.clip()
+    let visible = graphics.boundingBoxOfClipPath
+    guard !visible.isEmpty else { return true }
+    // The cells that cover what the clip shows, in the space of the pattern.
+    let area = visible.applying(graphics.ctm).applying(matrix.inverted())
+    let columns = Int((area.minX / width).rounded(.down))..<Int((area.maxX / width).rounded(.up))
+    let rows = Int((area.minY / height).rounded(.down))..<Int((area.maxY / height).rounded(.up))
+    guard columns.count * rows.count <= Self.maxCells else { return false }
+    // A position halfway between pixels rounds up, even when the arithmetic of a bitmap that starts at another pixel
+    // puts it a little below.
+    func pixel(_ position: CGFloat) -> CGFloat {
+      (position + 0.5 + 1e-6).rounded(.down)
+    }
+    // The cells round to at most two widths and two heights, so the tile is scaled to each size once, and the cells
+    // are drawn without scaling.
+    var cells = [CGSize: CGImage]()
+    func cell(width cellWidth: CGFloat, height cellHeight: CGFloat) -> CGImage? {
+      let key = CGSize(width: cellWidth, height: cellHeight)
+      if let image = cells[key] { return image }
+      guard
+        let context = CGContext.bitmap(
+          size: CGSize(width: abs(cellWidth), height: abs(cellHeight)), scale: 1,
+          space: tile.colorSpace ?? CGColorSpaceCreateDeviceRGB())
+      else { return nil }
+      // The tile maps to the cell as the space of the pattern maps to the device, flipped where it flips.
+      context.concatenate(
+        CGAffineTransform(
+          cellWidth / width, 0, 0, cellHeight / height, max(-cellWidth, 0), max(-cellHeight, 0)))
+      context.draw(tile, in: CGRect(x: 0, y: 0, width: width, height: height))
+      let image = context.makeImage()
+      cells[key] = image
+      return image
+    }
+    graphics.concatenate(graphics.ctm.inverted())
+    for row in rows {
+      for column in columns {
+        let x = CGFloat(column) * width
+        let y = CGFloat(row) * height
+        let left = pixel(matrix.a * x + matrix.tx)
+        let right = pixel(matrix.a * (x + width) + matrix.tx)
+        let bottom = pixel(matrix.d * y + matrix.ty)
+        let top = pixel(matrix.d * (y + height) + matrix.ty)
+        guard left != right, bottom != top, let image = cell(width: right - left, height: top - bottom) else {
+          continue
+        }
+        graphics.draw(
+          image,
+          in: CGRect(x: min(left, right), y: min(bottom, top), width: abs(right - left), height: abs(top - bottom)))
+      }
+    }
+    return true
   }
 }

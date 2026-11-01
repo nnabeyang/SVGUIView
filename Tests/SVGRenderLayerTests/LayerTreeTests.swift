@@ -28,11 +28,13 @@ private func pixels(of context: CGContext) -> [UInt8] {
 
 /// A document with the content at the times, rendered into one bitmap and into layers, one time after another, where
 /// the layers of a time reuse the ones of the time before.
+///
+/// - Parameter root: The attributes of the root `<svg>` element.
 @MainActor
-private func renderings(_ content: String, at times: [Double], scale: CGFloat) async throws -> [(
-  bitmap: [UInt8], layers: [UInt8]
-)] {
-  let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"# + content + "</svg>"
+private func renderings(
+  _ content: String, root: String = #"viewBox="0 0 100 100""#, at times: [Double], scale: CGFloat
+) async throws -> [(bitmap: [UInt8], layers: [UInt8])] {
+  let svg = #"<svg xmlns="http://www.w3.org/2000/svg" "# + root + ">" + content + "</svg>"
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(origin: .zero, size: size)
   let fit = ContentFit(
@@ -151,6 +153,34 @@ struct LayerTreeTests {
       true
     ),
   ]
+
+  /// Documents whose edges fall between the pixels of the screen, with the attributes of their root elements.
+  nonisolated private static let edges: [(String, String)] = [
+    // The cells of a pattern end between pixels, and the layer starts away from the origin of the view.
+    (
+      #"<pattern id="p" patternUnits="userSpaceOnUse" width="100" height="100" viewBox="0 0 10 10">"#
+        + #"<circle cx="5" cy="5" r="1.9" fill="red"/></pattern>"#
+        + ##"<rect x="1" y="1" width="200" height="200" fill="url(#p)"/>"##, #"viewBox="0 0 480 360""#
+    ),
+    // The viewport of the root element clips its content where the margins of the fit end, between pixels.
+    (#"<rect x="-100" y="-100" width="680" height="560" fill="blue"/>"#, #"width="100%" height="100%" viewBox="0 0 480 360""#),
+    // The same, with an element that moves, which puts the content of the viewport in layers of their own.
+    (
+      keyframes + #"<rect x="-100" y="-100" width="680" height="560" fill="blue"/>"#
+        + #"<rect x="200" y="100" width="40" height="40" fill="green" style="animation: f 1s linear"/>"#,
+      #"width="100%" height="100%" viewBox="0 0 480 360""#
+    ),
+  ]
+
+  @Test("layers show the edges between pixels as a rendering into one bitmap does", arguments: edges)
+  func edgeAgreement(document: (content: String, root: String)) async throws {
+    for scale in [1.0, 2.0, 3.0] {
+      let (single, layers) = try #require(
+        try await renderings(document.content, root: document.root, at: [0], scale: scale).first)
+      let (count, largest) = differences(single, layers)
+      #expect(count == 0, "\(count) pixels differ by up to \(largest) at the scale \(scale)")
+    }
+  }
 
   @Test("layers show what a rendering into one bitmap shows, at one time after another", arguments: documents)
   func agreement(document: (content: String, moves: Bool)) async throws {
