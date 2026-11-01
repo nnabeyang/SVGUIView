@@ -182,6 +182,39 @@ struct LayerTreeTests {
     ),
   ]
 
+  /// The attributes of root elements with transforms, and whether they move.
+  nonisolated private static let rootTransforms: [(String, Bool)] = [
+    (#"viewBox="0 0 100 100" transform="rotate(30)""#, false),
+    (#"viewBox="0 0 100 100" transform="translate(10.25, 20)""#, false),
+    (#"width="100%" height="100%" viewBox="0 0 480 360" style="animation: s 1s linear""#, true),
+  ]
+
+  @Test("layers show the transform of the root element as a rendering into one bitmap does", arguments: rootTransforms)
+  func rootTransformAgreement(document: (root: String, moves: Bool)) async throws {
+    let content =
+      keyframes + #"<rect x="-50" y="-50" width="600" height="600" fill="white"/>"#
+      + #"<rect x="10" y="10" width="50" height="30" fill="red"/>"#
+      + #"<circle cx="60" cy="60" r="20" fill="blue" stroke="black" stroke-width="4"/>"#
+    let times = [0, 0.25, 0.5]
+    for scale in [1.0, 2.0] {
+      let renderings = try await renderings(content, root: document.root, at: times, scale: scale)
+      for (time, (single, layers)) in zip(times, renderings) {
+        let (count, largest) = differences(single, layers)
+        let description = "\(count) pixels differ by up to \(largest) at the time \(time) and the scale \(scale)"
+        if document.moves {
+          // The screen resamples the edges of the shapes and of the viewport that turns with them.
+          #expect(count <= single.count / 4 / 15, "\(description)")
+        } else {
+          #expect(count == 0, "\(description)")
+        }
+      }
+      // The root element turns in the bitmap.
+      if document.moves {
+        #expect(renderings[0].bitmap != renderings[2].bitmap)
+      }
+    }
+  }
+
   @Test("layers show the edges between pixels as a rendering into one bitmap does", arguments: edges)
   func edgeAgreement(document: (content: String, root: String)) async throws {
     for scale in [1.0, 2.0, 3.0] {
