@@ -54,10 +54,14 @@ struct CascadedValues: Sendable {
 
   /// The declarations of the user agent's style sheet for an element, which every other declaration overrides.
   ///
-  /// SVG 2 hides the overflow of the elements that establish viewports, except the root element.
+  /// SVG 2 hides the overflow of the elements that establish viewports, except the root element. The root element is
+  /// a box of CSS layout, whose transform origin is its center, as SVG 2 sets `transform-origin: 0 0` only for the
+  /// other `<svg>` elements.
   static func userAgentDeclarations(of name: SVGElementName, isRoot: Bool) -> [PropertyDeclaration] {
     switch name {
-    case .svg where !isRoot, .symbol, .image, .marker, .pattern:
+    case .svg where isRoot:
+      [PropertyDeclaration(TransformOriginProperty.self, .value(TransformOrigin(x: .percent(50), y: .percent(50))))]
+    case .svg, .symbol, .image, .marker, .pattern:
       [PropertyDeclaration(OverflowProperty.self, .value(.hidden))]
     default: []
     }

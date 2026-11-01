@@ -74,6 +74,19 @@ struct ImagePlacementTests {
     #expect(above[3] < 10, "\(above)")
   }
 
+  @Test("the root element of an SVG image turns about the center of the rectangle of the image")
+  func svgImageRootTransform() async throws {
+    let svg =
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2" transform="rotate(90)">"#
+      + #"<rect width="1" height="2" fill="red"/></svg>"#
+    let content =
+      #"<image x="5" y="5" width="10" height="10" href="data:image/svg+xml;base64,\#(Data(svg.utf8).base64EncodedString())"/>"#
+    let top = try await pixel(content, x: 10, y: 7)
+    let bottom = try await pixel(content, x: 10, y: 12)
+    #expect(top[0] > 245 && top[3] > 245, "\(top)")
+    #expect(bottom[3] < 10, "\(bottom)")
+  }
+
   @Test("an image with slice is clipped to its rectangle")
   func sliced() async throws {
     let content = image(#"preserveAspectRatio="xMinYMin slice""#)

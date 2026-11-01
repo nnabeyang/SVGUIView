@@ -83,6 +83,59 @@ struct RenderTreeBuilderTests {
     #expect(nested.translation == CGAffineTransform(translationX: 5, y: 5))
   }
 
+  /// The transform of a rotation by 90 degrees about a point.
+  private static func rotation(about x: CGFloat, _ y: CGFloat) -> CGAffineTransform {
+    CGAffineTransform(translationX: -x, y: -y).concatenating(CGAffineTransform(rotationAngle: .pi / 2))
+      .concatenating(CGAffineTransform(translationX: x, y: y))
+  }
+
+  /// Attributes of the root element of 40 by 20, and its transform, about the center of its viewport if the transform
+  /// origin isn't declared, in the coordinates outside its view box.
+  private static let rootTransforms: [(String, CGAffineTransform)] = [
+    (#"transform="rotate(90)""#, rotation(about: 20, 10)),
+    (#"transform="rotate(90)" transform-origin="0 0""#, CGAffineTransform(rotationAngle: .pi / 2)),
+    (#"style="transform: rotate(90deg); transform-origin: 100% 0""#, rotation(about: 40, 0)),
+    (#"transform="rotate(90)" transform-box="fill-box""#, rotation(about: 20, 10)),
+    (#"style="transform: translate(50%, 10px)""#, CGAffineTransform(translationX: 20, y: 10)),
+  ]
+
+  @Test("the transform of the root element applies about the center of its viewport", arguments: rootTransforms)
+  func rootTransform(attributes: String, transform: CGAffineTransform) async throws {
+    let tree = try await renderTree(
+      #"<svg width="10" height="10" transform="rotate(90)"/>"#, attributes: #"width="40" height="20" "# + attributes)
+    guard case .viewport(let root) = tree.root, case .viewport(let nested)? = try children(of: tree).first else {
+      Issue.record("The root and its child aren't viewports")
+      return
+    }
+    expectClose(root.transform, transform)
+    // The transform of a nested svg element applies about the origin of its user space.
+    expectClose(nested.transform, CGAffineTransform(rotationAngle: .pi / 2))
+  }
+
+  @Test("a style sheet sets the transform origin of the root element")
+  func rootTransformOriginInStyleSheet() async throws {
+    let tree = try await renderTree(
+      "<style>svg { transform-origin: 0 0 }</style>", attributes: #"width="40" height="20" transform="rotate(90)""#)
+    guard case .viewport(let root) = tree.root else {
+      Issue.record("The root isn't a viewport")
+      return
+    }
+    expectClose(root.transform, CGAffineTransform(rotationAngle: .pi / 2))
+  }
+
+  @Test("the filter of the root element applies inside its transform, which its source doesn't apply again")
+  func rootTransformWithFilter() async throws {
+    let tree = try await renderTree(
+      #"<filter id="f"><feOffset dx="1"/></filter><rect width="10" height="10"/>"#,
+      attributes: #"width="40" height="20" transform="rotate(90)" filter="url(#f)""#)
+    guard case .filtered(let filtered) = tree.root, case .viewport(let source) = filtered.source else {
+      Issue.record("The root isn't a filtered viewport")
+      return
+    }
+    expectClose(filtered.transform, Self.rotation(about: 20, 10))
+    #expect(source.transform == .identity)
+  }
+
   /// Attributes of an image of 2 by 1 in a rectangle of 10 by 10 at 5, 5, where the image is drawn, and the rectangle
   /// that clips it.
   private static let imagePlacements: [(String, CGRect, CGRect?)] = [
@@ -1741,16 +1794,6 @@ struct RenderTreeBuilderTests {
       }
     let moved = point.applying(transform)
     #expect(abs(moved.x - expected.x) < 1e-9 && abs(moved.y - expected.y) < 1e-9, "\(moved)")
-  }
-
-  @Test("the root svg element isn't transformed")
-  func rootTransform() async throws {
-    let tree = try await renderTree(#"<rect width="10" height="10"/>"#, attributes: #"transform="rotate(90)""#)
-    guard case .viewport(let viewport) = tree.root else {
-      Issue.record("The root isn't a viewport")
-      return
-    }
-    #expect(viewport.transform == .identity)
   }
 
   @Test("the children of an svg element with a filter keep their transforms")

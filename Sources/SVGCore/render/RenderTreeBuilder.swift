@@ -387,10 +387,9 @@ package struct RenderTreeBuilder {
     let context = context.styled(by: svg)
     let id = renderID(of: svg, instance: instance)
     let isRoot = svg.base.elementID == base.root?.base.elementID
-    // The root element is placed by the view, and its transform isn't supported yet. The viewport of a symbol has
-    // no transform of its own, as SVG 1.1 has, and as WebKit draws it.
+    // The viewport of a symbol has no transform of its own, as SVG 1.1 has, and as WebKit draws it.
     let transform =
-      mode != .filter(isRoot: true) && !isRoot && svg.base.name != .symbol
+      mode != .filter(isRoot: true) && svg.base.name != .symbol
       ? await transform(of: svg, context: context, frame: nil, guard: references) : .identity
     let (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
     guard let layout else {
@@ -585,6 +584,9 @@ package struct RenderTreeBuilder {
   func transform(
     of element: any SVGDrawableElement, context: ResolveContext, frame: CGRect?, guard references: ReferenceGuard
   ) async -> CGAffineTransform {
+    if let svg = element as? SVGSVGElement, svg.base.elementID == base.root?.base.elementID {
+      return transform(of: svg.style, box: rootBox(of: svg, context: context), context: context)
+    }
     let transform = await transform(of: element.style, context: context) { box in
       if box == .fillBox, let frame { return frame }
       let path = await path(of: element, context: context, guard: references)
@@ -602,11 +604,27 @@ package struct RenderTreeBuilder {
   func transform(
     of style: ComputedStyle, context: ResolveContext, reference: (TransformBox) async -> CGRect
   ) async -> CGAffineTransform {
-    let list = style.transform
-    guard !list.functions.isEmpty else { return .identity }
+    guard !style.transform.functions.isEmpty else { return .identity }
     // The box of `view-box` starts at the origin of user space, also for a `viewBox` that doesn't.
     let box =
       style.transformBox == .viewBox ? CGRect(origin: .zero, size: context.viewBoxSize) : await reference(style.transformBox)
+    return transform(of: style, box: box, context: context)
+  }
+
+  /// The box of CSS layout of the root element, which is the reference box of its transform for every
+  /// `transform-box`: its viewport, in the coordinates that the view or the `<image>` element places it in. Its
+  /// transform applies outside the transform of its view box.
+  private func rootBox(of svg: SVGSVGElement, context: ResolveContext) -> CGRect {
+    if imageFit != nil { return viewPort }
+    return CGRect(
+      x: 0, y: 0, width: (svg.width ?? .percent(100)).value(context: context, mode: .width),
+      height: (svg.height ?? .percent(100)).value(context: context, mode: .height))
+  }
+
+  /// The transform of computed values about their transform origin in a reference box.
+  private func transform(of style: ComputedStyle, box: CGRect, context: ResolveContext) -> CGAffineTransform {
+    let list = style.transform
+    guard !list.functions.isEmpty else { return .identity }
     let matrix = list.matrix(box: box.size, context: context)
     let origin = CGPoint(
       x: box.minX + style.transformOrigin.x.value(total: box.width, context: context),

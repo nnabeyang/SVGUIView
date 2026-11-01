@@ -48,6 +48,19 @@ struct ContainerTests {
     #expect(try await pixel(svg, x: 15, y: 10) == Self.clear)
   }
 
+  @Test("the root element turns about the center of the view, with the viewport that clips it")
+  func rootTransform() async throws {
+    let leftHalf = #"<rect width="10" height="20" fill="lime"/>"#
+    let turned = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" transform="rotate(90)">"#
+    #expect(try await pixel(turned + leftHalf + "</svg>", x: 10, y: 5) == Self.lime)
+    #expect(try await pixel(turned + leftHalf + "</svg>", x: 10, y: 15) == Self.clear)
+    let moved =
+      #"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" transform="translate(5)">"#
+    let all = #"<rect x="-20" width="60" height="20" fill="lime"/>"#
+    #expect(try await pixel(moved + all + "</svg>", x: 2, y: 10) == Self.clear)
+    #expect(try await pixel(moved + all + "</svg>", x: 7, y: 10) == Self.lime)
+  }
+
   @Test("a group, an svg element and a use element are masked")
   func masks() async throws {
     for content in [
