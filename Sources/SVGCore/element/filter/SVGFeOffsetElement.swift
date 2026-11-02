@@ -18,6 +18,7 @@ final class SVGFeOffsetElement: SVGElement, SVGFilterPrimitiveElement {
 
   let result: String?
 
+  let input: SVGFilterInput?
   let dx: Double?
   let dy: Double?
 
@@ -31,6 +32,7 @@ final class SVGFeOffsetElement: SVGElement, SVGFilterPrimitiveElement {
 
     result = attributes["result"]
 
+    input = SVGFilterInput(rawValue: attributes["in", default: ""])
     dx = Double(attributes["dx", default: ""])
     dy = Double(attributes["dy", default: ""])
   }

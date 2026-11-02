@@ -135,6 +135,13 @@ struct MetalFilterRendererTests {
     // Offsets, also clipped by the region of the primitive before.
     filter(#"<feOffset dx="5" dy="-8"/>"#),
     filter(#"<feFlood flood-color="blue" x="0" y="0" width="60" height="60"/><feOffset dx="10" dy="10"/>"#),
+    // Offsets of an input that `in` names, clipped by their subregion only.
+    filter(
+      #"<feFlood flood-color="blue" x="0" y="0" width="60" height="60" result="f"/>"#
+        + #"<feOffset in="SourceGraphic" dx="10" dy="10"/>"#),
+    filter(
+      #"<feFlood flood-color="blue" x="0" y="0" width="60" height="60" result="f"/>"#
+        + #"<feGaussianBlur stdDeviation="1"/><feOffset in="f" dx="-5" dy="5" x="10" y="10" width="70" height="70"/>"#),
     // Floods.
     filter(#"<feFlood flood-color="orange" flood-opacity="0.7" x="20" y="20" width="40" height="50"/>"#),
     filter(#"<feFlood flood-color="orange"/>"#, space: "sRGB", opacity: "0.3"),

@@ -274,8 +274,8 @@ private struct FilterGeometry {
       case .merge:
         guard area(of: subregion) != nil else { return false }
         clipRect = subregion
-      case .offset(let translation):
-        clipRect = clipRect.intersection(subregion)
+      case .offset(let input, let translation):
+        clipRect = input == nil ? clipRect.intersection(subregion) : subregion
         guard isOnPixels(translation.tx * scale), isOnPixels(translation.ty * scale),
           clipRect.isNull || area(of: clipRect) != nil
         else { return false }
@@ -394,18 +394,24 @@ private struct FilterRun {
       }
       guard let result else { return fill(.zero, in: fullArea) }
       return clipped(result, to: area)
-    case .offset(let translation):
+    case .offset(let offsetInput, let translation):
       let dx = translation.tx * scale
       let dy = translation.ty * scale
-      clipRect = clipRect.intersection(subregion)
+      // As on the CPU, the result of the primitive before stays clipped by what clipped it, and an input that `in`
+      // names is clipped by the subregion only.
+      clipRect = offsetInput == nil ? clipRect.intersection(subregion) : subregion
       // A clip to nothing draws nothing.
       let clip = clipRect.isNull ? DrawArea(origin: .zero, end: .zero) : area(of: clipRect)
-      guard isOnPixels(dx), isOnPixels(dy), var area = clip, let converted = convert(input, to: source.space) else {
+      var source = source
+      guard isOnPixels(dx), isOnPixels(dy), var area = clip, let converted = convert(input, to: source.space),
+        let selected = offsetInput == nil
+          ? converted : self.input(offsetInput, source: &source, input: converted, space: source.space)
+      else {
         return nil
       }
       // The bitmaps of the CPU have their origin at the bottom left, so a positive distance up is a smaller row.
       area.offset = SIMD2(Int32(dx.rounded()), Int32(-dy.rounded()))
-      return draw(converted, in: area)
+      return draw(selected, in: area)
     }
   }
 

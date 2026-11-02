@@ -143,10 +143,10 @@ extension CGPainter {
       return merge(
         inputs: inputs, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
         clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
-    case .offset(let translation):
+    case .offset(let input, let translation):
       return offset(
-        translation: translation, srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect,
-        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext)
+        translation: translation, input: input, srcImage: srcImage, inImage: inImage, subregion: subregion,
+        clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     }
   }
 
@@ -262,9 +262,11 @@ extension CGPainter {
     return cgContext.makeImage()
   }
 
+  /// Moves the input. Without `in`, the result of the primitive before is moved and clipped by what clipped it as
+  /// well, and an input that `in` names is clipped by the subregion only.
   private func offset(
-    translation: CGAffineTransform, srcImage: CGImage, inImage: CGImage, subregion: CGRect, clipRect: inout CGRect,
-    bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext
+    translation: CGAffineTransform, input: SVGFilterInput?, srcImage: CGImage, inImage: CGImage, subregion: CGRect,
+    clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     guard
       var format = vImage_CGImageFormat(
@@ -274,18 +276,34 @@ extension CGPainter {
         bitmapInfo: srcImage.bitmapInfo),
       var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
     else { return nil }
-    defer { inputBuffer.free() }
-    // The image uses the memory of the buffer, which is freed after the image is drawn below.
-    guard
-      let image = vImageCreateCGImageFromBuffer(
-        &inputBuffer,
-        &format,
-        { _, _ in },
-        nil,
-        vImage_Flags(kvImageNoAllocate),
-        nil)?.takeRetainedValue()
-    else { return nil }
-    clipRect = CGRectIntersection(clipRect, subregion)
+    let inputData = inputBuffer.data
+    defer { free(inputData) }
+    let image: CGImage
+    if let input {
+      // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
+      guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format) else { return nil }
+      let srcData = srcBuffer.data
+      defer { free(srcData) }
+      guard
+        let selected = inputImage(
+          input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
+      else { return nil }
+      image = selected
+      clipRect = subregion
+    } else {
+      // The image uses the memory of the buffer, which is freed after the image is drawn below.
+      guard
+        let previous = vImageCreateCGImageFromBuffer(
+          &inputBuffer,
+          &format,
+          { _, _ in },
+          nil,
+          vImage_Flags(kvImageNoAllocate),
+          nil)?.takeRetainedValue()
+      else { return nil }
+      image = previous
+      clipRect = CGRectIntersection(clipRect, subregion)
+    }
     cgContext.clip(to: clipRect)
     cgContext.concatenate(translation)
     cgContext.setAlpha(opacity)
