@@ -105,6 +105,15 @@ extension RenderTreeBuilder {
       return .blend(mode: (blend.mode ?? .normal).toCgBlendMode, input: blend.input, input2: blend.input2)
     case let colorMatrix as SVGFeColorMatrixElement:
       return .colorMatrix(input: colorMatrix.input, matrix: Self.matrix(of: colorMatrix))
+    case let transfer as SVGFeComponentTransferElement:
+      // The last function of a component is the one that the primitive uses.
+      var functions = [SVGElementName: TransferFunction]()
+      for case let function as SVGFeFuncElement in transfer.children {
+        functions[function.type] = Self.transferFunction(of: function)
+      }
+      return .componentTransfer(
+        input: transfer.input, red: functions[.feFuncR] ?? .identity, green: functions[.feFuncG] ?? .identity,
+        blue: functions[.feFuncB] ?? .identity, alpha: functions[.feFuncA] ?? .identity)
     case let flood as SVGFeFloodElement:
       return .flood(color: floodColor(of: flood))
     case let blur as SVGFeGaussianBlurElement:
@@ -178,6 +187,26 @@ extension RenderTreeBuilder {
       ]
     }
     return matrix.map(Float.init)
+  }
+
+  /// The transfer function of a `feFuncR`, `feFuncG`, `feFuncB` or `feFuncA`. A missing or invalid `type`, and a
+  /// table without values, change nothing, and a missing or invalid number has its initial value.
+  static func transferFunction(of element: SVGFeFuncElement) -> TransferFunction {
+    let values = (element.tableValues ?? []).map(Float.init)
+    switch element.functionType ?? .identity {
+    case .identity:
+      return .identity
+    case .table:
+      return values.isEmpty ? .identity : .table(values)
+    case .discrete:
+      return values.isEmpty ? .identity : .discrete(values)
+    case .linear:
+      return .linear(slope: Float(element.slope ?? 1), intercept: Float(element.intercept ?? 0))
+    case .gamma:
+      return .gamma(
+        amplitude: Float(element.amplitude ?? 1), exponent: Float(element.exponent ?? 1),
+        offset: Float(element.offset ?? 0))
+    }
   }
 
   /// The color of a flood, premultiplied by its alpha and the flood opacity, in the order of the pixels of the

@@ -1704,6 +1704,69 @@ struct RenderTreeBuilderTests {
     #expect(zip(matrix, expected).allSatisfy { abs($0 - $1) < 0.001 }, "\(matrix)")
   }
 
+  /// Children of a `feComponentTransfer`, and the functions of red, green, blue and alpha.
+  private static let componentTransfers: [(String, [TransferFunction])] = [
+    ("", [.identity, .identity, .identity, .identity]),
+    (
+      #"<feFuncR type="table" tableValues="0 1, 0.5"/><feFuncG type="discrete" tableValues="1 0"/>"#
+        + #"<feFuncB type="linear" slope="0.5" intercept="0.25"/>"#
+        + #"<feFuncA type="gamma" amplitude="2" exponent="3" offset="-1"/>"#,
+      [.table([0, 1, 0.5]), .discrete([1, 0]), .linear(slope: 0.5, intercept: 0.25), .gamma(amplitude: 2, exponent: 3, offset: -1)]
+    ),
+    // The last function of a component is the one that the primitive uses.
+    (
+      #"<feFuncB type="table" tableValues="0 0 1 1"/><feFuncB type="table" tableValues="1 1 0 0"/>"#,
+      [.identity, .identity, .table([1, 1, 0, 0]), .identity]
+    ),
+    // A missing or invalid type, and a table without values, change nothing.
+    (#"<feFuncR tableValues="1 0"/><feFuncG type="random" tableValues="1 0"/>"#, [.identity, .identity, .identity, .identity]),
+    (
+      #"<feFuncB type="table"/><feFuncR type="table" tableValues=""/><feFuncG type="discrete" tableValues="1px"/>"#,
+      [.identity, .identity, .identity, .identity]
+    ),
+    // A missing or invalid number has its initial value.
+    (
+      #"<feFuncR type="linear" slope="0.5px" intercept="50%"/><feFuncG type="gamma" amplitude="2px" offset="0.5"/>"#,
+      [.linear(slope: 1, intercept: 0), .gamma(amplitude: 1, exponent: 1, offset: 0.5), .identity, .identity]
+    ),
+  ]
+
+  @Test("a feComponentTransfer maps each component by the function of its last child", arguments: componentTransfers)
+  func componentTransfer(children: String, expected: [TransferFunction]) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feComponentTransfer>"## + children + ##"</feComponentTransfer></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .componentTransfer(_, let red, let green, let blue, let alpha) = filtered.primitives.first?.primitive
+    else {
+      Issue.record("The primitive isn't a component transfer")
+      return
+    }
+    #expect([red, green, blue, alpha] == expected)
+  }
+
+  /// Transfer functions, components, and what they map the components to.
+  private static let transfers: [(TransferFunction, Float, Float)] = [
+    // A table interpolates between its values at even intervals, and its last interval includes 1.
+    (.table([0, 1, 0.5]), 0.25, 0.5),
+    (.table([0, 1, 0.5]), 0.75, 0.75),
+    (.table([0, 1, 0.5]), 1, 0.5),
+    // Steps have even widths, and the last includes 1.
+    (.discrete([1, 0, 0.5]), 0.3, 1),
+    (.discrete([1, 0, 0.5]), 0.5, 0),
+    (.discrete([1, 0, 0.5]), 1, 0.5),
+    (.linear(slope: 0.5, intercept: 0.25), 0.5, 0.5),
+    (.gamma(amplitude: 2, exponent: 2, offset: 0.1), 0.5, 0.6),
+    // The results are clamped to 0 to 1.
+    (.table([100, -100]), 0.25, 1),
+    (.linear(slope: 999_999, intercept: 999_999), 0, 1),
+    (.linear(slope: 1, intercept: -2), 0.5, 0),
+  ]
+
+  @Test("a transfer function maps a component as the specification computes it", arguments: transfers)
+  func transfer(function: TransferFunction, component: Float, expected: Float) {
+    #expect(abs(function.apply(component) - expected) < 0.0001, "\(function.apply(component))")
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)
