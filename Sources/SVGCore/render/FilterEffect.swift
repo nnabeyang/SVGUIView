@@ -17,13 +17,17 @@ package struct FilteredNode: Sendable {
   package let colorInterpolation: SVGColorInterpolation
   /// The color space that the primitives draw into.
   package let colorInterpolationFilters: SVGColorInterpolation
-  /// The opacity of the element, which the result of the filter is drawn with.
+  /// The opacity of the element, which the result of the filter is drawn with after the clip path and the mask.
   package let opacity: CGFloat
   package let primitives: [FilterStep]
   /// The element without its filter.
   package let source: RenderNode?
   /// How the result blends with what's behind the element in its isolation group.
   package var blendMode = CGBlendMode.normal
+  /// The clip path of the element, which clips the result.
+  package var clip: ClipPathEffect?
+  /// The mask of the element, which masks the result after the clip path.
+  package var mask = MaskApplication.none
 }
 
 /// A primitive of a filter, with what it shares with the others.

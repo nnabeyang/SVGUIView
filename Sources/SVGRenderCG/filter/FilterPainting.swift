@@ -8,16 +8,29 @@ extension CGPainter {
   func paint(_ filtered: FilteredNode, into cgContext: CGContext) async {
     guard let source = await sourceImage(of: filtered), let result = await filterResult(of: filtered, source: source)
     else { return }
-    draw(result, of: filtered, into: cgContext)
+    await draw(result, of: filtered, into: cgContext)
   }
 
-  /// Draws the result of a filter with the transform and the opacity of the element into its filter region.
+  /// Draws the result of a filter into its filter region with the transform of the element, clipped by its clip path,
+  /// masked by its mask and with its opacity, in this order.
   ///
   /// The result covers the pixels of the filter bitmap, which can go past the filter region by part of a pixel.
-  package func draw(_ result: CGImage, of filtered: FilteredNode, into cgContext: CGContext) {
+  package func draw(_ result: CGImage, of filtered: FilteredNode, into cgContext: CGContext) async {
     cgContext.saveGState()
     cgContext.setBlendMode(filtered.blendMode)
     cgContext.concatenate(filtered.transform)
+    // The clip path and the mask cover the filter region, which the result can go past the bounds of the element in.
+    if let clip = filtered.clip {
+      await apply(clip, to: cgContext, extent: filtered.effectRect)
+    }
+    switch filtered.mask {
+    case .none:
+      break
+    case .clipToZero:
+      cgContext.clip(to: .zero)
+    case .mask(let mask):
+      await apply(mask, to: cgContext, extent: filtered.effectRect)
+    }
     cgContext.clip(to: filtered.effectRect)
     cgContext.setAlpha(filtered.opacity)
     cgContext.draw(result, in: bitmapRect(of: filtered))

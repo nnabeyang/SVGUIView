@@ -75,7 +75,8 @@ extension RenderNode {
         FilteredNode(
           id: filtered.id, transform: .identity, frame: filtered.frame, effectRect: filtered.effectRect,
           colorInterpolation: filtered.colorInterpolation, colorInterpolationFilters: filtered.colorInterpolationFilters,
-          opacity: 1, primitives: filtered.primitives, source: filtered.source))
+          opacity: 1, primitives: filtered.primitives, source: filtered.source, clip: filtered.clip,
+          mask: filtered.mask))
     }
   }
 }

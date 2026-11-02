@@ -5,7 +5,8 @@ import UIKit
 
 @testable import SVGUIView
 
-/// Tests that the opacity of an element with a filter applies to the result of the filter, once.
+/// Tests that the clip path, the mask and the opacity of an element with a filter apply to the result of the filter,
+/// in this order.
 @MainActor
 @Suite("Filter compositing")
 struct FilterCompositingTests {
@@ -51,6 +52,37 @@ struct FilterCompositingTests {
   func opacity(primitives: String) async throws {
     let pixel = try await pixel(square(primitives, attributes: #"opacity="0.5""#), x: 10, y: 10)
     #expect(hasAlpha(pixel, 128), "\(pixel)")
+  }
+
+  @Test(
+    "the clip path and the mask of the element apply to the result of the filter, which they cut at their edges",
+    arguments: [
+      #"<clipPath id="e"><rect x="5" y="5" width="10" height="10"/></clipPath>"#,
+      #"<mask id="e"><rect x="5" y="5" width="10" height="10" fill="white"/></mask>"#,
+    ])
+  func clipAndMask(effect: String) async throws {
+    let attribute = effect.hasPrefix("<clipPath") ? #"clip-path="url(#e)""# : #"mask="url(#e)""#
+    let content = effect + square(#"<feGaussianBlur stdDeviation="2"/>"#, attributes: attribute)
+    // The blur of the whole square is opaque at the edge of the clip, and nothing shows past it.
+    let inside = try await pixel(content, x: 5, y: 10)
+    #expect(Int(inside[3]) > 240, "\(inside)")
+    #expect(try await pixel(content, x: 4, y: 10) == [0, 0, 0, 0])
+  }
+
+  @Test(
+    "the result of the filter shows past the bounds of the element where the clip path and the mask cover it",
+    arguments: [
+      #"<clipPath id="e"><rect width="20" height="20"/></clipPath>"#,
+      #"<mask id="e" maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><rect width="20" height="20" fill="white"/></mask>"#,
+    ])
+  func pastBounds(effect: String) async throws {
+    let attribute = effect.hasPrefix("<clipPath") ? #"clip-path="url(#e)""# : #"mask="url(#e)""#
+    let content =
+      effect
+      + #"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="20" height="20"><feGaussianBlur stdDeviation="2"/></filter>"#
+      + #"<rect x="5" y="5" width="10" height="10" fill="blue" filter="url(#f)" "# + attribute + "/>"
+    let outside = try await pixel(content, x: 3, y: 10)
+    #expect(Int(outside[3]) > 16, "\(outside)")
   }
 
   @Test("a result that a later primitive takes by its name has no opacity of its own")

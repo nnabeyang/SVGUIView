@@ -37,9 +37,17 @@ extension RenderTreeBuilder {
     var source = await nodeWithoutFilter(
       of: element, context: sourceContext, mode: .filter(isRoot: true), guard: ReferenceGuard(), instance: instance)
     let id = RenderID(element: element.base.elementID, instance: instance)
-    // The last filter draws the result with the transform, the opacity and the blending of the element, and the
-    // others draw theirs into the source of the next one as they are.
+    // The last filter draws the result with the transform, the clip path, the mask, the opacity and the blending of
+    // the element, and the others draw theirs into the source of the next one as they are. The clip path and the mask
+    // of an `<svg>` element are in the coordinates of its content, so its source has them instead.
     let transform = await transform(of: element, context: elementContext, frame: frame, guard: references)
+    var clip: ClipPathEffect?
+    var mask = MaskApplication.none
+    if !(element is SVGSVGElement) {
+      clip = await clipEffect(element.clipPath, frame: frame, context: elementContext, guard: references)
+      mask = await maskApplication(
+        of: element, frame: frame, context: elementContext, guard: references, instance: instance)
+    }
     for (i, function) in functions.enumerated() {
       let isLast = i == functions.count - 1
       let effect: FilterEffect?
@@ -63,7 +71,8 @@ extension RenderTreeBuilder {
           effectRect: effect.effectRect, colorInterpolation: effect.colorInterpolation,
           colorInterpolationFilters: effect.colorInterpolationFilters, opacity: isLast ? element.opacity : 1,
           primitives: effect.primitives, source: source,
-          blendMode: isLast ? element.style.mixBlendMode.cgBlendMode : .normal))
+          blendMode: isLast ? element.style.mixBlendMode.cgBlendMode : .normal, clip: isLast ? clip : nil,
+          mask: isLast ? mask : .none))
     }
     return .filtered(source)
   }
