@@ -9,7 +9,6 @@ final class SVGFeMergeElement: SVGElement, SVGFilterPrimitiveElement {
   let height: SVGLength?
 
   let result: String?
-  let colorInterpolationFilters: SVGColorInterpolation?
 
   static var type: SVGElementName {
     .feMergeNode
@@ -31,7 +30,6 @@ final class SVGFeMergeElement: SVGElement, SVGFilterPrimitiveElement {
     height = SVGLength(attributes["height"])
 
     result = attributes["result"]
-    colorInterpolationFilters = base.style.colorInterpolationFilters
   }
 
 }

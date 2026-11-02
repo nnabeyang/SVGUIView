@@ -124,12 +124,11 @@ extension CGPainter {
     case .gaussianBlur(let blur):
       return blur.apply(
         srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect,
-        opacity: opacity, cgContext: cgContext, results: results, isFirst: step.isFirst, scale: scale)
-    case .merge(let inputs, let colorInterpolationFilters):
+        opacity: opacity, cgContext: cgContext, results: results, colorSpace: step.colorSpace, scale: scale)
+    case .merge(let inputs):
       return merge(
-        inputs: inputs, colorInterpolationFilters: colorInterpolationFilters, srcImage: srcImage, inImage: inImage,
-        subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext,
-        results: results, isFirst: step.isFirst)
+        inputs: inputs, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
+        clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     case .offset(let translation):
       return offset(
         translation: translation, srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect,
@@ -214,16 +213,16 @@ extension CGPainter {
   }
 
   private func merge(
-    inputs: [SVGFilterInput?], colorInterpolationFilters: SVGColorInterpolation?, srcImage: CGImage,
-    inImage: CGImage, subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat,
-    cgContext: CGContext, results: [String: CGImage], isFirst: Bool
+    inputs: [SVGFilterInput?], colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage,
+    subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
+    results: [String: CGImage]
   ) -> CGImage? {
-    let colorSpace = colorInterpolationFilters?.colorSpace ?? (isFirst ? srcImage.colorSpace! : inImage.colorSpace!)
+    // The inputs are converted to the color space of the primitive, and composited in the bitmap of the filter.
     guard
       var format = vImage_CGImageFormat(
         bitsPerComponent: srcImage.bitsPerComponent,
         bitsPerPixel: srcImage.bitsPerPixel,
-        colorSpace: colorSpace,
+        colorSpace: colorSpace.colorSpace,
         bitmapInfo: srcImage.bitmapInfo),
       var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
     else { return nil }

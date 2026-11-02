@@ -15,43 +15,26 @@ extension GaussianBlurPrimitive {
   }
 
   /// Blurs the input in the color space of the primitive, and draws it into `cgContext`.
+  ///
+  /// - Parameter colorSpace: The color space of the primitive, which the inputs are converted to.
   func apply(
     srcImage: CGImage, inImage: CGImage, subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect,
-    opacity: CGFloat, cgContext: CGContext, results: [String: CGImage], isFirst: Bool, scale: CGFloat
+    opacity: CGFloat, cgContext: CGContext, results: [String: CGImage], colorSpace: SVGColorInterpolation,
+    scale: CGFloat
   ) -> CGImage? {
-    let colorSpace: CGColorSpace
-    switch input {
-    case .none:
-      if isFirst {
-        colorSpace = (colorInterpolationFilters ?? filterColorInterpolationFilters ?? .sRGB).colorSpace
-      } else {
-        colorSpace = (colorInterpolationFilters ?? filterColorInterpolationFilters)?.colorSpace ?? inImage.colorSpace!
-      }
-    case .sourceAlpha, .sourceGraphic:
-      colorSpace = colorInterpolationFilters?.colorSpace ?? srcImage.colorSpace!
-    case .other(let srcName):
-      if let image = results[srcName] {
-        colorSpace = image.colorSpace!
-      } else {
-        colorSpace = colorInterpolationFilters?.colorSpace ?? (isFirst ? srcImage.colorSpace! : inImage.colorSpace!)
-      }
-    }
     guard
       var format = vImage_CGImageFormat(
         bitsPerComponent: srcImage.bitsPerComponent,
         bitsPerPixel: srcImage.bitsPerPixel,
-        colorSpace: colorSpace,
+        colorSpace: colorSpace.colorSpace,
         bitmapInfo: srcImage.bitmapInfo)
     else { return nil }
-    // The buffers below share memory, so free each allocation once, through the pointer that it returns.
-    guard let srcCopy = srcImage.copy(colorSpace: colorSpace),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcCopy, format: format)
-    else { return nil }
+    // The buffers convert the images to the format, and share memory below, so free each allocation once, through
+    // the pointer that it returns.
+    guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format) else { return nil }
     let srcData = srcBuffer.data
     defer { free(srcData) }
-    guard let inputCopy = inImage.copy(colorSpace: colorSpace),
-      var inputBuffer = try? vImage_Buffer(cgImage: inputCopy, format: format)
-    else { return nil }
+    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
     let inputData = inputBuffer.data
     defer { free(inputData) }
 

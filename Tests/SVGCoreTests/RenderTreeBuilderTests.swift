@@ -1620,7 +1620,6 @@ struct RenderTreeBuilderTests {
       """##)
     #expect(filtered.frame == CGRect(x: 10, y: 0, width: 10, height: 5))
     #expect(filtered.effectRect == CGRect(x: 9, y: -0.5, width: 12, height: 6))
-    #expect(filtered.primitives.map(\.isFirst) == [true, false, false])
     #expect(filtered.primitives.first?.result == "a")
     guard case .offset(let translation) = filtered.primitives[0].primitive else {
       Issue.record("The first primitive isn't an offset")
@@ -1636,12 +1635,30 @@ struct RenderTreeBuilderTests {
     }
     #expect(x == 1)
     #expect(y == 1)
-    guard case .merge(let inputs, _) = filtered.primitives[2].primitive else {
+    guard case .merge(let inputs) = filtered.primitives[2].primitive else {
       Issue.record("The third primitive isn't a merge")
       return
     }
     #expect(inputs.count == 2)
     #expect(inputs.first.map { $0 == nil } == true)
+  }
+
+  @Test(
+    "a primitive computes in its color-interpolation-filters, which it inherits from the filter, and is linearRGB by default"
+  )
+  func filterColorSpaces() async throws {
+    let linear = try await filteredNode(
+      ##"<filter id="f"><feOffset/><feGaussianBlur color-interpolation-filters="sRGB"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    #expect(linear.primitives.map(\.colorSpace) == [.linearRGB, .sRGB])
+    let inherited = try await filteredNode(
+      ##"<filter id="f" color-interpolation-filters="sRGB"><feOffset/><feMerge color-interpolation-filters="linearRGB"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    #expect(inherited.primitives.map(\.colorSpace) == [.sRGB, .linearRGB])
+    let fromAncestor = try await filteredNode(
+      ##"<g color-interpolation-filters="sRGB"><filter id="f"><feOffset/></filter></g>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    #expect(fromAncestor.primitives.map(\.colorSpace) == [.sRGB])
   }
 
   @Test("a filter without children draws nothing")
