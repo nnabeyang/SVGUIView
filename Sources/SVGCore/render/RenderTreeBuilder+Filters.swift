@@ -31,7 +31,7 @@ extension RenderTreeBuilder {
     }
     let elementContext = context.styled(by: element)
     let path = await path(of: element, context: elementContext, guard: references)
-    let frame = await frame(of: element, context: elementContext, path: path, guard: references)
+    var frame = await frame(of: element, context: elementContext, path: path, guard: references)
     // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
     let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
     var source = await nodeWithoutFilter(
@@ -40,7 +40,26 @@ extension RenderTreeBuilder {
     // The last filter draws the result with the transform, the clip path, the mask, the opacity and the blending of
     // the element, and the others draw theirs into the source of the next one as they are. The clip path and the mask
     // of an `<svg>` element are in the coordinates of its content, so its source has them instead.
-    let transform = await transform(of: element, context: elementContext, frame: frame, guard: references)
+    var transform = await transform(of: element, context: elementContext, frame: frame, guard: references)
+    // The filter of an `<svg>` element applies in the coordinates of its content, as Chrome and Firefox draw it: the
+    // filter region and the values of the primitives are resolved there, and the result moves to the viewport and
+    // the position of the element after the filter.
+    var filterContext = context
+    var functionContext = elementContext
+    if let svg = element as? SVGSVGElement {
+      let (translation, layout) = viewport(
+        of: svg, context: elementContext, isRoot: svg.base.elementID == base.root?.base.elementID)
+      // A viewport without area draws nothing.
+      guard let layout else { return .filtered(nil) }
+      frame = await self.frame(of: svg.children, context: layout.context, guard: references) ?? .zero
+      filterContext = layout.context
+      functionContext = layout.context
+      // The viewport of a symbol has no transform of its own, as its node has none.
+      let svgTransform =
+        svg.base.name != .symbol
+        ? await self.transform(of: svg, context: elementContext, frame: nil, guard: references) : .identity
+      transform = layout.viewBoxTransform.concatenating(translation).concatenating(svgTransform)
+    }
     var clip: ClipPathEffect?
     var mask = MaskApplication.none
     if !(element is SVGSVGElement) {
@@ -52,13 +71,14 @@ extension RenderTreeBuilder {
       let isLast = i == functions.count - 1
       let effect: FilterEffect?
       if case .url(let filterID) = function, let filter = filters[filterID] {
-        let region = effectRect(of: filter, frame: frame, context: context)
+        let region = effectRect(of: filter, frame: frame, context: filterContext)
         effect = FilterEffect(
           effectRect: region, colorInterpolation: filter.colorInterpolation ?? .sRGB,
           colorInterpolationFilters: filter.colorInterpolationFilters ?? .linearRGB,
-          primitives: primitives(of: filter, region: region, frame: frame, context: context))
+          primitives: primitives(of: filter, region: region, frame: frame, context: filterContext))
       } else {
-        effect = functionEffect(of: function, element: element, source: source, frame: frame, context: elementContext)
+        effect = functionEffect(
+          of: function, element: element, source: source, frame: frame, context: functionContext)
       }
       guard let effect else {
         // A filter function of a source that paints nothing paints nothing.
