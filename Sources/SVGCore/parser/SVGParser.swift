@@ -32,6 +32,7 @@ enum SVGElementName: String, Equatable {
   case feGaussianBlur
   case feFlood
   case feBlend
+  case feColorMatrix
   case feOffset
   case feMerge
   case feMergeNode

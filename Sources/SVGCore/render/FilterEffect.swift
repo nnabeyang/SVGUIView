@@ -40,6 +40,9 @@ package struct FilterStep: Sendable {
 
 package enum FilterPrimitive: Sendable {
   case blend(mode: CGBlendMode, input: SVGFilterInput?, input2: SVGFilterInput?)
+  /// A matrix of 4 rows of 5 numbers, for red, green, blue and alpha, that multiplies the components of each pixel
+  /// without its alpha premultiplied, from 0 to 1, followed by 1.
+  case colorMatrix(input: SVGFilterInput?, matrix: [Float])
   /// A flood with the components of its color, premultiplied, in the order of the pixels of the bitmap.
   case flood(color: [UInt8])
   case gaussianBlur(GaussianBlurPrimitive)

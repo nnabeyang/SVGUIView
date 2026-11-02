@@ -103,6 +103,8 @@ extension RenderTreeBuilder {
     switch element {
     case let blend as SVGFeBlendElement:
       return .blend(mode: (blend.mode ?? .normal).toCgBlendMode, input: blend.input, input2: blend.input2)
+    case let colorMatrix as SVGFeColorMatrixElement:
+      return .colorMatrix(input: colorMatrix.input, matrix: Self.matrix(of: colorMatrix))
     case let flood as SVGFeFloodElement:
       return .flood(color: floodColor(of: flood))
     case let blur as SVGFeGaussianBlurElement:
@@ -132,6 +134,50 @@ extension RenderTreeBuilder {
     default:
       preconditionFailure("\(element.type.rawValue) isn't a filter primitive")
     }
+  }
+
+  /// The matrix of a `feColorMatrix`, as the specification makes it from its `type` and `values`. Values that aren't
+  /// one number, or 20 for `matrix`, are missing, and a missing value gives the matrix that changes nothing.
+  static func matrix(of element: SVGFeColorMatrixElement) -> [Float] {
+    let identity: [Double] = [
+      1, 0, 0, 0, 0,
+      0, 1, 0, 0, 0,
+      0, 0, 1, 0, 0,
+      0, 0, 0, 1, 0,
+    ]
+    let values = element.values
+    let single = values?.count == 1 ? values?.first : nil
+    let matrix: [Double]
+    switch element.matrixType {
+    case .matrix:
+      matrix = values?.count == 20 ? values! : identity
+    case .saturate:
+      let s = single ?? 1
+      matrix = [
+        0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0, 0,
+        0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0, 0,
+        0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0, 0,
+        0, 0, 0, 1, 0,
+      ]
+    case .hueRotate:
+      let angle = (single ?? 0) * .pi / 180
+      let c = cos(angle)
+      let s = sin(angle)
+      matrix = [
+        0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928, 0, 0,
+        0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283, 0, 0,
+        0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072, 0, 0,
+        0, 0, 0, 1, 0,
+      ]
+    case .luminanceToAlpha:
+      matrix = [
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+        0.2125, 0.7154, 0.0721, 0, 0,
+      ]
+    }
+    return matrix.map(Float.init)
   }
 
   /// The color of a flood, premultiplied by its alpha and the flood opacity, in the order of the pixels of the
