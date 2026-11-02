@@ -121,6 +121,11 @@ extension CGPainter {
       return colorMatrix(
         matrix, input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
         clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
+    case .componentTransfer(let input, let red, let green, let blue, let alpha):
+      return componentTransfer(
+        (red, green, blue, alpha), input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage,
+        subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext,
+        results: results)
     case .flood(let color):
       return flood(
         color: color, srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect,

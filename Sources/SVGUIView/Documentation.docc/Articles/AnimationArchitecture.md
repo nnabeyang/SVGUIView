@@ -557,7 +557,8 @@ in the background run the filters on the CPU with Core Graphics and vImage.
     of the specification.
   - A blur whose standard deviations differ, and that blurs a direction with
     three boxes.
-  - A `feColorMatrix`, for which the GPU has no kernel yet.
+  - A `feColorMatrix` or a `feComponentTransfer`, for which the GPU has no
+    kernels yet.
   - A filter region too large for a texture.
 - The element is painted with Core Graphics into memory that the GPU reads, and
   the result is read from memory that the GPU writes, so the pixels aren't
