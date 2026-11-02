@@ -434,10 +434,15 @@ package struct RenderTreeBuilder {
       }
     }
     let references = beginsLevel(mode) ? references.beginning([.clipPaths, .masks]) : references
-    let clip = await clipEffect(svg.clipPath, frame: inner.viewBox, context: inner, guard: references)
-    let mask = await maskEffect(
-      self.mask(of: svg), frame: inner.viewBox, context: inner, guard: references,
-      instance: instance + [svg.base.elementID])
+    // The filter of the element clips and masks its result instead.
+    let isFilterRoot = mode == .filter(isRoot: true)
+    let clip = isFilterRoot ? nil : await clipEffect(svg.clipPath, frame: inner.viewBox, context: inner, guard: references)
+    let mask =
+      isFilterRoot
+      ? nil
+      : await maskEffect(
+        self.mask(of: svg), frame: inner.viewBox, context: inner, guard: references,
+        instance: instance + [svg.base.elementID])
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
     for child in svg.children {
