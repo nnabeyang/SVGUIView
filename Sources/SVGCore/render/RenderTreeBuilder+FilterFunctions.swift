@@ -80,7 +80,7 @@ extension RenderTreeBuilder {
           0, 0, 0, color[3], 0,
         ]),
       .gaussianBlur(GaussianBlurPrimitive(input: nil, standardDeviation: deviation)),
-      .offset(translation: CGAffineTransform(translationX: offset.width, y: offset.height)),
+      .offset(input: nil, translation: CGAffineTransform(translationX: offset.width, y: offset.height)),
     ]
     return primitives.map { FilterStep(primitive: $0, subregion: region, result: nil, colorSpace: colorSpace) }
       + [FilterStep(primitive: .merge(inputs: [nil, input]), subregion: subregion, result: result, colorSpace: colorSpace)]

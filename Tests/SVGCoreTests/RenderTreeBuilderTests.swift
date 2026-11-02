@@ -1621,7 +1621,7 @@ struct RenderTreeBuilderTests {
     #expect(filtered.frame == CGRect(x: 10, y: 0, width: 10, height: 5))
     #expect(filtered.effectRect == CGRect(x: 9, y: -0.5, width: 12, height: 6))
     #expect(filtered.primitives.first?.result == "a")
-    guard case .offset(let translation) = filtered.primitives[0].primitive else {
+    guard case .offset(_, let translation) = filtered.primitives[0].primitive else {
       Issue.record("The first primitive isn't an offset")
       return
     }
@@ -1816,7 +1816,7 @@ struct RenderTreeBuilderTests {
     let steps = filtered.primitives
     #expect(steps.count == 4)
     guard case .colorMatrix(let input, let matrix) = steps[0].primitive,
-      case .gaussianBlur(let blur) = steps[1].primitive, case .offset(let offset) = steps[2].primitive,
+      case .gaussianBlur(let blur) = steps[1].primitive, case .offset(_, let offset) = steps[2].primitive,
       case .merge(let inputs) = steps[3].primitive
     else {
       Issue.record("The steps aren't a matrix, a blur, an offset and a merge")
@@ -1843,7 +1843,7 @@ struct RenderTreeBuilderTests {
     #expect(steps.count == 5)
     let name = try #require(steps[0].result)
     guard case .colorMatrix(let input, _) = steps[1].primitive, case .other(let inputName) = input,
-      case .offset(let offset) = steps[3].primitive
+      case .offset(_, let offset) = steps[3].primitive
     else {
       Issue.record("The shadow doesn't take the named result of the offset")
       return
@@ -1878,6 +1878,23 @@ struct RenderTreeBuilderTests {
     #expect(compositeOperator == expected)
     #expect(k == expectedK)
     #expect(input2.map { if case .sourceAlpha = $0 { true } else { false } } == true)
+  }
+
+  @Test("a feOffset has its input, which is the result of the primitive before without in")
+  func offsetInput() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feFlood result="a"/><feOffset/><feOffset in="SourceGraphic"/><feOffset in="a"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    let inputs: [String] = filtered.primitives.dropFirst().map {
+      guard case .offset(let input, _) = $0.primitive else { return "not an offset" }
+      return switch input {
+      case nil: "none"
+      case .sourceGraphic: "SourceGraphic"
+      case .sourceAlpha: "SourceAlpha"
+      case .other(let name): name
+      }
+    }
+    #expect(inputs == ["none", "SourceGraphic", "a"])
   }
 
   @Test("a filter without children draws nothing")

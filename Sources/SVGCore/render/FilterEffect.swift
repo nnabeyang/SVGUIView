@@ -54,7 +54,9 @@ package enum FilterPrimitive: Sendable {
   case flood(color: [UInt8])
   case gaussianBlur(GaussianBlurPrimitive)
   case merge(inputs: [SVGFilterInput?])
-  case offset(translation: CGAffineTransform)
+  /// The input moved by a translation. Without an input, the result of the primitive before is moved, and clipped by
+  /// what clipped it as well.
+  case offset(input: SVGFilterInput?, translation: CGAffineTransform)
 }
 
 /// The transfer function of a component of a `feComponentTransfer`, from its `feFuncR`, `feFuncG`, `feFuncB` or

@@ -240,9 +240,9 @@ extension RenderTreeBuilder {
       let dy = offset.dy ?? 0
       return switch filter.primitiveUnits ?? .userSpaceOnUse {
       case .userSpaceOnUse:
-        .offset(translation: CGAffineTransform(translationX: dx, y: dy))
+        .offset(input: offset.input, translation: CGAffineTransform(translationX: dx, y: dy))
       case .objectBoundingBox:
-        .offset(translation: CGAffineTransform(translationX: dx * frame.width, y: dy * frame.height))
+        .offset(input: offset.input, translation: CGAffineTransform(translationX: dx * frame.width, y: dy * frame.height))
       }
     default:
       preconditionFailure("\(element.type.rawValue) isn't a filter primitive")
