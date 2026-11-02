@@ -79,7 +79,6 @@ extension CGPainter {
     filterCgContext.saveGState()
     var results = [String: CGImage]()
     var inputImage = srcImage
-    var clipRect = effectRect
     for step in filtered.primitives {
       // Leave the loop rather than return, so that the graphics states stay balanced. A cancelled rendering
       // throws its image away.
@@ -91,7 +90,7 @@ extension CGPainter {
       filterCgContext.clear(bitmapRect)
       guard
         let clippedImage = apply(
-          step, srcImage: srcImage, inImage: inputImage, clipRect: &clipRect, bitmapRect: bitmapRect,
+          step, srcImage: srcImage, inImage: inputImage, bitmapRect: bitmapRect,
           opacity: filtered.opacity, cgContext: filterCgContext, results: results)
       else { break }
       if let result = step.result {
@@ -108,7 +107,7 @@ extension CGPainter {
   ///
   /// - Parameter bitmapRect: The rectangle that the bitmaps of the filter cover, which the images are drawn into.
   private func apply(
-    _ step: FilterStep, srcImage: CGImage, inImage: CGImage, clipRect: inout CGRect, bitmapRect: CGRect,
+    _ step: FilterStep, srcImage: CGImage, inImage: CGImage, bitmapRect: CGRect,
     opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     let subregion = step.subregion
@@ -116,48 +115,51 @@ extension CGPainter {
     case .blend(let mode, let input, let input2):
       return blend(
         mode: mode, input: input, input2: input2, srcImage: srcImage, inImage: inImage, subregion: subregion,
-        clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
+        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     case .colorMatrix(let input, let matrix):
       return colorMatrix(
         matrix, input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
-        clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
+        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     case .componentTransfer(let input, let red, let green, let blue, let alpha):
       return componentTransfer(
         (red, green, blue, alpha), input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage,
-        subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext,
+        subregion: subregion, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext,
         results: results)
     case .composite(let compositeOperator, let k, let input, let input2):
       return composite(
         compositeOperator, k: k, input: input, input2: input2, colorSpace: step.colorSpace, srcImage: srcImage,
-        inImage: inImage, subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity,
+        inImage: inImage, subregion: subregion, bitmapRect: bitmapRect, opacity: opacity,
         cgContext: cgContext, results: results)
     case .morphology(let input, let morphologyOperator, let radius):
       return morphology(
         morphologyOperator, radius: radius, input: input, colorSpace: step.colorSpace, srcImage: srcImage,
-        inImage: inImage, subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity,
+        inImage: inImage, subregion: subregion, bitmapRect: bitmapRect, opacity: opacity,
         cgContext: cgContext, results: results)
+    case .tile(let input, let tile):
+      return self.tile(
+        tile, input: input, srcImage: srcImage, inImage: inImage, subregion: subregion,
+        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     case .flood(let color):
       return flood(
-        color: color, srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect,
-        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext)
+        color: color, srcImage: srcImage, inImage: inImage, subregion: subregion, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext)
     case .gaussianBlur(let blur):
       return blur.apply(
-        srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect,
+        srcImage: srcImage, inImage: inImage, subregion: subregion, bitmapRect: bitmapRect,
         opacity: opacity, cgContext: cgContext, results: results, colorSpace: step.colorSpace, scale: scale)
     case .merge(let inputs):
       return merge(
         inputs: inputs, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
-        clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
+        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     case .offset(let input, let translation):
       return offset(
         translation: translation, input: input, srcImage: srcImage, inImage: inImage, subregion: subregion,
-        clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
+        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     }
   }
 
   private func blend(
     mode: CGBlendMode, input: SVGFilterInput?, input2: SVGFilterInput?, srcImage: CGImage, inImage: CGImage,
-    subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
+    subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
     results: [String: CGImage]
   ) -> CGImage? {
     guard
@@ -189,13 +191,11 @@ extension CGPainter {
     cgContext.setBlendMode(mode)
     cgContext.draw(image1, in: bitmapRect)
 
-    clipRect = subregion
     return cgContext.makeImage()
   }
 
   private func flood(
-    color: [UInt8], srcImage: CGImage, inImage: CGImage, subregion: CGRect, clipRect: inout CGRect,
-    bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext
+    color: [UInt8], srcImage: CGImage, inImage: CGImage, subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext
   ) -> CGImage? {
     guard
       var format = vImage_CGImageFormat(
@@ -224,7 +224,6 @@ extension CGPainter {
     else {
       return nil
     }
-    clipRect = subregion
     cgContext.clip(to: subregion)
     cgContext.setAlpha(opacity)
     cgContext.draw(image, in: bitmapRect)
@@ -233,7 +232,7 @@ extension CGPainter {
 
   private func merge(
     inputs: [SVGFilterInput?], colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage,
-    subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
+    subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
     results: [String: CGImage]
   ) -> CGImage? {
     // The inputs are converted to the color space of the primitive, and composited in the bitmap of the filter.
@@ -263,15 +262,13 @@ extension CGPainter {
       else { return nil }
       cgContext.draw(image, in: bitmapRect)
     }
-    clipRect = subregion
     return cgContext.makeImage()
   }
 
-  /// Moves the input. Without `in`, the result of the primitive before is moved and clipped by what clipped it as
-  /// well, and an input that `in` names is clipped by the subregion only.
+  /// Moves the input, clipped by the subregion.
   private func offset(
     translation: CGAffineTransform, input: SVGFilterInput?, srcImage: CGImage, inImage: CGImage, subregion: CGRect,
-    clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
+    bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     guard
       var format = vImage_CGImageFormat(
@@ -294,7 +291,6 @@ extension CGPainter {
           input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
       else { return nil }
       image = selected
-      clipRect = subregion
     } else {
       // The image uses the memory of the buffer, which is freed after the image is drawn below.
       guard
@@ -307,9 +303,8 @@ extension CGPainter {
           nil)?.takeRetainedValue()
       else { return nil }
       image = previous
-      clipRect = CGRectIntersection(clipRect, subregion)
     }
-    cgContext.clip(to: clipRect)
+    cgContext.clip(to: subregion)
     cgContext.concatenate(translation)
     cgContext.setAlpha(opacity)
     cgContext.draw(image, in: bitmapRect)

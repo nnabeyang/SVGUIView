@@ -18,7 +18,7 @@ extension GaussianBlurPrimitive {
   ///
   /// - Parameter colorSpace: The color space of the primitive, which the inputs are converted to.
   func apply(
-    srcImage: CGImage, inImage: CGImage, subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect,
+    srcImage: CGImage, inImage: CGImage, subregion: CGRect, bitmapRect: CGRect,
     opacity: CGFloat, cgContext: CGContext, results: [String: CGImage], colorSpace: SVGColorInterpolation,
     scale: CGFloat
   ) -> CGImage? {
@@ -77,7 +77,6 @@ extension GaussianBlurPrimitive {
     else {
       return nil
     }
-    clipRect = subregion
     cgContext.clip(to: subregion)
     cgContext.setAlpha(opacity)
     cgContext.draw(image, in: bitmapRect)

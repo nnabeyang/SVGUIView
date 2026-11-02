@@ -26,8 +26,8 @@ private let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView
 /// - A `feBlend` or a `feMerge` whose subregion isn't the filter region, which the CPU scales its inputs into.
 /// - A blend mode other than the ones that Core Graphics computes as the specification does.
 /// - A blur whose standard deviations differ, and that blurs a direction with three boxes.
-/// - A `feColorMatrix`, a `feComponentTransfer`, a `feComposite` or a `feMorphology`, for which it has no kernels yet, and a `feDropShadow` and the filter
-///   functions of the CSS that are made of them.
+/// - A `feColorMatrix`, a `feComponentTransfer`, a `feComposite`, a `feMorphology` or a `feTile`, for which it has
+///   no kernels yet, and a `feDropShadow` and the filter functions of the CSS that are made of them.
 package final class MetalFilterRenderer: Sendable {
   let device: MTLDevice
   private let queue: MTLCommandQueue
@@ -246,23 +246,19 @@ private struct FilterGeometry {
 
   /// Whether the GPU runs the filter with the same results as the CPU, as `FilterRun` checks while it encodes it.
   var isSupported: Bool {
-    let effectRect = filtered.effectRect
     guard !filtered.primitives.isEmpty, (1...Self.maximumSize).contains(width),
       (1...Self.maximumSize).contains(height)
     else { return false }
-    var clipRect = effectRect
     for step in filtered.primitives {
       let subregion = step.subregion
       switch step.primitive {
       case .blend(let mode, _, _):
         guard blendModes.contains(mode), area(of: subregion) != nil else { return false }
-        clipRect = subregion
-      case .colorMatrix, .componentTransfer, .composite, .morphology:
+      case .colorMatrix, .componentTransfer, .composite, .morphology, .tile:
         // The GPU has no kernels for these yet.
         return false
       case .flood(let color):
         guard area(of: subregion) != nil, color.count == 4 else { return false }
-        clipRect = subregion
       case .gaussianBlur(let blur):
         guard area(of: subregion) != nil else { return false }
         if case .hetero(let x, let y) = blur.standardDeviation, x >= 0, y >= 0, x != y {
@@ -270,14 +266,10 @@ private struct FilterGeometry {
             return false
           }
         }
-        clipRect = subregion
       case .merge:
         guard area(of: subregion) != nil else { return false }
-        clipRect = subregion
-      case .offset(let input, let translation):
-        clipRect = input == nil ? clipRect.intersection(subregion) : subregion
-        guard isOnPixels(translation.tx * scale), isOnPixels(translation.ty * scale),
-          clipRect.isNull || area(of: clipRect) != nil
+      case .offset(_, let translation):
+        guard isOnPixels(translation.tx * scale), isOnPixels(translation.ty * scale), area(of: subregion) != nil
         else { return false }
       }
     }
@@ -298,8 +290,6 @@ private struct FilterRun {
   let buffer: MTLCommandBuffer
   /// The results of the primitives with names.
   var results = [String: FilterImage]()
-  /// The rectangle that the last primitive clipped to, which `feOffset` clips to as well.
-  var clipRect: CGRect
   /// The tables of the color operations that the run uses, in buffers that the kernels read, which are too large to
   /// pass as bytes.
   let tableBuffers = TableBuffers()
@@ -309,7 +299,6 @@ private struct FilterRun {
     self.filtered = filtered
     self.scale = scale
     self.buffer = buffer
-    clipRect = filtered.effectRect
   }
 
   private var geometry: FilterGeometry { FilterGeometry(filtered: filtered, scale: scale) }
@@ -343,7 +332,6 @@ private struct FilterRun {
     switch step.primitive {
     case .blend(let mode, let input1, let input2):
       guard let modeIndex = blendModes.firstIndex(of: mode), let area = area(of: subregion) else { return nil }
-      clipRect = subregion
       // The inputs are in the color space of the source.
       var source = source
       guard let converted = convert(input, to: source.space),
@@ -353,14 +341,13 @@ private struct FilterRun {
         let blended = blend(image1, over: backdrop, mode: UInt32(modeIndex))
       else { return nil }
       return clipped(blended, to: area)
-    case .colorMatrix, .componentTransfer, .composite, .morphology:
+    case .colorMatrix, .componentTransfer, .composite, .morphology, .tile:
       // `isSupported` leaves these filters to the CPU.
       return nil
     case .flood(let color):
       guard let area = area(of: subregion), color.count == 4,
         let table = renderer.table(.draw(from: source.space, to: space, alpha: filtered.opacity))
       else { return nil }
-      clipRect = subregion
       // The color is in the order of the pixels of the bitmap, and the kernels read the components as RGBA.
       func lookUp(_ component: UInt8) -> UInt32 {
         UInt32(table[(Int(color[3]) * 256 + Int(component)) * 2])
@@ -370,11 +357,9 @@ private struct FilterRun {
     case .gaussianBlur(let blur):
       guard let area = area(of: subregion), let blurred = gaussianBlur(blur, step: step, source: source, input: input)
       else { return nil }
-      clipRect = subregion
       return draw(blurred, in: area)
     case .merge(let inputs):
       guard let area = area(of: subregion) else { return nil }
-      clipRect = subregion
       let mergeSpace = step.colorSpace
       guard var source = convert(source, to: mergeSpace), let converted = convert(input, to: mergeSpace) else {
         return nil
@@ -397,11 +382,7 @@ private struct FilterRun {
     case .offset(let offsetInput, let translation):
       let dx = translation.tx * scale
       let dy = translation.ty * scale
-      // As on the CPU, the result of the primitive before stays clipped by what clipped it, and an input that `in`
-      // names is clipped by the subregion only.
-      clipRect = offsetInput == nil ? clipRect.intersection(subregion) : subregion
-      // A clip to nothing draws nothing.
-      let clip = clipRect.isNull ? DrawArea(origin: .zero, end: .zero) : area(of: clipRect)
+      let clip = area(of: subregion)
       var source = source
       guard isOnPixels(dx), isOnPixels(dy), var area = clip, let converted = convert(input, to: source.space),
         let selected = offsetInput == nil

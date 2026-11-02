@@ -83,9 +83,29 @@ extension RenderTreeBuilder {
     of filter: SVGFilterElement, region: CGRect, frame: CGRect, context: ResolveContext
   ) -> [FilterStep] {
     var steps = [FilterStep]()
+    // The subregions of the named results, and of the primitive before, which the subregions of the primitives that
+    // take them default to.
+    var resultSubregions = [String: CGRect]()
+    var previousSubregion: CGRect?
+    /// The subregion of an input, or `nil` for a standard input, whose subregion is the filter region. A name that no
+    /// primitive before has given is the result of the primitive before, as it is in the painting.
+    func inputSubregion(_ input: SVGFilterInput?) -> CGRect? {
+      switch input {
+      case nil: previousSubregion
+      case .sourceGraphic, .sourceAlpha: nil
+      case .other(let name): resultSubregions[name] ?? previousSubregion
+      }
+    }
     for child in filter.knownChildren {
       guard let child = child as? (any SVGFilterPrimitiveElement) else { continue }
-      let subregion = subregion(of: child, filter: filter, frame: frame, context: context)
+      // The attributes that the primitive doesn't have come from the union of the subregions of its inputs, or from
+      // the filter region for a primitive without inputs, one with a standard input and a `feTile`.
+      let inputSubregions = Self.inputs(of: child).map(inputSubregion)
+      let defaultSubregion =
+        inputSubregions.isEmpty || inputSubregions.contains(nil)
+        ? region : inputSubregions.compactMap { $0 }.reduce(CGRect.null) { $0.union($1) }
+      let subregion = subregion(
+        of: child, filter: filter, frame: frame, context: context, defaultSubregion: defaultSubregion)
       // The property is inherited, so the primitive has the value of the filter element where it declares none, and
       // the initial value is linearRGB.
       let colorSpace = child.base.style.colorInterpolationFilters ?? .linearRGB
@@ -94,12 +114,21 @@ extension RenderTreeBuilder {
         steps += dropShadowSteps(
           of: shadow, input: input, filter: filter, region: region, subregion: subregion, frame: frame,
           context: context, colorSpace: colorSpace)
-        continue
+      } else if let tile = child as? SVGFeTileElement {
+        steps.append(
+          FilterStep(
+            primitive: .tile(input: tile.input, tile: inputSubregion(tile.input) ?? region), subregion: subregion,
+            result: child.result, colorSpace: colorSpace))
+      } else {
+        steps.append(
+          FilterStep(
+            primitive: primitive(of: child, filter: filter, frame: frame, context: context), subregion: subregion,
+            result: child.result, colorSpace: colorSpace))
       }
-      steps.append(
-        FilterStep(
-          primitive: primitive(of: child, filter: filter, frame: frame, context: context), subregion: subregion,
-          result: child.result, colorSpace: colorSpace))
+      previousSubregion = subregion
+      if let result = child.result {
+        resultSubregions[result] = subregion
+      }
     }
     return steps
   }
@@ -167,33 +196,44 @@ extension RenderTreeBuilder {
     return CGRect(x: x, y: y, width: width, height: height)
   }
 
-  /// The primitive subregion, whose attributes that the primitive doesn't have come from the filter region.
+  /// The primitive subregion, whose attributes that the primitive doesn't have come from `defaultSubregion`.
   private func subregion(
-    of primitive: any SVGFilterPrimitiveElement, filter: SVGFilterElement, frame: CGRect, context: ResolveContext
+    of primitive: any SVGFilterPrimitiveElement, filter: SVGFilterElement, frame: CGRect, context: ResolveContext,
+    defaultSubregion: CGRect
   ) -> CGRect {
     let primitiveUnits = filter.primitiveUnits ?? .userSpaceOnUse
-    let filterUnits = filter.filterUnits ?? .objectBoundingBox
     let x =
       primitive.x?.calculatedLength(
         frame: frame, context: context, mode: .width, unitType: primitiveUnits, isPosition: true)
-      ?? filter.x?.calculatedLength(
-        frame: frame, context: context, mode: .width, unitType: filterUnits, isPosition: true)
-      ?? (frame.minX - 0.1 * frame.width)
+      ?? defaultSubregion.minX
     let y =
       primitive.y?.calculatedLength(
         frame: frame, context: context, mode: .height, unitType: primitiveUnits, isPosition: true)
-      ?? filter.y?.calculatedLength(
-        frame: frame, context: context, mode: .height, unitType: filterUnits, isPosition: true)
-      ?? (frame.minY - 0.1 * frame.height)
+      ?? defaultSubregion.minY
     let width =
       primitive.width?.calculatedLength(frame: frame, context: context, mode: .width, unitType: primitiveUnits)
-      ?? filter.width?.calculatedLength(frame: frame, context: context, mode: .width, unitType: filterUnits)
-      ?? 1.2 * frame.width
+      ?? defaultSubregion.width
     let height =
       primitive.height?.calculatedLength(frame: frame, context: context, mode: .height, unitType: primitiveUnits)
-      ?? filter.height?.calculatedLength(frame: frame, context: context, mode: .height, unitType: filterUnits)
-      ?? 1.2 * frame.height
+      ?? defaultSubregion.height
     return CGRect(x: x, y: y, width: width, height: height)
+  }
+
+  /// The inputs of a primitive, where `nil` is the result of the primitive before. A `feTile` has none here, because
+  /// its subregion defaults to the filter region whatever its input is.
+  private static func inputs(of primitive: any SVGFilterPrimitiveElement) -> [SVGFilterInput?] {
+    switch primitive {
+    case let blend as SVGFeBlendElement: [blend.input, blend.input2]
+    case let colorMatrix as SVGFeColorMatrixElement: [colorMatrix.input]
+    case let transfer as SVGFeComponentTransferElement: [transfer.input]
+    case let composite as SVGFeCompositeElement: [composite.input, composite.input2]
+    case let shadow as SVGFeDropShadowElement: [shadow.input]
+    case let blur as SVGFeGaussianBlurElement: [blur.input]
+    case let merge as SVGFeMergeElement: merge.children.compactMap { $0 as? SVGFeMergeNodeElement }.map(\.input)
+    case let morphology as SVGFeMorphologyElement: [morphology.input]
+    case let offset as SVGFeOffsetElement: [offset.input]
+    default: []
+    }
   }
 
   private func primitive(

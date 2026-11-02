@@ -5,7 +5,7 @@ import UIKit
 
 @testable import SVGUIView
 
-/// Tests that `feOffset` moves the input that `in` names.
+/// Tests that `feOffset` moves the input that `in` names, clipped by its subregion.
 @MainActor
 @Suite("Offset")
 struct OffsetTests {
@@ -41,13 +41,21 @@ struct OffsetTests {
     #expect(try await pixel(content, x: 2, y: 2) == [0, 0, 0, 0])
   }
 
-  @Test("an offset of a named result moves that result, past the subregion of the primitive before")
+  @Test("an offset of a named result moves that result, in a subregion past those of the primitives before")
   func namedResult() async throws {
     let content = square(
       #"<feFlood flood-color="blue" width="5" height="5" result="a"/><feFlood flood-color="lime" x="10" y="0" width="5" height="5"/>"#
-        + #"<feOffset in="a" dx="10" dy="10"/>"#)
+        + #"<feOffset in="a" dx="10" dy="10" width="20" height="20"/>"#)
     #expect(try await pixel(content, x: 12, y: 12) == [0, 0, 255, 255])
     #expect(try await pixel(content, x: 12, y: 2) == [0, 0, 0, 0])
+  }
+
+  @Test("the subregion of an offset is that of its input by default, which clips the moved input")
+  func defaultSubregion() async throws {
+    let content = square(#"<feFlood flood-color="blue" width="10" height="10"/><feOffset dx="5" dy="5"/>"#)
+    #expect(try await pixel(content, x: 7, y: 7) == [0, 0, 255, 255])
+    #expect(try await pixel(content, x: 12, y: 12) == [0, 0, 0, 0])
+    #expect(try await pixel(content, x: 2, y: 2) == [0, 0, 0, 0])
   }
 
   @Test("an offset without in moves the result of the primitive before")

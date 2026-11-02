@@ -29,7 +29,9 @@ package struct FilteredNode: Sendable {
 /// A primitive of a filter, with what it shares with the others.
 package struct FilterStep: Sendable {
   package let primitive: FilterPrimitive
-  /// The primitive subregion, which clips the result.
+  /// The primitive subregion, which clips the result. The attributes that the primitive doesn't have come from the
+  /// union of the subregions of its inputs, or from the filter region for a primitive without inputs, one with a
+  /// standard input and a `feTile`.
   package let subregion: CGRect
   /// The name of the result, which later primitives take as an input.
   package let result: String?
@@ -58,9 +60,10 @@ package enum FilterPrimitive: Sendable {
   case flood(color: [UInt8])
   case gaussianBlur(GaussianBlurPrimitive)
   case merge(inputs: [SVGFilterInput?])
-  /// The input moved by a translation. Without an input, the result of the primitive before is moved, and clipped by
-  /// what clipped it as well.
+  /// The input moved by a translation.
   case offset(input: SVGFilterInput?, translation: CGAffineTransform)
+  /// The rectangle `tile` of the input, which is the subregion of the input, repeated in x and y from its origin.
+  case tile(input: SVGFilterInput?, tile: CGRect)
 }
 
 /// The transfer function of a component of a `feComponentTransfer`, from its `feFuncR`, `feFuncG`, `feFuncB` or
