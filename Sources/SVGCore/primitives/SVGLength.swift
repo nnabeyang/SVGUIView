@@ -231,7 +231,7 @@ enum SVGLength: Equatable, Sendable {
       let dy: CGFloat
       switch unitType {
       case .userSpaceOnUse:
-        return min(value, 1.2 * viewBoxSize.height)
+        return value
       case .objectBoundingBox:
         dy = frame.height * value
         return isPosition ? frame.minY + dy : dy
@@ -240,7 +240,7 @@ enum SVGLength: Equatable, Sendable {
       let dx: CGFloat
       switch unitType {
       case .userSpaceOnUse:
-        return min(value, 1.2 * viewBoxSize.width)
+        return value
       case .objectBoundingBox:
         dx = frame.width * value
         return isPosition ? frame.minX + dx : dx

@@ -157,11 +157,13 @@ struct SVGUIViewTests {
     let view = makeView(
       #"""
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-        <!-- A filter region in user space is limited to the viewport, but one relative to the element is not. -->
-        <filter id="huge" x="0" y="0" width="1000000000000000000000" height="1000000000000000000000">
+        <!-- A filter region is limited to around the viewBox, which is huge in the user space of the inner svg. -->
+        <filter id="huge">
           <feOffset dx="0" dy="0"/>
         </filter>
-        <rect width="10" height="20" fill="red" filter="url(#huge)"/>
+        <svg width="10" height="20" viewBox="0 0 1000000000000000000000 2000000000000000000000">
+          <rect width="1000000000000000000000" height="2000000000000000000000" fill="red" filter="url(#huge)"/>
+        </svg>
         <rect x="10" width="10" height="20" fill="lime"/>
       </svg>
       """#)
