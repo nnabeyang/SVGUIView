@@ -411,7 +411,12 @@ package struct RenderTreeBuilder {
     let transform =
       mode != .filter(isRoot: true) && svg.base.name != .symbol
       ? await transform(of: svg, context: context, frame: nil, guard: references) : .identity
-    let (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
+    var (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
+    // The filter of the element moves the content to the viewport and to the position of the element instead.
+    if mode == .filter(isRoot: true) {
+      translation = .identity
+      layout = layout.map { ViewportLayout(viewBoxTransform: .identity, rect: $0.rect, context: $0.context) }
+    }
     guard let layout else {
       return .viewport(
         ViewportNode(id: id, transform: transform, translation: translation, opacity: opacity(of: svg, mode: mode), content: nil))
@@ -450,7 +455,7 @@ package struct RenderTreeBuilder {
   }
 
   /// The content of a viewport, which has an area.
-  private struct ViewportLayout {
+  struct ViewportLayout {
     /// The transform from the coordinates of the content to the viewport.
     let viewBoxTransform: CGAffineTransform
     /// The viewport in the coordinates of its content.
@@ -465,7 +470,7 @@ package struct RenderTreeBuilder {
   /// The root element of an SVG image fills the rectangle of the `<image>` element, which is the viewport of the
   /// builder: the `preserveAspectRatio` of the `<image>` element places its view box there, or the box of its width
   /// and height if it has no view box, instead of its own `preserveAspectRatio`.
-  private func viewport(
+  func viewport(
     of svg: SVGSVGElement, context: ResolveContext, isRoot: Bool
   ) -> (translation: CGAffineTransform, layout: ViewportLayout?) {
     if isRoot, let imageFit {

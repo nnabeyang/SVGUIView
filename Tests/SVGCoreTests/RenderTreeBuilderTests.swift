@@ -123,7 +123,9 @@ struct RenderTreeBuilderTests {
     expectClose(root.transform, CGAffineTransform(rotationAngle: .pi / 2))
   }
 
-  @Test("the filter of the root element applies inside its transform, which its source doesn't apply again")
+  @Test(
+    "the filter of the root element applies inside its viewBox and its transform, which its source doesn't apply again"
+  )
   func rootTransformWithFilter() async throws {
     let tree = try await renderTree(
       #"<filter id="f"><feOffset dx="1"/></filter><rect width="10" height="10"/>"#,
@@ -132,8 +134,10 @@ struct RenderTreeBuilderTests {
       Issue.record("The root isn't a filtered viewport")
       return
     }
-    expectClose(filtered.transform, Self.rotation(about: 20, 10))
+    // The viewBox of 20 by 20 is centered in the viewport of 40 by 20.
+    expectClose(filtered.transform, CGAffineTransform(translationX: 10, y: 0).concatenating(Self.rotation(about: 20, 10)))
     #expect(source.transform == .identity)
+    #expect(source.content?.viewBoxTransform == .identity)
   }
 
   /// Attributes of an image of 2 by 1 in a rectangle of 10 by 10 at 5, 5, where the image is drawn, and the rectangle
@@ -1895,6 +1899,28 @@ struct RenderTreeBuilderTests {
       }
     }
     #expect(inputs == ["none", "SourceGraphic", "a"])
+  }
+
+  @Test("the filter of an svg element applies in the coordinates of its content, and the result moves to its viewport")
+  func viewportFilter() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="10" height="5" primitiveUnits="objectBoundingBox">"##
+        + ##"<feOffset dx="0.5"/></filter>"##
+        + ##"<svg x="2" y="3" width="10" height="10" viewBox="0 0 5 5" filter="url(#f)"><rect width="4" height="4"/></svg>"##)
+    #expect(filtered.effectRect == CGRect(x: 0, y: 0, width: 10, height: 5))
+    #expect(filtered.frame == CGRect(x: 0, y: 0, width: 4, height: 4))
+    #expect(filtered.transform == CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 2, ty: 3))
+    guard case .offset(_, let translation) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't an offset")
+      return
+    }
+    #expect(translation == CGAffineTransform(translationX: 2, y: 0))
+    guard case .viewport(let viewport) = filtered.source else {
+      Issue.record("The source isn't a viewport")
+      return
+    }
+    #expect(viewport.translation == .identity)
+    #expect(viewport.content?.viewBoxTransform == .identity)
   }
 
   /// Attributes of a filter in the user space of a document of 20 by 20, and its region, which the viewBox with its

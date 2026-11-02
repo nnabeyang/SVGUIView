@@ -85,6 +85,25 @@ struct FilterCompositingTests {
     #expect(Int(outside[3]) > 16, "\(outside)")
   }
 
+  @Test("the filter of an svg element moves its content in the coordinates of the content, which its viewBox scales")
+  func viewportOffset() async throws {
+    let content =
+      #"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="10" height="10"><feOffset dx="2"/></filter>"#
+      + #"<svg width="20" height="20" viewBox="0 0 10 10" filter="url(#f)"><rect width="2" height="10" fill="blue"/></svg>"#
+    // The square from 0 to 4 moves by 4.
+    #expect(try await pixel(content, x: 7, y: 10) == [0, 0, 255, 255])
+    #expect(try await pixel(content, x: 3, y: 10) == [0, 0, 0, 0])
+  }
+
+  @Test("the filter region in the user space of an svg element is in the coordinates of its content")
+  func viewportRegion() async throws {
+    // The content is from 0 to 6 in its coordinates, out of the region from 10 to 20.
+    let content =
+      #"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="10" width="20" height="10"><feOffset/></filter>"#
+      + #"<svg x="2" y="12" width="8" height="8" filter="url(#f)"><rect width="6" height="6" fill="blue"/></svg>"#
+    #expect(try await pixel(content, x: 4, y: 14) == [0, 0, 0, 0])
+  }
+
   @Test("a result that a later primitive takes by its name has no opacity of its own")
   func namedResult() async throws {
     let content = square(
