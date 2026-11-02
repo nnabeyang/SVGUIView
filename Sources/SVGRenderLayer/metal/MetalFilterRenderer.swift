@@ -26,7 +26,8 @@ private let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView
 /// - A `feBlend` or a `feMerge` whose subregion isn't the filter region, which the CPU scales its inputs into.
 /// - A blend mode other than the ones that Core Graphics computes as the specification does.
 /// - A blur whose standard deviations differ, and that blurs a direction with three boxes.
-/// - A `feColorMatrix` or a `feComponentTransfer`, for which it has no kernels yet.
+/// - A `feColorMatrix` or a `feComponentTransfer`, for which it has no kernels yet, and a `feDropShadow` and the filter
+///   functions of the CSS that are made of them.
 package final class MetalFilterRenderer: Sendable {
   let device: MTLDevice
   private let queue: MTLCommandQueue

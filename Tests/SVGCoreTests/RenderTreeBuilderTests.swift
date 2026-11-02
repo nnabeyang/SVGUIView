@@ -1808,6 +1808,51 @@ struct RenderTreeBuilderTests {
     #expect(shadow.primitives.count == 4)
   }
 
+  @Test("a feDropShadow is a colored and blurred alpha of its input, moved by the offset, under the input")
+  func dropShadow() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feDropShadow result="s" x="0" width="5" flood-color="red" flood-opacity="0.5"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    let steps = filtered.primitives
+    #expect(steps.count == 4)
+    guard case .colorMatrix(let input, let matrix) = steps[0].primitive,
+      case .gaussianBlur(let blur) = steps[1].primitive, case .offset(let offset) = steps[2].primitive,
+      case .merge(let inputs) = steps[3].primitive
+    else {
+      Issue.record("The steps aren't a matrix, a blur, an offset and a merge")
+      return
+    }
+    // The first primitive takes the source graphic, and the color of red is 1 in linearRGB too.
+    #expect(input.map { if case .sourceGraphic = $0 { true } else { false } } == true)
+    #expect(matrix[4] == 1 && matrix[9] == 0 && matrix[18] == 0.5)
+    if case .iso(let deviation) = blur.standardDeviation { #expect(deviation == 2) } else { Issue.record("\(blur)") }
+    #expect(offset == CGAffineTransform(translationX: 2, y: 2))
+    #expect(inputs.count == 2)
+    // Only the result is clipped to the subregion, and it has the name of the primitive.
+    #expect(steps[2].subregion == filtered.effectRect)
+    #expect(steps[3].subregion == CGRect(x: 0, y: -1, width: 5, height: 12))
+    #expect(steps[3].result == "s")
+  }
+
+  @Test("a feDropShadow after another primitive takes its result, which gets a name")
+  func dropShadowAfterPrimitive() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f" primitiveUnits="objectBoundingBox"><feOffset dx="0.1"/><feDropShadow dx="0.5" dy="10%" stdDeviation="0"/></filter>"##
+        + ##"<rect width="10" height="20" filter="url(#f)"/>"##)
+    let steps = filtered.primitives
+    #expect(steps.count == 5)
+    let name = try #require(steps[0].result)
+    guard case .colorMatrix(let input, _) = steps[1].primitive, case .other(let inputName) = input,
+      case .offset(let offset) = steps[3].primitive
+    else {
+      Issue.record("The shadow doesn't take the named result of the offset")
+      return
+    }
+    #expect(inputName == name)
+    // A percentage isn't a number, so the offset has its initial value of 2 times the height.
+    #expect(offset == CGAffineTransform(translationX: 5, y: 40))
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)

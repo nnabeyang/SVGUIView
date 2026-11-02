@@ -44,11 +44,11 @@ extension RenderTreeBuilder {
       let isLast = i == functions.count - 1
       let effect: FilterEffect?
       if case .url(let filterID) = function, let filter = filters[filterID] {
+        let region = effectRect(of: filter, frame: frame, context: context)
         effect = FilterEffect(
-          effectRect: effectRect(of: filter, frame: frame, context: context),
-          colorInterpolation: filter.colorInterpolation ?? .sRGB,
+          effectRect: region, colorInterpolation: filter.colorInterpolation ?? .sRGB,
           colorInterpolationFilters: filter.colorInterpolationFilters ?? .linearRGB,
-          primitives: primitives(of: filter, frame: frame, context: context))
+          primitives: primitives(of: filter, region: region, frame: frame, context: context))
       } else {
         effect = functionEffect(of: function, element: element, source: source, frame: frame, context: elementContext)
       }
@@ -76,20 +76,77 @@ extension RenderTreeBuilder {
     let primitives: [FilterStep]
   }
 
-  /// The primitives of a filter element.
-  private func primitives(of filter: SVGFilterElement, frame: CGRect, context: ResolveContext) -> [FilterStep] {
-    var primitives = [FilterStep]()
+  /// The steps of the primitives of a filter element, where a `feDropShadow` is the steps that it's equal to.
+  ///
+  /// - Parameter region: The filter region.
+  private func primitives(
+    of filter: SVGFilterElement, region: CGRect, frame: CGRect, context: ResolveContext
+  ) -> [FilterStep] {
+    var steps = [FilterStep]()
     for child in filter.knownChildren {
       guard let child = child as? (any SVGFilterPrimitiveElement) else { continue }
-      primitives.append(
+      let subregion = subregion(of: child, filter: filter, frame: frame, context: context)
+      // The property is inherited, so the primitive has the value of the filter element where it declares none, and
+      // the initial value is linearRGB.
+      let colorSpace = child.base.style.colorInterpolationFilters ?? .linearRGB
+      if let shadow = child as? SVGFeDropShadowElement {
+        let input = shadow.input ?? previousResult(of: &steps)
+        steps += dropShadowSteps(
+          of: shadow, input: input, filter: filter, region: region, subregion: subregion, frame: frame,
+          context: context, colorSpace: colorSpace)
+        continue
+      }
+      steps.append(
         FilterStep(
-          primitive: primitive(of: child, filter: filter, frame: frame, context: context),
-          subregion: subregion(of: child, filter: filter, frame: frame, context: context), result: child.result,
-          // The property is inherited, so the primitive has the value of the filter element where it declares none,
-          // and the initial value is linearRGB.
-          colorSpace: child.base.style.colorInterpolationFilters ?? .linearRGB))
+          primitive: primitive(of: child, filter: filter, frame: frame, context: context), subregion: subregion,
+          result: child.result, colorSpace: colorSpace))
     }
-    return primitives
+    return steps
+  }
+
+  /// The input that is the result of the primitive before, which a primitive takes without `in`: the source graphic
+  /// for the first primitive, and the name of the result of the step before for the others, which gets a name that
+  /// no document can give where it has none.
+  private func previousResult(of steps: inout [FilterStep]) -> SVGFilterInput {
+    guard let last = steps.last else { return .sourceGraphic }
+    if let result = last.result { return .other(result) }
+    let name = "\u{0}result\(steps.count)"
+    steps[steps.count - 1] = FilterStep(
+      primitive: last.primitive, subregion: last.subregion, result: name, colorSpace: last.colorSpace)
+    return .other(name)
+  }
+
+  /// The steps of a `feDropShadow`: a shadow of the flood color and opacity in the color space of the primitive,
+  /// under the input.
+  private func dropShadowSteps(
+    of shadow: SVGFeDropShadowElement, input: SVGFilterInput, filter: SVGFilterElement, region: CGRect,
+    subregion: CGRect, frame: CGRect, context: ResolveContext, colorSpace: SVGColorInterpolation
+  ) -> [FilterStep] {
+    let units = filter.primitiveUnits ?? .userSpaceOnUse
+    var offset = CGSize(width: shadow.dx ?? 2, height: shadow.dy ?? 2)
+    if units == .objectBoundingBox {
+      offset = CGSize(width: offset.width * frame.width, height: offset.height * frame.height)
+    }
+    let deviation: GaussianBlurPrimitive.StandardDeviation =
+      switch shadow.stdDeviation ?? .iso(.number(2)) {
+      case .iso(let value):
+        .iso(value.calculatedLength(frame: frame, context: context, mode: .other, unitType: units))
+      case .hetero(let x, let y):
+        .hetero(
+          x: x.calculatedLength(frame: frame, context: context, mode: .width, unitType: units),
+          y: y.calculatedLength(frame: frame, context: context, mode: .height, unitType: units))
+      }
+    let (red, green, blue, alpha) = shadow.floodColor.rgba
+    // The flood color is in sRGB, and the primitive paints it in its color space.
+    func component(_ value: CGFloat) -> Float {
+      let c = value / 255
+      guard colorSpace == .linearRGB else { return Float(c) }
+      return Float(c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4))
+    }
+    return Self.shadowSteps(
+      of: input, offset: offset, deviation: deviation,
+      color: [component(red), component(green), component(blue), Float(alpha / 255 * shadow.floodOpacity)],
+      region: region, subregion: subregion, result: shadow.result, colorSpace: colorSpace)
   }
 
   /// The filter region.
