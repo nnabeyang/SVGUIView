@@ -1972,7 +1972,7 @@ struct RenderTreeBuilderTests {
 
   @Test(
     "an element with a filter clips and masks the result, and its source has no clip path nor mask",
-    arguments: filteredElements.dropLast(2) + filteredElements.suffix(1))
+    arguments: filteredElements)
   func filteredClipAndMask(element: String) async throws {
     let filtered = try await filteredNode(
       ##"<defs><rect id="r" width="10" height="10"/></defs><clipPath id="c"><rect width="5" height="5"/></clipPath>"##
@@ -1991,22 +1991,12 @@ struct RenderTreeBuilderTests {
     case .use(let use):
       #expect(use.clip == nil)
       #expect(use.mask == nil)
+    case .viewport(let viewport):
+      #expect(viewport.content?.clip == nil)
+      #expect(viewport.content?.mask == nil)
     default:
       Issue.record("The source is \(source)")
     }
-  }
-
-  @Test("an svg element with a filter keeps its clip path and its mask, which are in the coordinates of its content")
-  func filteredViewportClipAndMask() async throws {
-    let filtered = try await filteredNode(
-      ##"<clipPath id="c"><rect width="5" height="5"/></clipPath><filter id="f"><feOffset/></filter>"##
-        + ##"<svg width="10" height="10" clip-path="url(#c)" filter="url(#f)"><rect width="10" height="10"/></svg>"##)
-    #expect(filtered.clip == nil)
-    guard case .viewport(let viewport) = filtered.source else {
-      Issue.record("The source isn't a viewport")
-      return
-    }
-    #expect(viewport.content?.clip != nil)
   }
 
   @Test("only the last of the filters of an element clips and masks its result")

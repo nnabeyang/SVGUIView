@@ -104,6 +104,19 @@ struct FilterCompositingTests {
     #expect(try await pixel(content, x: 4, y: 14) == [0, 0, 0, 0])
   }
 
+  @Test("the clip path of an svg element with a filter clips the result in the coordinates of its content")
+  func viewportClip() async throws {
+    // The clip from 0 to 5 in the content is from 0 to 10 in the document, and the blur shows nothing past it.
+    let content =
+      #"<clipPath id="c"><rect width="5" height="10"/></clipPath><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="10" height="10">"#
+      + #"<feGaussianBlur stdDeviation="1"/></filter><svg width="20" height="20" viewBox="0 0 10 10" clip-path="url(#c)" filter="url(#f)">"#
+      + #"<rect width="10" height="10" fill="blue"/></svg>"#
+    let inside = try await pixel(content, x: 9, y: 10)
+    #expect(Int(inside[3]) > 240, "\(inside)")
+    // The bitmap of the clip is enlarged with the viewBox, which blurs its edge by a pixel (svg_ui_view-225).
+    #expect(try await pixel(content, x: 11, y: 10) == [0, 0, 0, 0])
+  }
+
   @Test("a result that a later primitive takes by its name has no opacity of its own")
   func namedResult() async throws {
     let content = square(

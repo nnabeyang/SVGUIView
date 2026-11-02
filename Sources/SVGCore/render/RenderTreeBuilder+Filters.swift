@@ -38,14 +38,15 @@ extension RenderTreeBuilder {
       of: element, context: sourceContext, mode: .filter(isRoot: true), guard: ReferenceGuard(), instance: instance)
     let id = RenderID(element: element.base.elementID, instance: instance)
     // The last filter draws the result with the transform, the clip path, the mask, the opacity and the blending of
-    // the element, and the others draw theirs into the source of the next one as they are. The clip path and the mask
-    // of an `<svg>` element are in the coordinates of its content, so its source has them instead.
+    // the element, and the others draw theirs into the source of the next one as they are.
     var transform = await transform(of: element, context: elementContext, frame: frame, guard: references)
     // The filter of an `<svg>` element applies in the coordinates of its content, as Chrome and Firefox draw it: the
     // filter region and the values of the primitives are resolved there, and the result moves to the viewport and
     // the position of the element after the filter.
     var filterContext = context
     var functionContext = elementContext
+    var clip: ClipPathEffect?
+    var mask = MaskApplication.none
     if let svg = element as? SVGSVGElement {
       let (translation, layout) = viewport(
         of: svg, context: elementContext, isRoot: svg.base.elementID == base.root?.base.elementID)
@@ -59,10 +60,17 @@ extension RenderTreeBuilder {
         svg.base.name != .symbol
         ? await self.transform(of: svg, context: elementContext, frame: nil, guard: references) : .identity
       transform = layout.viewBoxTransform.concatenating(translation).concatenating(svgTransform)
-    }
-    var clip: ClipPathEffect?
-    var mask = MaskApplication.none
-    if !(element is SVGSVGElement) {
+      // The clip path and the mask of an `<svg>` element are in the coordinates of its content too, with the viewBox
+      // as its bounds, as its node has them.
+      let inner = layout.context
+      clip = await clipEffect(svg.clipPath, frame: inner.viewBox, context: inner, guard: references)
+      if let effect = await maskEffect(
+        self.mask(of: svg), frame: inner.viewBox, context: inner, guard: references,
+        instance: instance + [svg.base.elementID])
+      {
+        mask = .mask(effect)
+      }
+    } else {
       clip = await clipEffect(element.clipPath, frame: frame, context: elementContext, guard: references)
       mask = await maskApplication(
         of: element, frame: frame, context: elementContext, guard: references, instance: instance)
