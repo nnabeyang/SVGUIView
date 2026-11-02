@@ -36,19 +36,18 @@ extension ShapeNode {
   fileprivate var paintedBounds: CGRect {
     guard let geometry, let content else { return .null }
     let path = geometry.path.cgPath
-    // The frame of text is the bounds of its lines, and an image is drawn where it's placed, which can be outside
-    // the rectangle of its element.
+    // The frame of text is the bounds of its lines.
     var bounds = geometry.frame.union(path.boundingBoxOfPath)
-    let stroke: StrokeStyle?
-    switch content {
-    case .vector(_, let vectorStroke, _):
-      stroke = vectorStroke
-    case .image(let image, let imageStroke):
-      if let image {
-        bounds = bounds.union(image.clip.map(image.rect.intersection) ?? image.rect)
-      }
-      stroke = imageStroke
+    // An image is drawn where it's placed, which can be outside the rectangle of its element. Matching it apart from
+    // the stroke keeps the other shapes as fast as before, as the layers compute the bounds of every shape each frame.
+    if case .image(let image?, _) = content {
+      bounds = bounds.union(image.clip.map(image.rect.intersection) ?? image.rect)
     }
+    let stroke: StrokeStyle? =
+      switch content {
+      case .vector(_, let stroke, _): stroke
+      case .image(_, let stroke): stroke
+      }
     if let stroke, stroke.width > 0 {
       let stroked = path.copy(
         strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)

@@ -55,7 +55,22 @@ struct PaintedBoundsTests {
     ),
     (#"<rect width="10" height="10"/><rect x="50" y="60" width="10" height="10"/>"#, CGRect(x: 0, y: 0, width: 60, height: 70)),
     (#"<rect width="10" height="10" visibility="hidden"/>"#, .null),
+    // An image of 2 by 1 that slices its rectangle is drawn past it, unless the rectangle clips it.
+    (
+      #"<image x="5" y="5" width="10" height="10" preserveAspectRatio="xMinYMin slice" overflow="visible" "#
+        + #"href="data:image/png;base64,\#(Self.png)"/>"#,
+      CGRect(x: 5, y: 5, width: 20, height: 10)
+    ),
+    (
+      #"<image x="5" y="5" width="10" height="10" preserveAspectRatio="xMinYMin slice" "#
+        + #"href="data:image/png;base64,\#(Self.png)"/>"#,
+      CGRect(x: 5, y: 5, width: 10, height: 10)
+    ),
   ]
+
+  /// A PNG image of 2 by 1 pixels.
+  private static let png =
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII="
 
   @Test("the rectangle that a document paints in", arguments: documents)
   func paintedBounds(content: String, expected: CGRect) async throws {
