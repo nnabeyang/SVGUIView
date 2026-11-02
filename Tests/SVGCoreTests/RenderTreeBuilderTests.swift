@@ -1897,6 +1897,24 @@ struct RenderTreeBuilderTests {
     #expect(inputs == ["none", "SourceGraphic", "a"])
   }
 
+  /// Elements with a filter `f` and the attributes, which the placeholder `ATTRIBUTES` stands for.
+  private static let filteredElements = [
+    #"<rect width="10" height="10" ATTRIBUTES/>"#,
+    #"<g ATTRIBUTES><rect width="10" height="10"/></g>"#,
+    ##"<use href="#r" ATTRIBUTES/>"##,
+    #"<svg width="10" height="10" ATTRIBUTES><rect width="10" height="10"/></svg>"#,
+    #"<text y="10" ATTRIBUTES>A<tspan>B</tspan></text>"#,
+  ]
+
+  @Test("an element with a filter draws the result with its opacity, and its source without it", arguments: filteredElements)
+  func filteredOpacity(element: String) async throws {
+    let filtered = try await filteredNode(
+      ##"<defs><rect id="r" width="10" height="10"/></defs><filter id="f"><feOffset/></filter>"##
+        + element.replacingOccurrences(of: "ATTRIBUTES", with: #"opacity="0.5" filter="url(#f)""#))
+    #expect(filtered.opacity == 0.5)
+    #expect(try #require(filtered.source).groupOpacity == 1)
+  }
+
   /// Primitives of a filter of an element of 10 by 10, whose region is -1, -1, 12, 12, and the subregion of the last.
   private static let defaultSubregions: [(String, CGRect)] = [
     // The first primitive takes the source graphic.

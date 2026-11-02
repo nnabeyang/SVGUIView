@@ -17,7 +17,7 @@ package struct FilteredNode: Sendable {
   package let colorInterpolation: SVGColorInterpolation
   /// The color space that the primitives draw into.
   package let colorInterpolationFilters: SVGColorInterpolation
-  /// The opacity of the element, which each primitive draws its result with.
+  /// The opacity of the element, which the result of the filter is drawn with.
   package let opacity: CGFloat
   package let primitives: [FilterStep]
   /// The element without its filter.

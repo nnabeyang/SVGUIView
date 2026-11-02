@@ -12,7 +12,7 @@ extension CGPainter {
   /// in Chrome and Safari, and a negative radius or radii that are both 0 leave the input as it is.
   func morphology(
     _ morphologyOperator: SVGMorphologyOperator, radius: CGSize, input: SVGFilterInput?,
-    colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage, subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
+    colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage, subregion: CGRect, bitmapRect: CGRect, cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     guard
       var format = vImage_CGImageFormat(
@@ -41,7 +41,6 @@ extension CGPainter {
       image = morphed
     }
     cgContext.clip(to: subregion)
-    cgContext.setAlpha(opacity)
     cgContext.draw(image, in: bitmapRect)
     return cgContext.makeImage()
   }

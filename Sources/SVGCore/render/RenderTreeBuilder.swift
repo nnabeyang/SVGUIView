@@ -235,7 +235,7 @@ package struct RenderTreeBuilder {
     guard !markers.isEmpty || parts != nil else {
       return .shape(
         ShapeNode(
-          id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: element.opacity,
+          id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: opacity(of: element, mode: mode),
           content: content, antialiases: antialiases, blendMode: blendMode(of: element, mode: mode)))
     }
     // The shape and the markers are drawn in the paint order, with the effects of the shape.
@@ -260,8 +260,13 @@ package struct RenderTreeBuilder {
     let groupMask: MaskEffect? = if case .mask(let effect) = mask { effect } else { nil }
     return .group(
       GroupNode(
-        id: id, transform: transform, opacity: element.opacity, clip: clip, mask: groupMask, children: children,
+        id: id, transform: transform, opacity: opacity(of: element, mode: mode), clip: clip, mask: groupMask, children: children,
         blendMode: blendMode(of: element, mode: mode)))
+  }
+
+  /// The opacity of an element, which the filter of an element drawn as its source applies to its result instead.
+  private func opacity(of element: some SVGDrawableElement, mode: DrawMode) -> CGFloat {
+    mode == .filter(isRoot: true) ? 1 : element.opacity
   }
 
   /// How an element blends with what's behind it, which the filter of an element drawn as its source does instead.
@@ -322,7 +327,7 @@ package struct RenderTreeBuilder {
     }
     return .group(
       GroupNode(
-        id: renderID(of: text, instance: instance), transform: transform, opacity: text.opacity, clip: clip,
+        id: renderID(of: text, instance: instance), transform: transform, opacity: opacity(of: text, mode: mode), clip: clip,
         mask: mask, children: children, blendMode: blendMode(of: text, mode: mode)))
   }
 
@@ -356,7 +361,7 @@ package struct RenderTreeBuilder {
     }
     return .group(
       GroupNode(
-        id: renderID(of: group, instance: instance), transform: transform, opacity: group.opacity, clip: clip,
+        id: renderID(of: group, instance: instance), transform: transform, opacity: opacity(of: group, mode: mode), clip: clip,
         mask: mask, children: children, blendMode: blendMode(of: group, mode: mode),
         isolates: group.style.isolation == .isolate))
   }
@@ -394,7 +399,7 @@ package struct RenderTreeBuilder {
     let (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
     guard let layout else {
       return .viewport(
-        ViewportNode(id: id, transform: transform, translation: translation, opacity: svg.opacity, content: nil))
+        ViewportNode(id: id, transform: transform, translation: translation, opacity: opacity(of: svg, mode: mode), content: nil))
     }
     let inner = layout.context
     var overflowClip: CGRect?
@@ -423,7 +428,7 @@ package struct RenderTreeBuilder {
     }
     return .viewport(
       ViewportNode(
-        id: id, transform: transform, translation: translation, opacity: svg.opacity,
+        id: id, transform: transform, translation: translation, opacity: opacity(of: svg, mode: mode),
         content: ViewportContent(
           viewBoxTransform: layout.viewBoxTransform, overflowClip: overflowClip, clip: clip, mask: mask,
           children: children), blendMode: blendMode(of: svg, mode: mode), isolates: svg.style.isolation == .isolate))
@@ -503,7 +508,7 @@ package struct RenderTreeBuilder {
       isFilterRoot ? .identity : await transform(of: use, context: context, frame: frame, guard: references)
     let content = await withReferencedElement(of: use, context: context, guard: references) { element, references in
       UseInstance(
-        translation: translation(of: use, context: context), opacity: use.opacity,
+        translation: translation(of: use, context: context), opacity: opacity(of: use, mode: mode),
         content: await node(
           of: element, context: context, mode: .normal, guard: references,
           instance: instance + [use.base.elementID]))
