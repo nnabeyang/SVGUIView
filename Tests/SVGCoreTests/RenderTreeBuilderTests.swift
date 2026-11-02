@@ -1853,6 +1853,33 @@ struct RenderTreeBuilderTests {
     #expect(offset == CGAffineTransform(translationX: 5, y: 40))
   }
 
+  /// Attributes of a `feComposite`, its operator and its coefficients.
+  private static let composites: [(String, SVGCompositeOperator, [Float])] = [
+    ("", .over, [0, 0, 0, 0]),
+    (#"operator="z""#, .over, [0, 0, 0, 0]),
+    (#"operator="in""#, .in, [0, 0, 0, 0]),
+    (#"operator="out""#, .out, [0, 0, 0, 0]),
+    (#"operator="atop""#, .atop, [0, 0, 0, 0]),
+    (#"operator="xor""#, .xor, [0, 0, 0, 0]),
+    (#"operator="arithmetic" k1="0.1" k2="0.2" k3="0.3" k4="0.4""#, .arithmetic, [0.1, 0.2, 0.3, 0.4]),
+    // Coefficients that are missing or aren't numbers are 0.
+    (#"operator="arithmetic" k2="0.3" k3="1px" k4="z""#, .arithmetic, [0, 0.3, 0, 0]),
+  ]
+
+  @Test("a feComposite has its operator, which is over by default, and coefficients that are 0 by default", arguments: composites)
+  func composite(attributes: String, expected: SVGCompositeOperator, k expectedK: [Float]) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feComposite "## + attributes + ##" in2="SourceAlpha"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .composite(let compositeOperator, let k, _, let input2) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a composite")
+      return
+    }
+    #expect(compositeOperator == expected)
+    #expect(k == expectedK)
+    #expect(input2.map { if case .sourceAlpha = $0 { true } else { false } } == true)
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)

@@ -273,6 +273,8 @@ extension ElementCursor {
         SVGFeFuncElement(base: base, contents: contents)
       case .feDropShadow:
         SVGFeDropShadowElement(base: base, contents: contents)
+      case .feComposite:
+        SVGFeCompositeElement(base: base, contents: contents)
       case .feOffset:
         SVGFeOffsetElement(base: base, contents: contents)
       case .feMergeNode:

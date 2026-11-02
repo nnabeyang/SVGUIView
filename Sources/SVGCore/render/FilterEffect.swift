@@ -43,6 +43,9 @@ package enum FilterPrimitive: Sendable {
   /// A matrix of 4 rows of 5 numbers, for red, green, blue and alpha, that multiplies the components of each pixel
   /// without its alpha premultiplied, from 0 to 1, followed by 1.
   case colorMatrix(input: SVGFilterInput?, matrix: [Float])
+  /// The first input composited over, in, out of, atop or xor the second, or combined with it by the coefficients
+  /// `k1` to `k4` of `arithmetic`.
+  case composite(operator: SVGCompositeOperator, k: [Float], input: SVGFilterInput?, input2: SVGFilterInput?)
   /// Functions that map each component of each pixel, without its alpha premultiplied, from 0 to 1.
   case componentTransfer(
     input: SVGFilterInput?, red: TransferFunction, green: TransferFunction, blue: TransferFunction,
