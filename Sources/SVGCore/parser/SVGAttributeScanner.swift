@@ -507,27 +507,6 @@ extension SVGAttributeScanner {
   }
 }
 
-extension SVGAttributeScanner {
-  mutating func scanFilter() -> SVGFilter? {
-    guard let name = scanIdentity() else {
-      return nil
-    }
-    guard let type = SVGFilterType(rawValue: name.lowercased()) else {
-      return nil
-    }
-    switch type {
-    case .none:
-      return SVGFilter.none
-    case .url:
-      guard consume(ascii: UInt8(ascii: "(")) else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: "#"))
-      guard let id = scanIdentity() else { return nil }
-      guard consume(ascii: UInt8(ascii: ")")) else { return nil }
-      return .url(url: id)
-    }
-  }
-}
-
 // for svg length
 extension SVGAttributeScanner {
   mutating func scanLengthType() -> SVGLengthType {

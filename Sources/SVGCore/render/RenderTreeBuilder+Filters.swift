@@ -10,7 +10,8 @@ extension RenderTreeBuilder {
     case filtered(RenderNode?)
   }
 
-  /// Applies the filter of an element, if it has one.
+  /// Applies the filters of an element, if it has any, one after another: the first one filters the element, and
+  /// each of the others filters the result of the one before it.
   ///
   /// - Parameters:
   ///   - context: The context of the parent of the element.
@@ -19,11 +20,64 @@ extension RenderTreeBuilder {
     of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard,
     instance: [ElementID]
   ) async -> Filtering {
-    guard case .url(let id) = element.filter ?? .none, let filter = base.filters[id] else { return .none }
-    guard !filter.knownChildren.isEmpty else { return .filtered(nil) }
+    guard let functions = element.filter else { return .none }
+    // A reference to something that isn't a filter element makes the element have no filters.
+    var filters = [String: SVGFilterElement]()
+    for case .url(let id) in functions {
+      guard let filter = base.filters[id] else { return .none }
+      // A filter element without children draws nothing, which nothing after it can draw from.
+      guard !filter.knownChildren.isEmpty else { return .filtered(nil) }
+      filters[id] = filter
+    }
     let elementContext = context.styled(by: element)
     let path = await path(of: element, context: elementContext, guard: references)
     let frame = await frame(of: element, context: elementContext, path: path, guard: references)
+    // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
+    let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
+    var source = await nodeWithoutFilter(
+      of: element, context: sourceContext, mode: .filter(isRoot: true), guard: ReferenceGuard(), instance: instance)
+    let id = RenderID(element: element.base.elementID, instance: instance)
+    // The last filter draws the result with the transform, the opacity and the blending of the element, and the
+    // others draw theirs into the source of the next one as they are.
+    let transform = await transform(of: element, context: elementContext, frame: frame, guard: references)
+    for (i, function) in functions.enumerated() {
+      let isLast = i == functions.count - 1
+      let effect: FilterEffect?
+      if case .url(let filterID) = function, let filter = filters[filterID] {
+        effect = FilterEffect(
+          effectRect: effectRect(of: filter, frame: frame, context: context),
+          colorInterpolation: filter.colorInterpolation ?? .sRGB,
+          colorInterpolationFilters: filter.colorInterpolationFilters ?? .linearRGB,
+          primitives: primitives(of: filter, frame: frame, context: context))
+      } else {
+        effect = functionEffect(of: function, element: element, source: source, frame: frame, context: elementContext)
+      }
+      guard let effect else {
+        // A filter function of a source that paints nothing paints nothing.
+        source = nil
+        continue
+      }
+      source = .filtered(
+        FilteredNode(
+          id: partID(id, part: functions.count - 1 - i), transform: isLast ? transform : .identity, frame: frame,
+          effectRect: effect.effectRect, colorInterpolation: effect.colorInterpolation,
+          colorInterpolationFilters: effect.colorInterpolationFilters, opacity: isLast ? element.opacity : 1,
+          primitives: effect.primitives, source: source,
+          blendMode: isLast ? element.style.mixBlendMode.cgBlendMode : .normal))
+    }
+    return .filtered(source)
+  }
+
+  /// What a filter element or a filter function does to its source.
+  struct FilterEffect {
+    let effectRect: CGRect
+    let colorInterpolation: SVGColorInterpolation
+    let colorInterpolationFilters: SVGColorInterpolation
+    let primitives: [FilterStep]
+  }
+
+  /// The primitives of a filter element.
+  private func primitives(of filter: SVGFilterElement, frame: CGRect, context: ResolveContext) -> [FilterStep] {
     var primitives = [FilterStep]()
     for child in filter.knownChildren {
       guard let child = child as? (any SVGFilterPrimitiveElement) else { continue }
@@ -35,19 +89,7 @@ extension RenderTreeBuilder {
           // and the initial value is linearRGB.
           colorSpace: child.base.style.colorInterpolationFilters ?? .linearRGB))
     }
-    // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
-    let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
-    let source = await nodeWithoutFilter(
-      of: element, context: sourceContext, mode: .filter(isRoot: true), guard: ReferenceGuard(), instance: instance)
-    return .filtered(
-      .filtered(
-        FilteredNode(
-          id: RenderID(element: element.base.elementID, instance: instance),
-          transform: await transform(of: element, context: elementContext, frame: frame, guard: references),
-          frame: frame, effectRect: effectRect(of: filter, frame: frame, context: context),
-          colorInterpolation: filter.colorInterpolation ?? .sRGB,
-          colorInterpolationFilters: filter.colorInterpolationFilters ?? .linearRGB, opacity: element.opacity,
-          primitives: primitives, source: source, blendMode: element.style.mixBlendMode.cgBlendMode)))
+    return primitives
   }
 
   /// The filter region.
@@ -161,23 +203,9 @@ extension RenderTreeBuilder {
     case .matrix:
       matrix = values?.count == 20 ? values! : identity
     case .saturate:
-      let s = single ?? 1
-      matrix = [
-        0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0, 0,
-        0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0, 0,
-        0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0, 0,
-        0, 0, 0, 1, 0,
-      ]
+      matrix = saturateMatrix(single ?? 1)
     case .hueRotate:
-      let angle = (single ?? 0) * .pi / 180
-      let c = cos(angle)
-      let s = sin(angle)
-      matrix = [
-        0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928, 0, 0,
-        0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283, 0, 0,
-        0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072, 0, 0,
-        0, 0, 0, 1, 0,
-      ]
+      matrix = hueRotateMatrix(degrees: single ?? 0)
     case .luminanceToAlpha:
       matrix = [
         0, 0, 0, 0, 0,
@@ -187,6 +215,29 @@ extension RenderTreeBuilder {
       ]
     }
     return matrix.map(Float.init)
+  }
+
+  /// The matrix of `saturate`, which leaves the colors as they are at 1, and makes them gray at 0.
+  static func saturateMatrix(_ s: Double) -> [Double] {
+    [
+      0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0, 0,
+      0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0, 0,
+      0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0, 0,
+      0, 0, 0, 1, 0,
+    ]
+  }
+
+  /// The matrix of `hueRotate`, which rotates the hues by an angle in degrees.
+  static func hueRotateMatrix(degrees: Double) -> [Double] {
+    let angle = degrees * .pi / 180
+    let c = cos(angle)
+    let s = sin(angle)
+    return [
+      0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928, 0, 0,
+      0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283, 0, 0,
+      0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072, 0, 0,
+      0, 0, 0, 1, 0,
+    ]
   }
 
   /// The transfer function of a `feFuncR`, `feFuncG`, `feFuncB` or `feFuncA`. A missing or invalid `type`, and a
