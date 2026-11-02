@@ -180,7 +180,8 @@ extension SVGDrawableElement {
   // `nil` for `none`, so that the frame of an element without a clip path isn't found for it.
   var clipPath: SVGClipPath? { if case .url = style.clipPath { style.clipPath } else { nil } }
   var mask: SVGMask? { if case .url = style.mask { style.mask } else { nil } }
-  var filter: SVGFilter? { if case .url = style.filter { style.filter } else { nil } }
+  /// The filters of the element, or `nil` if it has none.
+  var filter: [SVGFilterFunction]? { if case .list(let functions) = style.filter { functions } else { nil } }
   var display: CSSDisplay? { style.display }
   var visibility: CSSVisibility? { style.visibility }
 

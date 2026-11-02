@@ -86,7 +86,7 @@ struct RestyleScope: Sendable {
     var names = [String]()
     if case .url(let name) = style.clipPath { names.append(name) }
     if case .url(let name) = style.mask { names.append(name) }
-    if case .url(let name) = style.filter { names.append(name) }
+    names.append(contentsOf: style.filter.references)
     if case .url(let name, _) = style.fill { names.append(name) }
     if case .url(let name, _) = style.stroke { names.append(name) }
     names.append(contentsOf: [style.markerStart, style.markerMid, style.markerEnd].compactMap(\.id))

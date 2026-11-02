@@ -1767,6 +1767,47 @@ struct RenderTreeBuilderTests {
     #expect(abs(function.apply(component) - expected) < 0.0001, "\(function.apply(component))")
   }
 
+  @Test("a list of filters nests them, and only the last one has the transform and the opacity of the element")
+  func filterList() async throws {
+    let outer = try await filteredNode(
+      ##"<filter id="f"><feOffset dx="1"/></filter>"##
+        + ##"<rect width="10" height="10" opacity="0.5" transform="translate(5 0)" filter="url(#f) grayscale()"/>"##)
+    #expect(outer.transform == CGAffineTransform(translationX: 5, y: 0))
+    #expect(outer.opacity == 0.5)
+    #expect(outer.colorInterpolationFilters == .sRGB)
+    guard case .colorMatrix = outer.primitives.first?.primitive, case .filtered(let inner) = outer.source else {
+      Issue.record("The last filter isn't a matrix of a filtered source")
+      return
+    }
+    #expect(inner.transform == .identity)
+    #expect(inner.opacity == 1)
+    #expect(inner.effectRect == CGRect(x: -1, y: -1, width: 12, height: 12))
+    guard case .offset = inner.primitives.first?.primitive else {
+      Issue.record("The first filter isn't the offset")
+      return
+    }
+    // The function covers what the first filter paints, which is its region.
+    #expect(outer.effectRect.contains(inner.effectRect))
+  }
+
+  @Test("a reference to a missing filter in a list leaves the element without filters")
+  func missingFilterInList() async throws {
+    let tree = try await renderTree(##"<rect width="10" height="10" filter="grayscale() url(#missing)"/>"##)
+    guard case .shape = try children(of: tree).first else {
+      Issue.record("The element is filtered")
+      return
+    }
+  }
+
+  @Test("a blur and a shadow cover what the source paints, as far as they move it")
+  func filterFunctionRegions() async throws {
+    let blur = try await filteredNode(##"<rect width="10" height="10" filter="blur(2)"/>"##)
+    #expect(blur.effectRect.minX <= -6 && blur.effectRect.maxX >= 16, "\(blur.effectRect)")
+    let shadow = try await filteredNode(##"<rect width="10" height="10" filter="drop-shadow(20 0)"/>"##)
+    #expect(shadow.effectRect.minX <= 0 && shadow.effectRect.maxX >= 30, "\(shadow.effectRect)")
+    #expect(shadow.primitives.count == 4)
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)

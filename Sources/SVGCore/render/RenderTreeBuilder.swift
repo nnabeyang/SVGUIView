@@ -271,7 +271,7 @@ package struct RenderTreeBuilder {
 
   /// The identity of a part of the shape of an element that's painted as shapes of its own: the first part has the
   /// identity of the element, and the instance chain tells the others apart, as it does the copies of markers.
-  private func partID(_ id: RenderID, part: Int) -> RenderID {
+  func partID(_ id: RenderID, part: Int) -> RenderID {
     guard part > 0 else { return id }
     return RenderID(element: id.element, instance: id.instance + [id.element, ElementID(rawValue: Int.min + part)])
   }

@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import SVGCore
 
 extension RenderNode {
   /// A rectangle in the coordinates of the parent of the node that contains everything the node paints, or
