@@ -364,10 +364,10 @@ private struct FilterRun {
       else { return nil }
       clipRect = subregion
       return draw(blurred, in: area)
-    case .merge(let inputs, let colorInterpolationFilters):
+    case .merge(let inputs):
       guard let area = area(of: subregion) else { return nil }
       clipRect = subregion
-      let mergeSpace = colorInterpolationFilters ?? (step.isFirst ? source.space : input.space)
+      let mergeSpace = step.colorSpace
       guard var source = convert(source, to: mergeSpace), let converted = convert(input, to: mergeSpace) else {
         return nil
       }
@@ -429,28 +429,15 @@ private struct FilterRun {
   private func gaussianBlur(
     _ blur: GaussianBlurPrimitive, step: FilterStep, source: FilterImage, input: FilterImage
   ) -> FilterImage? {
-    // The color space, as on the CPU, which reinterprets the pixels of the source and the input in it.
-    let blurSpace: SVGColorInterpolation
-    switch blur.input {
-    case .none:
-      blurSpace =
-        step.isFirst
-        ? (blur.colorInterpolationFilters ?? blur.filterColorInterpolationFilters ?? .sRGB)
-        : (blur.colorInterpolationFilters ?? blur.filterColorInterpolationFilters ?? input.space)
-    case .sourceAlpha, .sourceGraphic:
-      blurSpace = blur.colorInterpolationFilters ?? source.space
-    case .other(let name):
-      blurSpace = results[name]?.space ?? blur.colorInterpolationFilters ?? (step.isFirst ? source.space : input.space)
-    }
-    var source = FilterImage(texture: source.texture, space: blurSpace)
-    let reinterpreted = FilterImage(texture: input.texture, space: blurSpace)
-    guard let selected = self.input(blur.input, source: &source, input: reinterpreted, space: blurSpace) else {
-      return nil
-    }
+    // The source and the input are converted to the color space of the primitive, as on the CPU.
+    let blurSpace = step.colorSpace
+    guard var source = convert(source, to: blurSpace), let converted = convert(input, to: blurSpace),
+      let selected = self.input(blur.input, source: &source, input: converted, space: blurSpace)
+    else { return nil }
     switch blur.standardDeviation {
     case .hetero(let x, let y) where x < 0 || y < 0:
       // The CPU leaves the input of the primitive, rather than the one that it takes.
-      return reinterpreted
+      return converted
     case .iso(let x) where x < 0:
       return selected
     case .hetero(let x, let y) where x != y:

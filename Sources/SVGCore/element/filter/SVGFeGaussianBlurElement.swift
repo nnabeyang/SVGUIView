@@ -77,8 +77,6 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterPrimitiveElement {
 
   let input: SVGFilterInput?
 
-  let colorInterpolationFilters: SVGColorInterpolation?
-
   let stdDeviation: StdDeviation?
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
@@ -93,8 +91,6 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterPrimitiveElement {
 
     stdDeviation = StdDeviation(description: attributes["stdDeviation", default: ""])
     input = SVGFilterInput(rawValue: attributes["in", default: ""])
-
-    colorInterpolationFilters = base.style.colorInterpolationFilters
   }
 
 }

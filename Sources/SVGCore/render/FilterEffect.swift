@@ -33,8 +33,9 @@ package struct FilterStep: Sendable {
   package let subregion: CGRect
   /// The name of the result, which later primitives take as an input.
   package let result: String?
-  /// Whether the primitive is the first child of the filter element.
-  package let isFirst: Bool
+  /// The `color-interpolation-filters` of the primitive, the color space that its inputs are converted to and that
+  /// it computes its result in.
+  package let colorSpace: SVGColorInterpolation
 }
 
 package enum FilterPrimitive: Sendable {
@@ -42,7 +43,7 @@ package enum FilterPrimitive: Sendable {
   /// A flood with the components of its color, premultiplied, in the order of the pixels of the bitmap.
   case flood(color: [UInt8])
   case gaussianBlur(GaussianBlurPrimitive)
-  case merge(inputs: [SVGFilterInput?], colorInterpolationFilters: SVGColorInterpolation?)
+  case merge(inputs: [SVGFilterInput?])
   case offset(translation: CGAffineTransform)
 }
 
@@ -58,8 +59,4 @@ package struct GaussianBlurPrimitive: Sendable {
 
   package let input: SVGFilterInput?
   package let standardDeviation: StandardDeviation
-  /// The `color-interpolation-filters` of the primitive.
-  package let colorInterpolationFilters: SVGColorInterpolation?
-  /// The `color-interpolation-filters` of the filter element.
-  package let filterColorInterpolationFilters: SVGColorInterpolation?
 }

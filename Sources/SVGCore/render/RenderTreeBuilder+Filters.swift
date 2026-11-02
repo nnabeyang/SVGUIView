@@ -25,13 +25,15 @@ extension RenderTreeBuilder {
     let path = await path(of: element, context: elementContext, guard: references)
     let frame = await frame(of: element, context: elementContext, path: path, guard: references)
     var primitives = [FilterStep]()
-    for (i, child) in filter.knownChildren.enumerated() {
+    for child in filter.knownChildren {
       guard let child = child as? (any SVGFilterPrimitiveElement) else { continue }
       primitives.append(
         FilterStep(
           primitive: primitive(of: child, filter: filter, frame: frame, context: context),
           subregion: subregion(of: child, filter: filter, frame: frame, context: context), result: child.result,
-          isFirst: i == 0))
+          // The property is inherited, so the primitive has the value of the filter element where it declares none,
+          // and the initial value is linearRGB.
+          colorSpace: child.base.style.colorInterpolationFilters ?? .linearRGB))
     }
     // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
     let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
@@ -115,14 +117,9 @@ extension RenderTreeBuilder {
             y: y.calculatedLength(frame: frame, context: context, mode: .height, unitType: units))
         }
       return .gaussianBlur(
-        GaussianBlurPrimitive(
-          input: blur.input, standardDeviation: standardDeviation,
-          colorInterpolationFilters: blur.colorInterpolationFilters,
-          filterColorInterpolationFilters: filter.colorInterpolationFilters))
+        GaussianBlurPrimitive(input: blur.input, standardDeviation: standardDeviation))
     case let merge as SVGFeMergeElement:
-      return .merge(
-        inputs: merge.children.compactMap { $0 as? SVGFeMergeNodeElement }.map(\.input),
-        colorInterpolationFilters: merge.colorInterpolationFilters)
+      return .merge(inputs: merge.children.compactMap { $0 as? SVGFeMergeNodeElement }.map(\.input))
     case let offset as SVGFeOffsetElement:
       let dx = offset.dx ?? 0
       let dy = offset.dy ?? 0
