@@ -1897,6 +1897,48 @@ struct RenderTreeBuilderTests {
     #expect(inputs == ["none", "SourceGraphic", "a"])
   }
 
+  /// Primitives of a filter of an element of 10 by 10, whose region is -1, -1, 12, 12, and the subregion of the last.
+  private static let defaultSubregions: [(String, CGRect)] = [
+    // The first primitive takes the source graphic.
+    (#"<feOffset/>"#, CGRect(x: -1, y: -1, width: 12, height: 12)),
+    (#"<feFlood x="1" y="2" width="3" height="4"/><feOffset/>"#, CGRect(x: 1, y: 2, width: 3, height: 4)),
+    (#"<feFlood x="1" y="2" width="3" height="4"/><feOffset in="SourceGraphic"/>"#, CGRect(x: -1, y: -1, width: 12, height: 12)),
+    (#"<feFlood x="1" y="2" width="3" height="4"/><feOffset in="SourceAlpha"/>"#, CGRect(x: -1, y: -1, width: 12, height: 12)),
+    // A name that no primitive before has given is the result of the primitive before.
+    (#"<feFlood x="1" y="2" width="3" height="4"/><feOffset in="z"/>"#, CGRect(x: 1, y: 2, width: 3, height: 4)),
+    // Each attribute that the primitive doesn't have comes from its inputs.
+    (#"<feFlood x="1" y="2" width="3" height="4"/><feOffset x="0" height="10"/>"#, CGRect(x: 0, y: 2, width: 3, height: 10)),
+    (
+      #"<feFlood x="0" y="0" width="2" height="2" result="a"/><feFlood x="5" y="6" width="2" height="2"/><feComposite in="a"/>"#,
+      CGRect(x: 0, y: 0, width: 7, height: 8)
+    ),
+    (
+      #"<feFlood x="0" y="0" width="2" height="2" result="a"/><feFlood x="5" y="6" width="2" height="2"/><feComposite in2="SourceGraphic"/>"#,
+      CGRect(x: -1, y: -1, width: 12, height: 12)
+    ),
+    (
+      #"<feFlood x="0" y="0" width="2" height="2" result="a"/><feFlood x="5" y="6" width="2" height="2"/><feMerge><feMergeNode in="a"/><feMergeNode/></feMerge>"#,
+      CGRect(x: 0, y: 0, width: 7, height: 8)
+    ),
+    (#"<feFlood x="0" y="0" width="2" height="2"/><feMerge/>"#, CGRect(x: -1, y: -1, width: 12, height: 12)),
+    // A later result of the same name replaces the earlier one.
+    (
+      #"<feFlood x="0" y="0" width="2" height="2" result="a"/><feFlood x="5" y="6" width="2" height="2" result="a"/><feGaussianBlur in="a"/>"#,
+      CGRect(x: 5, y: 6, width: 2, height: 2)
+    ),
+    // A flood has no inputs.
+    (#"<feFlood x="1" y="2" width="3" height="4"/><feFlood/>"#, CGRect(x: -1, y: -1, width: 12, height: 12)),
+  ]
+
+  @Test(
+    "the attributes of a primitive subregion default to the union of the subregions of its inputs, or to the filter region",
+    arguments: defaultSubregions)
+  func defaultSubregion(primitives: String, expected: CGRect) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f">"## + primitives + ##"</filter><rect width="10" height="10" filter="url(#f)"/>"##)
+    #expect(filtered.primitives.last?.subregion == expected)
+  }
+
   /// Attributes of a `feMorphology`, its operator and its radii.
   private static let morphologies: [(String, SVGMorphologyOperator, CGSize)] = [
     ("", .erode, .zero),

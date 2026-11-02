@@ -8,13 +8,13 @@ extension CGPainter {
   /// draws the result into `cgContext`.
   func colorMatrix(
     _ matrix: [Float], input: SVGFilterInput?, colorSpace: SVGColorInterpolation, srcImage: CGImage,
-    inImage: CGImage, subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat,
+    inImage: CGImage, subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat,
     cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     guard matrix.count == 20 else { return nil }
     return mapColors(
       input: input, colorSpace: colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
-      clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results
+      bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results
     ) { color in
       func row(_ i: Int) -> Float {
         matrix[i * 5] * color[0] + matrix[i * 5 + 1] * color[1] + matrix[i * 5 + 2] * color[2] + matrix[i * 5 + 3]
@@ -29,12 +29,12 @@ extension CGPainter {
   func componentTransfer(
     _ functions: (red: TransferFunction, green: TransferFunction, blue: TransferFunction, alpha: TransferFunction),
     input: SVGFilterInput?, colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage,
-    subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
+    subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
     results: [String: CGImage]
   ) -> CGImage? {
     mapColors(
       input: input, colorSpace: colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
-      clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results
+      bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results
     ) { color in
       SIMD4(
         functions.red.apply(color[0]), functions.green.apply(color[1]), functions.blue.apply(color[2]),
@@ -49,7 +49,7 @@ extension CGPainter {
   ///   from 0 to 1, to those of the result, which are clamped to 0 to 1.
   private func mapColors(
     input: SVGFilterInput?, colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage,
-    subregion: CGRect, clipRect: inout CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
+    subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext,
     results: [String: CGImage], map: (SIMD4<Float>) -> SIMD4<Float>
   ) -> CGImage? {
     // The pixels are blue, green, red and alpha in memory, with the alpha premultiplied, so that the loop below knows
@@ -85,7 +85,6 @@ extension CGPainter {
       let image = vImageCreateCGImageFromBuffer(
         &output, &format, { _, _ in }, nil, vImage_Flags(kvImageNoAllocate), nil)?.takeRetainedValue()
     else { return nil }
-    clipRect = subregion
     cgContext.clip(to: subregion)
     cgContext.setAlpha(opacity)
     cgContext.draw(image, in: bitmapRect)

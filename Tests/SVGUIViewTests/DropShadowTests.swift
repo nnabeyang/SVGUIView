@@ -61,7 +61,7 @@ struct DropShadowTests {
   func afterPrimitive() async throws {
     let content = square(
       #"<feFlood flood-color="blue" x="0" y="0" width="5" height="5"/>"#
-        + #"<feDropShadow dx="10" dy="10" stdDeviation="0" flood-color="lime"/>"#)
+        + #"<feDropShadow dx="10" dy="10" stdDeviation="0" flood-color="lime" width="20" height="20"/>"#)
     #expect(isClose(try await pixel(content, x: 2, y: 2), [0, 0, 255, 255]))
     #expect(isClose(try await pixel(content, x: 12, y: 12), [0, 255, 0, 255]))
     // The red square isn't the input, so its shadow doesn't show.

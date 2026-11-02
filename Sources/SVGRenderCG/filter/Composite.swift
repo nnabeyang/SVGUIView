@@ -11,8 +11,7 @@ extension CGPainter {
   /// color space of the bitmap of the filter.
   func composite(
     _ compositeOperator: SVGCompositeOperator, k: [Float], input: SVGFilterInput?, input2: SVGFilterInput?,
-    colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage, subregion: CGRect, clipRect: inout CGRect,
-    bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
+    colorSpace: SVGColorInterpolation, srcImage: CGImage, inImage: CGImage, subregion: CGRect, bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     // The pixels are blue, green, red and alpha in memory, with the alpha premultiplied, so that the loop below knows
     // where each component is whatever the format of the images.
@@ -50,7 +49,6 @@ extension CGPainter {
       let image = vImageCreateCGImageFromBuffer(
         &output, &format, { _, _ in }, nil, vImage_Flags(kvImageNoAllocate), nil)?.takeRetainedValue()
     else { return nil }
-    clipRect = subregion
     cgContext.clip(to: subregion)
     cgContext.setAlpha(opacity)
     cgContext.draw(image, in: bitmapRect)
