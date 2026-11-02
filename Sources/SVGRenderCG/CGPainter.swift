@@ -342,24 +342,29 @@ package struct CGPainter {
   // MARK: - Clip paths
 
   /// Clips `target` to a clip path.
-  private func apply(_ clip: ClipPathEffect, to target: CGContext) async {
-    guard let image = await image(of: clip) else { return }
-    target.clip(to: clip.frame, mask: image)
+  ///
+  /// - Parameter extent: The rectangle that the clip covers, which is the bounds of the clipped element by default,
+  ///   and the filter region for the result of a filter, which can go past them.
+  func apply(_ clip: ClipPathEffect, to target: CGContext, extent: CGRect? = nil) async {
+    let extent = extent ?? clip.frame
+    guard let image = await image(of: clip, extent: extent) else { return }
+    target.clip(to: extent, mask: image)
   }
 
-  /// The bitmap of the bounds of the clipped element, whose alpha is the clip path, or `nil` if it can't be made.
-  private func image(of clip: ClipPathEffect) async -> CGImage? {
+  /// The bitmap of `extent`, whose alpha is the clip path, or `nil` if it can't be made.
+  private func image(of clip: ClipPathEffect, extent: CGRect) async -> CGImage? {
     let size = clip.frame.size
-    guard let graphics = CGContext.bitmap(size: size, scale: scale, space: CGColorSpaceCreateDeviceRGB()) else {
+    guard let graphics = CGContext.bitmap(size: extent.size, scale: scale, space: CGColorSpaceCreateDeviceRGB())
+    else {
       return nil
     }
-    // The clip path of the `<clipPath>` element is built for the same bounds, so its bitmap covers this one.
+    // The clip path of the `<clipPath>` element is built for the same bounds, and its bitmap covers the same extent.
     if let clipPath = clip.clipPath {
-      guard let image = await image(of: clipPath) else { return nil }
+      guard let image = await image(of: clipPath, extent: extent) else { return nil }
       graphics.clip(to: CGRect(x: 0, y: 0, width: graphics.width, height: graphics.height), mask: image)
     }
     // The units place the content in the user space of the clipped element, where the transform of the
-    // `<clipPath>` element applies, and then the bounds move to the origin of the bitmap.
+    // `<clipPath>` element applies, and then the extent moves to the origin of the bitmap.
     let units: CGAffineTransform =
       switch clip.units {
       case .userSpaceOnUse: .identity
@@ -368,7 +373,7 @@ package struct CGPainter {
       }
     graphics.concatenate(
       units.concatenating(clip.transform)
-        .concatenating(CGAffineTransform(translationX: -clip.frame.minX, y: -clip.frame.minY))
+        .concatenating(CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
         .concatenating(CGAffineTransform(scaleX: scale, y: scale)))
     for shape in clip.shapes {
       if Task.isCancelled { break }
@@ -388,25 +393,31 @@ package struct CGPainter {
   // MARK: - Masks
 
   /// Clips `target` to a mask.
-  private func apply(_ mask: MaskEffect, to target: CGContext) async {
-    guard let image = await image(of: mask) else { return }
+  ///
+  /// - Parameter extent: The rectangle that the mask covers, which is the bounds of the masked element by default,
+  ///   and the filter region for the result of a filter, which can go past them.
+  func apply(_ mask: MaskEffect, to target: CGContext, extent: CGRect? = nil) async {
+    let extent = extent ?? mask.frame
+    guard let image = await image(of: mask, extent: extent) else { return }
     target.clip(to: mask.region)
-    target.clip(to: mask.frame, mask: image)
+    target.clip(to: extent, mask: image)
   }
 
-  /// The bitmap of the bounds of the masked element, whose alpha is the luminance of the mask, or `nil` if it
-  /// can't be made.
-  private func image(of mask: MaskEffect) async -> CGImage? {
+  /// The bitmap of `extent`, whose alpha is the luminance of the mask, or `nil` if it can't be made.
+  private func image(of mask: MaskEffect, extent: CGRect) async -> CGImage? {
     let size = mask.frame.size
-    guard let graphics = CGContext.bitmap(size: size, scale: scale, space: mask.colorInterpolation.colorSpace) else {
+    guard
+      let graphics = CGContext.bitmap(size: extent.size, scale: scale, space: mask.colorInterpolation.colorSpace)
+    else {
       return nil
     }
-    let transform = CGAffineTransform(scaleX: scale, y: scale)
+    let transform = CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: -extent.minX, y: -extent.minY)
     switch mask.contentUnits {
     case .userSpaceOnUse:
-      graphics.concatenate(transform.translatedBy(x: -mask.frame.minX, y: -mask.frame.minY))
+      graphics.concatenate(transform)
     case .objectBoundingBox:
-      graphics.concatenate(transform.scaledBy(x: size.width, y: size.height))
+      graphics.concatenate(
+        transform.translatedBy(x: mask.frame.minX, y: mask.frame.minY).scaledBy(x: size.width, y: size.height))
     }
     for node in mask.contents {
       if Task.isCancelled { break }

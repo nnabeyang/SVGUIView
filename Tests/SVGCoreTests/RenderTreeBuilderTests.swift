@@ -1897,6 +1897,81 @@ struct RenderTreeBuilderTests {
     #expect(inputs == ["none", "SourceGraphic", "a"])
   }
 
+  /// Elements with a filter `f` and the attributes, which the placeholder `ATTRIBUTES` stands for.
+  private static let filteredElements = [
+    #"<rect width="10" height="10" ATTRIBUTES/>"#,
+    #"<g ATTRIBUTES><rect width="10" height="10"/></g>"#,
+    ##"<use href="#r" ATTRIBUTES/>"##,
+    #"<svg width="10" height="10" ATTRIBUTES><rect width="10" height="10"/></svg>"#,
+    #"<text y="10" ATTRIBUTES>A<tspan>B</tspan></text>"#,
+  ]
+
+  @Test("an element with a filter draws the result with its opacity, and its source without it", arguments: filteredElements)
+  func filteredOpacity(element: String) async throws {
+    let filtered = try await filteredNode(
+      ##"<defs><rect id="r" width="10" height="10"/></defs><filter id="f"><feOffset/></filter>"##
+        + element.replacingOccurrences(of: "ATTRIBUTES", with: #"opacity="0.5" filter="url(#f)""#))
+    #expect(filtered.opacity == 0.5)
+    #expect(try #require(filtered.source).groupOpacity == 1)
+  }
+
+  @Test(
+    "an element with a filter clips and masks the result, and its source has no clip path nor mask",
+    arguments: filteredElements.dropLast(2) + filteredElements.suffix(1))
+  func filteredClipAndMask(element: String) async throws {
+    let filtered = try await filteredNode(
+      ##"<defs><rect id="r" width="10" height="10"/></defs><clipPath id="c"><rect width="5" height="5"/></clipPath>"##
+        + ##"<mask id="m"><rect width="5" height="5" fill="white"/></mask><filter id="f"><feOffset/></filter>"##
+        + element.replacingOccurrences(of: "ATTRIBUTES", with: ##"clip-path="url(#c)" mask="url(#m)" filter="url(#f)""##))
+    #expect(filtered.clip != nil)
+    #expect(filtered.mask.isMask)
+    let source = try #require(filtered.source)
+    switch source {
+    case .shape(let shape):
+      #expect(shape.clip == nil)
+      #expect(!shape.mask.isMask)
+    case .group(let group):
+      #expect(group.clip == nil)
+      #expect(group.mask == nil)
+    case .use(let use):
+      #expect(use.clip == nil)
+      #expect(use.mask == nil)
+    default:
+      Issue.record("The source is \(source)")
+    }
+  }
+
+  @Test("an svg element with a filter keeps its clip path and its mask, which are in the coordinates of its content")
+  func filteredViewportClipAndMask() async throws {
+    let filtered = try await filteredNode(
+      ##"<clipPath id="c"><rect width="5" height="5"/></clipPath><filter id="f"><feOffset/></filter>"##
+        + ##"<svg width="10" height="10" clip-path="url(#c)" filter="url(#f)"><rect width="10" height="10"/></svg>"##)
+    #expect(filtered.clip == nil)
+    guard case .viewport(let viewport) = filtered.source else {
+      Issue.record("The source isn't a viewport")
+      return
+    }
+    #expect(viewport.content?.clip != nil)
+  }
+
+  @Test("only the last of the filters of an element clips and masks its result")
+  func filterListClipAndMask() async throws {
+    let filtered = try await filteredNode(
+      ##"<clipPath id="c"><rect width="5" height="5"/></clipPath><mask id="m"><rect width="5" height="5" fill="white"/></mask>"##
+        + ##"<filter id="f"><feOffset/></filter>"##
+        + ##"<rect width="10" height="10" clip-path="url(#c)" mask="url(#m)" opacity="0.5" filter="url(#f) url(#f)"/>"##)
+    #expect(filtered.clip != nil)
+    #expect(filtered.mask.isMask)
+    #expect(filtered.opacity == 0.5)
+    guard case .filtered(let first) = filtered.source else {
+      Issue.record("The source of the last filter isn't the first filter")
+      return
+    }
+    #expect(first.clip == nil)
+    #expect(!first.mask.isMask)
+    #expect(first.opacity == 1)
+  }
+
   /// Primitives of a filter of an element of 10 by 10, whose region is -1, -1, 12, 12, and the subregion of the last.
   private static let defaultSubregions: [(String, CGRect)] = [
     // The first primitive takes the source graphic.
@@ -2205,5 +2280,11 @@ struct RenderTreeBuilderTests {
       throw NodeError.unexpected(try children(of: tree).last)
     }
     return filtered
+  }
+}
+
+extension MaskApplication {
+  fileprivate var isMask: Bool {
+    if case .mask = self { true } else { false }
   }
 }

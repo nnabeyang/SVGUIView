@@ -247,7 +247,7 @@ extension PaintedLayer {
     }
     let painter = CGPainter(scale: scale)
     if let filters, let filtered, let result = await filters.filterImage(of: filtered, painter: painter) {
-      painter.draw(result, of: filtered, into: graphics)
+      await painter.draw(result, of: filtered, into: graphics)
       return PaintedContents(
         image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key, filteredOnGPU: true)
     }

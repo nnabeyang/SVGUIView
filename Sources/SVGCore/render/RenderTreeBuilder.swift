@@ -184,15 +184,11 @@ package struct RenderTreeBuilder {
     if let path {
       let frame = await frame(of: element, context: context, path: path, guard: references)
       geometry = Geometry(path: RenderPath(path), frame: frame)
-      clip = await clipEffect(element.clipPath, frame: frame, context: context, guard: references)
-      let lineWidth = element.style.strokeWidth.value(context: context, mode: .other)
-      if self.mask(of: element) != nil, element.type == .line, frame.width == lineWidth || frame.height == lineWidth {
-        mask = .clipToZero
-      } else if let effect = await maskEffect(
-        self.mask(of: element), frame: frame, context: context, guard: references,
-        instance: instance + [element.base.elementID])
-      {
-        mask = .mask(effect)
+      // The filter of an element drawn as its source clips and masks its result instead.
+      if mode != .filter(isRoot: true) {
+        clip = await clipEffect(element.clipPath, frame: frame, context: context, guard: references)
+        mask = await maskApplication(
+          of: element, frame: frame, context: context, guard: references, instance: instance)
       }
     }
     let transform =
@@ -235,7 +231,7 @@ package struct RenderTreeBuilder {
     guard !markers.isEmpty || parts != nil else {
       return .shape(
         ShapeNode(
-          id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: element.opacity,
+          id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: opacity(of: element, mode: mode),
           content: content, antialiases: antialiases, blendMode: blendMode(of: element, mode: mode)))
     }
     // The shape and the markers are drawn in the paint order, with the effects of the shape.
@@ -260,8 +256,28 @@ package struct RenderTreeBuilder {
     let groupMask: MaskEffect? = if case .mask(let effect) = mask { effect } else { nil }
     return .group(
       GroupNode(
-        id: id, transform: transform, opacity: element.opacity, clip: clip, mask: groupMask, children: children,
+        id: id, transform: transform, opacity: opacity(of: element, mode: mode), clip: clip, mask: groupMask, children: children,
         blendMode: blendMode(of: element, mode: mode)))
+  }
+
+  /// The mask of an element with its bounds, where a line that has a mask and no area clips everything.
+  func maskApplication(
+    of element: any SVGDrawableElement, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard,
+    instance: [ElementID]
+  ) async -> MaskApplication {
+    let lineWidth = element.style.strokeWidth.value(context: context, mode: .other)
+    if self.mask(of: element) != nil, element.type == .line, frame.width == lineWidth || frame.height == lineWidth {
+      return .clipToZero
+    }
+    let effect = await maskEffect(
+      self.mask(of: element), frame: frame, context: context, guard: references,
+      instance: instance + [element.base.elementID])
+    return effect.map { .mask($0) } ?? .none
+  }
+
+  /// The opacity of an element, which the filter of an element drawn as its source applies to its result instead.
+  private func opacity(of element: some SVGDrawableElement, mode: DrawMode) -> CGFloat {
+    mode == .filter(isRoot: true) ? 1 : element.opacity
   }
 
   /// How an element blends with what's behind it, which the filter of an element drawn as its source does instead.
@@ -285,10 +301,14 @@ package struct RenderTreeBuilder {
     guard references: ReferenceGuard, instance: [ElementID]
   ) async -> RenderNode {
     let frame = spans.reduce(CGRect.null) { $0.union($1.frame) }
-    let clip = await clipEffect(text.clipPath, frame: frame, context: context, guard: references)
-    let mask = await maskEffect(
-      self.mask(of: text), frame: frame, context: context, guard: references,
-      instance: instance + [text.base.elementID])
+    let isFilterRoot = mode == .filter(isRoot: true)
+    let clip = isFilterRoot ? nil : await clipEffect(text.clipPath, frame: frame, context: context, guard: references)
+    let mask =
+      isFilterRoot
+      ? nil
+      : await maskEffect(
+        self.mask(of: text), frame: frame, context: context, guard: references,
+        instance: instance + [text.base.elementID])
     let transform =
       mode != .filter(isRoot: true)
       ? await transform(of: text, context: context, frame: frame, guard: references) : .identity
@@ -322,7 +342,7 @@ package struct RenderTreeBuilder {
     }
     return .group(
       GroupNode(
-        id: renderID(of: text, instance: instance), transform: transform, opacity: text.opacity, clip: clip,
+        id: renderID(of: text, instance: instance), transform: transform, opacity: opacity(of: text, mode: mode), clip: clip,
         mask: mask, children: children, blendMode: blendMode(of: text, mode: mode)))
   }
 
@@ -335,7 +355,7 @@ package struct RenderTreeBuilder {
     var clip: ClipPathEffect?
     var mask: MaskEffect?
     var frame: CGRect?
-    if group.clipPath != nil || self.mask(of: group) != nil {
+    if mode != .filter(isRoot: true), group.clipPath != nil || self.mask(of: group) != nil {
       let groupFrame = await self.frame(of: group, context: context, path: nil, guard: references)
       clip = await clipEffect(group.clipPath, frame: groupFrame, context: context, guard: references)
       mask = await maskEffect(
@@ -356,7 +376,7 @@ package struct RenderTreeBuilder {
     }
     return .group(
       GroupNode(
-        id: renderID(of: group, instance: instance), transform: transform, opacity: group.opacity, clip: clip,
+        id: renderID(of: group, instance: instance), transform: transform, opacity: opacity(of: group, mode: mode), clip: clip,
         mask: mask, children: children, blendMode: blendMode(of: group, mode: mode),
         isolates: group.style.isolation == .isolate))
   }
@@ -394,7 +414,7 @@ package struct RenderTreeBuilder {
     let (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
     guard let layout else {
       return .viewport(
-        ViewportNode(id: id, transform: transform, translation: translation, opacity: svg.opacity, content: nil))
+        ViewportNode(id: id, transform: transform, translation: translation, opacity: opacity(of: svg, mode: mode), content: nil))
     }
     let inner = layout.context
     var overflowClip: CGRect?
@@ -423,7 +443,7 @@ package struct RenderTreeBuilder {
     }
     return .viewport(
       ViewportNode(
-        id: id, transform: transform, translation: translation, opacity: svg.opacity,
+        id: id, transform: transform, translation: translation, opacity: opacity(of: svg, mode: mode),
         content: ViewportContent(
           viewBoxTransform: layout.viewBoxTransform, overflowClip: overflowClip, clip: clip, mask: mask,
           children: children), blendMode: blendMode(of: svg, mode: mode), isolates: svg.style.isolation == .isolate))
@@ -491,7 +511,7 @@ package struct RenderTreeBuilder {
     var clip: ClipPathEffect?
     var mask: MaskEffect?
     var frame: CGRect?
-    if use.clipPath != nil || self.mask(of: use) != nil {
+    if !isFilterRoot, use.clipPath != nil || self.mask(of: use) != nil {
       let useFrame = await self.frame(of: use, context: context, path: nil, guard: references)
       clip = await clipEffect(use.clipPath, frame: useFrame, context: context, guard: references)
       mask = await maskEffect(
@@ -503,7 +523,7 @@ package struct RenderTreeBuilder {
       isFilterRoot ? .identity : await transform(of: use, context: context, frame: frame, guard: references)
     let content = await withReferencedElement(of: use, context: context, guard: references) { element, references in
       UseInstance(
-        translation: translation(of: use, context: context), opacity: use.opacity,
+        translation: translation(of: use, context: context), opacity: opacity(of: use, mode: mode),
         content: await node(
           of: element, context: context, mode: .normal, guard: references,
           instance: instance + [use.base.elementID]))

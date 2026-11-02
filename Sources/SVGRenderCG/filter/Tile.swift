@@ -11,7 +11,7 @@ extension CGPainter {
   /// The pixels are copied as they are, without a conversion of the color space.
   func tile(
     _ tile: CGRect, input: SVGFilterInput?, srcImage: CGImage, inImage: CGImage, subregion: CGRect,
-    bitmapRect: CGRect, opacity: CGFloat, cgContext: CGContext, results: [String: CGImage]
+    bitmapRect: CGRect, cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     // The pixels are copied as 4 bytes, which they are in the bitmaps of the filter.
     guard srcImage.bitsPerPixel == 32,
@@ -46,7 +46,6 @@ extension CGPainter {
     defer { output.free() }
     guard let image = try? output.createCGImage(format: format) else { return nil }
     cgContext.clip(to: subregion)
-    cgContext.setAlpha(opacity)
     cgContext.draw(image, in: bitmapRect)
     return cgContext.makeImage()
   }

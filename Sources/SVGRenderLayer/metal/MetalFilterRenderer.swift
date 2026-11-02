@@ -15,9 +15,9 @@ private let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView
 /// It takes the image of the element without its filter from `CGPainter.sourceImage(of:)`, and returns what
 /// `CGPainter.filterResult(of:source:)` does, as textures of premultiplied BGRA pixels of the filter region. It does
 /// the same steps as the CPU: each primitive draws into a cleared bitmap of the color space of
-/// `color-interpolation-filters`, clipped to its subregion, with the opacity of the element, converting the color
-/// spaces where the CPU does. The color conversions and the opacity are looked up in tables that Core Graphics and
-/// vImage make, so that they round in the same way.
+/// `color-interpolation-filters`, clipped to its subregion, converting the color spaces where the CPU does. The color
+/// conversions are looked up in tables that Core Graphics and vImage make, so that they round in the same way. The
+/// opacity of the element applies to the result, where `CGPainter.draw(_:of:into:)` draws it.
 ///
 /// It doesn't run a filter region larger than the textures that every GPU can make, nor filters whose results it can't
 /// make the same, for which it returns `nil`:
@@ -346,7 +346,7 @@ private struct FilterRun {
       return nil
     case .flood(let color):
       guard let area = area(of: subregion), color.count == 4,
-        let table = renderer.table(.draw(from: source.space, to: space, alpha: filtered.opacity))
+        let table = renderer.table(.draw(from: source.space, to: space, alpha: 1))
       else { return nil }
       // The color is in the order of the pixels of the bitmap, and the kernels read the components as RGBA.
       func lookUp(_ component: UInt8) -> UInt32 {
@@ -513,9 +513,9 @@ private struct FilterRun {
     return FilterImage(texture: output, space: space)
   }
 
-  /// An image drawn with the opacity into the area of a cleared bitmap of the filter.
+  /// An image drawn into the area of a cleared bitmap of the filter.
   private func draw(_ image: FilterImage, in area: DrawArea) -> FilterImage? {
-    guard let table = tableBuffer(.draw(from: image.space, to: space, alpha: filtered.opacity)),
+    guard let table = tableBuffer(.draw(from: image.space, to: space, alpha: 1)),
       let output = makeTexture()
     else { return nil }
     var area = area
@@ -548,9 +548,9 @@ private struct FilterRun {
     return FilterImage(texture: output, space: image.space)
   }
 
-  /// An image drawn with the opacity and a blend mode over an image of the filter.
+  /// An image drawn with a blend mode over an image of the filter.
   private func blend(_ image: FilterImage, over backdrop: FilterImage, mode: UInt32) -> FilterImage? {
-    guard let table = tableBuffer(.draw(from: image.space, to: space, alpha: filtered.opacity)),
+    guard let table = tableBuffer(.draw(from: image.space, to: space, alpha: 1)),
       let output = makeTexture()
     else { return nil }
     var mode = mode

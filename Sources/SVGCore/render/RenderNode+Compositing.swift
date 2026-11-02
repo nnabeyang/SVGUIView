@@ -25,15 +25,14 @@ extension RenderNode {
   }
 
   /// The opacity that the node composites what it paints with as a group, which a layer can apply instead: the
-  /// opacity of a shape, a group or a viewport, and of the content of a `<use>`. A filtered node draws each
-  /// primitive with its opacity, so its opacity is 1.
+  /// opacity of a shape, a group, a viewport or the result of a filter, and of the content of a `<use>`.
   package var groupOpacity: CGFloat {
     switch self {
     case .shape(let shape): shape.opacity
     case .group(let group): group.opacity
     case .viewport(let viewport): viewport.opacity
     case .use(let use): use.instance?.opacity ?? 1
-    case .filtered: 1
+    case .filtered(let filtered): filtered.opacity
     }
   }
 
@@ -76,7 +75,8 @@ extension RenderNode {
         FilteredNode(
           id: filtered.id, transform: .identity, frame: filtered.frame, effectRect: filtered.effectRect,
           colorInterpolation: filtered.colorInterpolation, colorInterpolationFilters: filtered.colorInterpolationFilters,
-          opacity: filtered.opacity, primitives: filtered.primitives, source: filtered.source))
+          opacity: 1, primitives: filtered.primitives, source: filtered.source, clip: filtered.clip,
+          mask: filtered.mask))
     }
   }
 }
