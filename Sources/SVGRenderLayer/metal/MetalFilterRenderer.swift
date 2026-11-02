@@ -26,7 +26,7 @@ private let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView
 /// - A `feBlend` or a `feMerge` whose subregion isn't the filter region, which the CPU scales its inputs into.
 /// - A blend mode other than the ones that Core Graphics computes as the specification does.
 /// - A blur whose standard deviations differ, and that blurs a direction with three boxes.
-/// - A `feColorMatrix`, a `feComponentTransfer` or a `feComposite`, for which it has no kernels yet, and a `feDropShadow` and the filter
+/// - A `feColorMatrix`, a `feComponentTransfer`, a `feComposite` or a `feMorphology`, for which it has no kernels yet, and a `feDropShadow` and the filter
 ///   functions of the CSS that are made of them.
 package final class MetalFilterRenderer: Sendable {
   let device: MTLDevice
@@ -257,7 +257,7 @@ private struct FilterGeometry {
       case .blend(let mode, _, _):
         guard blendModes.contains(mode), area(of: subregion) != nil else { return false }
         clipRect = subregion
-      case .colorMatrix, .componentTransfer, .composite:
+      case .colorMatrix, .componentTransfer, .composite, .morphology:
         // The GPU has no kernels for these yet.
         return false
       case .flood(let color):
@@ -353,7 +353,7 @@ private struct FilterRun {
         let blended = blend(image1, over: backdrop, mode: UInt32(modeIndex))
       else { return nil }
       return clipped(blended, to: area)
-    case .colorMatrix, .componentTransfer, .composite:
+    case .colorMatrix, .componentTransfer, .composite, .morphology:
       // `isSupported` leaves these filters to the CPU.
       return nil
     case .flood(let color):

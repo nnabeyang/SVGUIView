@@ -131,6 +131,11 @@ extension CGPainter {
         compositeOperator, k: k, input: input, input2: input2, colorSpace: step.colorSpace, srcImage: srcImage,
         inImage: inImage, subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity,
         cgContext: cgContext, results: results)
+    case .morphology(let input, let morphologyOperator, let radius):
+      return morphology(
+        morphologyOperator, radius: radius, input: input, colorSpace: step.colorSpace, srcImage: srcImage,
+        inImage: inImage, subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity,
+        cgContext: cgContext, results: results)
     case .flood(let color):
       return flood(
         color: color, srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect,

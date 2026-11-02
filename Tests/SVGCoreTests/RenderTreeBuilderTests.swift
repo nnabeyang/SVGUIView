@@ -1897,6 +1897,44 @@ struct RenderTreeBuilderTests {
     #expect(inputs == ["none", "SourceGraphic", "a"])
   }
 
+  /// Attributes of a `feMorphology`, its operator and its radii.
+  private static let morphologies: [(String, SVGMorphologyOperator, CGSize)] = [
+    ("", .erode, .zero),
+    (#"operator="dilate" radius="2""#, .dilate, CGSize(width: 2, height: 2)),
+    (#"operator="z" radius="2 3""#, .erode, CGSize(width: 2, height: 3)),
+    (#"radius="2, 0""#, .erode, CGSize(width: 2, height: 0)),
+    (#"radius="-1""#, .erode, CGSize(width: -1, height: -1)),
+    // Radii that aren't one or two numbers are 0.
+    (#"radius="""#, .erode, .zero),
+    (#"radius="1 2 3""#, .erode, .zero),
+    (#"radius="2px""#, .erode, .zero),
+  ]
+
+  @Test("a feMorphology has its operator, which is erode by default, and radii that are 0 by default", arguments: morphologies)
+  func morphology(attributes: String, expected: SVGMorphologyOperator, radius expectedRadius: CGSize) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feMorphology "## + attributes + ##"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .morphology(_, let morphologyOperator, let radius) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a morphology")
+      return
+    }
+    #expect(morphologyOperator == expected)
+    #expect(radius == expectedRadius)
+  }
+
+  @Test("the radii of a feMorphology are fractions of the size of the element in the units of its bounding box")
+  func morphologyBoundingBox() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f" primitiveUnits="objectBoundingBox"><feMorphology radius="0.1 0.5"/></filter>"##
+        + ##"<rect width="10" height="20" filter="url(#f)"/>"##)
+    guard case .morphology(_, _, let radius) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a morphology")
+      return
+    }
+    #expect(radius == CGSize(width: 1, height: 10))
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)
