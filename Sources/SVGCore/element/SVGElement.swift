@@ -264,6 +264,8 @@ extension ElementCursor {
         SVGFeFloodElement(base: base, contents: contents)
       case .feBlend:
         SVGFeBlendElement(base: base, contents: contents)
+      case .feColorMatrix:
+        SVGFeColorMatrixElement(base: base, contents: contents)
       case .feOffset:
         SVGFeOffsetElement(base: base, contents: contents)
       case .feMergeNode:

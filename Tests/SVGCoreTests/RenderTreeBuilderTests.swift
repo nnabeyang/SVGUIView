@@ -1661,6 +1661,49 @@ struct RenderTreeBuilderTests {
     #expect(fromAncestor.primitives.map(\.colorSpace) == [.sRGB])
   }
 
+  /// The matrix that changes nothing.
+  private static let identityMatrix: [Float] = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]
+
+  /// Attributes of a `feColorMatrix`, and its matrix.
+  private static let colorMatrices: [(String, [Float])] = [
+    (
+      #"values="0 1 0 0 0, 1 0 0 0 0, 0 0 1 0 0, 0 0 0 1 0.5""#,
+      [0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0.5]
+    ),
+    // Values that are missing, too few or too many, or not numbers, leave the colors as they are.
+    ("", identityMatrix),
+    (#"type="matrix" values="""#, identityMatrix),
+    (#"values="1 0 0 0 0""#, identityMatrix),
+    (#"values="\#(Array(repeating: "0", count: 21).joined(separator: " "))""#, identityMatrix),
+    (#"values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 x""#, identityMatrix),
+    (#"type="saturate""#, identityMatrix),
+    (#"type="hueRotate""#, identityMatrix),
+    // A type that isn't one of the types is a matrix.
+    (#"type="qwe" values="0 1 0 0 0 1 0 0 0 0 0 0 1 0 0 0 0 0 1 0""#, [0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]),
+    (
+      #"type="saturate" values="0""#,
+      [0.213, 0.715, 0.072, 0, 0, 0.213, 0.715, 0.072, 0, 0, 0.213, 0.715, 0.072, 0, 0, 0, 0, 0, 1, 0]
+    ),
+    (
+      #"type="hueRotate" values="180""#,
+      [-0.574, 1.43, 0.144, 0, 0, 0.426, 0.43, 0.144, 0, 0, 0.426, 1.43, -0.856, 0, 0, 0, 0, 0, 1, 0]
+    ),
+    (#"type="luminanceToAlpha""#, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2125, 0.7154, 0.0721, 0, 0]),
+  ]
+
+  @Test("a feColorMatrix multiplies the colors by the matrix of its type and values", arguments: colorMatrices)
+  func colorMatrix(attributes: String, expected: [Float]) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feColorMatrix "## + attributes + ##"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .colorMatrix(_, let matrix) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a color matrix")
+      return
+    }
+    #expect(matrix.count == 20)
+    #expect(zip(matrix, expected).allSatisfy { abs($0 - $1) < 0.001 }, "\(matrix)")
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)

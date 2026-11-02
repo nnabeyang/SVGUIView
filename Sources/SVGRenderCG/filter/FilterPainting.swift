@@ -117,6 +117,10 @@ extension CGPainter {
       return blend(
         mode: mode, input: input, input2: input2, srcImage: srcImage, inImage: inImage, subregion: subregion,
         clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
+    case .colorMatrix(let input, let matrix):
+      return colorMatrix(
+        matrix, input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
+        clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     case .flood(let color):
       return flood(
         color: color, srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect,
