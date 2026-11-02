@@ -50,6 +50,16 @@ struct OffsetTests {
     #expect(try await pixel(content, x: 12, y: 2) == [0, 0, 0, 0])
   }
 
+  @Test("an offset in the units of the bounding box moves the element into a region in the user space past the viewBox")
+  func boundingBoxPastViewBox() async throws {
+    // The region is 30 wide, more than 1.2 times the viewBox, and the square moves 2 times its size to 10.
+    let content =
+      #"<filter id="f" filterUnits="userSpaceOnUse" primitiveUnits="objectBoundingBox" x="-10" y="-10" width="30" height="30">"#
+      + #"<feOffset dx="2" dy="2"/></filter><rect width="5" height="5" fill="blue" filter="url(#f)"/>"#
+    #expect(try await pixel(content, x: 14, y: 14) == [0, 0, 255, 255])
+    #expect(try await pixel(content, x: 2, y: 2) == [0, 0, 0, 0])
+  }
+
   @Test("the subregion of an offset is that of its input by default, which clips the moved input")
   func defaultSubregion() async throws {
     let content = square(#"<feFlood flood-color="blue" width="10" height="10"/><feOffset dx="5" dy="5"/>"#)
