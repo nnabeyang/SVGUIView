@@ -46,6 +46,10 @@ package enum FilterPrimitive: Sendable {
   /// The first input composited over, in, out of, atop or xor the second, or combined with it by the coefficients
   /// `k1` to `k4` of `arithmetic`.
   case composite(operator: SVGCompositeOperator, k: [Float], input: SVGFilterInput?, input2: SVGFilterInput?)
+  /// The input thinned or fattened by radii in the user space: each component is the least or the greatest in the
+  /// rectangle of the radii around its pixel. A radius of 0 doesn't change the input in its direction, and a negative
+  /// radius or radii that are both 0 leave the input as it is.
+  case morphology(input: SVGFilterInput?, operator: SVGMorphologyOperator, radius: CGSize)
   /// Functions that map each component of each pixel, without its alpha premultiplied, from 0 to 1.
   case componentTransfer(
     input: SVGFilterInput?, red: TransferFunction, green: TransferFunction, blue: TransferFunction,

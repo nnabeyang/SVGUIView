@@ -35,6 +35,7 @@ enum SVGElementName: String, Equatable {
   case feColorMatrix
   case feComponentTransfer
   case feComposite
+  case feMorphology
   case feDropShadow
   case feFuncR
   case feFuncG

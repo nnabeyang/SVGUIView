@@ -218,6 +218,12 @@ extension RenderTreeBuilder {
         operator: composite.compositeOperator,
         k: [composite.k1, composite.k2, composite.k3, composite.k4].map(Float.init), input: composite.input,
         input2: composite.input2)
+    case let morphology as SVGFeMorphologyElement:
+      var radius = morphology.radius
+      if filter.primitiveUnits == .objectBoundingBox {
+        radius = CGSize(width: radius.width * frame.width, height: radius.height * frame.height)
+      }
+      return .morphology(input: morphology.input, operator: morphology.morphologyOperator, radius: radius)
     case let flood as SVGFeFloodElement:
       return .flood(color: floodColor(of: flood))
     case let blur as SVGFeGaussianBlurElement:
