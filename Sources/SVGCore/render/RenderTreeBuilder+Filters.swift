@@ -213,6 +213,11 @@ extension RenderTreeBuilder {
       return .componentTransfer(
         input: transfer.input, red: functions[.feFuncR] ?? .identity, green: functions[.feFuncG] ?? .identity,
         blue: functions[.feFuncB] ?? .identity, alpha: functions[.feFuncA] ?? .identity)
+    case let composite as SVGFeCompositeElement:
+      return .composite(
+        operator: composite.compositeOperator,
+        k: [composite.k1, composite.k2, composite.k3, composite.k4].map(Float.init), input: composite.input,
+        input2: composite.input2)
     case let flood as SVGFeFloodElement:
       return .flood(color: floodColor(of: flood))
     case let blur as SVGFeGaussianBlurElement:

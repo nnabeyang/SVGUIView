@@ -126,6 +126,11 @@ extension CGPainter {
         (red, green, blue, alpha), input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage,
         subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext,
         results: results)
+    case .composite(let compositeOperator, let k, let input, let input2):
+      return composite(
+        compositeOperator, k: k, input: input, input2: input2, colorSpace: step.colorSpace, srcImage: srcImage,
+        inImage: inImage, subregion: subregion, clipRect: &clipRect, bitmapRect: bitmapRect, opacity: opacity,
+        cgContext: cgContext, results: results)
     case .flood(let color):
       return flood(
         color: color, srcImage: srcImage, inImage: inImage, subregion: subregion, clipRect: &clipRect,
