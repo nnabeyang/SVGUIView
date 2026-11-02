@@ -37,21 +37,12 @@ extension RenderTreeBuilder {
         case .currentColor: element.style.color
         }
       let (red, green, blue, alpha) = svgColor.rgba
-      // The blurred alpha of the source, moved by the offset, and colored by the color as a flood that it masks
-      // would be, under the source.
-      primitives = [
-        .gaussianBlur(GaussianBlurPrimitive(input: .sourceAlpha, standardDeviation: .iso(deviation))),
-        .offset(translation: CGAffineTransform(translationX: offset.width, y: offset.height)),
-        .colorMatrix(
-          input: nil,
-          matrix: [
-            0, 0, 0, 0, Float(red / 255),
-            0, 0, 0, 0, Float(green / 255),
-            0, 0, 0, 0, Float(blue / 255),
-            0, 0, 0, Float(alpha / 255), 0,
-          ]),
-        .merge(inputs: [nil, .sourceGraphic]),
-      ]
+      return FilterEffect(
+        effectRect: effectRect, colorInterpolation: .sRGB, colorInterpolationFilters: .sRGB,
+        primitives: Self.shadowSteps(
+          of: .sourceGraphic, offset: offset, deviation: .iso(deviation),
+          color: [Float(red / 255), Float(green / 255), Float(blue / 255), Float(alpha / 255)], region: effectRect,
+          subregion: effectRect, result: nil, colorSpace: .sRGB))
     case .colorAdjust(let adjust, let amount):
       effectRect = painted
       primitives = [Self.primitive(of: adjust, amount: amount)]
@@ -64,6 +55,35 @@ extension RenderTreeBuilder {
       primitives: primitives.map {
         FilterStep(primitive: $0, subregion: effectRect, result: nil, colorSpace: .sRGB)
       })
+  }
+
+  /// The steps of a shadow under an input, as `feDropShadow` and `drop-shadow()` make it: the alpha of the input,
+  /// colored by a color, blurred, moved by an offset, and the input over it.
+  ///
+  /// The color is uniform, so coloring the alpha before the blur paints what the specification paints with a flood
+  /// that the blurred alpha masks. The result is clipped to the subregion, and the steps before it only to the region
+  /// of the filter, so that the shadow is clipped after it's moved.
+  ///
+  /// - Parameter color: The red, green, blue and alpha of the color, from 0 to 1 in the color space, without the alpha
+  ///   premultiplied.
+  static func shadowSteps(
+    of input: SVGFilterInput, offset: CGSize, deviation: GaussianBlurPrimitive.StandardDeviation, color: [Float],
+    region: CGRect, subregion: CGRect, result: String?, colorSpace: SVGColorInterpolation
+  ) -> [FilterStep] {
+    let primitives: [FilterPrimitive] = [
+      .colorMatrix(
+        input: input,
+        matrix: [
+          0, 0, 0, 0, color[0],
+          0, 0, 0, 0, color[1],
+          0, 0, 0, 0, color[2],
+          0, 0, 0, color[3], 0,
+        ]),
+      .gaussianBlur(GaussianBlurPrimitive(input: nil, standardDeviation: deviation)),
+      .offset(translation: CGAffineTransform(translationX: offset.width, y: offset.height)),
+    ]
+    return primitives.map { FilterStep(primitive: $0, subregion: region, result: nil, colorSpace: colorSpace) }
+      + [FilterStep(primitive: .merge(inputs: [nil, input]), subregion: subregion, result: result, colorSpace: colorSpace)]
   }
 
   /// The primitive that a color adjustment is equal to, as the specification makes it.

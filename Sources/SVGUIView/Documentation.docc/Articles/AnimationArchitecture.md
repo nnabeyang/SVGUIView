@@ -558,7 +558,8 @@ in the background run the filters on the CPU with Core Graphics and vImage.
   - A blur whose standard deviations differ, and that blurs a direction with
     three boxes.
   - A `feColorMatrix` or a `feComponentTransfer`, for which the GPU has no
-    kernels yet.
+    kernels yet, and a `feDropShadow` and the filter functions of the CSS
+    that are made of them.
   - A filter region too large for a texture.
 - The element is painted with Core Graphics into memory that the GPU reads, and
   the result is read from memory that the GPU writes, so the pixels aren't
