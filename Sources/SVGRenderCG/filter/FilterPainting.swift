@@ -135,6 +135,10 @@ extension CGPainter {
         morphologyOperator, radius: radius, input: input, colorSpace: step.colorSpace, srcImage: srcImage,
         inImage: inImage, subregion: subregion, bitmapRect: bitmapRect, opacity: opacity,
         cgContext: cgContext, results: results)
+    case .tile(let input, let tile):
+      return self.tile(
+        tile, input: input, srcImage: srcImage, inImage: inImage, subregion: subregion,
+        bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext, results: results)
     case .flood(let color):
       return flood(
         color: color, srcImage: srcImage, inImage: inImage, subregion: subregion, bitmapRect: bitmapRect, opacity: opacity, cgContext: cgContext)

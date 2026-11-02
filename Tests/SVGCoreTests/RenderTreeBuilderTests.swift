@@ -1939,6 +1939,21 @@ struct RenderTreeBuilderTests {
     #expect(filtered.primitives.last?.subregion == expected)
   }
 
+  @Test("a feTile repeats the subregion of its input, and its own subregion defaults to the filter region")
+  func tile() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feFlood x="1" y="2" width="3" height="4" result="a"/><feOffset x="0" y="0" width="5" height="6"/>"##
+        + ##"<feTile/><feTile in="a"/>"##
+        + ##"<feTile in="SourceGraphic"/></filter><rect width="10" height="10" filter="url(#f)"/>"##)
+    let region = CGRect(x: -1, y: -1, width: 12, height: 12)
+    let tiles: [CGRect?] = filtered.primitives.dropFirst(2).map {
+      guard case .tile(_, let tile) = $0.primitive else { return nil }
+      return tile
+    }
+    #expect(tiles == [CGRect(x: 0, y: 0, width: 5, height: 6), CGRect(x: 1, y: 2, width: 3, height: 4), region])
+    #expect(filtered.primitives.dropFirst(2).map(\.subregion) == [region, region, region])
+  }
+
   /// Attributes of a `feMorphology`, its operator and its radii.
   private static let morphologies: [(String, SVGMorphologyOperator, CGSize)] = [
     ("", .erode, .zero),

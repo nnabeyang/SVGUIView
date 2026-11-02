@@ -114,6 +114,11 @@ extension RenderTreeBuilder {
         steps += dropShadowSteps(
           of: shadow, input: input, filter: filter, region: region, subregion: subregion, frame: frame,
           context: context, colorSpace: colorSpace)
+      } else if let tile = child as? SVGFeTileElement {
+        steps.append(
+          FilterStep(
+            primitive: .tile(input: tile.input, tile: inputSubregion(tile.input) ?? region), subregion: subregion,
+            result: child.result, colorSpace: colorSpace))
       } else {
         steps.append(
           FilterStep(

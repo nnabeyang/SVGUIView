@@ -279,6 +279,8 @@ extension ElementCursor {
         SVGFeMorphologyElement(base: base, contents: contents)
       case .feOffset:
         SVGFeOffsetElement(base: base, contents: contents)
+      case .feTile:
+        SVGFeTileElement(base: base, contents: contents)
       case .feMergeNode:
         SVGFeMergeNodeElement(base: base, contents: contents)
       case .text:

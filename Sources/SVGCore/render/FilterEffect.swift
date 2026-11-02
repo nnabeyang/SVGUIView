@@ -62,6 +62,8 @@ package enum FilterPrimitive: Sendable {
   case merge(inputs: [SVGFilterInput?])
   /// The input moved by a translation.
   case offset(input: SVGFilterInput?, translation: CGAffineTransform)
+  /// The rectangle `tile` of the input, which is the subregion of the input, repeated in x and y from its origin.
+  case tile(input: SVGFilterInput?, tile: CGRect)
 }
 
 /// The transfer function of a component of a `feComponentTransfer`, from its `feFuncR`, `feFuncG`, `feFuncB` or
