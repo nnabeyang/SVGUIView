@@ -730,9 +730,9 @@ public class SVGUIView: UIView {
       }
       graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
       await CGPainter(scale: scale).paint(tree, into: graphics)
-      guard !Task.isCancelled, let image = graphics.makeImage() else {
-        return nil
-      }
+      guard !Task.isCancelled else { return nil }
+      // Making the image copies the bitmap, which can fail as allocating it can.
+      guard let image = graphics.makeImage() else { return .failure(.allocationFailed) }
       return .success(image)
     }
     return rendered.flatMap { $0 }
