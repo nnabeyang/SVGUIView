@@ -11,14 +11,17 @@ import UIKit
 struct WideGamutTests {
   private let rect = CGRect(x: 0, y: 0, width: 10, height: 10)
 
-  /// A document of 10 by 10 painted with a paint, which can refer to the definitions.
+  /// A view of a document of 10 by 10 painted with a paint, which can refer to the definitions, and waits for its
+  /// renderings as long as the other tests do.
   private func view(fill: String, definitions: String = "") -> SVGUIView {
     let svg = #"""
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">\#(definitions)
         <rect width="10" height="10" fill="\#(fill)"/>
       </svg>
       """#
-    return SVGUIView(frame: rect, data: Data(svg.utf8))
+    let view = SVGUIView(frame: rect, data: Data(svg.utf8))
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    return view
   }
 
   /// The red, green, blue and alpha of the pixel in the middle of an image, in a color space.
