@@ -170,7 +170,8 @@ protocol DocumentHost: AnyObject {
   func playback(of id: CSSAnimationID) -> (playback: AnimationPlayback, time: Double)?
   /// Changes the playback of a CSS animation at the time of the timeline that the view displays.
   func changePlayback(of id: CSSAnimationID, _ change: (inout AnimationPlayback, Double) -> Void)
-  /// Waits until a CSS animation finishes, or no element runs it, or the view no longer shows the document.
+  /// Waits until a CSS animation finishes, or no element runs it, or the view no longer shows the document, or the
+  /// task is cancelled.
   func waitUntilFinished(_ id: CSSAnimationID) async
   /// Begins the SMIL animation of an animation element at the time of the timeline that the view displays.
   func beginSMILAnimation(_ element: ElementID)
@@ -507,9 +508,10 @@ extension SVGDocument.Animation {
   /// Waits until the animation finishes: until it reaches its end, or its
   /// start when it plays backward.
   ///
-  /// This also returns when the element no longer runs the animation, or the
-  /// view no longer shows the document. It returns at once for an animation
-  /// that has finished.
+  /// This also returns when the element no longer runs the animation, the
+  /// view no longer shows the document, or the task that waits is cancelled.
+  /// It returns at once for an animation that has finished, or in a task that
+  /// is cancelled.
   public func finished() async {
     await host?.waitUntilFinished(id)
   }

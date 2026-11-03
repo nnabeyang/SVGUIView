@@ -145,6 +145,53 @@ struct AnimationControlTests {
     #expect(circle.currentTime == nil)
   }
 
+  @Test("waiting for an animation returns when the task that waits is cancelled, though the animation doesn't finish")
+  func cancelledWait() async throws {
+    let (view, _) = try await makeView()
+    let animation = try startSquare(in: view)
+    animation.pause()
+    let waiter = Task { await animation.finished() }
+    try await display()
+    waiter.cancel()
+    await waiter.value
+    // The view still runs the animation, so the wait didn't return because the view was released or the animation
+    // stopped running.
+    #expect(animation.currentTime != nil)
+    withExtendedLifetime(view) {}
+  }
+
+  @Test("waiting for an animation in a task that is already cancelled returns at once")
+  func waitInCancelledTask() async throws {
+    let (view, _) = try await makeView()
+    let animation = try startSquare(in: view)
+    let waiter = Task { await animation.finished() }
+    waiter.cancel()
+    await waiter.value
+    #expect(animation.currentTime != nil)
+    withExtendedLifetime(view) {}
+  }
+
+  @Test("cancelling a task that waits for an animation leaves the other tasks waiting until it finishes")
+  func otherWaitersAfterCancellation() async throws {
+    let (view, clock) = try await makeView()
+    let animation = try startSquare(in: view)
+    var hasFinished = false
+    let cancelled = Task { await animation.finished() }
+    let waiter = Task {
+      await animation.finished()
+      hasFinished = true
+    }
+    try await display()
+    cancelled.cancel()
+    await cancelled.value
+    try await display()
+    #expect(!hasFinished)
+    clock.advance(by: .milliseconds(1100))
+    await waiter.value
+    #expect(hasFinished)
+    withExtendedLifetime(view) {}
+  }
+
   @Test("moving an animation back runs the clock that stopped at the end of the animations")
   func runsClockAgain() async throws {
     let (view, clock) = try await makeView()
