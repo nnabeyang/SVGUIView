@@ -367,7 +367,7 @@ let frame = try await svgView.takeSnapshot(at: .seconds(2))
 - **Reduce Motion:** ``SVGUIViewConfiguration/playsWithReduceMotion`` lets an
   app play animations that are essential to its content while Reduce Motion is
   on. See <doc:#Pausing-playback>.
-- **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)``
+- **Rendering a given time:** ``SVGUIView/SVGUIView/takeSnapshot(rect:at:scale:)``
   takes a time, so that any frame can be rendered as an image with the same
   method as other snapshots.
 - **Reaching the document:** ``SVGUIView/SVGUIView/document`` is the
@@ -606,7 +606,7 @@ playback is smooth.
   cases at the edges: just before and after a delay, at iteration boundaries,
   for each fill mode, and at each step of `steps()`.
 - **Snapshots at given times:** Because a time fully decides the output,
-  ``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` with a time gives stable
+  ``SVGUIView/SVGUIView/takeSnapshot(rect:at:scale:)`` with a time gives stable
   snapshots. Each test document is captured at a few times, such as 0, 0.5 and
   1 second.
 - **Checking against a browser:** Reference images are recorded from

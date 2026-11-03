@@ -61,7 +61,7 @@ can't be inserted or removed.
 
 The view shows the changes of its document at its next rendering, and the
 changes made in one turn of the run loop are rendered together.
-``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` includes the changes that the
+``SVGUIView/SVGUIView/takeSnapshot(rect:at:scale:)`` includes the changes that the
 view hasn't rendered yet.
 
 Assigning new ``SVGUIView/SVGUIView/data`` to the view replaces its document.

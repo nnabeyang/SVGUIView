@@ -19,7 +19,7 @@ import os
 /// after the time at which the document doesn't change any more. While its
 /// animations play, the view shows its document in layers of its layer,
 /// instead of in one image. While they don't, such as when they're paused or
-/// have ended, it shows the image that ``takeSnapshot(rect:at:)`` renders for
+/// have ended, it shows the image that ``takeSnapshot(rect:at:scale:)`` renders for
 /// the time.
 public class SVGUIView: UIView {
   private var baseContext: SVGBaseContext {
@@ -303,7 +303,7 @@ public class SVGUIView: UIView {
     renderedTime = time
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
-    // The animations play in layers. A still frame is rendered into one image, as `takeSnapshot(rect:at:)` renders it,
+    // The animations play in layers. A still frame is rendered into one image, as `takeSnapshot(rect:at:scale:)` renders it,
     // so that the view shows what a snapshot of the frame shows.
     let promoted = rendersLayers ? promoted : nil
     renderedInLayers = promoted != nil
@@ -591,41 +591,86 @@ public class SVGUIView: UIView {
   /// The image includes every change made to ``document`` so far, even the
   /// ones that the view hasn't rendered yet.
   ///
-  /// The image is rendered at the main screen's scale with the view's current
-  /// `contentMode`. The view's displayed contents do not change.
+  /// The image is rendered with the view's current `contentMode`, and the
+  /// view's displayed contents do not change. Its width and height in pixels
+  /// are those of the rectangle times the scale, which is the main screen's
+  /// scale by default. The image itself has a scale of 1, so its size in
+  /// points is its size in pixels.
+  ///
+  /// A view doesn't have to be on the screen to render: pass the rectangle to
+  /// render into. Without one, the view renders into its frame, which is empty
+  /// for a view that has no frame, and the method throws
+  /// ``SVGRenderingError/zeroSizedRect``.
   ///
   /// The time starts at zero when the document is loaded. A view that doesn't
   /// play its animations displays time zero, and a view that plays them
   /// displays ``currentTime``. A document without animations looks the same at
-  /// any time.
+  /// any time, and ``SVGDocument/animationEnd`` is the time after which a
+  /// document looks the same.
   ///
   /// - Parameters:
   ///   - rect: The rectangle to render into. Pass `nil` to use the view's
   ///     frame.
   ///   - time: The time of the document's animations.
+  ///   - scale: The number of pixels in a point of the image. Pass `nil` to use
+  ///     the main screen's scale.
   /// - Returns: The rendered image.
   /// - Throws: ``SVGRenderingError/missingRootElement`` if the document has no
   ///   root `svg` element, ``SVGRenderingError/zeroSizedRect`` if the rectangle
-  ///   has no width or no height, ``SVGRenderingError/timedOut`` if rendering
-  ///   takes longer than ``SVGUIViewConfiguration/timeoutDuration``, or
+  ///   has no width or no height in pixels at the scale,
+  ///   ``SVGRenderingError/timedOut`` if rendering takes longer than
+  ///   ``SVGUIViewConfiguration/timeoutDuration``, or
   ///   ``SVGRenderingError/cancelled`` if the task that calls this method is
   ///   cancelled before rendering finishes, or
   ///   ``SVGRenderingError/allocationFailed`` if the memory for the image
   ///   couldn't be allocated.
   public func takeSnapshot(
-    rect: CGRect? = nil, at time: Duration = .zero
+    rect: CGRect? = nil, at time: Duration = .zero, scale: CGFloat? = nil
   ) async throws(SVGRenderingError) -> UIImage {
+    UIImage(cgImage: try await snapshot(rect: rect, at: time, scale: scale))
+  }
+
+  /// Renders the current SVG document into a Core Graphics image, as it is at
+  /// a time of its animations.
+  ///
+  /// This renders the image that ``takeSnapshot(rect:at:scale:)`` does, without
+  /// a `UIImage` around it, such as for the frames of a video, whose pixel
+  /// buffers are made from Core Graphics images:
+  ///
+  /// ```swift
+  /// let rect = CGRect(x: 0, y: 0, width: 320, height: 320)
+  /// let frame = try await svgView.takeCGImageSnapshot(
+  ///   rect: rect, at: .milliseconds(500), scale: 2)
+  /// // frame.width and frame.height are 640.
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - rect: The rectangle to render into. Pass `nil` to use the view's
+  ///     frame.
+  ///   - time: The time of the document's animations.
+  ///   - scale: The number of pixels in a point of the image. Pass `nil` to use
+  ///     the main screen's scale.
+  /// - Returns: The rendered image, whose width and height in pixels are those
+  ///   of the rectangle times the scale.
+  /// - Throws: The errors that ``takeSnapshot(rect:at:scale:)`` throws.
+  public func takeCGImageSnapshot(
+    rect: CGRect? = nil, at time: Duration = .zero, scale: CGFloat? = nil
+  ) async throws(SVGRenderingError) -> CGImage {
+    try await snapshot(rect: rect, at: time, scale: scale)
+  }
+
+  /// Renders the document with every change into an image of the rectangle at the scale, for the snapshots.
+  private func snapshot(rect: CGRect?, at time: Duration, scale: CGFloat?) async throws(SVGRenderingError) -> CGImage {
     let rect = rect ?? frame
-    let scale = UIScreen.main.scale
+    let scale = scale ?? UIScreen.main.scale
     applyDocumentChanges()
     let capturedBase = baseContext
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
-    let image = try await SVGUIView.makeImage(
+    return try await SVGUIView.makeImage(
       rect: rect, scale: scale, base: capturedBase, time: time,
       fit: fit, timeoutDuration: timeoutDuration
     ).get()
-    return UIImage(cgImage: image)
   }
 
   @concurrent
@@ -728,6 +773,11 @@ extension SVGUIView: DocumentHost {
   func cssAnimations() -> [CSSAnimationID] {
     applyDocumentChanges()
     return baseContext.cssAnimations()
+  }
+
+  func documentAnimationEnd() -> Double {
+    applyDocumentChanges()
+    return animationEnd
   }
 
   func playback(of id: CSSAnimationID) -> (playback: AnimationPlayback, time: Double)? {

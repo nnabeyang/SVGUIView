@@ -66,8 +66,11 @@ public final class SVGDocument {
   /// Selectors match type, class and ID selectors, attribute selectors and
   /// combinators, the pseudo-classes of the structure of the tree, such as
   /// `:first-child` and `:nth-child()`, and `:not()`, `:is()` and `:where()`.
-  /// A selector with a pseudo-class that depends on user actions or on the
-  /// language, such as `:hover` or `:lang()`, matches no element.
+  /// They also match `:lang()`, with the language of `xml:lang` or `lang` of
+  /// an element or of its nearest ancestor that has one, and `:link` and
+  /// `:any-link`, with the `a` elements that have `href`. A selector with a
+  /// pseudo-class that depends on user actions, such as `:hover`, matches no
+  /// element.
   ///
   /// - Parameter selectors: CSS selectors, separated by commas.
   /// - Throws: ``SelectorError`` if the selectors can't be parsed.
@@ -83,6 +86,36 @@ public final class SVGDocument {
   /// in it.
   public var animations: [Animation] {
     (host?.cssAnimations() ?? []).map { Animation(element: Element(document: self, id: $0.element), id: $0) }
+  }
+
+  /// The time after which the document looks the same, or `nil` if its
+  /// animations don't end.
+  ///
+  /// The time is on the timeline of ``SVGUIView/takeSnapshot(rect:at:scale:)``,
+  /// which starts at zero when the document is loaded, so the frames of the
+  /// animations are the snapshots from zero to this time. It's zero for a
+  /// document without animations, and for a document that no view shows any
+  /// more, such as one whose view is released, since the document doesn't
+  /// keep its view.
+  ///
+  /// The time includes the changes made to the document so far, even the ones
+  /// that the view hasn't rendered yet. A CSS animation that a change starts
+  /// counts from the time of the change, and a paused CSS animation doesn't
+  /// count, since it stays where it is. The animations don't end, and the
+  /// value is `nil`, when one repeats forever, such as with
+  /// `animation-iteration-count: infinite` or `repeatCount="indefinite"`, or
+  /// when SMIL animations keep beginning again, such as two that begin when
+  /// the other ends.
+  ///
+  /// ```swift
+  /// if let end = svgView.document.animationEnd {
+  ///   // Render the frames from zero to `end`.
+  /// }
+  /// ```
+  public var animationEnd: Duration? {
+    guard let host else { return .zero }
+    let seconds = host.documentAnimationEnd()
+    return seconds.isFinite ? .seconds(seconds) : nil
   }
 
   /// Takes the changes that the view hasn't rendered yet.
@@ -127,6 +160,9 @@ public final class SVGDocument {
 protocol DocumentHost: AnyObject {
   /// Renders the changes of the document.
   func documentDidChange()
+  /// The time in seconds after which the document with its changes looks the same, which is infinite for animations
+  /// that don't end.
+  func documentAnimationEnd() -> Double
   /// The CSS animations of the document with its changes.
   func cssAnimations() -> [CSSAnimationID]
   /// The playback of a CSS animation and the time of the timeline that the view displays, or `nil` if no element
