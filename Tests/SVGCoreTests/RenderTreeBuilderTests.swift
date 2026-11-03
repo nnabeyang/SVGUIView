@@ -140,6 +140,34 @@ struct RenderTreeBuilderTests {
     #expect(source.content?.viewBoxTransform == .identity)
   }
 
+  @Test(
+    "an svg element that a use element shows transforms about the center of its viewport, unless it declares an origin"
+  )
+  func useSVGTransformOrigin() async throws {
+    let tree = try await renderTree(
+      ##"<defs><svg id="s" width="4" height="4" transform="scale(2)"><rect width="4" height="4"/></svg>"##
+        + ##"<svg id="t" width="4" height="4" transform="scale(2)" transform-origin="0 0"><rect width="4" height="4"/></svg></defs>"##
+        + ##"<use href="#s"/><use href="#t"/><svg width="4" height="4" transform="scale(2)"><rect width="4" height="4"/></svg>"##)
+    let nodes = try children(of: tree)
+    func viewportTransform(_ node: RenderNode) -> CGAffineTransform? {
+      switch node {
+      case .use(let use):
+        guard case .viewport(let viewport) = use.instance?.content else { return nil }
+        return viewport.transform
+      case .viewport(let viewport):
+        return viewport.transform
+      default:
+        return nil
+      }
+    }
+    #expect(nodes.count == 4)
+    // The viewport of the document is 20 by 20, whose center is 10, 10.
+    #expect(viewportTransform(nodes[1]) == CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: -10, ty: -10))
+    #expect(viewportTransform(nodes[2]) == CGAffineTransform(scaleX: 2, y: 2))
+    // An svg element in the document has a parent, so its origin is 0 0.
+    #expect(viewportTransform(nodes[3]) == CGAffineTransform(scaleX: 2, y: 2))
+  }
+
   /// Attributes of an image of 2 by 1 in a rectangle of 10 by 10 at 5, 5, where the image is drawn, and the rectangle
   /// that clips it.
   private static let imagePlacements: [(String, CGRect, CGRect?)] = [

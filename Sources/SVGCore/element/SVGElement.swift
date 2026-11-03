@@ -109,8 +109,14 @@ final class SVGBaseElement: Sendable {
   ///   - parent: The computed values of the parent, or `nil` for the root element.
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
   ///   - animations: The animations of the document at its time, or `nil` for no animations.
-  func restyled(parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?) -> SVGBaseElement {
-    SVGBaseElement(
+  ///   - userAgentDeclarations: Declarations of the user agent's style sheet for the element where it's shown, under
+  ///     its cascaded values.
+  func restyled(
+    parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?,
+    userAgentDeclarations: [PropertyDeclaration] = []
+  ) -> SVGBaseElement {
+    let cascaded = cascaded.addingUserAgentDeclarations(userAgentDeclarations)
+    return SVGBaseElement(
       elementID: elementID, name: name, texts: texts, attributes: attributes, cascaded: cascaded,
       style: ComputedStyle(
         cascaded: cascaded, parent: parent, root: root, animations: animations,
@@ -132,8 +138,14 @@ extension SVGElement {
   ///   - parent: The computed values of the parent, or `nil` for the root element.
   ///   - root: The computed values of the root element, or `nil` for the root element itself.
   ///   - animations: The animations of the document at its time, or `nil` for no animations.
-  func restyled(parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?) -> any SVGElement {
-    let base = base.restyled(parent: parent, root: root, animations: animations)
+  ///   - userAgentDeclarations: Declarations of the user agent's style sheet for the element, and not its
+  ///     descendants, where it's shown, under its cascaded values.
+  func restyled(
+    parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?,
+    userAgentDeclarations: [PropertyDeclaration] = []
+  ) -> any SVGElement {
+    let base = base.restyled(
+      parent: parent, root: root, animations: animations, userAgentDeclarations: userAgentDeclarations)
     return Self(
       base: base,
       contents: children.map { $0.restyled(parent: base.style, root: root ?? base.style, animations: animations) })
