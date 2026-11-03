@@ -14,7 +14,7 @@ extension GradientPaint {
 
 extension LinearGradientPaint {
   func paint(_ path: CGPath, frame units: CGRect, in graphics: CGContext) {
-    let space = CGColorSpaceCreateDeviceRGB()
+    let space = gradientSpace(colors: colors)
     guard let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else {
       return
     }
@@ -64,7 +64,7 @@ extension LinearGradientPaint {
 
 extension RadialGradientPaint {
   func paint(_ path: CGPath, frame: CGRect, in graphics: CGContext) {
-    let space = CGColorSpaceCreateDeviceRGB()
+    let space = gradientSpace(colors: colors)
     guard let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else {
       return
     }
@@ -115,6 +115,14 @@ extension RadialGradientPaint {
     }
   }
 }
+
+/// The color space that a gradient of colors interpolates in: device RGB, which is sRGB, or extended sRGB where a
+/// color is outside sRGB, so that the gradient keeps it.
+private func gradientSpace(colors: [CGColor]) -> CGColorSpace {
+  colors.contains(where: \.isOutsideSRGB) ? extendedSRGB : CGColorSpaceCreateDeviceRGB()
+}
+
+private let extendedSRGB = CGColorSpace(name: CGColorSpace.extendedSRGB)!
 
 /// The gradient that goes from the end to the start of a gradient with the colors at the locations, which the odd
 /// bands of a reflected gradient are painted with.

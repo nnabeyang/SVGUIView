@@ -340,15 +340,25 @@ extension SVGAttributeScanner {
 
   /// The color of a function and its components, or `nil` for components that the function doesn't take.
   ///
-  /// - Parameter isLegacy: Whether the components are separated by commas, in the legacy syntax.
+  /// - Parameters:
+  ///   - isLegacy: Whether the components are separated by commas, in the legacy syntax.
+  ///   - isRelative: Whether the color is a relative color, whose components aren't clamped to sRGB in the functions
+  ///     of sRGB, as CSS Color 5 specifies, so that it keeps an origin outside sRGB.
   static func color(
-    of function: ColorFunction, components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool
+    of function: ColorFunction, components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool,
+    isRelative: Bool = false
   ) -> SVGColor? {
     switch function {
     case .rgb:
       // The legacy syntax with commas takes numbers or percentages, but not both.
       guard !isLegacy || components.allSatisfy(\.isPercentage) || components.allSatisfy(\.isNumber) else {
         return nil
+      }
+      if isRelative {
+        let (red, green, blue) = (components[0], components[1], components[2])
+        return Self.color(
+          red: red.value(percentOf: 255) / 255, green: green.value(percentOf: 255) / 255,
+          blue: blue.value(percentOf: 255) / 255, alpha: alpha?.alpha ?? 1)
       }
       // Each channel is a number from 0 to 255 or a percentage, which the color keeps.
       let dimensions = components.map { channel -> ColorDimension in
@@ -363,18 +373,18 @@ extension SVGAttributeScanner {
     case .hsl:
       guard !isLegacy || components.dropFirst().allSatisfy(\.isPercentage) else { return nil }
       // A negative saturation is 0%, and the other values outside their ranges make colors outside sRGB, whose
-      // channels are clamped.
+      // channels are clamped, since `hsl()` is a function of sRGB.
       let (red, green, blue) = ColorConversion.sRGB(
         hue: components[0].value, saturation: max(components[1].value, 0), lightness: components[2].value)
-      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
+      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1, clampsToSRGB: !isRelative)
     case .hwb:
       guard !isLegacy else { return nil }
       let (red, green, blue) = ColorConversion.sRGB(
         hue: components[0].value, whiteness: components[1].value, blackness: components[2].value)
-      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
+      return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1, clampsToSRGB: !isRelative)
     case .lab, .lch, .oklab, .oklch:
       // These functions have only the modern syntax. The lightness and the chroma have the ranges of CSS Color 4,
-      // which their percentages are of, and the other values make colors outside sRGB, whose channels are clamped.
+      // which their percentages are of, and the other values can make colors outside sRGB.
       guard !isLegacy else { return nil }
       let isPolar = function == .lch || function == .oklch
       let isOK = function == .oklab || function == .oklch
@@ -517,10 +527,19 @@ extension SVGAttributeScanner {
     }
   }
 
-  /// A color of red, green and blue from 0 to 1, which are clamped to sRGB.
-  static func color(red: Double, green: Double, blue: Double, alpha: Double) -> SVGColor {
+  /// A color of red, green and blue of sRGB, where 0 to 1 is sRGB and the values outside are colors outside it.
+  ///
+  /// A value that is outside 0 to 1 by less than half a step of 8 bits, such as from the errors of the conversions
+  /// of white of Display P3, is in sRGB.
+  ///
+  /// - Parameter clampsToSRGB: Whether values outside 0 to 1 are clamped to it, for a function of sRGB.
+  static func color(
+    red: Double, green: Double, blue: Double, alpha: Double, clampsToSRGB: Bool = false
+  ) -> SVGColor {
     func channel(_ value: Double) -> ColorDimension {
-      .absolute(min(max(value, 0), 1) * 255)
+      let limit = SVGColor.sRGBTolerance
+      let isNearSRGB = -limit < value && value < 1 + limit
+      return .absolute((clampsToSRGB || isNearSRGB ? min(max(value, 0), 1) : value) * 255)
     }
     return .rgba(SVGRGBAColor(r: channel(red), g: channel(green), b: channel(blue), a: alpha))
   }

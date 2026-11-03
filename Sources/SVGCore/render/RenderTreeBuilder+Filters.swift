@@ -202,8 +202,8 @@ extension RenderTreeBuilder {
           x: x.calculatedLength(frame: frame, context: context, mode: .width, unitType: units),
           y: y.calculatedLength(frame: frame, context: context, mode: .height, unitType: units))
       }
-    let (red, green, blue, alpha) = shadow.floodColor.rgba
-    // The flood color is in sRGB, and the primitive paints it in its color space.
+    let (red, green, blue, alpha) = shadow.floodColor.sRGBClampedRGBA
+    // The flood color is in sRGB, which the filters compute in, and the primitive paints it in its color space.
     func component(_ value: CGFloat) -> Float {
       let c = value / 255
       guard colorSpace == .linearRGB else { return Float(c) }
@@ -415,9 +415,9 @@ extension RenderTreeBuilder {
   }
 
   /// The color of a flood, premultiplied by its alpha and the flood opacity, in the order of the pixels of the
-  /// bitmap.
+  /// bitmap, which is in sRGB, so a color outside it is clamped to it.
   private func floodColor(of flood: SVGFeFloodElement) -> [UInt8] {
-    let (red:r, green:g, blue:b, alpha:a) = flood.floodColor.rgba
+    let (red:r, green:g, blue:b, alpha:a) = flood.floodColor.sRGBClampedRGBA
     let opacity = flood.floodOpacity
     let alpha = opacity * a / 255
     let y = (r * 0.2125 + g * 0.7154 + b * 0.0721) * alpha

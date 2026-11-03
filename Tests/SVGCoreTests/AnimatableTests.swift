@@ -92,6 +92,19 @@ struct AnimatableTests {
     #expect(matches(try color("red").interpolated(to: color("blue"), progress: 1.5), (0, 0, 1, 1)))
   }
 
+  @Test("colors outside sRGB keep their components outside 0 to 1 in interpolations")
+  func wideColorInterpolation() throws {
+    let red = try color("color(display-p3 1 0 0)")
+    let green = try color("color(display-p3 0 1 0)")
+    let r = try #require(red.components)
+    let g = try #require(green.components)
+    let halfway = (r.red / 2 + g.red / 2, r.green / 2 + g.green / 2, r.blue / 2 + g.blue / 2, 1.0)
+    #expect(matches(red.interpolated(to: green, progress: 0.5), halfway))
+    // A progress over 1 is clamped to the range of sRGB and the ends.
+    #expect(matches(red.interpolated(to: green, progress: 1.5), (g.red, g.green, g.blue, 1)))
+    #expect(matches(try color("red").interpolated(to: red, progress: 2), (r.red, r.green, r.blue, 1)))
+  }
+
   @Test("colors are added and measured by their components")
   func colorSumAndDistance() throws {
     #expect(matches(try color("rgb(255, 128, 0)").adding(color("rgb(255, 0, 255)")), (1, 128.0 / 255, 1, 1)))

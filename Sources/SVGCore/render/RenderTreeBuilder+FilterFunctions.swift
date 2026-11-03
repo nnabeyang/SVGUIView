@@ -37,7 +37,8 @@ extension RenderTreeBuilder {
         case .currentColor: element.style.color
         case .expression(let expression): expression.resolved(currentColor: element.style.color)
         }
-      let (red, green, blue, alpha) = svgColor.rgba
+      // The shadow is computed in sRGB, so a color outside it is clamped to it.
+      let (red, green, blue, alpha) = svgColor.sRGBClampedRGBA
       return FilterEffect(
         effectRect: effectRect, colorInterpolation: .sRGB, colorInterpolationFilters: .sRGB,
         primitives: Self.shadowSteps(
