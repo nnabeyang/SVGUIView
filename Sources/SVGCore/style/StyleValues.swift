@@ -7,6 +7,8 @@ indirect enum Paint: Sendable, Equatable {
   case color(SVGColor)
   /// The value of `color`, which stays a keyword in computed values and is resolved where it's used.
   case currentColor
+  /// A color that `currentcolor` is part of, such as a `color-mix()` of it, which is resolved where it's used too.
+  case expression(ColorExpression)
   /// A paint server, such as a gradient or a pattern, by its ID, and the paint used instead where the server can't
   /// paint: `none`, a color or `currentColor`.
   case url(String, fallback: Paint?)
@@ -34,17 +36,22 @@ indirect enum Paint: Sendable, Equatable {
 enum ColorValue: Sendable, Equatable {
   case color(SVGColor)
   case currentColor
+  /// A color that `currentcolor` is part of, such as a `color-mix()` of it, which is resolved where it's used too.
+  case expression(ColorExpression)
 
   init?(_ text: String) {
-    if keyword(text) == "currentcolor" {
+    // A name that isn't a color, or a function that isn't supported, is invalid.
+    switch SVGAttributeScanner.parseColorExpression(description: text) {
+    case .color(let color)?:
+      guard color.toCGColor(opacity: 1) != nil else { return nil }
+      self = .color(color)
+    case .currentColor?:
       self = .currentColor
-      return
-    }
-    // A name that isn't a color, or a function that isn't supported, such as `lab()`, is invalid.
-    guard let color = SVGAttributeScanner.parseColor(description: text), color.toCGColor(opacity: 1) != nil else {
+    case let expression?:
+      self = .expression(expression)
+    case nil:
       return nil
     }
-    self = .color(color)
   }
 }
 

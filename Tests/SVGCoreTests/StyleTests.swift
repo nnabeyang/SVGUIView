@@ -85,6 +85,7 @@ struct StyleTests {
       return switch paint {
       case .none: "none"
       case .currentColor: "currentColor"
+      case .expression: "expression"
       case .color(let color): color.description
       case .url(let id, _): "url(\(id))"
       }
@@ -99,7 +100,7 @@ struct StyleTests {
   @Test("a name that isn't a color and a function that isn't supported are invalid")
   func invalidColors() {
     #expect(FillProperty.declared(attribute: "bogus") == nil)
-    #expect(StopColorProperty.declared(attribute: "color-mix(in srgb, red, blue)") == nil)
+    #expect(StopColorProperty.declared(attribute: "light-dark(red, blue)") == nil)
     #expect(declared(FloodColorProperty.self, css: "bogus") == nil)
     #expect(FillProperty.declared(attribute: "green") != nil)
   }

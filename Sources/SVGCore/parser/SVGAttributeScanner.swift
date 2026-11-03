@@ -195,8 +195,10 @@ extension SVGAttributeScanner {
       return .currentColor
     case .inherit:
       return nil
-    case .rgb, .rgba, .hsl, .hsla, .hwb, .lab, .lch, .oklab, .oklch, .color:
-      return scanColor(type: type).map { .color($0) }
+    case .rgb, .rgba, .hsl, .hsla, .hwb, .lab, .lch, .oklab, .oklch, .color, .colorMix:
+      return scanColorExpression(type: type).map { expression in
+        if case .color(let color) = expression { .color(color) } else { .expression(expression) }
+      }
     case .url:
       guard consume(ascii: UInt8(ascii: "(")) else { return nil }
       consumeWhitespaceIfNext(UInt8(ascii: "#"))
@@ -210,75 +212,172 @@ extension SVGAttributeScanner {
     }
   }
 
+  /// A color, or `nil` for a value that isn't one or that `currentcolor` is part of.
   mutating func scanColor() -> SVGColor? {
+    guard case .color(let color)? = scanColorExpression() else { return nil }
+    return color
+  }
+
+  /// A color, or an expression that `currentcolor` is part of, such as `currentcolor` itself or a `color-mix()` of
+  /// it, or `nil` for a value that isn't one.
+  mutating func scanColorExpression() -> ColorExpression? {
     guard let ascii = reader.consumeWhitespace() else { return nil }
     if ascii == UInt8(ascii: "#") {
       guard let hex = scanHex() else { return nil }
-      return SVGHexColor(hex: hex).flatMap({ .hex($0) })
+      return SVGHexColor(hex: hex).map { .color(.hex($0)) }
     }
 
     guard let name = scanIdentity() else {
       return nil
     }
     guard let type = SVGFillType(rawValue: name.lowercased()) else {
-      return .named(SVGColorName(name: name))
+      return .color(.named(SVGColorName(name: name)))
     }
-    return scanColor(type: type)
+    if type == .current { return .currentColor }
+    return scanColorExpression(type: type)
   }
 
-  /// A color function after its name, or `nil` for a function that isn't a color or an invalid one.
-  private mutating func scanColor(type: SVGFillType) -> SVGColor? {
-    switch type {
-    case .rgb, .rgba:
-      // The legacy syntax with commas takes numbers or percentages, but not both.
-      guard let (channels, alpha, isLegacy) = scanColorArguments(),
-        !isLegacy || channels.allSatisfy(\.isPercentage) || channels.allSatisfy(\.isNumber)
+  /// A color function after its name, as a color or an expression that `currentcolor` is part of.
+  private mutating func scanColorExpression(type: SVGFillType) -> ColorExpression? {
+    if type == .colorMix { return scanColorMix() }
+    guard var function = ColorFunction(type), consume(ascii: UInt8(ascii: "(")) else { return nil }
+    let origin: ColorExpression?
+    if consumeFromKeyword() {
+      // A relative color, whose components can be the names of the components of its origin.
+      guard let color = scanColorExpression() else { return nil }
+      if case .color(let value) = color, value.toCGColor(opacity: 1) == nil { return nil }
+      origin = color
+    } else {
+      origin = nil
+    }
+    if case .color = function {
+      guard reader.consumeWhitespace() != nil, let name = scanIdentity(),
+        let space = CSSColorSpace(rawValue: name.lowercased())
       else { return nil }
+      function = .color(space)
+    }
+    guard
+      let (components, alpha, isLegacy) = scanColorComponents(
+        hueAt: function.hueIndex, allowsChannels: origin != nil)
+    else { return nil }
+    guard let origin else {
+      return Self.color(of: function, components: components, alpha: alpha, isLegacy: isLegacy).map { .color($0) }
+    }
+    // A relative color has only the modern syntax, and the names of the components of its function.
+    let names = function.channelNames.union(["alpha"])
+    guard !isLegacy,
+      (components + [alpha].compactMap { $0 }).allSatisfy({
+        if case .channel(let name) = $0 { names.contains(name) } else { true }
+      })
+    else { return nil }
+    return ColorExpression.relative(
+      RelativeColor(function: function, origin: origin, components: components, alpha: alpha)
+    ).simplified
+  }
+
+  /// Whether the next name is `from` and a space follows it, which starts a relative color, and reads it if it is.
+  private mutating func consumeFromKeyword() -> Bool {
+    guard reader.consumeWhitespace() != nil else { return false }
+    let letters = "from".utf8.map { $0 }
+    for (offset, letter) in letters.enumerated() {
+      let ascii = reader.peek(offset: offset)
+      guard ascii == letter || ascii == letter - 32 else { return false }
+    }
+    let next = reader.peek(offset: letters.count)
+    guard
+      next == UInt8(ascii: " ") || next == UInt8(ascii: "\t") || next == UInt8(ascii: "\n")
+        || next == UInt8(ascii: "\r") || next == 0x0C
+    else { return false }
+    reader.moveReaderIndex(forwardBy: letters.count)
+    return true
+  }
+
+  /// `color-mix()` after its name: `in` a color space, and a method of interpolating hues for a space with them,
+  /// and two colors, each with a percentage that can be omitted, before or after it.
+  private mutating func scanColorMix() -> ColorExpression? {
+    guard consume(ascii: UInt8(ascii: "(")), reader.consumeWhitespace() != nil, scanIdentity()?.lowercased() == "in",
+      reader.consumeWhitespace() != nil, let spaceName = scanIdentity(),
+      let space = ColorMixSpace(rawValue: spaceName.lowercased())
+    else { return nil }
+    var method = HueInterpolationMethod.shorter
+    if reader.consumeWhitespace() != UInt8(ascii: ",") {
+      guard space.isPolar, let name = scanIdentity(), let hueMethod = HueInterpolationMethod(rawValue: name.lowercased()),
+        reader.consumeWhitespace() != nil, scanIdentity()?.lowercased() == "hue"
+      else { return nil }
+      method = hueMethod
+    }
+    guard consume(ascii: UInt8(ascii: ",")), let (color1, percentage1) = scanColorMixOperand(),
+      consume(ascii: UInt8(ascii: ",")), let (color2, percentage2) = scanColorMixOperand(),
+      consume(ascii: UInt8(ascii: ")")), ColorConversion.mixWeights(percentage1, percentage2) != nil
+    else { return nil }
+    return ColorExpression.mix(space, method, color1, percentage1, color2, percentage2).simplified
+  }
+
+  /// A color of `color-mix()` and its percentage, which comes before or after it and can be omitted.
+  private mutating func scanColorMixOperand() -> (ColorExpression, Double?)? {
+    var percentage = scanPercentageIfNext()
+    // A name that isn't a color makes the mix invalid.
+    guard let color = scanColorExpression() else { return nil }
+    if case .color(let value) = color, value.toCGColor(opacity: 1) == nil { return nil }
+    if percentage == nil {
+      percentage = scanPercentageIfNext()
+    }
+    return (color, percentage)
+  }
+
+  /// A percentage if the next characters are a number, which needs a percent sign, or `nil` if they aren't a
+  /// number or the number isn't a percentage, which makes `color-mix()` invalid where it's checked.
+  private mutating func scanPercentageIfNext() -> Double? {
+    guard let next = reader.consumeWhitespace(),
+      next == UInt8(ascii: "+") || next == UInt8(ascii: "-") || next == UInt8(ascii: ".")
+        || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(next),
+      let value = scanNumber()
+    else { return nil }
+    guard reader.peek() == UInt8(ascii: "%") else { return .nan }
+    reader.advance()
+    return value
+  }
+
+  /// The color of a function and its components, or `nil` for components that the function doesn't take.
+  ///
+  /// - Parameter isLegacy: Whether the components are separated by commas, in the legacy syntax.
+  static func color(
+    of function: ColorFunction, components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool
+  ) -> SVGColor? {
+    switch function {
+    case .rgb:
+      // The legacy syntax with commas takes numbers or percentages, but not both.
+      guard !isLegacy || components.allSatisfy(\.isPercentage) || components.allSatisfy(\.isNumber) else {
+        return nil
+      }
       // Each channel is a number from 0 to 255 or a percentage, which the color keeps.
-      let dimensions = channels.map { channel -> ColorDimension in
+      let dimensions = components.map { channel -> ColorDimension in
         switch channel {
         case .number(let value): .absolute(min(max(value, 0), 255))
         case .percentage(let value): .percent(min(max(value, 0), 100))
-        case .none: .absolute(0)
+        case .none, .channel: .absolute(0)
         }
       }
       guard let alpha else { return .rgb(SVGRGBColor(r: dimensions[0], g: dimensions[1], b: dimensions[2])) }
       return .rgba(SVGRGBAColor(r: dimensions[0], g: dimensions[1], b: dimensions[2], a: alpha.alpha))
-    case .hsl, .hsla:
-      guard let (components, alpha, isLegacy) = scanColorArguments(hueAt: 0),
-        !isLegacy || components.dropFirst().allSatisfy(\.isPercentage)
-      else { return nil }
+    case .hsl:
+      guard !isLegacy || components.dropFirst().allSatisfy(\.isPercentage) else { return nil }
       // A negative saturation is 0%, and the other values outside their ranges make colors outside sRGB, whose
       // channels are clamped.
-      let (red, green, blue) = Self.rgb(
+      let (red, green, blue) = ColorConversion.sRGB(
         hue: components[0].value, saturation: max(components[1].value, 0), lightness: components[2].value)
       return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
     case .hwb:
-      guard let (components, alpha, isLegacy) = scanColorArguments(hueAt: 0), !isLegacy else {
-        return nil
-      }
-      let whiteness = components[1].value / 100
-      let blackness = components[2].value / 100
-      let (red, green, blue): (Double, Double, Double)
-      if whiteness + blackness >= 1 {
-        let gray = whiteness / (whiteness + blackness)
-        (red, green, blue) = (gray, gray, gray)
-      } else {
-        let hue = Self.rgb(hue: components[0].value, saturation: 100, lightness: 50)
-        let scale = 1 - whiteness - blackness
-        (red, green, blue) = (
-          hue.red * scale + whiteness, hue.green * scale + whiteness, hue.blue * scale + whiteness
-        )
-      }
+      guard !isLegacy else { return nil }
+      let (red, green, blue) = ColorConversion.sRGB(
+        hue: components[0].value, whiteness: components[1].value, blackness: components[2].value)
       return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
     case .lab, .lch, .oklab, .oklch:
       // These functions have only the modern syntax. The lightness and the chroma have the ranges of CSS Color 4,
       // which their percentages are of, and the other values make colors outside sRGB, whose channels are clamped.
-      let isPolar = type == .lch || type == .oklch
-      let isOK = type == .oklab || type == .oklch
-      guard let (components, alpha, isLegacy) = scanColorArguments(hueAt: isPolar ? 2 : nil), !isLegacy else {
-        return nil
-      }
+      guard !isLegacy else { return nil }
+      let isPolar = function == .lch || function == .oklch
+      let isOK = function == .oklab || function == .oklch
       let lightnessRange: Double = isOK ? 1 : 100
       let lightness = min(max(components[0].value(percentOf: lightnessRange), 0), lightnessRange)
       let a: Double
@@ -295,31 +394,28 @@ extension SVGAttributeScanner {
         ? ColorConversion.sRGB(oklabLightness: lightness, a: a, b: b)
         : ColorConversion.sRGB(lightness: lightness, a: a, b: b)
       return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
-    case .color:
-      // The color space, and its three components, where 100% is 1.
-      guard consume(ascii: UInt8(ascii: "(")), reader.consumeWhitespace() != nil,
-        let name = scanIdentity(), let space = CSSColorSpace(rawValue: name.lowercased()),
-        let (components, alpha, isLegacy) = scanColorComponents(hueAt: nil), !isLegacy
-      else { return nil }
+    case .color(let space):
+      // The three components of the color space, where 100% is 1.
+      guard !isLegacy else { return nil }
       let (red, green, blue) = ColorConversion.sRGB(
         (components[0].value(percentOf: 1), components[1].value(percentOf: 1), components[2].value(percentOf: 1)),
         in: space)
       return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
-    case .url, .inherit, .current:
-      return nil
     }
   }
 
-  /// A number, a percentage, or `none`, which is 0, in a color function.
-  private enum ColorComponent {
+  /// A number, a percentage, or `none`, which is 0, in a color function, or the name of a component of the origin of
+  /// a relative color, which is replaced by its value.
+  enum ColorComponent: Sendable, Equatable {
     case number(Double)
     case percentage(Double)
     case none
+    case channel(String)
 
     var value: Double {
       switch self {
       case .number(let value), .percentage(let value): value
-      case .none: 0
+      case .none, .channel: 0
       }
     }
 
@@ -328,7 +424,7 @@ extension SVGAttributeScanner {
       switch self {
       case .number(let value): value
       case .percentage(let value): value / 100 * range
-      case .none: 0
+      case .none, .channel: 0
       }
     }
 
@@ -345,27 +441,22 @@ extension SVGAttributeScanner {
       switch self {
       case .number(let value): min(max(value, 0), 1)
       case .percentage(let value): min(max(value / 100, 0), 1)
-      case .none: 0
+      case .none, .channel: 0
       }
     }
   }
 
-  /// The arguments of a color function, from its opening parenthesis to its closing one: three components and an
-  /// alpha, which is optional, separated by commas in the legacy syntax, or by spaces with a slash before the
-  /// alpha in the modern one, which also takes `none`.
+  /// The arguments of a color function after its opening parenthesis, or after the color space of `color()` or the
+  /// origin of a relative color, to its closing parenthesis: three components and an alpha, which is optional,
+  /// separated by commas in the legacy syntax, or by spaces with a slash before the alpha in the modern one, which
+  /// also takes `none`.
   ///
-  /// - Parameter hueIndex: The index of the component that is a hue, such as 0 for `hsl()`, or `nil` for none.
-  private mutating func scanColorArguments(
-    hueAt hueIndex: Int? = nil
-  ) -> (components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool)? {
-    guard consume(ascii: UInt8(ascii: "(")) else { return nil }
-    return scanColorComponents(hueAt: hueIndex)
-  }
-
-  /// The arguments of a color function after its opening parenthesis, or after the color space of `color()`, to its
-  /// closing parenthesis.
+  /// - Parameters:
+  ///   - hueIndex: The index of the component that is a hue, such as 0 for `hsl()`, or `nil` for none.
+  ///   - allowsChannels: Whether the components can be the names of the components of the origin of a relative
+  ///     color.
   private mutating func scanColorComponents(
-    hueAt hueIndex: Int?
+    hueAt hueIndex: Int?, allowsChannels: Bool = false
   ) -> (components: [ColorComponent], alpha: ColorComponent?, isLegacy: Bool)? {
     var components = [ColorComponent]()
     var isLegacy = false
@@ -374,12 +465,15 @@ extension SVGAttributeScanner {
         isLegacy = reader.consumeWhitespace() == UInt8(ascii: ",")
       }
       if index > 0, isLegacy, !consume(ascii: UInt8(ascii: ",")) { return nil }
-      guard let component = index == hueIndex ? scanHue() : scanColorComponent() else { return nil }
+      guard
+        let component = index == hueIndex
+          ? scanHue(allowsChannels: allowsChannels) : scanColorComponent(allowsChannels: allowsChannels)
+      else { return nil }
       components.append(component)
     }
     var alpha: ColorComponent?
     if consume(ascii: UInt8(ascii: isLegacy ? "," : "/")) {
-      guard let component = scanColorComponent() else { return nil }
+      guard let component = scanColorComponent(allowsChannels: allowsChannels) else { return nil }
       alpha = component
     }
     guard consume(ascii: UInt8(ascii: ")")) else { return nil }
@@ -390,11 +484,12 @@ extension SVGAttributeScanner {
     return (components, alpha, isLegacy)
   }
 
-  /// A component of a color function: a number, a percentage, or `none`.
-  private mutating func scanColorComponent() -> ColorComponent? {
+  /// A component of a color function: a number, a percentage, or `none`, or the name of a component of the origin
+  /// of a relative color where it's allowed.
+  private mutating func scanColorComponent(allowsChannels: Bool = false) -> ColorComponent? {
     // A name starts with a letter, unlike a number.
     if reader.consumeWhitespace()?.isNameStart == true {
-      return consumeName().lowercased() == "none" ? ColorComponent.none : nil
+      return Self.component(named: consumeName(), allowsChannels: allowsChannels)
     }
     guard let value = scanNumber() else { return nil }
     if reader.peek() == UInt8(ascii: "%") {
@@ -404,11 +499,12 @@ extension SVGAttributeScanner {
     return .number(value)
   }
 
-  /// A hue in degrees: a number, an angle, or `none`.
-  private mutating func scanHue() -> ColorComponent? {
+  /// A hue in degrees: a number, an angle, or `none`, or the name of a component of the origin of a relative color
+  /// where it's allowed.
+  private mutating func scanHue(allowsChannels: Bool = false) -> ColorComponent? {
     // A name starts with a letter, unlike a number.
     if reader.consumeWhitespace()?.isNameStart == true {
-      return consumeName().lowercased() == "none" ? ColorComponent.none : nil
+      return Self.component(named: consumeName(), allowsChannels: allowsChannels)
     }
     guard let value = scanNumber() else { return nil }
     guard reader.peek().isNameStart else { return .number(value) }
@@ -422,31 +518,31 @@ extension SVGAttributeScanner {
   }
 
   /// A color of red, green and blue from 0 to 1, which are clamped to sRGB.
-  private static func color(red: Double, green: Double, blue: Double, alpha: Double) -> SVGColor {
+  static func color(red: Double, green: Double, blue: Double, alpha: Double) -> SVGColor {
     func channel(_ value: Double) -> ColorDimension {
       .absolute(min(max(value, 0), 1) * 255)
     }
     return .rgba(SVGRGBAColor(r: channel(red), g: channel(green), b: channel(blue), a: alpha))
   }
 
-  /// The red, green and blue of a color in HSL, as CSS Color converts it, which can be outside 0 to 1.
-  ///
-  /// - Parameters:
-  ///   - hue: The hue in degrees, which goes around every 360 degrees.
-  ///   - saturation: The saturation, 100 for a full one.
-  ///   - lightness: The lightness, from 0 for black to 100 for white.
-  private static func rgb(hue: Double, saturation: Double, lightness: Double) -> (
-    red: Double, green: Double, blue: Double
-  ) {
-    let hue = hue.truncatingRemainder(dividingBy: 360) + (hue < 0 ? 360 : 0)
-    let saturation = saturation / 100
-    let lightness = lightness / 100
-    func channel(_ n: Double) -> Double {
-      let k = (n + hue / 30).truncatingRemainder(dividingBy: 12)
-      let a = saturation * min(lightness, 1 - lightness)
-      return lightness - a * max(-1, min(k - 3, 9 - k, 1))
+  /// `none`, or the name of a component of the origin of a relative color where it's allowed, or `nil`.
+  private static func component(named name: String, allowsChannels: Bool) -> ColorComponent? {
+    let name = name.lowercased()
+    if name == "none" { return ColorComponent.none }
+    return allowsChannels ? .channel(name) : nil
+  }
+
+  /// A color, or an expression that `currentcolor` is part of, with nothing after it.
+  static func parseColorExpression(description: String) -> ColorExpression? {
+    var data = description
+    return data.withUTF8 {
+      let bytes = BufferView(unsafeBufferPointer: $0)!
+      var scanner = SVGAttributeScanner(bytes: bytes)
+      guard let expression = scanner.scanColorExpression(), scanner.reader.consumeWhitespace() == nil else {
+        return nil
+      }
+      return expression
     }
-    return (channel(0), channel(8), channel(4))
   }
 
   static func parseColor(description: String) -> SVGColor? {

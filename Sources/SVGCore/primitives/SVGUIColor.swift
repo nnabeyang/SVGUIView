@@ -12,6 +12,7 @@ enum SVGFillType: String {
   case oklab
   case oklch
   case color
+  case colorMix = "color-mix"
   case url
   case inherit
   case current = "currentcolor"
