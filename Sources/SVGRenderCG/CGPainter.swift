@@ -346,13 +346,17 @@ package struct CGPainter {
   /// - Parameter extent: The rectangle that the clip covers, which is the bounds of the clipped element by default,
   ///   and the filter region for the result of a filter, which can go past them.
   func apply(_ clip: ClipPathEffect, to target: CGContext, extent: CGRect? = nil) async {
-    let extent = extent ?? clip.frame
-    guard let image = await image(of: clip, extent: extent) else { return }
+    let (extent, scale) = bitmapExtent(of: extent ?? clip.frame, in: target)
+    guard !extent.isNull else {
+      target.clip(to: .zero)
+      return
+    }
+    guard let image = await image(of: clip, extent: extent, scale: scale) else { return }
     target.clip(to: extent, mask: image)
   }
 
-  /// The bitmap of `extent`, whose alpha is the clip path, or `nil` if it can't be made.
-  private func image(of clip: ClipPathEffect, extent: CGRect) async -> CGImage? {
+  /// The bitmap of `extent` at `scale`, whose alpha is the clip path, or `nil` if it can't be made.
+  private func image(of clip: ClipPathEffect, extent: CGRect, scale: CGFloat) async -> CGImage? {
     let size = clip.frame.size
     guard let graphics = CGContext.bitmap(size: extent.size, scale: scale, space: CGColorSpaceCreateDeviceRGB())
     else {
@@ -360,7 +364,7 @@ package struct CGPainter {
     }
     // The clip path of the `<clipPath>` element is built for the same bounds, and its bitmap covers the same extent.
     if let clipPath = clip.clipPath {
-      guard let image = await image(of: clipPath, extent: extent) else { return nil }
+      guard let image = await image(of: clipPath, extent: extent, scale: scale) else { return nil }
       graphics.clip(to: CGRect(x: 0, y: 0, width: graphics.width, height: graphics.height), mask: image)
     }
     // The units place the content in the user space of the clipped element, where the transform of the
@@ -397,14 +401,43 @@ package struct CGPainter {
   /// - Parameter extent: The rectangle that the mask covers, which is the bounds of the masked element by default,
   ///   and the filter region for the result of a filter, which can go past them.
   func apply(_ mask: MaskEffect, to target: CGContext, extent: CGRect? = nil) async {
-    let extent = extent ?? mask.frame
-    guard let image = await image(of: mask, extent: extent) else { return }
+    let (extent, scale) = bitmapExtent(of: extent ?? mask.frame, in: target)
+    guard !extent.isNull else {
+      target.clip(to: .zero)
+      return
+    }
+    guard let image = await image(of: mask, extent: extent, scale: scale) else { return }
     target.clip(to: mask.region)
     target.clip(to: extent, mask: image)
   }
 
-  /// The bitmap of `extent`, whose alpha is the luminance of the mask, or `nil` if it can't be made.
-  private func image(of mask: MaskEffect, extent: CGRect) async -> CGImage? {
+  /// The rectangle and the scale of the bitmap of a clip path or a mask of `extent` that clips `target`, or a null
+  /// rectangle if no part of `extent` can show.
+  ///
+  /// The bitmap is as fine as the pixels of `target`, where its user space is enlarged, such as by a viewBox or a
+  /// transform, so that its edges are as sharp as they are without the enlargement, and never coarser than the scale
+  /// of the painter. An enlarged bitmap covers only the part of `extent` that can show in `target`, on the grid of the
+  /// pixels of the whole one, so that it has no more pixels than `target` shows.
+  private func bitmapExtent(of extent: CGRect, in target: CGContext) -> (extent: CGRect, scale: CGFloat) {
+    let ctm = target.ctm
+    let targetScale = max(hypot(ctm.a, ctm.b), hypot(ctm.c, ctm.d))
+    // A scale that differs from the painter's by rounding, such as of the fit of the document, keeps the bitmap of
+    // the painter's scale.
+    guard targetScale.isFinite, targetScale > scale * 1.001 else { return (extent, scale) }
+    let visible = extent.intersection(target.boundingBoxOfClipPath)
+    guard !visible.isNull, !visible.isEmpty else { return (.null, targetScale) }
+    func edge(_ value: CGFloat, from origin: CGFloat, _ rule: FloatingPointRoundingRule) -> CGFloat {
+      origin + ((value - origin) * targetScale).rounded(rule) / targetScale
+    }
+    let minX = edge(visible.minX, from: extent.minX, .down)
+    let minY = edge(visible.minY, from: extent.minY, .down)
+    let maxX = min(edge(visible.maxX, from: extent.minX, .up), extent.maxX)
+    let maxY = min(edge(visible.maxY, from: extent.minY, .up), extent.maxY)
+    return (CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY), targetScale)
+  }
+
+  /// The bitmap of `extent` at `scale`, whose alpha is the luminance of the mask, or `nil` if it can't be made.
+  private func image(of mask: MaskEffect, extent: CGRect, scale: CGFloat) async -> CGImage? {
     let size = mask.frame.size
     guard
       let graphics = CGContext.bitmap(size: extent.size, scale: scale, space: mask.colorInterpolation.colorSpace)
