@@ -74,6 +74,24 @@ package struct ShapeNode: Sendable {
   package var antialiases = true
   /// How the shape blends with what's behind it in its isolation group.
   package var blendMode = CGBlendMode.normal
+  /// Whether the shape paints colors outside sRGB, which a bitmap of a wide gamut shows.
+  package let usesWideGamut: Bool
+
+  package init(
+    id: RenderID, transform: CGAffineTransform, geometry: Geometry?, clip: ClipPathEffect?, mask: MaskApplication,
+    opacity: CGFloat, content: ShapeContent?, antialiases: Bool = true, blendMode: CGBlendMode = .normal
+  ) {
+    self.id = id
+    self.transform = transform
+    self.geometry = geometry
+    self.clip = clip
+    self.mask = mask
+    self.opacity = opacity
+    self.content = content
+    self.antialiases = antialiases
+    self.blendMode = blendMode
+    usesWideGamut = content?.usesWideGamut ?? false
+  }
 }
 
 package struct Geometry: Sendable {
@@ -142,10 +160,27 @@ package struct GroupNode: Sendable {
   package let clip: ClipPathEffect?
   package let mask: MaskEffect?
   package let children: [RenderNode]
+  /// Whether the children paint colors outside sRGB, which a bitmap of a wide gamut shows.
+  package let usesWideGamut: Bool
   /// How the group blends with what's behind it in its isolation group.
   package var blendMode = CGBlendMode.normal
   /// Whether the group is an isolation group, which what it contains blends in, though nothing else makes it one.
   package var isolates = false
+
+  package init(
+    id: RenderID, transform: CGAffineTransform, opacity: CGFloat, clip: ClipPathEffect?, mask: MaskEffect?,
+    children: [RenderNode], blendMode: CGBlendMode = .normal, isolates: Bool = false
+  ) {
+    self.id = id
+    self.transform = transform
+    self.opacity = opacity
+    self.clip = clip
+    self.mask = mask
+    self.children = children
+    self.blendMode = blendMode
+    self.isolates = isolates
+    usesWideGamut = children.contains(where: \.usesWideGamut)
+  }
 }
 
 package struct ViewportNode: Sendable {
@@ -170,6 +205,20 @@ package struct ViewportContent: Sendable {
   package let clip: ClipPathEffect?
   package let mask: MaskEffect?
   package let children: [RenderNode]
+  /// Whether the children paint colors outside sRGB, which a bitmap of a wide gamut shows.
+  package let usesWideGamut: Bool
+
+  package init(
+    viewBoxTransform: CGAffineTransform, overflowClip: CGRect?, clip: ClipPathEffect?, mask: MaskEffect?,
+    children: [RenderNode]
+  ) {
+    self.viewBoxTransform = viewBoxTransform
+    self.overflowClip = overflowClip
+    self.clip = clip
+    self.mask = mask
+    self.children = children
+    usesWideGamut = children.contains(where: \.usesWideGamut)
+  }
 }
 
 package struct UseNode: Sendable {
@@ -190,4 +239,13 @@ package struct UseInstance: Sendable {
   package let translation: CGAffineTransform
   package let opacity: CGFloat
   package let content: RenderNode?
+  /// Whether the content paints colors outside sRGB, which a bitmap of a wide gamut shows.
+  package let usesWideGamut: Bool
+
+  package init(translation: CGAffineTransform, opacity: CGFloat, content: RenderNode?) {
+    self.translation = translation
+    self.opacity = opacity
+    self.content = content
+    usesWideGamut = content?.usesWideGamut ?? false
+  }
 }
