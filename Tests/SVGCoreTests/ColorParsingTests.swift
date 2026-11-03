@@ -141,6 +141,61 @@ struct ColorParsingTests {
     #expect(Paint(text) == nil)
   }
 
+  /// Relative colors, and their red, green and blue from 0 to 255, rounded, and their alpha.
+  private static let relativeValues: [(String, [Double])] = [
+    ("rgb(from red r g 255)", [255, 0, 255, 1]),
+    ("rgb(from #0000ff b g r)", [255, 0, 0, 1]),
+    ("RGB(FROM red R G B / 50%)", [255, 0, 0, 0.5]),
+    // The alpha is the alpha of the origin where it's omitted.
+    ("rgb(from rgb(255 0 0 / 0.5) r g b)", [255, 0, 0, 0.5]),
+    ("rgba(from red r g b / alpha)", [255, 0, 0, 1]),
+    ("rgb(from red none g b)", [0, 0, 0, 1]),
+    ("hsl(from red h s 25%)", [128, 0, 0, 1]),
+    ("hsl(from red 120deg s l)", [0, 255, 0, 1]),
+    ("hwb(from red h 50 b)", [255, 128, 128, 1]),
+    ("lab(from white l 0 0)", [255, 255, 255, 1]),
+    ("oklab(from black l a b / 0.25)", [0, 0, 0, 0.25]),
+    ("lch(from blue l c h)", [0, 0, 255, 1]),
+    ("oklch(from red l c h / 50%)", [255, 0, 0, 0.5]),
+    ("color(from red srgb r g b)", [255, 0, 0, 1]),
+    ("color(from red srgb-linear r g b)", [255, 0, 0, 1]),
+    ("color(from red xyz x y z)", [255, 0, 0, 1]),
+    ("color(from blue display-p3 r g b)", [0, 0, 255, 1]),
+    ("rgb(from color-mix(in srgb, red, blue) r 0 b)", [128, 0, 128, 1]),
+  ]
+
+  @Test("relative colors take the components of their origins by their names", arguments: relativeValues)
+  func relativeColors(text: String, expected: [Double]) {
+    let rgba = rgba(of: Paint(text)).map { [$0[0].rounded(), $0[1].rounded(), $0[2].rounded(), $0[3]] }
+    #expect(isClose(rgba, expected), "\(text): \(String(describing: rgba))")
+  }
+
+  @Test(
+    "invalid relative colors",
+    arguments: [
+      "rgb(from red r g)", "rgb(from red r g c)", "rgb(from red, r, g, b)", "rgb(from foo r g b)",
+      "color(from red foo r g b)", "color(from red xyz r g b)", "oklch(from red l c calc(h + 180))",
+      "hsl(from red h s)", "rgb(from red r g b /)",
+    ])
+  func invalidRelativeColors(text: String) {
+    #expect(ColorValue(text) == nil)
+    #expect(Paint(text) == nil)
+  }
+
+  @Test("a relative color of currentcolor is resolved where it's used, with the color of the element that uses it")
+  func relativeCurrentColor() throws {
+    let base = parse(
+      #"<g color="red" fill="rgb(from currentcolor r g 255)"><rect id="a" width="10" height="10"/>"#
+        + #"<rect id="b" color="lime" width="10" height="10"/></g>"#)
+    let elements = base.root?.elements ?? []
+    func fill(_ id: String) throws -> [Double]? {
+      let element = try #require(elements.first { $0.base.id == id })
+      return rgba(of: element.style.resolved(element.style.fill)).map { $0.map { $0.rounded() } }
+    }
+    #expect(try fill("a") == [255, 0, 255, 1])
+    #expect(try fill("b") == [0, 255, 255, 1])
+  }
+
   @Test("a mix of currentcolor is resolved where it's used, with the color of the element that uses it")
   func mixOfCurrentColor() throws {
     #expect(ColorValue("color-mix(in srgb, currentcolor, white)") != nil)
