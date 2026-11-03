@@ -45,7 +45,7 @@ couldn't be allocated, the view keeps the image that it shows.
 
 ### Taking a snapshot
 
-``SVGUIView/SVGUIView/takeSnapshot(rect:at:)`` renders the current document into a
+``SVGUIView/SVGUIView/takeSnapshot(rect:at:scale:)`` renders the current document into a
 `UIImage` without changing what the view displays. It throws an
 ``SVGRenderingError`` when the document has no root `svg` element, the rectangle
 to render into has no width or no height, rendering times out, the task that
@@ -79,6 +79,27 @@ themselves, and `<animateColor>` is ignored.
 
 ```swift
 let image = try await svgView.takeSnapshot(at: .seconds(1.5))
+```
+
+A snapshot is rendered at the main screen's scale by default, and at another
+scale for an image of a given size in pixels.
+``SVGUIView/SVGUIView/takeCGImageSnapshot(rect:at:scale:)`` renders the same
+image as a `CGImage`, such as for the frames of a video. A view renders without
+being on the screen, into the rectangle that it's given.
+``SVGDocument/animationEnd`` is the time after which the document looks the
+same, which ends the frames:
+
+```swift
+let view = SVGUIView(data: data)
+let rect = CGRect(x: 0, y: 0, width: 320, height: 320)
+if let end = view.document.animationEnd {
+  var time = Duration.zero
+  while time <= end {
+    let frame = try await view.takeCGImageSnapshot(rect: rect, at: time, scale: 2)
+    // Append the frame of 640 by 640 pixels to the video.
+    time += .milliseconds(40)
+  }
+}
 ```
 
 ### Playing animations

@@ -91,7 +91,7 @@ public final class SVGDocument {
   /// The time after which the document looks the same, or `nil` if its
   /// animations don't end.
   ///
-  /// The time is on the timeline of ``SVGUIView/takeSnapshot(rect:at:)``,
+  /// The time is on the timeline of ``SVGUIView/takeSnapshot(rect:at:scale:)``,
   /// which starts at zero when the document is loaded, so the frames of the
   /// animations are the snapshots from zero to this time. It's zero for a
   /// document without animations, and for a document that no view shows any
