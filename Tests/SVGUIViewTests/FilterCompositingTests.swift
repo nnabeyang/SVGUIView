@@ -113,8 +113,7 @@ struct FilterCompositingTests {
       + #"<rect width="10" height="10" fill="blue"/></svg>"#
     let inside = try await pixel(content, x: 9, y: 10)
     #expect(Int(inside[3]) > 240, "\(inside)")
-    // The bitmap of the clip is enlarged with the viewBox, which blurs its edge by a pixel (svg_ui_view-225).
-    #expect(try await pixel(content, x: 11, y: 10) == [0, 0, 0, 0])
+    #expect(try await pixel(content, x: 10, y: 10) == [0, 0, 0, 0])
   }
 
   @Test("a result that a later primitive takes by its name has no opacity of its own")
