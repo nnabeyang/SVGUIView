@@ -7,6 +7,11 @@ enum SVGFillType: String {
   case hsl
   case hsla
   case hwb
+  case lab
+  case lch
+  case oklab
+  case oklch
+  case color
   case url
   case inherit
   case current = "currentcolor"

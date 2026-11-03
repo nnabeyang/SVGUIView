@@ -57,6 +57,45 @@ struct ColorParsingTests {
     #expect(isClose(rgba(of: Paint(text)), expected), "\(text): \(String(describing: rgba(of: Paint(text))))")
   }
 
+  /// Colors in the color spaces of CSS Color 4, and their red, green and blue from 0 to 255, rounded, and their
+  /// alpha.
+  private static let colorSpaceValues: [(String, [Double])] = [
+    // The examples of CSS Color 4 of the same color, #7d2329.
+    ("lab(29.2345% 39.3825 20.0664)", [125, 35, 41, 1]),
+    ("lch(29.2345% 44.2 27)", [125, 35, 41, 1]),
+    ("oklab(40.101% 0.1147 0.0453)", [125, 35, 41, 1]),
+    ("oklch(40.101% 0.12332 21.555)", [125, 35, 41, 1]),
+    ("LCH(29.2345% 44.2 0.075turn)", [125, 35, 41, 1]),
+    ("lab(50% 0 0)", [119, 119, 119, 1]),
+    ("lab(50 0 0 / 0.5)", [119, 119, 119, 0.5]),
+    ("lab(100% 0 0)", [255, 255, 255, 1]),
+    ("lab(150 0 0)", [255, 255, 255, 1]),
+    ("lab(none 0 0)", [0, 0, 0, 1]),
+    ("lch(50% -10 30)", [119, 119, 119, 1]),
+    ("oklab(1 0 0)", [255, 255, 255, 1]),
+    ("oklab(100% 0% 0% / 50%)", [255, 255, 255, 0.5]),
+    ("oklch(0 0 none)", [0, 0, 0, 1]),
+    ("color(srgb 0.5 0 1)", [128, 0, 255, 1]),
+    ("color(srgb 50% 0% 100% / 0.25)", [128, 0, 255, 0.25]),
+    ("color(srgb-linear 0.2 0 1)", [124, 0, 255, 1]),
+    ("color(xyz-d65 0.95047 1 1.08883)", [255, 255, 255, 1]),
+    ("color(xyz 0.95047 1 1.08883)", [255, 255, 255, 1]),
+    ("color(xyz-d50 0.96422 1 0.82521)", [255, 255, 255, 1]),
+    ("color(display-p3 1 1 1)", [255, 255, 255, 1]),
+    ("color(a98-rgb 1 1 1)", [255, 255, 255, 1]),
+    ("color(prophoto-rgb 1 1 1)", [255, 255, 255, 1]),
+    ("color(rec2020 1 1 1)", [255, 255, 255, 1]),
+    ("color(rec2020 0 0 0)", [0, 0, 0, 1]),
+    // The red of Display P3 is outside sRGB, and its channels are clamped.
+    ("color(display-p3 1 0 0)", [255, 0, 0, 1]),
+  ]
+
+  @Test("colors in the color spaces of CSS Color 4 are converted to sRGB, and clamped to it", arguments: colorSpaceValues)
+  func colorSpaces(text: String, expected: [Double]) {
+    let rgba = rgba(of: Paint(text)).map { [$0[0].rounded(), $0[1].rounded(), $0[2].rounded(), $0[3]] }
+    #expect(isClose(rgba, expected), "\(text): \(String(describing: rgba))")
+  }
+
   @Test("hsl() is the color of the same hex in 8 bits")
   func hslAsHex() {
     #expect(rgba(of: Paint("hsl(0, 70%, 50%)"))?.map { $0.rounded() } == rgba(of: Paint("#d92626")))
@@ -68,6 +107,8 @@ struct ColorParsingTests {
       "hsl(120, 100, 25%)", "hsl(120 100% 25%, 0.5)", "rgb(0 128 0, 0.5)", "rgb(0, 128 0)", "rgb(0, 128, none)",
       "hwb(120, 0%, 50%)", "hsl(120, 100%, 25%", "hsl(120px 100% 50%)", "hsl(120 100% 50% / 0.5 0.5)",
       "#aaz", "#aa", "#12345", "rgba(0, 50%, 0, 0.5)", "rgb(0, 50%, 0)",
+      "lab(50, 0, 0)", "lab(50% 0)", "lab(50% 0 0deg)", "lch(50% 0 0 0)", "oklch(50% 0.1)", "color(foo 1 0 0)",
+      "color(srgb 1, 0, 0)", "color(display-p3)", "color(1 0 0)", "color(srgb 1 0 0",
     ])
   func invalidColors(text: String) {
     #expect(Paint(text) == nil)
@@ -84,8 +125,8 @@ struct ColorParsingTests {
 
   @Test("a function that isn't supported isn't a color, and paints black as a name that isn't a color does")
   func unsupportedFunctions() {
-    #expect(ColorValue("lab(50 0 0)") == nil)
-    #expect(Paint("lab(50 0 0)") == Paint("black"))
+    #expect(ColorValue("color-mix(in srgb, red, blue)") == nil)
+    #expect(Paint("color-mix(in srgb, red, blue)") == Paint("black"))
   }
 
   /// The named colors of CSS Color 4.
@@ -149,6 +190,27 @@ struct ColorParsingTests {
     #expect(isClose(rgba(of: rect.style.fill), [0, 127.5, 0, 1]))
     let stop = try #require(elements.first { $0.base.id == "s" })
     #expect(stop.style.stopColor == .color(SVGAttributeScanner.parseColor(description: "rgb(0, 127.5, 0)")!))
+  }
+
+  @Test("stop-color, flood-color and style sheets read the colors of the color spaces of CSS Color 4")
+  func otherPropertiesInColorSpaces() throws {
+    guard case .color(let white) = ColorValue("oklab(1 0 0)"), let components = white.components else {
+      Issue.record("oklab() isn't a color value")
+      return
+    }
+    #expect(isClose([components.red, components.green, components.blue].map { ($0 * 255).rounded() }, [255, 255, 255]))
+    let base = parse(
+      "<style>rect { fill: color(srgb 0 0.5 0) }</style>"
+        + #"<rect id="a" width="10" height="10"/><stop id="s" stop-color="lab(100 0 0)"/>"#)
+    let elements = base.root?.elements ?? []
+    let rect = try #require(elements.first { $0.base.id == "a" })
+    #expect(isClose(rgba(of: rect.style.fill), [0, 127.5, 0, 1]))
+    let stop = try #require(elements.first { $0.base.id == "s" })
+    guard case .color(let color) = stop.style.stopColor, let components = color.components else {
+      Issue.record("The stop color isn't a color")
+      return
+    }
+    #expect(isClose([components.red * 255, components.green * 255, components.blue * 255].map { $0.rounded() }, [255, 255, 255]))
   }
 
   @Test("CSS animations interpolate hsl() colors as other colors")
