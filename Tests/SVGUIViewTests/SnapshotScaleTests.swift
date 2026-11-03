@@ -21,6 +21,14 @@ struct SnapshotScaleTests {
 
   private let rect = CGRect(x: 0, y: 0, width: 100, height: 50)
 
+  /// A view of the document with a frame, which waits for its renderings as long as the other tests do, since the
+  /// tests that fill the threads of the renderings can run at the same time.
+  private func makeView(frame: CGRect) -> SVGUIView {
+    let view = SVGUIView(frame: frame, data: Self.svg)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    return view
+  }
+
   /// The bytes of the pixels of an image, rows of 4 bytes for each pixel.
   private func pixels(of image: CGImage) throws -> [UInt8] {
     var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
@@ -34,7 +42,7 @@ struct SnapshotScaleTests {
 
   @Test("the pixels of a snapshot are the rectangle times the scale", arguments: [1, 2, 3] as [CGFloat])
   func scale(scale: CGFloat) async throws {
-    let view = SVGUIView(frame: rect, data: Self.svg)
+    let view = makeView(frame: rect)
     let image = try #require(try await view.takeSnapshot(scale: scale).cgImage)
     #expect(image.width == Int(100 * scale))
     #expect(image.height == Int(50 * scale))
@@ -45,7 +53,7 @@ struct SnapshotScaleTests {
 
   @Test("without a scale, a snapshot is rendered at the main screen's scale")
   func defaultScale() async throws {
-    let view = SVGUIView(frame: rect, data: Self.svg)
+    let view = makeView(frame: rect)
     let image = try #require(try await view.takeSnapshot().cgImage)
     #expect(image.width == Int(100 * UIScreen.main.scale))
     #expect(try await view.takeCGImageSnapshot().height == Int(50 * UIScreen.main.scale))
@@ -53,7 +61,7 @@ struct SnapshotScaleTests {
 
   @Test("a view without a frame renders into a rectangle that it's given, and throws without one")
   func viewWithoutFrame() async throws {
-    let view = SVGUIView(frame: .zero, data: Self.svg)
+    let view = makeView(frame: .zero)
     let image = try await view.takeCGImageSnapshot(rect: rect, scale: 2)
     #expect(image.width == 200 && image.height == 100)
     await #expect(throws: SVGRenderingError.zeroSizedRect) {
@@ -66,7 +74,7 @@ struct SnapshotScaleTests {
 
   @Test("the Core Graphics image is the image of the snapshot at the same time")
   func sameImage() async throws {
-    let view = SVGUIView(frame: rect, data: Self.svg)
+    let view = makeView(frame: rect)
     let image = try #require(try await view.takeSnapshot(at: .seconds(1), scale: 2).cgImage)
     let cgImage = try await view.takeCGImageSnapshot(at: .seconds(1), scale: 2)
     #expect(cgImage.width == image.width && cgImage.height == image.height)

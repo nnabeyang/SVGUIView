@@ -8,11 +8,12 @@ import UIKit
 @MainActor
 @Suite("Animation end")
 struct AnimationEndTests {
-  /// A view of a document of 20 by 20 with the content, which doesn't play its animations.
+  /// A view of a document of 20 by 20 with the content, which doesn't play its animations, and waits for its
+  /// renderings as long as the other tests do.
   private func makeView(_ content: String) -> SVGUIView {
     let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">"# + content + "</svg>"
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
-    view.configuration = SVGUIViewConfiguration(animation: .none)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience, animation: .none)
     return view
   }
 
