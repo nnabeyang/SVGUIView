@@ -355,9 +355,13 @@ public func matchesSimpleSelector<E: Element>(
     value = !matchesNested(list: list, element: element, context: context, inNegation: true)
   case .is(let list), .where(let list):
     value = matchesNested(list: list, element: element, context: context, inNegation: context.shared.inNegation)
+  case .nonTSPseudoClass(let pseudoClass):
+    // The element decides the pseudo-classes that it can, such as `:lang()`, and others, such as the ones of user
+    // actions, match no element.
+    value = element.matchesNonTSPseudoClass(pseudoClass)
   default:
-    // Matching doesn't support the other components, such as pseudo-classes of user actions, so a selector with one
-    // of them matches no element, instead of every element.
+    // Matching doesn't support the other components, so a selector with one of them matches no element, instead of
+    // every element.
     value = false
   }
   return .from(value)

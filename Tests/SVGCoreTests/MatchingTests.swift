@@ -225,9 +225,68 @@ struct MatchingTests {
 
   @Test(
     "a selector with a part that matching doesn't support matches no element",
-    arguments: ["rect:hover", ":focus", "g:active rect", ":lang(en)", "rect:hover + circle"])
+    arguments: ["rect:hover", ":focus", "g:active rect", "a:visited", "rect:hover + circle"])
   func unsupportedSelector(css: String) {
     #expect(Self.matches(css).isEmpty)
+  }
+
+  /// A tree of languages and links for `:lang()`, `:link` and `:any-link`:
+  ///
+  /// ```svg
+  /// <svg id="0" lang="en">
+  ///   <g id="1" xml:lang="fr" lang="en">
+  ///     <rect id="2"/>
+  ///     <text id="3" lang="FR-ca"/>
+  ///   </g>
+  ///   <a id="4" href="#x"/>
+  ///   <a id="5"/>
+  ///   <rect id="6" lang=""/>
+  ///   <circle id="7" href="#x"/>
+  /// </svg>
+  /// ```
+  private static let languagesAndLinks = documentElement(
+    0, "svg", ["lang": "en"],
+    [
+      documentElement(
+        1, "g", ["xml:lang": "fr", "lang": "en"], [documentElement(2, "rect"), documentElement(3, "text", ["lang": "FR-ca"])]),
+      documentElement(4, "a", ["href": "#x"]),
+      documentElement(5, "a"),
+      documentElement(6, "rect", ["lang": ""]),
+      documentElement(7, "circle", ["href": "#x"]),
+    ])
+
+  @Test(
+    ":lang() matches the language of the element or of its nearest ancestor that has one, and :link and :any-link match links",
+    arguments: [
+      (":lang(en)", [0, 4, 5, 7]), (":lang(EN)", [0, 4, 5, 7]), (":lang(fr)", [1, 2, 3]), (":lang(fr-ca)", [3]),
+      (":lang(e)", []), (":lang(en-US)", []), ("rect:not(:lang(en))", [2, 6]), ("a:link", [4]), (":any-link", [4]),
+      (":link + a", [5]),
+    ] as [(String, Set<Int>)])
+  func languagesAndLinks(css: String, expected: Set<Int>) {
+    func visit(_ cursor: ElementCursor) -> [Int] {
+      (matchesSelector(element: cursor, css: css) ? [cursor.element.id.rawValue] : []) + cursor.children.flatMap(visit)
+    }
+    #expect(Set(visit(ElementCursor(root: Self.languagesAndLinks))) == expected)
+  }
+
+  @Test("style sheets match xml:lang and xlink:href of a document, and changes of lang and href")
+  func languagesAndLinksInDocument() throws {
+    let svg =
+      #"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100">"#
+      + "<style>:lang(fr) { fill: blue } a:any-link rect { stroke: green }</style>"
+      + #"<g id="g" xml:lang="fr"><rect id="r" width="10" height="10"/></g>"#
+      + ##"<a id="a" xlink:href="#r"><rect id="s" width="10" height="10"/></a></svg>"##
+    let base = SVGParser.parse(data: Data(svg.utf8))
+    func element(_ id: String, in base: SVGBaseContext) -> (any SVGElement)? {
+      base.root?.elements.first { $0.base.id == id }
+    }
+    #expect(try #require(element("r", in: base)).style.fill == Paint("blue"))
+    #expect(try #require(element("s", in: base)).style.stroke == Paint("green"))
+    let g = try #require(base.document.element(id: "g"))
+    let a = try #require(base.document.element(id: "a"))
+    let changed = base.changingAttributes([g: ["xml:lang": "en"], a: ["href": nil]])
+    #expect(try #require(element("r", in: changed)).style.fill != Paint("blue"))
+    #expect(try #require(element("s", in: changed)).style.stroke != Paint("green"))
   }
 
   @Test("a selector list matches with the selectors that matching supports")
