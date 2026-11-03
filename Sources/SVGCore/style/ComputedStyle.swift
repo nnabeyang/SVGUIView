@@ -450,6 +450,7 @@ struct ComputedStyle: Sendable, Equatable {
   func resolved(_ paint: Paint) -> Paint {
     switch paint {
     case .currentColor: .color(color)
+    case .expression(let expression): .color(expression.resolved(currentColor: color))
     case .url(let id, let fallback?): .url(id, fallback: resolved(fallback))
     default: paint
     }
@@ -460,6 +461,7 @@ struct ComputedStyle: Sendable, Equatable {
     switch value {
     case .color(let color): color
     case .currentColor: color
+    case .expression(let expression): expression.resolved(currentColor: color)
     }
   }
 }

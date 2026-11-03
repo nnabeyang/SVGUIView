@@ -35,6 +35,7 @@ extension RenderTreeBuilder {
         switch color {
         case .color(let color): color
         case .currentColor: element.style.color
+        case .expression(let expression): expression.resolved(currentColor: element.style.color)
         }
       let (red, green, blue, alpha) = svgColor.rgba
       return FilterEffect(

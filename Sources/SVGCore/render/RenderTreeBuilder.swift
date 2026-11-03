@@ -793,7 +793,7 @@ package struct RenderTreeBuilder {
       }
       // A reference to an element that doesn't exist or isn't a paint server paints the fallback, or nothing.
       return fallbackPaint
-    case .currentColor:
+    case .currentColor, .expression:
       preconditionFailure("currentColor is resolved")
     }
   }

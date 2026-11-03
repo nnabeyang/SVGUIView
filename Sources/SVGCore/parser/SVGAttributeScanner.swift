@@ -195,8 +195,10 @@ extension SVGAttributeScanner {
       return .currentColor
     case .inherit:
       return nil
-    case .rgb, .rgba, .hsl, .hsla, .hwb, .lab, .lch, .oklab, .oklch, .color:
-      return scanColor(type: type).map { .color($0) }
+    case .rgb, .rgba, .hsl, .hsla, .hwb, .lab, .lch, .oklab, .oklch, .color, .colorMix:
+      return scanColorExpression(type: type).map { expression in
+        if case .color(let color) = expression { .color(color) } else { .expression(expression) }
+      }
     case .url:
       guard consume(ascii: UInt8(ascii: "(")) else { return nil }
       consumeWhitespaceIfNext(UInt8(ascii: "#"))
@@ -210,20 +212,81 @@ extension SVGAttributeScanner {
     }
   }
 
+  /// A color, or `nil` for a value that isn't one or that `currentcolor` is part of.
   mutating func scanColor() -> SVGColor? {
+    guard case .color(let color)? = scanColorExpression() else { return nil }
+    return color
+  }
+
+  /// A color, or an expression that `currentcolor` is part of, such as `currentcolor` itself or a `color-mix()` of
+  /// it, or `nil` for a value that isn't one.
+  mutating func scanColorExpression() -> ColorExpression? {
     guard let ascii = reader.consumeWhitespace() else { return nil }
     if ascii == UInt8(ascii: "#") {
       guard let hex = scanHex() else { return nil }
-      return SVGHexColor(hex: hex).flatMap({ .hex($0) })
+      return SVGHexColor(hex: hex).map { .color(.hex($0)) }
     }
 
     guard let name = scanIdentity() else {
       return nil
     }
     guard let type = SVGFillType(rawValue: name.lowercased()) else {
-      return .named(SVGColorName(name: name))
+      return .color(.named(SVGColorName(name: name)))
     }
-    return scanColor(type: type)
+    if type == .current { return .currentColor }
+    return scanColorExpression(type: type)
+  }
+
+  /// A color function after its name, as a color or an expression that `currentcolor` is part of.
+  private mutating func scanColorExpression(type: SVGFillType) -> ColorExpression? {
+    if type == .colorMix { return scanColorMix() }
+    return scanColor(type: type).map { .color($0) }
+  }
+
+  /// `color-mix()` after its name: `in` a color space, and a method of interpolating hues for a space with them,
+  /// and two colors, each with a percentage that can be omitted, before or after it.
+  private mutating func scanColorMix() -> ColorExpression? {
+    guard consume(ascii: UInt8(ascii: "(")), reader.consumeWhitespace() != nil, scanIdentity()?.lowercased() == "in",
+      reader.consumeWhitespace() != nil, let spaceName = scanIdentity(),
+      let space = ColorMixSpace(rawValue: spaceName.lowercased())
+    else { return nil }
+    var method = HueInterpolationMethod.shorter
+    if reader.consumeWhitespace() != UInt8(ascii: ",") {
+      guard space.isPolar, let name = scanIdentity(), let hueMethod = HueInterpolationMethod(rawValue: name.lowercased()),
+        reader.consumeWhitespace() != nil, scanIdentity()?.lowercased() == "hue"
+      else { return nil }
+      method = hueMethod
+    }
+    guard consume(ascii: UInt8(ascii: ",")), let (color1, percentage1) = scanColorMixOperand(),
+      consume(ascii: UInt8(ascii: ",")), let (color2, percentage2) = scanColorMixOperand(),
+      consume(ascii: UInt8(ascii: ")")), ColorConversion.mixWeights(percentage1, percentage2) != nil
+    else { return nil }
+    return ColorExpression.mix(space, method, color1, percentage1, color2, percentage2).simplified
+  }
+
+  /// A color of `color-mix()` and its percentage, which comes before or after it and can be omitted.
+  private mutating func scanColorMixOperand() -> (ColorExpression, Double?)? {
+    var percentage = scanPercentageIfNext()
+    // A name that isn't a color makes the mix invalid.
+    guard let color = scanColorExpression() else { return nil }
+    if case .color(let value) = color, value.toCGColor(opacity: 1) == nil { return nil }
+    if percentage == nil {
+      percentage = scanPercentageIfNext()
+    }
+    return (color, percentage)
+  }
+
+  /// A percentage if the next characters are a number, which needs a percent sign, or `nil` if they aren't a
+  /// number or the number isn't a percentage, which makes `color-mix()` invalid where it's checked.
+  private mutating func scanPercentageIfNext() -> Double? {
+    guard let next = reader.consumeWhitespace(),
+      next == UInt8(ascii: "+") || next == UInt8(ascii: "-") || next == UInt8(ascii: ".")
+        || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(next),
+      let value = scanNumber()
+    else { return nil }
+    guard reader.peek() == UInt8(ascii: "%") else { return .nan }
+    reader.advance()
+    return value
   }
 
   /// A color function after its name, or `nil` for a function that isn't a color or an invalid one.
@@ -305,7 +368,7 @@ extension SVGAttributeScanner {
         (components[0].value(percentOf: 1), components[1].value(percentOf: 1), components[2].value(percentOf: 1)),
         in: space)
       return Self.color(red: red, green: green, blue: blue, alpha: alpha?.alpha ?? 1)
-    case .url, .inherit, .current:
+    case .url, .inherit, .current, .colorMix:
       return nil
     }
   }
@@ -422,7 +485,7 @@ extension SVGAttributeScanner {
   }
 
   /// A color of red, green and blue from 0 to 1, which are clamped to sRGB.
-  private static func color(red: Double, green: Double, blue: Double, alpha: Double) -> SVGColor {
+  static func color(red: Double, green: Double, blue: Double, alpha: Double) -> SVGColor {
     func channel(_ value: Double) -> ColorDimension {
       .absolute(min(max(value, 0), 1) * 255)
     }
@@ -447,6 +510,19 @@ extension SVGAttributeScanner {
       return lightness - a * max(-1, min(k - 3, 9 - k, 1))
     }
     return (channel(0), channel(8), channel(4))
+  }
+
+  /// A color, or an expression that `currentcolor` is part of, with nothing after it.
+  static func parseColorExpression(description: String) -> ColorExpression? {
+    var data = description
+    return data.withUTF8 {
+      let bytes = BufferView(unsafeBufferPointer: $0)!
+      var scanner = SVGAttributeScanner(bytes: bytes)
+      guard let expression = scanner.scanColorExpression(), scanner.reader.consumeWhitespace() == nil else {
+        return nil
+      }
+      return expression
+    }
   }
 
   static func parseColor(description: String) -> SVGColor? {

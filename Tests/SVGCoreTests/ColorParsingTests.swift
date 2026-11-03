@@ -96,6 +96,71 @@ struct ColorParsingTests {
     #expect(isClose(rgba, expected), "\(text): \(String(describing: rgba))")
   }
 
+  /// Mixes of `color-mix()`, and their red, green and blue from 0 to 255, rounded, and their alpha.
+  private static let mixValues: [(String, [Double])] = [
+    ("color-mix(in srgb, red, blue)", [128, 0, 128, 1]),
+    ("color-mix(in srgb, red 25%, blue)", [64, 0, 191, 1]),
+    ("color-mix(in srgb, 25% red, blue)", [64, 0, 191, 1]),
+    ("color-mix(in srgb, red, blue 75%)", [64, 0, 191, 1]),
+    ("color-mix(in srgb, red 60%, blue 60%)", [128, 0, 128, 1]),
+    // Percentages that add up to less than 100% lower the alpha.
+    ("color-mix(in srgb, red 30%, blue 30%)", [128, 0, 128, 0.6]),
+    ("color-mix(in srgb-linear, red, blue)", [188, 0, 188, 1]),
+    ("color-mix(in oklab, white, black)", [99, 99, 99, 1]),
+    // White and black have no hue in oklch.
+    ("color-mix(in oklch, white, black)", [99, 99, 99, 1]),
+    ("color-mix(in hsl, red, blue)", [255, 0, 255, 1]),
+    ("color-mix(in hsl shorter hue, red, blue)", [255, 0, 255, 1]),
+    ("color-mix(in hsl longer hue, red, blue)", [0, 255, 0, 1]),
+    ("color-mix(in hsl increasing hue, red, blue)", [0, 255, 0, 1]),
+    ("color-mix(in hsl decreasing hue, red, blue)", [255, 0, 255, 1]),
+    // White takes the hue of red.
+    ("color-mix(in hsl, red, white)", [223, 159, 159, 1]),
+    ("color-mix(in srgb, color-mix(in srgb, red, blue), white)", [191, 128, 191, 1]),
+    // The components are mixed with the alpha premultiplied.
+    ("color-mix(in srgb, rgb(255 0 0 / 0), blue)", [0, 0, 255, 0.5]),
+    ("COLOR-MIX(IN SRGB, red, blue)", [128, 0, 128, 1]),
+  ]
+
+  @Test("color-mix() mixes colors in a color space, as CSS Color 5 computes it", arguments: mixValues)
+  func colorMix(text: String, expected: [Double]) {
+    let rgba = rgba(of: Paint(text)).map { [$0[0].rounded(), $0[1].rounded(), $0[2].rounded(), $0[3]] }
+    #expect(isClose(rgba, expected), "\(text): \(String(describing: rgba))")
+  }
+
+  @Test(
+    "invalid mixes",
+    arguments: [
+      "color-mix(in srgb, red 0%, blue 0%)", "color-mix(in srgb, red -10%, blue)", "color-mix(in srgb, red 150%, blue)",
+      "color-mix(srgb, red, blue)", "color-mix(in foo, red, blue)", "color-mix(in srgb longer hue, red, blue)",
+      "color-mix(in srgb, red, foo)", "color-mix(in srgb, red 50, blue)", "color-mix(in srgb, red)",
+      "color-mix(in hsl longer, red, blue)",
+    ])
+  func invalidMixes(text: String) {
+    #expect(ColorValue(text) == nil)
+    #expect(Paint(text) == nil)
+  }
+
+  @Test("a mix of currentcolor is resolved where it's used, with the color of the element that uses it")
+  func mixOfCurrentColor() throws {
+    #expect(ColorValue("color-mix(in srgb, currentcolor, white)") != nil)
+    let base = parse(
+      #"<g id="g" color="blue" fill="color-mix(in srgb, currentcolor, white)"><rect id="a" width="10" height="10"/>"#
+        + #"<rect id="b" color="red" width="10" height="10"/>"#
+        + #"<rect id="c" color="color-mix(in srgb, currentcolor, white)" width="10" height="10"/></g>"#)
+    let elements = base.root?.elements ?? []
+    func fill(_ id: String) throws -> [Double]? {
+      let element = try #require(elements.first { $0.base.id == id })
+      return rgba(of: element.style.resolved(element.style.fill)).map { $0.map { $0.rounded() } }
+    }
+    // The child that inherits the mix mixes its own color.
+    #expect(try fill("a") == [128, 128, 255, 1])
+    #expect(try fill("b") == [255, 128, 128, 1])
+    // currentcolor in color is the color of the parent.
+    let c = try #require(elements.first { $0.base.id == "c" })
+    #expect(rgba(of: .color(c.style.color)).map { $0.map { $0.rounded() } } == [128, 128, 255, 1])
+  }
+
   @Test("hsl() is the color of the same hex in 8 bits")
   func hslAsHex() {
     #expect(rgba(of: Paint("hsl(0, 70%, 50%)"))?.map { $0.rounded() } == rgba(of: Paint("#d92626")))
@@ -125,8 +190,8 @@ struct ColorParsingTests {
 
   @Test("a function that isn't supported isn't a color, and paints black as a name that isn't a color does")
   func unsupportedFunctions() {
-    #expect(ColorValue("color-mix(in srgb, red, blue)") == nil)
-    #expect(Paint("color-mix(in srgb, red, blue)") == Paint("black"))
+    #expect(ColorValue("light-dark(red, blue)") == nil)
+    #expect(Paint("light-dark(red, blue)") == Paint("black"))
   }
 
   /// The named colors of CSS Color 4.
