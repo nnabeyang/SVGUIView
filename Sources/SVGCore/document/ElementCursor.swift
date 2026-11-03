@@ -103,4 +103,34 @@ extension ElementCursor: Element {
   func isSameType(as other: ElementCursor) -> Bool {
     element.localName == other.element.localName
   }
+
+  /// Whether the element matches `:lang()`, `:link` or `:any-link`, which the document decides. The other
+  /// pseudo-classes, such as the ones of user actions, match no element.
+  func matchesNonTSPseudoClass(_ pseudoClass: NonTSPseudoClassImpl) -> Bool {
+    switch pseudoClass {
+    case .lang(let range):
+      // The language matches the range, ignoring case, if it's the range or starts with the range and a hyphen.
+      guard let language = language?.lowercased(), !language.isEmpty, !range.isEmpty else { return false }
+      let range = range.lowercased()
+      return language == range || language.hasPrefix(range + "-")
+    case .link, .anyLink:
+      // Every link is unvisited, as there is no history. `xlink:href` is `href` once it's parsed.
+      return element.name == .a && element.attributes["href"] != nil
+    default:
+      return false
+    }
+  }
+
+  /// The language of the element: the value of `xml:lang` or `lang` of the element or of its nearest ancestor that
+  /// has one, where `xml:lang` comes first, as in HTML, or `nil` if none has one.
+  private var language: String? {
+    var cursor: ElementCursor? = self
+    while let current = cursor {
+      if let language = current.element.attributes["xml:lang"] ?? current.element.attributes["lang"] {
+        return language
+      }
+      cursor = current.parent
+    }
+    return nil
+  }
 }
