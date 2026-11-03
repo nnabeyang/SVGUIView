@@ -5,6 +5,16 @@ extension SnapshotTests {
   @MainActor
   @Suite
   struct SVGUIViewCustomTests {
+    @Test(arguments: SVGFile.all(root: "custom", in: "color"))
+    func color(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(root: "custom", in: "filters"))
+    func filters(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(root: "custom", in: "masking"))
     func masking(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
