@@ -730,6 +730,11 @@ extension SVGUIView: DocumentHost {
     return baseContext.cssAnimations()
   }
 
+  func documentAnimationEnd() -> Double {
+    applyDocumentChanges()
+    return animationEnd
+  }
+
   func playback(of id: CSSAnimationID) -> (playback: AnimationPlayback, time: Double)? {
     applyDocumentChanges()
     return baseContext.playback(of: id).map { ($0, displayedTime.seconds) }
