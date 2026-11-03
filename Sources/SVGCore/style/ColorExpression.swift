@@ -150,6 +150,7 @@ struct RelativeColor: Sendable, Equatable {
       return .number(channels[name] ?? 0)
     }
     return SVGAttributeScanner.color(
-      of: function, components: components.map(value), alpha: value(alpha ?? .channel("alpha")), isLegacy: false)
+      of: function, components: components.map(value), alpha: value(alpha ?? .channel("alpha")), isLegacy: false,
+      isRelative: true)
   }
 }

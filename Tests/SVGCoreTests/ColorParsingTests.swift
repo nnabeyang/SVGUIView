@@ -86,14 +86,44 @@ struct ColorParsingTests {
     ("color(prophoto-rgb 1 1 1)", [255, 255, 255, 1]),
     ("color(rec2020 1 1 1)", [255, 255, 255, 1]),
     ("color(rec2020 0 0 0)", [0, 0, 0, 1]),
-    // The red of Display P3 is outside sRGB, and its channels are clamped.
-    ("color(display-p3 1 0 0)", [255, 0, 0, 1]),
   ]
 
-  @Test("colors in the color spaces of CSS Color 4 are converted to sRGB, and clamped to it", arguments: colorSpaceValues)
+  @Test("colors in the color spaces of CSS Color 4 are converted to sRGB", arguments: colorSpaceValues)
   func colorSpaces(text: String, expected: [Double]) {
     let rgba = rgba(of: Paint(text)).map { [$0[0].rounded(), $0[1].rounded(), $0[2].rounded(), $0[3]] }
     #expect(isClose(rgba, expected), "\(text): \(String(describing: rgba))")
+  }
+
+  /// Colors outside sRGB, and their red, green and blue of extended sRGB, from 0 to 255 in sRGB, and their alpha.
+  private static let wideValues: [(String, [Double])] = [
+    ("color(display-p3 1 0 0)", [278.732, -57.819, -38.284, 1]),
+    ("color(display-p3 100% 0% 0% / 0.5)", [278.732, -57.819, -38.284, 0.5]),
+    ("color(rec2020 0 1 0)", [-201.546, 269.357, -89.292, 1]),
+    ("color-mix(in srgb, color(display-p3 1 0 0), white)", [266.866, 98.591, 108.358, 1]),
+    ("rgb(from color(display-p3 1 0 0) r g b)", [278.732, -57.819, -38.284, 1]),
+  ]
+
+  @Test("colors outside sRGB keep their components outside 0 to 1", arguments: wideValues)
+  func wideColors(text: String, expected: [Double]) throws {
+    let rgba = try #require(rgba(of: Paint(text)))
+    #expect(zip(rgba, expected).allSatisfy { abs($0 - $1) < 0.05 }, "\(text): \(rgba)")
+    if case .color(let color) = Paint(text) { #expect(color.isOutsideSRGB) }
+  }
+
+  @Test(
+    "colors in sRGB, and colors of sRGB functions, which are clamped to it, aren't outside sRGB",
+    arguments: [
+      "red", "#fff", "rgb(300 -5 0)", "hsl(120 200% 25%)", "hwb(0 -10% 0%)", "lab(100 0 0)", "oklch(1 0 0)",
+      "color(display-p3 1 1 1)", "color(rec2020 1 1 1)", "color(xyz 0.95047 1 1.08883)",
+    ])
+  func colorsInSRGB(text: String) throws {
+    guard case .color(let color) = Paint(text) else {
+      Issue.record("\(text) isn't a color")
+      return
+    }
+    #expect(!color.isOutsideSRGB)
+    let c = try #require(color.components)
+    #expect([c.red, c.green, c.blue].allSatisfy { (0...1).contains($0) }, "\(text): \(c)")
   }
 
   /// Mixes of `color-mix()`, and their red, green and blue from 0 to 255, rounded, and their alpha.

@@ -1,5 +1,15 @@
 import CoreGraphics
 
+extension CGColorSpace {
+  private static let displayP3Space = CGColorSpace(name: CGColorSpace.displayP3)!
+
+  /// The color space of the bitmaps that renderings are painted into: Display P3, which shows colors outside sRGB
+  /// on a screen of a wide gamut, or device RGB, which is sRGB, as renderings were before they showed them.
+  package static func rendering(wideGamut: Bool) -> CGColorSpace {
+    wideGamut ? displayP3Space : CGColorSpaceCreateDeviceRGB()
+  }
+}
+
 extension CGContext {
   /// Makes a bitmap context of premultiplied 32-bit pixels to render a size in points into.
   ///

@@ -173,6 +173,8 @@ public class SVGUIView: UIView {
     backgroundColor = .clear
     startObservingClock()
     observeNotifications()
+    // A screen of another gamut shows colors outside sRGB in another way.
+    registerForTraitChanges([UITraitDisplayGamut.self]) { (view: SVGUIView, _) in view.setNeedsDisplay() }
     document.host = self
     setNeedsDisplay()
   }
@@ -298,6 +300,7 @@ public class SVGUIView: UIView {
     renderedSize = rect.size
     let generation = nextRenderingGeneration()
     let scale = UIScreen.main.scale
+    let wideGamut = displaysWideGamut
     let capturedBase = baseContext
     let time = displayedTime
     renderedTime = time
@@ -319,7 +322,8 @@ public class SVGUIView: UIView {
     renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
       if let promoted {
         let rendered = await SVGUIView.makeLayers(
-          rect: rect, scale: scale, base: capturedBase, promoted: promoted, painting: painting, usesGPU: usesGPU,
+          rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, promoted: promoted, painting: painting,
+          usesGPU: usesGPU,
           previous: previous, previousNodes: previousNodes, previousStyled: previousStyled, time: time, fit: fit,
           timeoutDuration: timeoutDuration)
         let result: Result<RenderedContainer, SVGRenderingError>
@@ -356,7 +360,7 @@ public class SVGUIView: UIView {
         }
       } else {
         let result = await SVGUIView.makeImage(
-          rect: rect, scale: scale, base: capturedBase, time: time,
+          rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, time: time,
           fit: fit, timeoutDuration: timeoutDuration
         )
         switch result {
@@ -602,6 +606,12 @@ public class SVGUIView: UIView {
   /// for a view that has no frame, and the method throws
   /// ``SVGRenderingError/zeroSizedRect``.
   ///
+  /// The image is in sRGB, as the view shows it. On a screen of a wide gamut,
+  /// such as the screen of the view, or the main screen for a view that isn't
+  /// on one, a document that paints colors outside sRGB, such as
+  /// `color(display-p3 1 0 0)`, or images of a wide gamut, renders into an
+  /// image in Display P3 instead, which shows those colors.
+  ///
   /// The time starts at zero when the document is loaded. A view that doesn't
   /// play its animations displays time zero, and a view that plays them
   /// displays ``currentTime``. A document without animations looks the same at
@@ -660,23 +670,40 @@ public class SVGUIView: UIView {
   }
 
   /// Renders the document with every change into an image of the rectangle at the scale, for the snapshots.
-  private func snapshot(rect: CGRect?, at time: Duration, scale: CGFloat?) async throws(SVGRenderingError) -> CGImage {
+  ///
+  /// - Parameter wideGamut: Whether the image shows colors outside sRGB, or `nil` to show them as the screen of the
+  ///   view does.
+  func snapshot(
+    rect: CGRect?, at time: Duration, scale: CGFloat?, wideGamut: Bool? = nil
+  ) async throws(SVGRenderingError) -> CGImage {
     let rect = rect ?? frame
     let scale = scale ?? UIScreen.main.scale
+    let wideGamut = wideGamut ?? displaysWideGamut
     applyDocumentChanges()
     let capturedBase = baseContext
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
     return try await SVGUIView.makeImage(
-      rect: rect, scale: scale, base: capturedBase, time: time,
+      rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, time: time,
       fit: fit, timeoutDuration: timeoutDuration
     ).get()
   }
 
+  /// Whether the screen of the view shows colors outside sRGB, or the main screen, for a view that isn't on one.
+  private var displaysWideGamut: Bool {
+    let gamut = traitCollection.displayGamut
+    return (gamut == .unspecified ? UIScreen.main.traitCollection.displayGamut : gamut) == .P3
+  }
+
+  /// Renders the document into an image.
+  ///
+  /// - Parameter wideGamut: Whether the image shows colors outside sRGB, in Display P3, where the document paints
+  ///   them. An image of a document in sRGB is in sRGB anyway.
   @concurrent
   private static func makeImage(
     rect: CGRect,
     scale: CGFloat,
+    wideGamut: Bool,
     base: SVGBaseContext,
     time: Duration,
     fit: ContentFit,
@@ -688,21 +715,24 @@ public class SVGUIView: UIView {
     guard (rect.width * scale).rounded(.up) > 0, (rect.height * scale).rounded(.up) > 0 else {
       return .failure(.zeroSizedRect)
     }
-    guard let graphics = CGContext.bitmap(size: rect.size, scale: scale, space: CGColorSpaceCreateDeviceRGB()) else {
-      return .failure(.allocationFailed)
-    }
-    graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
 
-    return await withRenderingTimeout(timeoutDuration) {
+    let rendered = await withRenderingTimeout(timeoutDuration) { () async -> Result<CGImage, SVGRenderingError>? in
       // The computed values at the time are computed in the task, so that the timeout stops them too.
       let builder = RenderTreeBuilder(base: base.at(time: time.seconds), viewPort: rect, scale: scale)
       guard let tree = await builder.build(fit: fit) else { return nil }
+      // The tree tells which colors the bitmap shows.
+      let space = CGColorSpace.rendering(wideGamut: wideGamut && tree.usesWideGamut)
+      guard let graphics = CGContext.bitmap(size: rect.size, scale: scale, space: space) else {
+        return .failure(.allocationFailed)
+      }
+      graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
       await CGPainter(scale: scale).paint(tree, into: graphics)
-      guard !Task.isCancelled else {
+      guard !Task.isCancelled, let image = graphics.makeImage() else {
         return nil
       }
-      return graphics.makeImage()
+      return .success(image)
     }
+    return rendered.flatMap { $0 }
   }
 
   /// Renders the document at a time into layers: the layers of the elements whose transform or opacity changes, and
@@ -713,6 +743,7 @@ public class SVGUIView: UIView {
   /// - Parameters:
   ///   - painting: The elements whose painting changes in other ways than their compositing, or `nil` if any painting
   ///     can change.
+  ///   - wideGamut: Whether the layers show colors outside sRGB, in Display P3, where the frame paints them.
   ///   - usesGPU: Whether the filters of the elements that are painted into layers of their own run on the GPU.
   ///   - previousStyled: The document at the time of the frame that the view shows, from the same context, or `nil`
   ///     to render the frame anyway.
@@ -720,6 +751,7 @@ public class SVGUIView: UIView {
   private static func makeLayers(
     rect: CGRect,
     scale: CGFloat,
+    wideGamut: Bool,
     base: SVGBaseContext,
     promoted: Set<ElementID>,
     painting: Set<ElementID>?,
@@ -751,7 +783,9 @@ public class SVGUIView: UIView {
       defer { signposter.endInterval("Paint", paintInterval) }
       // The renderer is made when it's first used, off the main thread, since it compiles the kernels.
       let filters = usesGPU ? MetalFilterRenderer.shared : nil
-      guard let layers = await plan.painted(scale: scale, reusing: previous, filters: filters) else { return nil }
+      let wideGamut = wideGamut && tree.usesWideGamut
+      guard let layers = await plan.painted(scale: scale, wideGamut: wideGamut, reusing: previous, filters: filters)
+      else { return nil }
       return LayerFrame.changed(layers: layers, nodes: tree.reusableNodes, styled: base)
     }
   }

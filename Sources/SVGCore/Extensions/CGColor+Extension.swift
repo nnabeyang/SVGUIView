@@ -16,4 +16,12 @@ extension CGColor {
   static func extendedSRGB(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) -> CGColor {
     CGColor(colorSpace: extendedSRGB, components: [red, green, blue, alpha])!
   }
+
+  /// Whether the color is outside sRGB: one of the extended sRGB, whose red, green or blue is outside 0 to 1 by more
+  /// than half a step of 8 bits.
+  package var isOutsideSRGB: Bool {
+    guard colorSpace?.name == CGColorSpace.extendedSRGB, let components, components.count == 4 else { return false }
+    let tolerance = SVGColor.sRGBTolerance
+    return components.dropLast().contains { $0 < -tolerance || $0 > 1 + tolerance }
+  }
 }

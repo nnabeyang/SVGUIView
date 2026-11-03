@@ -106,12 +106,14 @@ extension ContainerLayer {
   /// - Parameters:
   ///   - scale: The scale of the screen, which the bitmaps of clip paths, masks, filters and patterns are made at,
   ///     as in a rendering into one bitmap.
+  ///   - wideGamut: Whether the layers show colors outside sRGB, in Display P3.
   ///   - previous: The layers of another time, whose contents the painted layers that don't change show instead of
   ///     being painted again.
   ///   - filters: The renderer that runs the filters of the layers that paint only an element with a filter on the
   ///     GPU, or `nil` to run them on the CPU.
   package func painted(
-    scale: CGFloat, reusing previous: RenderedContainer? = nil, filters: MetalFilterRenderer? = nil
+    scale: CGFloat, wideGamut: Bool = false, reusing previous: RenderedContainer? = nil,
+    filters: MetalFilterRenderer? = nil
   ) async -> RenderedContainer? {
     let previousMasks = previous?.masksByKey ?? [:]
     let previous = previous?.contentsByKey ?? [:]
@@ -120,13 +122,13 @@ extension ContainerLayer {
     let onCPU = layers.filter { layer in !onGPU.contains { $0.key == layer.key } }
     let painted = await withTaskGroup(of: [LayerKey: PaintedContents].self) { group in
       for layer in onGPU {
-        group.addTask { [layer.key: await layer.painted(scale: scale, filters: filters)] }
+        group.addTask { [layer.key: await layer.painted(scale: scale, wideGamut: wideGamut, filters: filters)] }
       }
       group.addTask {
         var painted = [LayerKey: PaintedContents]()
         for layer in onCPU {
           guard !Task.isCancelled else { break }
-          painted[layer.key] = await layer.painted(scale: scale, filters: nil)
+          painted[layer.key] = await layer.painted(scale: scale, wideGamut: wideGamut, filters: nil)
         }
         return painted
       }
@@ -228,12 +230,12 @@ extension PaintedLayer {
   /// What the nodes paint, as an image of the bounds at the raster scale.
   ///
   /// The filter of a layer that paints only an element with a filter runs on the GPU when `filters` runs it.
-  fileprivate func painted(scale: CGFloat, filters: MetalFilterRenderer?) async -> PaintedContents {
+  fileprivate func painted(scale: CGFloat, wideGamut: Bool, filters: MetalFilterRenderer?) async -> PaintedContents {
     let size = CGSize(
       width: pixels(bounds.width, rasterScale.width), height: pixels(bounds.height, rasterScale.height))
     // A bitmap that can't be made, such as one too large, shows nothing, as an element whose filter, mask, clip
     // path or pattern can't be allocated is left out of a rendering into one bitmap.
-    guard let graphics = CGContext.bitmap(size: size, scale: 1, space: CGColorSpaceCreateDeviceRGB()) else {
+    guard let graphics = CGContext.bitmap(size: size, scale: 1, space: .rendering(wideGamut: wideGamut)) else {
       return PaintedContents(image: nil, bounds: bounds, rasterScale: rasterScale, key: key)
     }
     // The first row of the bitmap is the top of the image, as in the contents of a layer.

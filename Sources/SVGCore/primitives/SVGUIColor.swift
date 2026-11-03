@@ -87,6 +87,24 @@ enum SVGColor: SVGUIColor, Equatable, Sendable {
 }
 
 extension SVGColor {
+  /// How far outside 0 to 1 a component can be and still be in sRGB, which is half a step of 8 bits, so that errors
+  /// of conversions, such as of white of Display P3, don't make colors outside sRGB.
+  static let sRGBTolerance = 0.5 / 255
+
+  /// Whether the color is outside sRGB, with a red, green or blue outside 0 to 1, such as `color(display-p3 1 0 0)`.
+  var isOutsideSRGB: Bool {
+    guard let c = components else { return false }
+    return [c.red, c.green, c.blue].contains { $0 < -Self.sRGBTolerance || $0 > 1 + Self.sRGBTolerance }
+  }
+
+  /// The red, green, blue and alpha from 0 to 255, where a color outside sRGB is clamped to it, for the filters,
+  /// which compute in sRGB.
+  var sRGBClampedRGBA: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+    let (red, green, blue, alpha) = rgba
+    func clamped(_ value: CGFloat) -> CGFloat { min(max(value, 0), 255) }
+    return (clamped(red), clamped(green), clamped(blue), alpha)
+  }
+
   /// Whether two colors are the same color however they're written, such as `red` and `#f00`, or the same paint
   /// server.
   static func == (lhs: SVGColor, rhs: SVGColor) -> Bool {
@@ -376,12 +394,13 @@ enum ColorDimension {
   case absolute(Double)
   case percent(Double)
 
+  /// The value from 0 to 255 in sRGB, which is outside it for a color outside sRGB.
   var value: CGFloat {
     switch self {
     case .absolute(let v):
-      return CGFloat(max(v, 0))
+      return CGFloat(v)
     case .percent(let v):
-      return CGFloat(max(v, 0)) / 100.0 * 255.0
+      return CGFloat(v) / 100.0 * 255.0
     }
   }
 }

@@ -95,13 +95,16 @@ extension SVGLength: Animatable {
 }
 
 /// Colors are interpolated in premultiplied sRGB, as CSS Color 4 specifies for colors in the legacy syntax.
+///
+/// A color that goes past its ends, such as with a progress over 1, is clamped to sRGB, or to the colors of the ends
+/// where they're outside sRGB.
 extension SVGColor: Animatable {
   func interpolated(to other: SVGColor, progress: Double) -> SVGColor? {
     guard let from = components, let to = other.components else { return nil }
     let alpha = Self.clamped(from.alpha + (to.alpha - from.alpha) * progress)
     guard alpha > 0 else { return Self.color(red: 0, green: 0, blue: 0, alpha: 0) }
     func channel(_ from: Double, _ to: Double, _ fromAlpha: Double, _ toAlpha: Double) -> Double {
-      Self.clamped((from * fromAlpha + (to * toAlpha - from * fromAlpha) * progress) / alpha)
+      Self.clamped((from * fromAlpha + (to * toAlpha - from * fromAlpha) * progress) / alpha, including: from, to)
     }
     return Self.color(
       red: channel(from.red, to.red, from.alpha, to.alpha),
@@ -111,9 +114,10 @@ extension SVGColor: Animatable {
 
   func adding(_ other: SVGColor) -> SVGColor? {
     guard let from = components, let to = other.components else { return nil }
+    func channel(_ from: Double, _ to: Double) -> Double { Self.clamped(from + to, including: from, to) }
     return Self.color(
-      red: Self.clamped(from.red + to.red), green: Self.clamped(from.green + to.green),
-      blue: Self.clamped(from.blue + to.blue), alpha: Self.clamped(from.alpha + to.alpha))
+      red: channel(from.red, to.red), green: channel(from.green, to.green), blue: channel(from.blue, to.blue),
+      alpha: Self.clamped(from.alpha + to.alpha))
   }
 
   func pacedDistance(to other: SVGColor) -> Double? {
@@ -134,6 +138,11 @@ extension SVGColor: Animatable {
 
   private static func clamped(_ value: Double) -> Double {
     min(max(value, 0), 1)
+  }
+
+  /// The value clamped to 0 to 1, widened to the values of the ends of an animation that are outside it.
+  private static func clamped(_ value: Double, including first: Double, _ second: Double) -> Double {
+    min(max(value, min(0, first, second)), max(1, first, second))
   }
 }
 
