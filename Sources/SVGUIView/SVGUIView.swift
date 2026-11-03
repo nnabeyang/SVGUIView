@@ -47,8 +47,11 @@ public class SVGUIView: UIView {
   private var promoted: Set<ElementID>
   /// The elements whose painting changes in other ways, which tells the layers that frames paint again.
   private var painting: Set<ElementID>
-  /// The CSS animations whose ends tasks wait for, which ``SVGDocument/Animation/finished()`` adds.
-  private var finishWaiters = [(id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
+  /// The CSS animations whose ends tasks wait for, which ``SVGDocument/Animation/finished()`` adds, with the tokens
+  /// that the cancellations of the tasks find them by.
+  private var finishWaiters = [(token: Int, id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
+  /// The token of the next task that waits for a CSS animation.
+  private var nextFinishWaiterToken = 0
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
   /// infinite for animations that don't end.
   private var animationEnd: Double
@@ -856,9 +859,25 @@ extension SVGUIView: DocumentHost {
   func waitUntilFinished(_ id: CSSAnimationID) async {
     applyDocumentChanges()
     guard !baseContext.isFinished(id, at: displayedTime.seconds) else { return }
-    await withCheckedContinuation { continuation in
-      finishWaiters.append((id, continuation))
+    let token = nextFinishWaiterToken
+    nextFinishWaiterToken += 1
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        // A task that is cancelled before it waits doesn't wait.
+        guard !Task.isCancelled else { return continuation.resume() }
+        finishWaiters.append((token, id, continuation))
+      }
+    } onCancel: { [weak self] in
+      // The handler can run on any thread, and runs before the task waits if it's cancelled already, so the waiter is
+      // resumed on the main actor, after it's added.
+      Task { @MainActor in self?.resumeFinishWaiter(token) }
     }
+  }
+
+  /// Lets the task go on that waits with a token, if it still waits.
+  private func resumeFinishWaiter(_ token: Int) {
+    guard let index = finishWaiters.firstIndex(where: { $0.token == token }) else { return }
+    finishWaiters.remove(at: index).continuation.resume()
   }
 
   /// Lets the tasks go on that wait for the animations that have finished at the time that the view displays, or
@@ -871,7 +890,7 @@ extension SVGUIView: DocumentHost {
 
   /// Lets the tasks go on that wait for the animations that pass a check.
   fileprivate func resumeWaiters(where finished: (CSSAnimationID) -> Bool) {
-    var waiting = [(id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
+    var waiting = [(token: Int, id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
     for waiter in finishWaiters {
       if finished(waiter.id) {
         waiter.continuation.resume()
