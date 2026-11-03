@@ -52,6 +52,24 @@ struct CascadedValues: Sendable {
     if case .value(let value) = self[P.self] { value } else { nil }
   }
 
+  /// The cascaded values with declarations of the user agent's style sheet under them: each one applies only if no
+  /// declaration of its property wins already.
+  func addingUserAgentDeclarations(_ declarations: [PropertyDeclaration]) -> CascadedValues {
+    var cascaded = self
+    for declaration in declarations where !cascaded.values.contains(where: { $0.id == declaration.id }) {
+      cascaded.values.append(declaration)
+    }
+    return cascaded
+  }
+
+  /// The declarations of the user agent's style sheet for an `<svg>` element that a `<use>` element shows, at the top
+  /// of the tree that it shows. SVG 2 sets `transform-origin: 0 0` only for the `<svg>` elements that have parents,
+  /// and the one at the top of the tree of a `<use>` element has none, so its transform origin is the center of its
+  /// box, as it is for the root element.
+  static var userAgentDeclarationsOfInstanceRoot: [PropertyDeclaration] {
+    [PropertyDeclaration(TransformOriginProperty.self, .value(TransformOrigin(x: .percent(50), y: .percent(50))))]
+  }
+
   /// The declarations of the user agent's style sheet for an element, which every other declaration overrides.
   ///
   /// SVG 2 hides the overflow of the elements that establish viewports, except the root element. The root element is
