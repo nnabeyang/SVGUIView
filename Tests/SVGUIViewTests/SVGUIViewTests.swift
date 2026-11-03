@@ -461,6 +461,22 @@ struct SVGUIViewTests {
     #expect(shownWidth(view) == Int((10 * UIScreen.main.scale).rounded(.up)))
   }
 
+  /// The smallest growth of a measure of the process over rounds of renderings.
+  ///
+  /// The measures count the memory of the whole process, so the other tests that run at the same time make the growth
+  /// larger in some rounds, while a rendering that keeps what it allocates makes it large in every round.
+  private func smallestGrowth(
+    of measure: () -> Int, rounds: Int = 3, renderings: Int, render: () async throws -> Void
+  ) async throws -> Int {
+    var smallest = Int.max
+    for _ in 0..<rounds {
+      let before = measure()
+      for _ in 0..<renderings { try await render() }
+      smallest = min(smallest, measure() - before)
+    }
+    return smallest
+  }
+
   /// The bytes that malloc has handed out and that are not freed yet.
   private func mallocBytesInUse() -> Int {
     var statistics = malloc_statistics_t()
@@ -490,12 +506,12 @@ struct SVGUIViewTests {
     view.frame.size = CGSize(width: 400, height: 400)
     for _ in 0..<2 { _ = try await view.takeSnapshot() }
     // The footprint of the process does not show the leak in the simulator, so count what malloc hands out.
-    let before = mallocBytesInUse()
     let renderings = 100
-    for _ in 0..<renderings { _ = try await view.takeSnapshot() }
-    let growth = mallocBytesInUse() - before
-    // A leak keeps at least one bitmap of the view, which is smaller than the filter region, per rendering.
-    // Other tests that run at the same time allocate memory too, so allow for some of them.
+    let growth = try await smallestGrowth(of: mallocBytesInUse, renderings: renderings) {
+      _ = try await view.takeSnapshot()
+    }
+    // A leak keeps at least one bitmap of the view, which is smaller than the filter region, per rendering, in every
+    // round. The allocations of the other tests can make a round grow by more than a few bitmaps, but not every one.
     let pixels = (400 * UIScreen.main.scale).rounded(.up)
     let bitmap = Int(pixels * pixels) * 4
     #expect(
@@ -522,12 +538,12 @@ struct SVGUIViewTests {
     for _ in 0..<2 { _ = try await view.takeSnapshot() }
     // The bitmaps that Core Graphics renders into are not allocated by malloc, so count the virtual memory,
     // which runs out on a device before the physical memory does.
-    let before = virtualBytes()
     let renderings = 100
-    for _ in 0..<renderings { _ = try await view.takeSnapshot() }
-    let growth = virtualBytes() - before
-    // Keeping the bitmap of each rendering until the timeout keeps all of them. Other tests that run at the
-    // same time allocate memory too, so allow for some of them.
+    let growth = try await smallestGrowth(of: virtualBytes, renderings: renderings) {
+      _ = try await view.takeSnapshot()
+    }
+    // Keeping the bitmap of each rendering until the timeout keeps all of them, in every round. The allocations of
+    // the other tests can make a round grow by more than a few bitmaps, but not every one.
     let pixels = (400 * UIScreen.main.scale).rounded(.up)
     let bitmap = Int(pixels * pixels) * 4
     #expect(
