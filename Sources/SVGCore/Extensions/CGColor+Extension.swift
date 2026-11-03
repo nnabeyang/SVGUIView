@@ -20,7 +20,9 @@ extension CGColor {
   /// Whether the color is outside sRGB: one of the extended sRGB, whose red, green or blue is outside 0 to 1 by more
   /// than half a step of 8 bits.
   package var isOutsideSRGB: Bool {
-    guard colorSpace?.name == CGColorSpace.extendedSRGB, let components, components.count == 4 else { return false }
+    // The colors outside sRGB are made in the extended sRGB space of `extendedSRGB(red:green:blue:alpha:)`, which
+    // is compared by identity, since comparing names is slower.
+    guard colorSpace === Self.extendedSRGB, let components, components.count == 4 else { return false }
     let tolerance = SVGColor.sRGBTolerance
     return components.dropLast().contains { $0 < -tolerance || $0 > 1 + tolerance }
   }

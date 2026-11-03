@@ -1,5 +1,8 @@
 import CoreGraphics
 
+// Whether a tree paints colors outside sRGB is known when its nodes are made, so that a tree that reuses nodes of
+// another time tells it without visiting them, and the rendering of every frame doesn't visit the whole tree.
+
 extension RenderTree {
   /// Whether the tree paints colors outside sRGB, which a bitmap of a wide gamut shows: colors of fills, strokes
   /// and gradients outside sRGB, and images of a wide gamut.
@@ -12,25 +15,25 @@ extension RenderTree {
 }
 
 extension RenderNode {
-  fileprivate var usesWideGamut: Bool {
+  /// Whether the node paints colors outside sRGB, which a bitmap of a wide gamut shows.
+  package var usesWideGamut: Bool {
     switch self {
-    case .shape(let shape):
-      switch shape.content {
-      case .vector(let fill, let stroke, _):
-        return fill?.usesWideGamut == true || stroke?.paint.usesWideGamut == true
-      case .image(let image, let stroke):
-        return image?.content.usesWideGamut == true || stroke?.paint.usesWideGamut == true
-      case nil:
-        return false
-      }
-    case .group(let group):
-      return group.children.contains(where: \.usesWideGamut)
-    case .viewport(let viewport):
-      return viewport.content?.children.contains(where: \.usesWideGamut) ?? false
-    case .use(let use):
-      return use.instance?.content?.usesWideGamut ?? false
-    case .filtered:
-      return false
+    case .shape(let shape): shape.usesWideGamut
+    case .group(let group): group.usesWideGamut
+    case .viewport(let viewport): viewport.content?.usesWideGamut ?? false
+    case .use(let use): use.instance?.usesWideGamut ?? false
+    case .filtered: false
+    }
+  }
+}
+
+extension ShapeContent {
+  var usesWideGamut: Bool {
+    switch self {
+    case .vector(let fill, let stroke, _):
+      fill?.usesWideGamut == true || stroke?.paint.usesWideGamut == true
+    case .image(let image, let stroke):
+      image?.content.usesWideGamut == true || stroke?.paint.usesWideGamut == true
     }
   }
 }
