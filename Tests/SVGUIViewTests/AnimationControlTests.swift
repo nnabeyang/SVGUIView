@@ -132,24 +132,64 @@ struct AnimationControlTests {
     await animation.finished()
   }
 
+  /// Waits until a task that waits for an animation has returned, and cancels it if it hasn't by the patience.
+  private func waitForReturn(
+    of task: Task<Void, Never>, hasReturned: () -> Bool, in view: SVGUIView,
+    sourceLocation: SourceLocation = #_sourceLocation
+  ) async throws {
+    try await waitUntil(
+      "The wait didn't return, with \(view.finishWaiters.count) tasks waiting, and the layer"
+        + (view.layer.needsDisplay() ? " needing display" : " displayed"),
+      sourceLocation: sourceLocation, hasReturned)
+    task.cancel()
+  }
+
   @Test("waiting for an animation returns when the element no longer runs it, or the view replaces the document")
   func finishedWithoutAnimation() async throws {
     let (view, _) = try await makeView()
     let animation = try startSquare(in: view)
-    let removed = Task { await animation.finished() }
+    var hasRemoved = false
+    let removed = Task {
+      await animation.finished()
+      hasRemoved = true
+    }
     try await waitForWaiters(1, in: view)
-    // The run loop displays the layer of the view, which applies the change, while the test waits.
     try #require(view.document.element(id: "square")).classList.remove("run")
-    await removed.value
+    try await waitForReturn(of: removed, hasReturned: { hasRemoved }, in: view)
     #expect(animation.currentTime == nil)
     let circle = try #require(view.document.animations.first)
-    let replaced = Task { await circle.finished() }
+    var hasReplaced = false
+    let replaced = Task {
+      await circle.finished()
+      hasReplaced = true
+    }
     try await waitForWaiters(1, in: view)
     view.data = Data((Self.document + "<!-- new -->").utf8)
-    await replaced.value
+    try await waitForReturn(of: replaced, hasReturned: { hasReplaced }, in: view)
     // The document that the view no longer shows has no animations.
     #expect(circle.element.document.animations.isEmpty)
     #expect(circle.currentTime == nil)
+  }
+
+  @Test("waiting for an animation returns when the element no longer runs it, in a view whose layer isn't displayed")
+  func finishedWithoutDisplay() async throws {
+    // A view that isn't in a window, whose layer isn't displayed.
+    let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(Self.document.utf8))
+    view.clock = ManualClock()
+    view.isReduceMotionEnabled = { false }
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience, animation: .play)
+    let animation = try startSquare(in: view)
+    var hasReturned = false
+    let waiter = Task {
+      await animation.finished()
+      hasReturned = true
+    }
+    try await waitUntil("\(view.finishWaiters.count) tasks wait for the animations, not 1") {
+      view.finishWaiters.count == 1
+    }
+    try #require(view.document.element(id: "square")).classList.remove("run")
+    try await waitForReturn(of: waiter, hasReturned: { hasReturned }, in: view)
+    #expect(animation.currentTime == nil)
   }
 
   @Test("waiting for an animation returns when the task that waits is cancelled, though the animation doesn't finish")
