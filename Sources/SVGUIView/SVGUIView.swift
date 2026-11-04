@@ -784,10 +784,10 @@ public class SVGUIView: UIView {
       }
       let paintInterval = signposter.beginInterval("Paint")
       defer { signposter.endInterval("Paint", paintInterval) }
-      // The renderer is made when it's first used, off the main thread, since it compiles the kernels.
-      let filters = usesGPU ? MetalFilterRenderer.shared : nil
       let wideGamut = wideGamut && tree.usesWideGamut
-      guard let layers = await plan.painted(scale: scale, wideGamut: wideGamut, reusing: previous, filters: filters)
+      guard
+        let layers = await plan.painted(
+          scale: scale, wideGamut: wideGamut, reusing: previous, runsFiltersOnGPU: usesGPU)
       else { return nil }
       return LayerFrame.changed(layers: layers, nodes: tree.reusableNodes, styled: base)
     }
