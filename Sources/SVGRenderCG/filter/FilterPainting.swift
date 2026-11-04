@@ -166,6 +166,9 @@ extension CGPainter {
       return offset(
         translation: translation, input: input, srcImage: srcImage, inImage: inImage, subregion: subregion,
         bitmapRect: bitmapRect, cgContext: cgContext, results: results)
+    case .turbulence(let turbulence):
+      return self.turbulence(
+        turbulence, colorSpace: step.colorSpace, subregion: subregion, bitmapRect: bitmapRect, cgContext: cgContext)
     }
   }
 

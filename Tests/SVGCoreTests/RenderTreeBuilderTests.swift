@@ -2140,6 +2140,63 @@ struct RenderTreeBuilderTests {
     #expect(radius == CGSize(width: 1, height: 10))
   }
 
+  /// Attributes of a `feTurbulence`, and its primitive, where `nil` is transparent black.
+  private static let turbulences: [(String, TurbulencePrimitive?)] = [
+    ("", TurbulencePrimitive(type: .turbulence, baseFrequency: .zero, numOctaves: 1, seed: 0, stitchTiles: false)),
+    (
+      #"type="fractalNoise" baseFrequency="0.1" numOctaves="3" seed="2" stitchTiles="stitch""#,
+      TurbulencePrimitive(
+        type: .fractalNoise, baseFrequency: CGSize(width: 0.1, height: 0.1), numOctaves: 3, seed: 2, stitchTiles: true)
+    ),
+    (
+      #"type="z" baseFrequency="0.1, 0.2" stitchTiles="z""#,
+      TurbulencePrimitive(
+        type: .turbulence, baseFrequency: CGSize(width: 0.1, height: 0.2), numOctaves: 1, seed: 0, stitchTiles: false)
+    ),
+    // Frequencies that aren't one or two numbers are 0, and numbers of octaves that aren't integers are 1.
+    (
+      #"baseFrequency="1 2 3" numOctaves="1.5""#,
+      TurbulencePrimitive(type: .turbulence, baseFrequency: .zero, numOctaves: 1, seed: 0, stitchTiles: false)
+    ),
+    (
+      #"numOctaves="0""#,
+      TurbulencePrimitive(type: .turbulence, baseFrequency: .zero, numOctaves: 0, seed: 0, stitchTiles: false)
+    ),
+    // The seed is truncated towards 0.
+    (
+      #"seed="-1.5""#,
+      TurbulencePrimitive(type: .turbulence, baseFrequency: .zero, numOctaves: 1, seed: -1, stitchTiles: false)
+    ),
+    // Negative frequencies and numbers of octaves aren't supported.
+    (#"baseFrequency="0.1 -0.1""#, nil),
+    (#"numOctaves="-1""#, nil),
+  ]
+
+  @Test("a feTurbulence has its type, frequencies, octaves, seed and stitching", arguments: turbulences)
+  func turbulence(attributes: String, expected: TurbulencePrimitive?) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feTurbulence "## + attributes + ##"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .turbulence(let turbulence) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a turbulence")
+      return
+    }
+    #expect(turbulence == expected)
+  }
+
+  @Test("the frequencies of a feTurbulence are the same in the units of the bounding box")
+  func turbulenceBoundingBox() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f" primitiveUnits="objectBoundingBox"><feTurbulence baseFrequency="0.1"/></filter>"##
+        + ##"<rect width="10" height="20" filter="url(#f)"/>"##)
+    guard case .turbulence(let turbulence) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a turbulence")
+      return
+    }
+    #expect(turbulence?.baseFrequency == CGSize(width: 0.1, height: 0.1))
+    #expect(filtered.primitives.first?.subregion == filtered.effectRect)
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)

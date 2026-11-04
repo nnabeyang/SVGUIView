@@ -293,6 +293,8 @@ extension ElementCursor {
         SVGFeOffsetElement(base: base, contents: contents)
       case .feTile:
         SVGFeTileElement(base: base, contents: contents)
+      case .feTurbulence:
+        SVGFeTurbulenceElement(base: base, contents: contents)
       case .feMergeNode:
         SVGFeMergeNodeElement(base: base, contents: contents)
       case .text:
