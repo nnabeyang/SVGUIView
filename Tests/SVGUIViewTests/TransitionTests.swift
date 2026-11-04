@@ -46,8 +46,7 @@ struct TransitionTests {
     #expect(!clock.isRunning)
     try #require(view.document.element(id: "square")).classList.add("on")
     // The run loop displays the layer of the view, which applies the change.
-    try await Task.sleep(for: .milliseconds(50))
-    try await waitForGreen(in: view) { $0 == 0 }
+    try await waitForRendering(of: view)
     #expect(clock.isRunning)
     clock.advance(by: .milliseconds(500))
     try await waitForGreen(in: view) { (126...129).contains($0) }

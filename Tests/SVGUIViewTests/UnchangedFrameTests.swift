@@ -37,22 +37,14 @@ struct UnchangedFrameTests {
     window.addSubview(view)
     view.layoutIfNeeded()
     view.layer.displayIfNeeded()
-    try await settle(view)
+    try await waitForRendering(of: view)
     return (view, clock)
-  }
-
-  /// Waits until the view has finished rendering.
-  private func settle(_ view: SVGUIView) async throws {
-    let deadline = ContinuousClock.now + patience
-    repeat {
-      try await Task.sleep(for: .milliseconds(20))
-    } while view.isRendering && ContinuousClock.now < deadline
   }
 
   /// Advances the clock by a frame, and waits until the view has rendered it.
   private func advance(_ clock: ManualClock, by time: Duration, in view: SVGUIView) async throws {
     clock.advance(by: time)
-    try await settle(view)
+    try await waitForRendering(of: view)
   }
 
   @Test("the frames within a step of an animation aren't rendered, and the frame of the next step is")
@@ -84,7 +76,7 @@ struct UnchangedFrameTests {
     #expect(view.unchangedFrameCount == 1)
     let animation = try #require(view.document.animations.first)
     animation.currentTime = .milliseconds(200)
-    try await settle(view)
+    try await waitForRendering(of: view)
     #expect(view.unchangedFrameCount == 1)
     try await advance(clock, by: .milliseconds(100), in: view)
     #expect(view.unchangedFrameCount == 2)

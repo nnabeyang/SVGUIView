@@ -49,9 +49,15 @@ struct AnimationControlTests {
     return try #require(square.animations.first)
   }
 
-  /// Lets the run loop display the layer of the view.
-  private func display() async throws {
-    try await Task.sleep(for: .milliseconds(50))
+  /// Waits until the run loop has displayed the layer of the view, and the number of the tasks that wait for the
+  /// animations to finish is the count.
+  private func waitForWaiters(
+    _ count: Int, in view: SVGUIView, sourceLocation: SourceLocation = #_sourceLocation
+  ) async throws {
+    try await waitForRendering(of: view, sourceLocation: sourceLocation)
+    try await waitUntil(
+      "\(view.finishWaiters.count) tasks wait for the animations, not \(count)", sourceLocation: sourceLocation
+    ) { view.finishWaiters.count == count }
   }
 
   @Test("the document lists the CSS animations that its elements run, with the changes made so far")
@@ -114,9 +120,10 @@ struct AnimationControlTests {
       await animation.finished()
       hasFinished = true
     }
-    try await display()
+    try await waitForWaiters(1, in: view)
     clock.advance(by: .milliseconds(900))
-    try await display()
+    try await waitForRendering(of: view)
+    #expect(view.finishWaiters.count == 1)
     #expect(!hasFinished)
     clock.advance(by: .milliseconds(200))
     await waiter.value
@@ -130,14 +137,14 @@ struct AnimationControlTests {
     let (view, _) = try await makeView()
     let animation = try startSquare(in: view)
     let removed = Task { await animation.finished() }
-    try await display()
+    try await waitForWaiters(1, in: view)
+    // The run loop displays the layer of the view, which applies the change, while the test waits.
     try #require(view.document.element(id: "square")).classList.remove("run")
-    try await display()
     await removed.value
     #expect(animation.currentTime == nil)
     let circle = try #require(view.document.animations.first)
     let replaced = Task { await circle.finished() }
-    try await display()
+    try await waitForWaiters(1, in: view)
     view.data = Data((Self.document + "<!-- new -->").utf8)
     await replaced.value
     // The document that the view no longer shows has no animations.
@@ -151,7 +158,7 @@ struct AnimationControlTests {
     let animation = try startSquare(in: view)
     animation.pause()
     let waiter = Task { await animation.finished() }
-    try await display()
+    try await waitForWaiters(1, in: view)
     waiter.cancel()
     await waiter.value
     // The view still runs the animation, so the wait didn't return because the view was released or the animation
@@ -181,10 +188,10 @@ struct AnimationControlTests {
       await animation.finished()
       hasFinished = true
     }
-    try await display()
+    try await waitForWaiters(2, in: view)
     cancelled.cancel()
     await cancelled.value
-    try await display()
+    #expect(view.finishWaiters.count == 1)
     #expect(!hasFinished)
     clock.advance(by: .milliseconds(1100))
     await waiter.value
