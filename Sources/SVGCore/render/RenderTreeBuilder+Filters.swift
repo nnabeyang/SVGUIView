@@ -274,6 +274,7 @@ extension RenderTreeBuilder {
     case let transfer as SVGFeComponentTransferElement: [transfer.input]
     case let composite as SVGFeCompositeElement: [composite.input, composite.input2]
     case let displacement as SVGFeDisplacementMapElement: [displacement.input, displacement.input2]
+    case let convolve as SVGFeConvolveMatrixElement: [convolve.input]
     case let shadow as SVGFeDropShadowElement: [shadow.input]
     case let blur as SVGFeGaussianBlurElement: [blur.input]
     case let merge as SVGFeMergeElement: merge.children.compactMap { $0 as? SVGFeMergeNodeElement }.map(\.input)
@@ -311,6 +312,8 @@ extension RenderTreeBuilder {
         radius = CGSize(width: radius.width * frame.width, height: radius.height * frame.height)
       }
       return .morphology(input: morphology.input, operator: morphology.morphologyOperator, radius: radius)
+    case let convolve as SVGFeConvolveMatrixElement:
+      return .convolveMatrix(input: convolve.input, Self.convolveMatrix(of: convolve))
     case let displacement as SVGFeDisplacementMapElement:
       var scale = CGSize(width: displacement.scale, height: displacement.scale)
       if filter.primitiveUnits == .objectBoundingBox {
@@ -354,6 +357,30 @@ extension RenderTreeBuilder {
     default:
       preconditionFailure("\(element.type.rawValue) isn't a filter primitive")
     }
+  }
+
+  /// The kernel of a `feConvolveMatrix`, or `nil` for a target out of the kernel, which the specification doesn't
+  /// allow and which gives transparent black.
+  ///
+  /// An order that isn't positive, or a kernel that doesn't have as many numbers as the order, makes the primitive
+  /// pass its input through. A divisor that is missing or 0 is the sum of the kernel, or 1 if the sum is 0 within the rounding of its numbers.
+  static func convolveMatrix(of element: SVGFeConvolveMatrixElement) -> ConvolveMatrixPrimitive? {
+    let (columns, rows) = element.order
+    guard columns > 0, rows > 0, element.kernelMatrix.count == columns * rows else { return .passThrough }
+    let targetX = element.targetX ?? columns / 2
+    let targetY = element.targetY ?? rows / 2
+    guard (0..<columns).contains(targetX), (0..<rows).contains(targetY) else { return nil }
+    var divisor = element.divisor ?? 0
+    if divisor == 0 {
+      // A sum of numbers that aren't exact in binary, such as 0.1 eight times and -0.8, is 0 within their rounding.
+      let sum = element.kernelMatrix.reduce(0, +)
+      let magnitude = element.kernelMatrix.reduce(0) { $0 + abs($1) }
+      divisor = abs(sum) <= magnitude * 1e-9 ? 1 : sum
+    }
+    return ConvolveMatrixPrimitive(
+      columns: columns, rows: rows, kernel: element.kernelMatrix.map(Float.init), divisor: Float(divisor),
+      bias: Float(element.bias), targetX: targetX,
+      targetY: targetY, edgeMode: element.edgeMode, preserveAlpha: element.preserveAlpha)
   }
 
   /// The matrix of a `feColorMatrix`, as the specification makes it from its `type` and `values`. Values that aren't

@@ -52,6 +52,8 @@ package enum FilterPrimitive: Sendable {
   /// The first input composited over, in, out of, atop or xor the second, or combined with it by the coefficients
   /// `k1` to `k4` of `arithmetic`.
   case composite(operator: SVGCompositeOperator, k: [Float], input: SVGFilterInput?, input2: SVGFilterInput?)
+  /// The input convolved with a kernel, or transparent black for `nil`, which values in error give.
+  case convolveMatrix(input: SVGFilterInput?, ConvolveMatrixPrimitive?)
   /// The input thinned or fattened by radii in the user space: each component is the least or the greatest in the
   /// rectangle of the radii around its pixel. A radius of 0 doesn't change the input in its direction, and a negative
   /// radius or radii that are both 0 leave the input as it is.
@@ -75,6 +77,44 @@ package enum FilterPrimitive: Sendable {
   case tile(input: SVGFilterInput?, tile: CGRect)
   /// The noise of a `feTurbulence`, or transparent black for `nil`, which values in error give.
   case turbulence(TurbulencePrimitive?)
+}
+
+/// The kernel of a `feConvolveMatrix` and how it applies, in pixels of the bitmap of the filter.
+///
+/// The kernel reaches `targetX` columns to the left of a pixel, `columns - targetX - 1` to the right, and as many
+/// rows as `targetY` and `rows - targetY - 1` up and down.
+package struct ConvolveMatrixPrimitive: Sendable, Equatable {
+  /// The primitive that passes its input through, which the specification gives to a kernel that doesn't have
+  /// `columns` times `rows` numbers.
+  package static let passThrough = ConvolveMatrixPrimitive(
+    columns: 1, rows: 1, kernel: [1], divisor: 1, bias: 0, targetX: 0, targetY: 0, edgeMode: .none,
+    preserveAlpha: false)
+
+  package let columns: Int
+  package let rows: Int
+  /// The numbers of the kernel, row by row, as the attribute gives them.
+  package let kernel: [Float]
+  package let divisor: Float
+  package let bias: Float
+  package let targetX: Int
+  package let targetY: Int
+  package let edgeMode: SVGEdgeMode
+  package let preserveAlpha: Bool
+
+  package init(
+    columns: Int, rows: Int, kernel: [Float], divisor: Float, bias: Float, targetX: Int, targetY: Int,
+    edgeMode: SVGEdgeMode, preserveAlpha: Bool
+  ) {
+    self.columns = columns
+    self.rows = rows
+    self.kernel = kernel
+    self.divisor = divisor
+    self.bias = bias
+    self.targetX = targetX
+    self.targetY = targetY
+    self.edgeMode = edgeMode
+    self.preserveAlpha = preserveAlpha
+  }
 }
 
 /// The values of a `feTurbulence` that the reference code of the specification takes.

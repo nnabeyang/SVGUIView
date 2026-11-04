@@ -2245,6 +2245,56 @@ struct RenderTreeBuilderTests {
     #expect(scale == CGSize(width: 5, height: 10))
   }
 
+  /// Attributes of a `feConvolveMatrix`, and its kernel, where `nil` is transparent black.
+  private static let convolveMatrices: [(String, ConvolveMatrixPrimitive?)] = [
+    (
+      #"kernelMatrix="1 2 3 4 5 6 7 8 9""#,
+      ConvolveMatrixPrimitive(
+        columns: 3, rows: 3, kernel: [1, 2, 3, 4, 5, 6, 7, 8, 9], divisor: 45, bias: 0, targetX: 1, targetY: 1,
+        edgeMode: .duplicate, preserveAlpha: false)
+    ),
+    (
+      #"order="4 2" kernelMatrix="1 0 0 0 0 0 0 -1" divisor="2" bias="0.5" targetX="0" targetY="1" edgeMode="wrap" preserveAlpha="true""#,
+      ConvolveMatrixPrimitive(
+        columns: 4, rows: 2, kernel: [1, 0, 0, 0, 0, 0, 0, -1], divisor: 2, bias: 0.5, targetX: 0, targetY: 1,
+        edgeMode: .wrap, preserveAlpha: true)
+    ),
+    // A divisor of 0 is the sum of the kernel, which is 1 if it's 0, and orders that aren't integers are truncated.
+    (
+      #"order="2.9 1" kernelMatrix="1 -1" divisor="0" edgeMode="z""#,
+      ConvolveMatrixPrimitive(
+        columns: 2, rows: 1, kernel: [1, -1], divisor: 1, bias: 0, targetX: 1, targetY: 0, edgeMode: .duplicate,
+        preserveAlpha: false)
+    ),
+    // A sum that is 0 within the rounding of the numbers is 0.
+    (
+      #"kernelMatrix="0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 -0.8""#,
+      ConvolveMatrixPrimitive(
+        columns: 3, rows: 3, kernel: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, -0.8], divisor: 1, bias: 0, targetX: 1,
+        targetY: 1, edgeMode: .duplicate, preserveAlpha: false)
+    ),
+    // Orders that aren't positive and kernels of other numbers of values pass the input through.
+    (#"order="0" kernelMatrix="1""#, .passThrough),
+    (#"order="3 -2" kernelMatrix="1 1 1 1 1 1""#, .passThrough),
+    (#"kernelMatrix="1 1 1 1 1 1 1 1""#, .passThrough),
+    ("", .passThrough),
+    // Targets out of the kernel are in error.
+    (#"kernelMatrix="1 1 1 1 1 1 1 1 1" targetX="3""#, nil),
+    (#"kernelMatrix="1 1 1 1 1 1 1 1 1" targetY="-1""#, nil),
+  ]
+
+  @Test("a feConvolveMatrix has its kernel, divisor, bias, target, edge mode and preserveAlpha", arguments: convolveMatrices)
+  func convolveMatrix(attributes: String, expected: ConvolveMatrixPrimitive?) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feConvolveMatrix "## + attributes + ##"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .convolveMatrix(_, let matrix) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a convolve matrix")
+      return
+    }
+    #expect(matrix == expected)
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)

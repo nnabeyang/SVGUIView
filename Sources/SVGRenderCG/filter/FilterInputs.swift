@@ -77,3 +77,21 @@ func inputImage(
     vImage_Flags(kvImageNoFlags),
     nil)?.takeRetainedValue()
 }
+
+extension CGPainter {
+  /// The input of a primitive in the format, with its own copy of the pixels.
+  func selectedImage(
+    _ input: SVGFilterInput?, format: inout vImage_CGImageFormat, srcImage: CGImage, inImage: CGImage,
+    results: [String: CGImage]
+  ) -> CGImage? {
+    guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format) else { return nil }
+    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
+    let srcData = srcBuffer.data
+    defer { free(srcData) }
+    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
+    let inputData = inputBuffer.data
+    defer { free(inputData) }
+    return inputImage(
+      input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
+  }
+}
