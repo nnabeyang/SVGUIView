@@ -258,9 +258,8 @@ extension RenderTreeBuilder {
 
   /// The filter region.
   ///
-  /// The region is limited to the viewBox with its width and its height added on each side, so that the bitmaps of
-  /// a huge region, such as 100000 by 100000, can still be made. The limit doesn't take the transform of the element
-  /// into account.
+  /// The painting limits a huge region, such as 100000 by 100000, to what shows, so the region is as the attributes
+  /// give it here.
   private func effectRect(of filter: SVGFilterElement, frame: CGRect, context: ResolveContext) -> CGRect {
     let units = filter.filterUnits ?? .objectBoundingBox
     let x =
@@ -275,12 +274,7 @@ extension RenderTreeBuilder {
     let height =
       filter.height?.calculatedLength(frame: frame, context: context, mode: .height, unitType: units)
       ?? 1.2 * frame.height
-    let region = CGRect(x: x, y: y, width: width, height: height)
-    // A region without area stays as it is, as an intersection would make its negative sizes positive.
-    guard width > 0, height > 0 else { return region }
-    let viewBox = context.viewBox
-    let limited = region.intersection(viewBox.insetBy(dx: -viewBox.width, dy: -viewBox.height))
-    return limited.isNull ? CGRect(origin: region.origin, size: .zero) : limited
+    return CGRect(x: x, y: y, width: width, height: height)
   }
 
   /// The primitive subregion, whose attributes that the primitive doesn't have come from `defaultSubregion`.

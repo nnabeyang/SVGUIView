@@ -4,11 +4,20 @@ import Foundation
 import SVGCore
 
 extension CGPainter {
-  /// Paints an element with its filter.
+  /// Paints an element with its filter, whose region is limited to what shows of the context.
   func paint(_ filtered: FilteredNode, into cgContext: CGContext) async {
+    let filtered = visiblePart(of: filtered, in: cgContext)
     guard let source = await sourceImage(of: filtered), let result = await filterResult(of: filtered, source: source)
     else { return }
     await draw(result, of: filtered, into: cgContext)
+  }
+
+  /// The element with its filter region limited to what shows of a context that its result is drawn into, so that
+  /// the bitmaps of a huge region, or of one far away that a transform brings into the context, can be made.
+  package func visiblePart(of filtered: FilteredNode, in cgContext: CGContext) -> FilteredNode {
+    guard filtered.transform.isInvertible else { return filtered }
+    let visible = cgContext.boundingBoxOfClipPath.applying(filtered.transform.inverted())
+    return filtered.limited(toVisible: visible, scale: scale)
   }
 
   /// Draws the result of a filter into its filter region with the transform of the element, clipped by its clip path,

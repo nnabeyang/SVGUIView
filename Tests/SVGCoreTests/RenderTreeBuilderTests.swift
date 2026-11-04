@@ -1951,19 +1951,19 @@ struct RenderTreeBuilderTests {
     #expect(viewport.content?.viewBoxTransform == .identity)
   }
 
-  /// Attributes of a filter in the user space of a document of 20 by 20, and its region, which the viewBox with its
-  /// size added on each side limits.
+  /// Attributes of a filter in the user space of a document of 20 by 20, and its region, which the painting limits to
+  /// what shows, so that a huge one keeps its size here.
   private static let userSpaceRegions: [(String, CGRect)] = [
     (#"x="-50%" y="-50%" width="200%" height="200%""#, CGRect(x: -10, y: -10, width: 40, height: 40)),
     (#"x="30" y="-15" width="5" height="50""#, CGRect(x: 30, y: -15, width: 5, height: 50)),
-    (#"x="0" y="0" width="100000" height="100000""#, CGRect(x: 0, y: 0, width: 40, height: 40)),
-    (#"x="-100000" y="0" width="200000" height="10""#, CGRect(x: -20, y: 0, width: 60, height: 10)),
+    (#"x="0" y="0" width="100000" height="100000""#, CGRect(x: 0, y: 0, width: 100000, height: 100000)),
+    (#"x="-100000" y="0" width="200000" height="10""#, CGRect(x: -100000, y: 0, width: 200000, height: 10)),
     // A region without area stays as it is.
     (#"x="0" y="0" width="-5" height="10""#, CGRect(x: 0, y: 0, width: -5, height: 10)),
   ]
 
   @Test(
-    "a filter region in the user space keeps its lengths, and the viewBox with its size on each side limits it",
+    "a filter region in the user space keeps its lengths, even a huge one",
     arguments: userSpaceRegions)
   func userSpaceRegion(attributes: String, expected: CGRect) async throws {
     let filtered = try await filteredNode(
