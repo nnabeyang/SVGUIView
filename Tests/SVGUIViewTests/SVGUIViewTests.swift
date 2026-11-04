@@ -12,10 +12,6 @@ import UIKit
 @MainActor
 @Suite("SVGUIView", .serialized)
 struct SVGUIViewTests {
-  /// How long a test waits for a rendering that it doesn't time. The tests check what a rendering does, not how
-  /// fast, and a CI machine sometimes stalls for many seconds, so this only catches a rendering that never ends.
-  private static let patience: Duration = .seconds(60)
-
   /// A view that shows its document as a still image, in one image, whose renderings the tests check.
   private func makeView(_ svg: String, timeoutDuration: Duration = patience) -> SVGUIView {
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
@@ -62,16 +58,10 @@ struct SVGUIViewTests {
     in view: SVGUIView, width: CGFloat, sourceLocation: SourceLocation = #_sourceLocation
   ) async throws {
     let pixels = Int((width * UIScreen.main.scale).rounded(.up))
-    let deadline = ContinuousClock.now + Self.patience
-    while shownWidth(view) != pixels {
-      guard ContinuousClock.now < deadline else {
-        Issue.record(
-          "The view shows an image \(shownWidth(view).map(String.init) ?? "nil") pixels wide, not \(pixels)",
-          sourceLocation: sourceLocation)
-        return
-      }
-      try await Task.sleep(for: .milliseconds(10))
-    }
+    try await waitUntil(
+      "The view shows an image \(shownWidth(view).map(String.init) ?? "nil") pixels wide, not \(pixels)",
+      sourceLocation: sourceLocation
+    ) { shownWidth(view) == pixels }
   }
 
   /// Renders the view as UIKit does when it displays the view.
@@ -223,6 +213,8 @@ struct SVGUIViewTests {
   {
     let painted = counter.value
     #expect(painted < Self.blurCount, "The rendering painted all the primitives", sourceLocation: sourceLocation)
+    // Nothing shows that a rendering painted nothing more, so the check waits for the time that painting a few
+    // primitives takes.
     try await Task.sleep(for: .milliseconds(200))
     #expect(
       counter.value == painted, "The rendering painted primitives after it returned", sourceLocation: sourceLocation)
@@ -366,16 +358,10 @@ struct SVGUIViewTests {
     let view = makeView(Self.square)
     render(view)
     try await waitForImage(in: view, width: 20)
-    // Let the view finish the rendering, so that it handles new data at once instead of queueing it.
-    try await Task.sleep(for: .milliseconds(100))
+    // New data marks the layer for display as it's set.
     view.data = Data(Self.square.utf8)
-    try await Task.sleep(for: .milliseconds(100))
     #expect(!view.layer.needsDisplay())
     view.data = Data(Self.square.replacingOccurrences(of: "<rect", with: "<circle").utf8)
-    let deadline = ContinuousClock.now + Self.patience
-    while !view.layer.needsDisplay() && ContinuousClock.now < deadline {
-      try await Task.sleep(for: .milliseconds(10))
-    }
     #expect(view.layer.needsDisplay(), "New data renders the view again")
   }
 
@@ -452,12 +438,12 @@ struct SVGUIViewTests {
       """#)
     view.frame.size = CGSize(width: 1000, height: 1000)
     render(view)
+    let older = try #require(view.renderingTask)
     view.frame.size = CGSize(width: 10, height: 10)
     view.setNeedsDisplay()
     render(view)
     try await waitForImage(in: view, width: 10)
-    // Give the older rendering time to finish.
-    try await Task.sleep(for: .seconds(2))
+    await older.value
     #expect(shownWidth(view) == Int((10 * UIScreen.main.scale).rounded(.up)))
   }
 

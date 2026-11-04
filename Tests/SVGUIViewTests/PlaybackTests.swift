@@ -216,10 +216,7 @@ struct PlaybackTests {
     #expect(view.layer.contents == nil)
     #expect(view.layer.sublayers?.isEmpty == false)
     view.configuration = SVGUIViewConfiguration(timeoutDuration: patience, animation: .none)
-    let deadline = ContinuousClock.now + patience
-    while view.layer.contents == nil, ContinuousClock.now < deadline {
-      try await Task.sleep(for: .milliseconds(10))
-    }
+    try await waitUntil("The view shows no image") { view.layer.contents != nil }
     #expect(view.layer.contents != nil)
     #expect(view.layer.sublayers?.isEmpty ?? true)
     #expect(green(in: view) == 0)
@@ -234,14 +231,9 @@ struct PlaybackTests {
   private func wait(
     for view: SVGUIView, inLayers: Bool, sourceLocation: SourceLocation = #_sourceLocation
   ) async throws {
-    let deadline = ContinuousClock.now + patience
-    while showsLayers(view) != inLayers || (!inLayers && view.layer.contents == nil) {
-      guard ContinuousClock.now < deadline else {
-        Issue.record("The view doesn't show its document \(inLayers ? "in layers" : "in one image")")
-        return
-      }
-      try await Task.sleep(for: .milliseconds(10))
-    }
+    try await waitUntil(
+      "The view doesn't show its document \(inLayers ? "in layers" : "in one image")", sourceLocation: sourceLocation
+    ) { showsLayers(view) == inLayers && (inLayers || view.layer.contents != nil) }
   }
 
   @Test("a view shows its document in layers while its animations play, and in one image while they don't")

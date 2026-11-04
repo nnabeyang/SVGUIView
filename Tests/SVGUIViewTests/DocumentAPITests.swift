@@ -40,16 +40,6 @@ struct DocumentAPITests {
     return (view, clock)
   }
 
-  /// Lets the run loop display the layer of the view, and waits until the view has shown its renderings.
-  ///
-  /// The tests don't display the layer themselves: UIKit displays it again at the next commit then.
-  private func settle(_ view: SVGUIView) async throws {
-    let deadline = ContinuousClock.now + patience
-    repeat {
-      try await Task.sleep(for: .milliseconds(50))
-    } while view.isRendering && ContinuousClock.now < deadline
-  }
-
   private func document(_ svg: String = square) -> SVGDocument {
     SVGUIView(data: Data(svg.utf8)).document
   }
@@ -156,12 +146,12 @@ struct DocumentAPITests {
   @Test("the changes made in one turn of the run loop are rendered together")
   func rendersChangesTogether() async throws {
     let (view, _) = try await makeView()
-    try await settle(view)
+    try await waitForRendering(of: view)
     let generation = view.renderingGeneration
     let square = try #require(view.document.element(id: "square"))
     square.setAttribute("fill", to: "rgb(0, 128, 0)")
     square.style.setProperty("fill", to: "rgb(0, 255, 0)")
-    try await settle(view)
+    try await waitForRendering(of: view)
     #expect(green(in: view) == 255)
     #expect(view.renderingGeneration == generation + 1)
   }
@@ -187,11 +177,11 @@ struct DocumentAPITests {
     view.data = Data(Self.square.replacingOccurrences(of: #"fill="red""#, with: #"fill="blue""#).utf8)
     #expect(view.document !== old)
     #expect(view.document.element(id: "square")?.attribute("fill") == "blue")
-    try await settle(view)
+    try await waitForRendering(of: view)
     let generation = view.renderingGeneration
     try #require(old.element(id: "square")).classList.add("lime")
     #expect(old.element(id: "square")?.attribute("class") == "lime")
-    try await settle(view)
+    try await waitForRendering(of: view)
     #expect(view.renderingGeneration == generation)
     #expect(green(in: view) == 0)
   }
@@ -201,7 +191,7 @@ struct DocumentAPITests {
     let (view, clock) = try await makeView(animation: .play)
     #expect(!clock.isRunning)
     try #require(view.document.element(id: "square")).classList.add("on")
-    try await settle(view)
+    try await waitForRendering(of: view)
     #expect(clock.isRunning)
   }
 }

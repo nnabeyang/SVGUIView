@@ -36,19 +36,41 @@ func green(in view: SVGUIView) -> UInt8? {
   return components[3] == 0 ? nil : components[1]
 }
 
+/// Waits until the condition holds, checking it every 10 ms, and records an issue with the message if it doesn't
+/// within the patience.
+@MainActor
+func waitUntil(
+  _ message: @autoclosure () -> String, sourceLocation: SourceLocation = #_sourceLocation,
+  _ condition: () -> Bool
+) async throws {
+  let deadline = ContinuousClock.now + patience
+  while !condition() {
+    guard ContinuousClock.now < deadline else {
+      Issue.record(Comment(rawValue: message()), sourceLocation: sourceLocation)
+      return
+    }
+    try await Task.sleep(for: .milliseconds(10))
+  }
+}
+
 /// Waits until the green component at the center of the image that the view shows passes the check.
 @MainActor
 func waitForGreen(
   in view: SVGUIView, sourceLocation: SourceLocation = #_sourceLocation, _ check: (UInt8) -> Bool
 ) async throws {
-  let deadline = ContinuousClock.now + patience
-  while green(in: view).map(check) != true {
-    guard ContinuousClock.now < deadline else {
-      Issue.record(
-        "The view shows green \(green(in: view).map(String.init) ?? "nil")", sourceLocation: sourceLocation)
-      return
-    }
-    try await Task.sleep(for: .milliseconds(10))
+  try await waitUntil(
+    "The view shows green \(green(in: view).map(String.init) ?? "nil")", sourceLocation: sourceLocation
+  ) { green(in: view).map(check) == true }
+}
+
+/// Waits until the run loop has displayed the layer of the view, and the view has shown the renderings that it
+/// started.
+///
+/// The tests don't display the layer themselves after a change: UIKit would display it again at the next commit.
+@MainActor
+func waitForRendering(of view: SVGUIView, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+  try await waitUntil("The view is still rendering", sourceLocation: sourceLocation) {
+    !view.layer.needsDisplay() && !view.isRendering
   }
 }
 

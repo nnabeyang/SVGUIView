@@ -49,7 +49,7 @@ public class SVGUIView: UIView {
   private var painting: Set<ElementID>
   /// The CSS animations whose ends tasks wait for, which ``SVGDocument/Animation/finished()`` adds, with the tokens
   /// that the cancellations of the tasks find them by.
-  private var finishWaiters = [(token: Int, id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
+  private(set) var finishWaiters = [(token: Int, id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
   /// The token of the next task that waits for a CSS animation.
   private var nextFinishWaiterToken = 0
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
