@@ -322,7 +322,10 @@ public class SVGUIView: UIView {
     let signpost = Self.signposter.beginInterval(
       "Render", id: Self.signposter.makeSignpostID(),
       "\(time.seconds, format: .fixed(precision: 3)) s into \(promoted == nil ? "an image" : "layers")")
-    renderingTask = Task(priority: configuration.taskPriority) { [weak self] in
+    // The task starts off the main actor, so that the rendering doesn't wait for the other work of the app there, and
+    // only the result is shown on it.
+    let target = RenderingTarget(view: self)
+    renderingTask = Task(priority: configuration.taskPriority) { @concurrent in
       if let promoted {
         let rendered = await SVGUIView.makeLayers(
           rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, promoted: promoted, painting: painting,
@@ -334,7 +337,7 @@ public class SVGUIView: UIView {
         case .success(.unchanged):
           // The view keeps showing the frame that looks the same.
           Self.signposter.endInterval("Render", signpost, "unchanged")
-          self?.finishRendering(ofRendering: generation) { $0.unchangedFrameCount += 1 }
+          await target.finishRendering(ofRendering: generation) { $0.unchangedFrameCount += 1 }
           return
         case .success(.changed(let layers, _, _)):
           result = .success(layers)
@@ -354,7 +357,7 @@ public class SVGUIView: UIView {
         case .failure(let error):
           Self.signposter.endInterval("Render", signpost, "\(String(describing: error))")
         }
-        self?.finishRendering(ofRendering: generation) { view in
+        await target.finishRendering(ofRendering: generation) { view in
           view.showLayers(result)
           if case .success(.changed(_, let nodes, let styled)) = rendered {
             view.shownNodes = nodes
@@ -370,7 +373,7 @@ public class SVGUIView: UIView {
         case .success: Self.signposter.endInterval("Render", signpost, "painted")
         case .failure(let error): Self.signposter.endInterval("Render", signpost, "\(String(describing: error))")
         }
-        self?.finishRendering(ofRendering: generation) { $0.show(result) }
+        await target.finishRendering(ofRendering: generation) { $0.show(result) }
       }
     }
   }
@@ -378,7 +381,7 @@ public class SVGUIView: UIView {
   /// Shows the result of a rendering, unless a newer rendering has started since, and starts the frame that waits
   /// for it. A rendering for an old size or old data that finished before it was cancelled doesn't replace a newer
   /// image.
-  private func finishRendering(ofRendering generation: Int, show: (SVGUIView) -> Void) {
+  private func finishRendering(ofRendering generation: Int, show: @MainActor (SVGUIView) -> Void) {
     guard generation == renderingGeneration else { return }
     isRendering = false
     show(self)
@@ -790,6 +793,18 @@ public class SVGUIView: UIView {
           scale: scale, wideGamut: wideGamut, reusing: previous, runsFiltersOnGPU: usesGPU)
       else { return nil }
       return LayerFrame.changed(layers: layers, nodes: tree.reusableNodes, styled: base)
+    }
+  }
+
+  /// The view of a rendering, which the rendering holds weakly, and only holds on the main actor while it shows its
+  /// result, so that the view is never released off the main thread.
+  private struct RenderingTarget: Sendable {
+    weak var view: SVGUIView?
+
+    /// Shows the result of the rendering in the view, unless the view has been released.
+    @MainActor
+    func finishRendering(ofRendering generation: Int, show: @MainActor (SVGUIView) -> Void) {
+      view?.finishRendering(ofRendering: generation, show: show)
     }
   }
 
