@@ -29,6 +29,16 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feConvolveMatrix"))
+    func feConvolveMatrix(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feDiffuseLighting"))
+    func feDiffuseLighting(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(in: "basic", "filters", "feDisplacementMap"))
     func feDisplacementMap(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
@@ -49,6 +59,11 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feImage"))
+    func feImage(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(in: "basic", "filters", "feMerge"))
     func feMerge(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
@@ -66,6 +81,11 @@ extension SnapshotTests {
 
     @Test(arguments: SVGFile.all(in: "basic", "filters", "feTile"))
     func feTile(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feTurbulence"))
+    func feTurbulence(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
 
