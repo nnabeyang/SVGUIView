@@ -16,4 +16,10 @@ extension CGAffineTransform {
   package var withoutScaling: CGAffineTransform {
     concatenating(invertedScale)
   }
+
+  /// Whether the transform has an inverse, which one that collapses the plane to a line or a point doesn't.
+  package var isInvertible: Bool {
+    let determinant = a * d - b * c
+    return determinant != 0 && determinant.isFinite
+  }
 }

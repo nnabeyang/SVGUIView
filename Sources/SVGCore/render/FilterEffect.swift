@@ -30,6 +30,88 @@ package struct FilteredNode: Sendable {
   package var mask = MaskApplication.none
 }
 
+extension FilteredNode {
+  /// The node with its filter region limited to what's visible with its width and its height added on each side, and
+  /// the distance that the primitives reach, so that the bitmaps of a huge region, or of one far away that a
+  /// transform brings into view, can be made, and the visible pixels are the ones of the whole region.
+  ///
+  /// A region within that stays as it is, as the bitmaps of another size would be drawn into the context a little
+  /// differently. The edges that the limit moves stay on the pixels of the region from its origin.
+  ///
+  /// - Parameters:
+  ///   - visible: The rectangle that shows, in the coordinates of the element, before its transform.
+  ///   - scale: The pixels of the bitmaps of the filter in a unit of the user space.
+  package func limited(toVisible visible: CGRect, scale: CGFloat) -> FilteredNode {
+    let region = effectRect
+    guard region.width > 0, region.height > 0, scale > 0, !visible.isNull, !visible.isInfinite, let reach = Self.reach(of: primitives, scale: scale)
+    else { return self }
+    let needed = visible.insetBy(dx: -visible.width - reach.width, dy: -visible.height - reach.height)
+    func pixel(_ value: CGFloat, from origin: CGFloat, rounding rule: FloatingPointRoundingRule) -> CGFloat {
+      origin + ((value - origin) * scale).rounded(rule) / scale
+    }
+    let minX = max(region.minX, pixel(needed.minX, from: region.minX, rounding: .down))
+    let minY = max(region.minY, pixel(needed.minY, from: region.minY, rounding: .down))
+    let maxX = min(region.maxX, pixel(needed.maxX, from: region.minX, rounding: .up))
+    let maxY = min(region.maxY, pixel(needed.maxY, from: region.minY, rounding: .up))
+    guard minX > region.minX || minY > region.minY || maxX < region.maxX || maxY < region.maxY else { return self }
+    // Nothing of the region shows.
+    guard minX < maxX, minY < maxY else { return with(effectRect: CGRect(x: region.minX, y: region.minY, width: 0, height: 0)) }
+    return with(effectRect: CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY))
+  }
+
+  /// The distance in the user space that the result of the primitives can take pixels of their inputs from, in x and
+  /// y, with a pixel more, or `nil` if a primitive takes pixels from anywhere in the region, such as a `feTile`.
+  private static func reach(of steps: [FilterStep], scale: CGFloat) -> CGSize? {
+    var width = 1 / scale
+    var height = 1 / scale
+    for step in steps {
+      switch step.primitive {
+      case .offset(_, let translation):
+        width += abs(translation.tx)
+        height += abs(translation.ty)
+      case .gaussianBlur(let blur):
+        switch blur.standardDeviation {
+        case .iso(let deviation):
+          width += 3 * max(deviation, 0)
+          height += 3 * max(deviation, 0)
+        case .hetero(let x, let y):
+          width += 3 * max(x, 0)
+          height += 3 * max(y, 0)
+        }
+      case .morphology(_, _, let radius):
+        width += max(radius.width, 0)
+        height += max(radius.height, 0)
+      case .displacementMap(_, _, let displacement, _, _):
+        width += abs(displacement.width) / 2
+        height += abs(displacement.height) / 2
+      case .convolveMatrix(_, let convolve):
+        guard let convolve else { continue }
+        // A kernel that wraps takes pixels from the other side of the region.
+        guard convolve.edgeMode != .wrap else { return nil }
+        width += CGFloat(max(convolve.targetX, convolve.columns - convolve.targetX - 1)) / scale
+        height += CGFloat(max(convolve.targetY, convolve.rows - convolve.targetY - 1)) / scale
+      case .lighting:
+        // The normals of the surface take the pixels around.
+        width += 1 / scale
+        height += 1 / scale
+      case .tile:
+        return nil
+      case .blend, .colorMatrix, .composite, .image, .componentTransfer, .flood, .merge, .turbulence:
+        continue
+      }
+    }
+    return CGSize(width: width, height: height)
+  }
+
+  /// The node with another filter region.
+  private func with(effectRect: CGRect) -> FilteredNode {
+    FilteredNode(
+      id: id, transform: transform, frame: frame, effectRect: effectRect, colorInterpolation: colorInterpolation,
+      colorInterpolationFilters: colorInterpolationFilters, opacity: opacity, primitives: primitives, source: source,
+      blendMode: blendMode, clip: clip, mask: mask)
+  }
+}
+
 /// A primitive of a filter, with what it shares with the others.
 package struct FilterStep: Sendable {
   package let primitive: FilterPrimitive

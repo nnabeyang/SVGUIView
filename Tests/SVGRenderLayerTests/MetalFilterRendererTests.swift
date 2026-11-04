@@ -10,7 +10,7 @@ import Testing
 private let renderer = MetalFilterRenderer.shared
 
 /// The filtered nodes of a document with the content, rendered into a rectangle of 100 by 100 at the scale.
-private func filteredNodes(_ content: String, scale: CGFloat) async throws -> [FilteredNode] {
+func filteredNodes(_ content: String, scale: CGFloat) async throws -> [FilteredNode] {
   let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"# + content + "</svg>"
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(x: 0, y: 0, width: 100, height: 100)

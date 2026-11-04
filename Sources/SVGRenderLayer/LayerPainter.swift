@@ -252,10 +252,13 @@ extension PaintedLayer {
       graphics.clip(to: view)
     }
     let painter = CGPainter(scale: scale)
-    if let filters, let filtered, let result = await filters.filterImage(of: filtered, painter: painter) {
-      await painter.draw(result, of: filtered, into: graphics)
-      return PaintedContents(
-        image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key, filteredOnGPU: true)
+    if let filters, let filtered {
+      let visible = painter.visiblePart(of: filtered, in: graphics)
+      if let result = await filters.filterImage(of: visible, painter: painter) {
+        await painter.draw(result, of: visible, into: graphics)
+        return PaintedContents(
+          image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key, filteredOnGPU: true)
+      }
     }
     await painter.paint(nodes, into: graphics)
     return PaintedContents(image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key)

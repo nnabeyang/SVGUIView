@@ -245,10 +245,18 @@ package struct LayerPlanner: Sendable {
       width: rounded(hypot(transform.a, transform.b)), height: rounded(hypot(transform.c, transform.d)))
     guard rasterScale.width > 0, rasterScale.height > 0, rasterScale.width.isFinite, rasterScale.height.isFinite
     else { return nil }
-    var bounds = nodes.paintedBounds
+    var bounds: CGRect
     if context.isFixed {
       // What's outside the view never shows, so the contents don't cover it.
-      bounds = bounds.intersection(context.view.applying(transform.inverted()))
+      bounds = nodes.paintedBounds.intersection(context.view.applying(transform.inverted()))
+    } else {
+      // The painting limits a huge filter region to what shows, which an animation can move into the view, so the
+      // filter regions are limited to the view with its width and its height added on each side as the layer rests,
+      // and its bitmap can be made.
+      let view = context.view
+      let resting = context.restingTransform
+      let limit = view.insetBy(dx: -view.width, dy: -view.height)
+      bounds = nodes.paintedBounds(filtersWithin: resting.isInvertible ? limit.applying(resting.inverted()) : nil)
     }
     guard !bounds.isNull, !bounds.isEmpty else { return nil }
     bounds = bounds.insetBy(dx: -Self.margin / rasterScale.width, dy: -Self.margin / rasterScale.height)

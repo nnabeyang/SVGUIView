@@ -8,18 +8,34 @@ extension RenderNode {
   /// The rectangle can be larger than what the node paints: a stroke counts as if it had no dashes, and the
   /// antialiased edges of the shapes aren't counted, so a layer adds a margin to it.
   package var paintedBounds: CGRect {
+    paintedBounds(filtersWithin: nil)
+  }
+
+  /// A rectangle that contains everything the node paints, with its filter regions and the ones of its descendants
+  /// limited to a rectangle in the coordinates of the parent, as the painting limits a huge filter region to what
+  /// shows, or not limited for `nil`.
+  package func paintedBounds(filtersWithin limit: CGRect?) -> CGRect {
+    /// The limit in the coordinates inside a transform, or none if the transform has no inverse.
+    func inside(_ transform: CGAffineTransform) -> CGRect? {
+      guard let limit, transform.isInvertible else { return nil }
+      return limit.applying(transform.inverted())
+    }
     switch self {
     case .shape(let shape):
-      shape.paintedBounds
+      return shape.paintedBounds
     case .group(let group):
-      group.children.paintedBounds.clipped(by: group.clip, group.mask).applying(group.transform)
+      return group.children.paintedBounds(filtersWithin: inside(group.transform)).clipped(by: group.clip, group.mask)
+        .applying(group.transform)
     case .viewport(let viewport):
-      viewport.paintedBounds
+      return viewport.paintedBounds(filtersWithin: limit)
     case .use(let use):
-      (use.instance?.content?.paintedBounds ?? .null).applying(use.instance?.translation ?? .identity)
-        .clipped(by: use.clip, use.mask).applying(use.transform)
+      let translation = use.instance?.translation ?? .identity
+      let content =
+        use.instance?.content?.paintedBounds(filtersWithin: inside(translation.concatenating(use.transform))) ?? .null
+      return content.applying(translation).clipped(by: use.clip, use.mask).applying(use.transform)
     case .filtered(let filtered):
-      filtered.effectRect.applying(filtered.transform)
+      let region = inside(filtered.transform).map(filtered.effectRect.intersection) ?? filtered.effectRect
+      return region.applying(filtered.transform)
     }
   }
 }
@@ -27,7 +43,13 @@ extension RenderNode {
 extension [RenderNode] {
   /// A rectangle that contains everything the nodes paint, in the coordinates of their parent.
   package var paintedBounds: CGRect {
-    reduce(.null) { $0.union($1.paintedBounds) }
+    paintedBounds(filtersWithin: nil)
+  }
+
+  /// A rectangle that contains everything the nodes paint, with their filter regions limited to a rectangle in the
+  /// coordinates of their parent, or not limited for `nil`.
+  package func paintedBounds(filtersWithin limit: CGRect?) -> CGRect {
+    reduce(.null) { $0.union($1.paintedBounds(filtersWithin: limit)) }
   }
 }
 
@@ -63,9 +85,11 @@ extension ShapeNode {
 }
 
 extension ViewportNode {
-  fileprivate var paintedBounds: CGRect {
+  fileprivate func paintedBounds(filtersWithin limit: CGRect?) -> CGRect {
     guard let content else { return .null }
-    var bounds = content.children.paintedBounds
+    let outside = content.viewBoxTransform.concatenating(translation).concatenating(transform)
+    let inner = limit.flatMap { outside.isInvertible ? $0.applying(outside.inverted()) : nil }
+    var bounds = content.children.paintedBounds(filtersWithin: inner)
     if let overflowClip = content.overflowClip {
       bounds = bounds.intersection(overflowClip)
     }
