@@ -147,6 +147,10 @@ extension CGPainter {
       return convolveMatrix(
         matrix, input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
         bitmapRect: bitmapRect, cgContext: cgContext, results: results)
+    case .lighting(let input, let lighting):
+      return self.lighting(
+        lighting, input: input, colorSpace: step.colorSpace, srcImage: srcImage, inImage: inImage, subregion: subregion,
+        bitmapRect: bitmapRect, cgContext: cgContext, results: results)
     case .displacementMap(let input, let input2, let scale, let x, let y):
       return displacementMap(
         scale: scale, x: x, y: y, input: input, input2: input2, colorSpace: step.colorSpace, srcImage: srcImage,

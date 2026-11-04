@@ -283,8 +283,18 @@ extension ElementCursor {
         SVGFeComponentTransferElement(base: base, contents: contents)
       case .feFuncR, .feFuncG, .feFuncB, .feFuncA:
         SVGFeFuncElement(base: base, contents: contents)
+      case .feDiffuseLighting:
+        SVGFeDiffuseLightingElement(base: base, contents: contents)
       case .feDisplacementMap:
         SVGFeDisplacementMapElement(base: base, contents: contents)
+      case .feDistantLight:
+        SVGFeDistantLightElement(base: base, contents: contents)
+      case .fePointLight:
+        SVGFePointLightElement(base: base, contents: contents)
+      case .feSpecularLighting:
+        SVGFeSpecularLightingElement(base: base, contents: contents)
+      case .feSpotLight:
+        SVGFeSpotLightElement(base: base, contents: contents)
       case .feDropShadow:
         SVGFeDropShadowElement(base: base, contents: contents)
       case .feComposite:

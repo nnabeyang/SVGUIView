@@ -55,6 +55,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case stopOpacity = "stop-opacity"
   case floodColor = "flood-color"
   case floodOpacity = "flood-opacity"
+  case lightingColor = "lighting-color"
   case x
   case y
   case width
@@ -132,6 +133,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .stopOpacity: visitor.visit(StopOpacityProperty.self)
     case .floodColor: visitor.visit(FloodColorProperty.self)
     case .floodOpacity: visitor.visit(FloodOpacityProperty.self)
+    case .lightingColor: visitor.visit(LightingColorProperty.self)
     case .x: visitor.visit(XProperty.self)
     case .y: visitor.visit(YProperty.self)
     case .width: visitor.visit(WidthProperty.self)
@@ -216,6 +218,7 @@ struct ComputedStyle: Sendable, Equatable {
   var stopOpacity: Double
   var floodColor: ColorValue
   var floodOpacity: Double
+  var lightingColor: ColorValue
   var x: SVGLength?
   var y: SVGLength?
   var width: SVGLength?
@@ -260,7 +263,8 @@ struct ComputedStyle: Sendable, Equatable {
     transformBox: TransformBoxProperty.initial, clipPath: ClipPathProperty.initial, mask: MaskProperty.initial,
     filter: FilterProperty.initial, display: DisplayProperty.initial, overflow: OverflowProperty.initial,
     stopColor: StopColorProperty.initial, stopOpacity: StopOpacityProperty.initial,
-    floodColor: FloodColorProperty.initial, floodOpacity: FloodOpacityProperty.initial, x: XProperty.initial,
+    floodColor: FloodColorProperty.initial, floodOpacity: FloodOpacityProperty.initial,
+    lightingColor: LightingColorProperty.initial, x: XProperty.initial,
     y: YProperty.initial, width: WidthProperty.initial, height: HeightProperty.initial, d: DProperty.initial,
     animationName: AnimationNameProperty.initial, animationDuration: AnimationDurationProperty.initial,
     animationTimingFunction: AnimationTimingFunctionProperty.initial, animationDelay: AnimationDelayProperty.initial,
@@ -365,7 +369,8 @@ struct ComputedStyle: Sendable, Equatable {
     isolation: Isolation, transform: TransformList,
     transformOrigin: TransformOrigin, transformBox: TransformBox,
     clipPath: SVGClipPath, mask: SVGMask, filter: SVGFilter, display: CSSDisplay, overflow: SVGOverflow,
-    stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double, x: SVGLength?,
+    stopColor: ColorValue, stopOpacity: Double, floodColor: ColorValue, floodOpacity: Double,
+    lightingColor: ColorValue, x: SVGLength?,
     y: SVGLength?, width: SVGLength?, height: SVGLength?, d: PathData, animationName: [AnimationName],
     animationDuration: [Double], animationTimingFunction: [EasingFunction], animationDelay: [Double],
     animationIterationCount: [AnimationIterationCount], animationDirection: [AnimationDirection],
@@ -421,6 +426,7 @@ struct ComputedStyle: Sendable, Equatable {
     self.stopOpacity = stopOpacity
     self.floodColor = floodColor
     self.floodOpacity = floodOpacity
+    self.lightingColor = lightingColor
     self.x = x
     self.y = y
     self.width = width
