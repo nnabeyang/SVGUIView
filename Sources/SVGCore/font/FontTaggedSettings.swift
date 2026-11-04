@@ -1,5 +1,5 @@
-class FontTaggedSettings<T: Comparable & Hashable>: Hashable {
-  var list = [FontTaggedSetting<T>]()
+final class FontTaggedSettings<T: Comparable & Hashable & Sendable>: Hashable, Sendable {
+  let list = [FontTaggedSetting<T>]()
   func hash(into hasher: inout Hasher) {
     hasher.combine(list)
   }
@@ -75,7 +75,7 @@ extension Dictionary where Key: _FontTag {
   }
 }
 
-struct FontTaggedSetting<T: Comparable & Hashable>: Comparable, Hashable {
+struct FontTaggedSetting<T: Comparable & Hashable & Sendable>: Comparable, Hashable, Sendable {
   let tag: FontTag
   let value: T
 

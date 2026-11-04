@@ -1,6 +1,6 @@
-class FontCreationContext: Hashable {
-  var fontFaceCapabilities: FontSelectionSpecifiedCapabilities
-  var rareData: FontCreationContextRareData?
+final class FontCreationContext: Hashable, Sendable {
+  let fontFaceCapabilities: FontSelectionSpecifiedCapabilities
+  let rareData: FontCreationContextRareData?
   init(fontFaceCapabilities: FontSelectionSpecifiedCapabilities = .init(), rareData: FontCreationContextRareData? = nil) {
     self.rareData = rareData
     self.fontFaceCapabilities = fontFaceCapabilities

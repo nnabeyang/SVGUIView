@@ -1,6 +1,8 @@
-import CoreText
+// CoreText doesn't mark its immutable types, such as CTFontDescriptor, Sendable, though they can be used across
+// threads.
+@preconcurrency import CoreText
 
-struct FontFamilySpecificationKey: Hashable {
+struct FontFamilySpecificationKey: Hashable, Sendable {
   let fontDescriptor: CTFontDescriptor
   let fontDescriptorKey: FontDescriptionKey
 

@@ -1,7 +1,8 @@
-import CoreText
+// CoreText doesn't mark its immutable types, such as CTFont, Sendable, though they can be used across threads.
+@preconcurrency import CoreText
 import _SPI
 
-struct FontPlatformData: Hashable {
+struct FontPlatformData: Hashable, Sendable {
   struct FontVariationAxis {
     let name: String
     let tag: String
