@@ -3,95 +3,44 @@ import CoreGraphics
 import Foundation
 import SVGCore
 
-/// Points `destBuffer` at the input of a primitive.
+/// The input of a primitive converted to the format, in memory of its own, which the caller frees, or `nil` if it
+/// can't be converted.
 ///
-/// `destBuffer` shares its memory with `srcBuffer` or `inputBuffer`, except for the result of another primitive,
-/// for which the function allocates the memory.
-///
-/// - Returns: The memory that the function allocates, if any. The caller frees it after it no longer uses
-///   `destBuffer`, or an image that it makes from `destBuffer` without copying the pixels.
-func inputImageBuffer(
-  input: SVGFilterInput?, format: inout vImage_CGImageFormat, results: [String: CGImage],
-  srcBuffer: inout vImage_Buffer, inputBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer
-) -> UnsafeMutableRawPointer? {
-  switch input {
-  case .none:
-    destBuffer = inputBuffer
-  case .sourceGraphic:
-    destBuffer = srcBuffer
-  case .sourceAlpha:
-    destBuffer = srcBuffer
-    dropRGBColor(srcBuffer: &srcBuffer, destBuffer: &destBuffer)
-  case .other(let srcName):
-    if let image = results[srcName],
-      let tbuffer = try? vImage_Buffer(cgImage: image, format: format)
-    {
-      destBuffer = tbuffer
-      return tbuffer.data
-    } else {
-      destBuffer = inputBuffer
+/// Only the image of the input is converted: the result of the primitive before for no input or a name that no
+/// primitive has given, the source for `SourceGraphic` and `SourceAlpha`, and the named result for a name.
+/// `SourceAlpha` keeps the alpha of the source, the fourth component of the pixels, with the colors of 0.
+func inputBuffer(
+  _ input: SVGFilterInput?, format: vImage_CGImageFormat, srcImage: CGImage, inImage: CGImage,
+  results: [String: CGImage]
+) -> vImage_Buffer? {
+  let image: CGImage =
+    switch input {
+    case .none: inImage
+    case .sourceGraphic, .sourceAlpha: srcImage
+    case .other(let name): results[name] ?? inImage
+    }
+  guard var buffer = try? vImage_Buffer(cgImage: image, format: format) else { return nil }
+  if input == .sourceAlpha {
+    // The bits of the mask are the components in memory from the first, so 0b1110 sets all but the fourth.
+    let error = withUnsafeMutablePointer(to: &buffer) { buffer in
+      vImageOverwriteChannelsWithScalar_ARGB8888(0, buffer, buffer, 0b1110, vImage_Flags(kvImageNoFlags))
+    }
+    guard error == kvImageNoError else {
+      buffer.free()
+      return nil
     }
   }
-  return nil
+  return buffer
 }
 
-private func dropRGBColor(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer) {
-  let matrix: [Int16] = [
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 1,
-  ]
-
-  vImageMatrixMultiply_ARGB8888(
-    &srcBuffer,
-    &destBuffer,
-    matrix,
-    1,
-    nil,
-    nil,
-    vImage_Flags(kvImageNoFlags)
-  )
-  swap(&srcBuffer, &destBuffer)
-}
-
-/// The input of a primitive, as an image with its own copy of the pixels.
+/// The input of a primitive converted to the format, as an image with its own copy of the pixels, or `nil` if it
+/// can't be made.
 func inputImage(
-  input: SVGFilterInput?, format: inout vImage_CGImageFormat, results: [String: CGImage],
-  srcBuffer: inout vImage_Buffer, inputBuffer: inout vImage_Buffer
+  _ input: SVGFilterInput?, format: vImage_CGImageFormat, srcImage: CGImage, inImage: CGImage,
+  results: [String: CGImage]
 ) -> CGImage? {
-  guard let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height)) else { return nil }
-  defer {
-    free(data)
-  }
-  var destBuffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
-  let resultData = inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &destBuffer)
-  defer { free(resultData) }
-
-  // Copy the pixels, because the caller draws the image after the buffers are freed.
-  return vImageCreateCGImageFromBuffer(
-    &destBuffer,
-    &format,
-    nil,
-    nil,
-    vImage_Flags(kvImageNoFlags),
-    nil)?.takeRetainedValue()
-}
-
-extension CGPainter {
-  /// The input of a primitive in the format, with its own copy of the pixels.
-  func selectedImage(
-    _ input: SVGFilterInput?, format: inout vImage_CGImageFormat, srcImage: CGImage, inImage: CGImage,
-    results: [String: CGImage]
-  ) -> CGImage? {
-    guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format) else { return nil }
-    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    return inputImage(
-      input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
-  }
+  guard let buffer = inputBuffer(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
+  else { return nil }
+  defer { buffer.free() }
+  return try? buffer.createCGImage(format: format)
 }

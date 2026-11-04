@@ -19,17 +19,7 @@ extension CGPainter {
         bitsPerComponent: 8, bitsPerPixel: 32, colorSpace: colorSpace.colorSpace,
         bitmapInfo: CGBitmapInfo(
           rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
-    else { return nil }
-    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    guard
-      let selected = inputImage(
-        input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
+      let selected = inputImage(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
     var image = selected
     // The radii in pixels, which are the halves of the sides of the rectangle without its middle pixel.

@@ -24,16 +24,14 @@ extension CGPainter {
     let bitmapInfo = CGBitmapInfo(
       rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
     guard
-      var format = vImage_CGImageFormat(
+      let format = vImage_CGImageFormat(
         bitsPerComponent: 8, bitsPerPixel: 32, colorSpace: colorSpace.colorSpace, bitmapInfo: bitmapInfo),
-      let image = selectedImage(input, format: &format, srcImage: srcImage, inImage: inImage, results: results),
-      let source = try? vImage_Buffer(cgImage: image, format: format),
-      let destination = try? vImage_Buffer(width: image.width, height: image.height, bitsPerPixel: 32)
+      let source = inputBuffer(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
-    defer {
-      source.free()
-      destination.free()
-    }
+    defer { source.free() }
+    guard let destination = try? vImage_Buffer(width: Int(source.width), height: Int(source.height), bitsPerPixel: 32)
+    else { return nil }
+    defer { destination.free() }
     let width = Int(source.width)
     let height = Int(source.height)
     // The alpha from 0 to 1, with the rows from the top of the user space, which is the bottom row of the bitmap, so

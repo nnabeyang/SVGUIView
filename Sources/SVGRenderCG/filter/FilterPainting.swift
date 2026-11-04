@@ -193,26 +193,13 @@ extension CGPainter {
     results: [String: CGImage]
   ) -> CGImage? {
     guard
-      var format = vImage_CGImageFormat(
+      let format = vImage_CGImageFormat(
         bitsPerComponent: srcImage.bitsPerComponent,
         bitsPerPixel: srcImage.bitsPerPixel,
         colorSpace: srcImage.colorSpace!,
         bitmapInfo: srcImage.bitmapInfo),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
-    else { return nil }
-    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    guard
-      let image1 = inputImage(
-        input: input, format: &format,
-        results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer),
-      let image2 = inputImage(
-        input: input2, format: &format,
-        results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
+      let image1 = inputImage(input, format: format, srcImage: srcImage, inImage: inImage, results: results),
+      let image2 = inputImage(input2, format: format, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
     // The subregion clips the result, rather than the inputs being drawn into it.
     cgContext.clip(to: subregion)
@@ -265,27 +252,17 @@ extension CGPainter {
   ) -> CGImage? {
     // The inputs are converted to the color space of the primitive, and composited in the bitmap of the filter.
     guard
-      var format = vImage_CGImageFormat(
+      let format = vImage_CGImageFormat(
         bitsPerComponent: srcImage.bitsPerComponent,
         bitsPerPixel: srcImage.bitsPerPixel,
         colorSpace: colorSpace.colorSpace,
-        bitmapInfo: srcImage.bitmapInfo),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
+        bitmapInfo: srcImage.bitmapInfo)
     else { return nil }
-    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
     // The subregion clips the result, rather than the inputs being drawn into it.
     cgContext.clip(to: subregion)
 
     for input in inputs {
-      guard
-        let image = inputImage(
-          input: input, format: &format,
-          results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
+      guard let image = inputImage(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
       else { return nil }
       cgContext.draw(image, in: bitmapRect)
     }
@@ -298,39 +275,13 @@ extension CGPainter {
     bitmapRect: CGRect, cgContext: CGContext, results: [String: CGImage]
   ) -> CGImage? {
     guard
-      var format = vImage_CGImageFormat(
+      let format = vImage_CGImageFormat(
         bitsPerComponent: srcImage.bitsPerComponent,
         bitsPerPixel: srcImage.bitsPerPixel,
         colorSpace: srcImage.colorSpace!,
         bitmapInfo: srcImage.bitmapInfo),
-      var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format)
+      let image = inputImage(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    let image: CGImage
-    if let input {
-      // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-      guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format) else { return nil }
-      let srcData = srcBuffer.data
-      defer { free(srcData) }
-      guard
-        let selected = inputImage(
-          input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer)
-      else { return nil }
-      image = selected
-    } else {
-      // The image uses the memory of the buffer, which is freed after the image is drawn below.
-      guard
-        let previous = vImageCreateCGImageFromBuffer(
-          &inputBuffer,
-          &format,
-          { _, _ in },
-          nil,
-          vImage_Flags(kvImageNoAllocate),
-          nil)?.takeRetainedValue()
-      else { return nil }
-      image = previous
-    }
     cgContext.clip(to: subregion)
     cgContext.concatenate(translation)
     cgContext.draw(image, in: bitmapRect)

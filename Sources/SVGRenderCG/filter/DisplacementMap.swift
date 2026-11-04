@@ -20,21 +20,20 @@ extension CGPainter {
     let bitmapInfo = CGBitmapInfo(
       rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
     guard let filterSpace = cgContext.colorSpace,
-      var imageFormat = vImage_CGImageFormat(
+      let imageFormat = vImage_CGImageFormat(
         bitsPerComponent: 8, bitsPerPixel: 32, colorSpace: filterSpace, bitmapInfo: bitmapInfo),
-      var mapFormat = vImage_CGImageFormat(
+      let mapFormat = vImage_CGImageFormat(
         bitsPerComponent: 8, bitsPerPixel: 32, colorSpace: colorSpace.colorSpace, bitmapInfo: bitmapInfo),
-      let image = selectedImage(input, format: &imageFormat, srcImage: srcImage, inImage: inImage, results: results),
-      let map = selectedImage(input2, format: &mapFormat, srcImage: srcImage, inImage: inImage, results: results),
-      let source = try? vImage_Buffer(cgImage: image, format: imageFormat),
-      let mapBuffer = try? vImage_Buffer(cgImage: map, format: mapFormat),
-      let destination = try? vImage_Buffer(width: image.width, height: image.height, bitsPerPixel: 32)
+      let source = inputBuffer(input, format: imageFormat, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
-    defer {
-      source.free()
-      mapBuffer.free()
-      destination.free()
-    }
+    defer { source.free() }
+    guard
+      let mapBuffer = inputBuffer(input2, format: mapFormat, srcImage: srcImage, inImage: inImage, results: results)
+    else { return nil }
+    defer { mapBuffer.free() }
+    guard let destination = try? vImage_Buffer(width: Int(source.width), height: Int(source.height), bitsPerPixel: 32)
+    else { return nil }
+    defer { destination.free() }
     let width = Int(source.width)
     let height = Int(source.height)
     guard Int(mapBuffer.width) == width, Int(mapBuffer.height) == height else { return nil }

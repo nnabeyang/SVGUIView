@@ -29,27 +29,19 @@ extension GaussianBlurPrimitive {
         colorSpace: colorSpace.colorSpace,
         bitmapInfo: srcImage.bitmapInfo)
     else { return nil }
-    // The buffers convert the images to the format, and share memory below, so free each allocation once, through
-    // the pointer that it returns.
-    guard var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format) else { return nil }
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
+    guard var buffer = inputBuffer(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
+    else { return nil }
+    let inputData = buffer.data
     defer { free(inputData) }
-
-    guard let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height)) else { return nil }
-    var destBuffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
-    defer {
-      free(data)
-    }
-    var buffer = vImage_Buffer(data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
-    let resultData = inputImageBuffer(input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer, destBuffer: &buffer)
-    defer { free(resultData) }
+    // The output of the blur, which is the input itself where the blur has no effect.
+    guard let data = malloc(buffer.rowBytes * Int(buffer.height)) else { return nil }
+    defer { free(data) }
+    var destBuffer = vImage_Buffer(data: data, height: buffer.height, width: buffer.width, rowBytes: buffer.rowBytes)
     switch standardDeviation {
     case .hetero(let x, let y):
+      // A negative deviation disables the blur, so that the result is the input, as the specification gives.
       guard x >= 0, y >= 0 else {
-        swap(&inputBuffer, &destBuffer)
+        destBuffer = buffer
         break
       }
       if x != y {
@@ -60,7 +52,7 @@ extension GaussianBlurPrimitive {
       }
     case .iso(let x):
       guard x >= 0 else {
-        swap(&buffer, &destBuffer)
+        destBuffer = buffer
         break
       }
       guard applyIso(srcBuffer: &buffer, destBuffer: &destBuffer, deviation: x * scale, scale: scale) else { return nil }
