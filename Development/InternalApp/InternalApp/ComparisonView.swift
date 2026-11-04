@@ -22,6 +22,8 @@ struct ComparisonView: View {
 
   let comparison: Comparison
   @State private var index: Int
+  /// The file that the views show, read once for each file, so that changing the controls doesn't read it again.
+  @State private var source: SVGSource
   @State private var mode = Mode.svgView
   /// The size of the views, as a fraction of the space for each.
   @State private var size = 1.0
@@ -40,6 +42,7 @@ struct ComparisonView: View {
   init(comparison: Comparison) {
     self.comparison = comparison
     _index = State(initialValue: comparison.index)
+    _source = State(initialValue: SVGSource(url: comparison.documents[comparison.index].url))
   }
 
   private var document: SVGFile { comparison.documents[index] }
@@ -59,56 +62,11 @@ struct ComparisonView: View {
       .pickerStyle(.segmented)
       .padding(.horizontal)
 
-      HStack {
-        Text("Size")
-        Slider(value: $size, in: 0.2...1)
-        Text(size.formatted(.percent.precision(.fractionLength(0))))
-          .monospacedDigit()
-          .frame(minWidth: 44, alignment: .trailing)
-      }
-      .padding(.horizontal)
+      ComparisonControls(size: $size, time: $time, isPlaying: $isPlaying)
 
-      HStack {
-        Button(isPlaying ? "Stop" : "Play", systemImage: isPlaying ? "stop.fill" : "play.fill") {
-          isPlaying.toggle()
-        }
-        .labelStyle(.iconOnly)
-        Text("Time")
-        // The time doesn't change what's shown while the animations play.
-        Slider(value: $time, in: 0...10)
-          .disabled(isPlaying)
-        TextField("Time", value: $time, format: .number.precision(.fractionLength(0...3)))
-          .keyboardType(.decimalPad)
-          .multilineTextAlignment(.trailing)
-          .monospacedDigit()
-          .frame(width: 64)
-          .disabled(isPlaying)
-        Text("s")
-      }
-      .padding(.horizontal)
-
-      // Changing the layout keeps the identity of the views, so that they are not created again.
-      let layout = mode == .sideBySide ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(ZStackLayout())
-      layout {
-        ZStack {
-          // SVGView stays until the snapshot of the file is rendered, so that the pane isn't empty in between.
-          SVGView(contentsOf: document.url, contentMode: contentMode)
-            .environment(\.svgViewConfiguration, configuration)
-            .opacity(isPlaying || time == 0 || !showsSnapshot ? 1 : 0)
-          if time != 0, !isPlaying {
-            SnapshotAtTime(
-              url: document.url, time: time, contentMode: contentMode, configuration: configuration,
-              showsImage: $showsSnapshot)
-          }
-        }
-        .modifier(
-          Pane(
-            title: contentMode == .fill ? "\(Mode.svgView.rawValue) (Fill)" : Mode.svgView.rawValue,
-            size: size, isVisible: mode != .webView))
-        // The web view always fits the file in.
-        SVGWebView(url: document.url, time: time, isPlaying: isPlaying)
-          .modifier(Pane(title: Mode.webView.rawValue, size: size, isVisible: mode != .svgView))
-      }
+      ComparisonPanes(
+        source: source, mode: mode, size: size, contentMode: contentMode, time: time, isPlaying: isPlaying,
+        configuration: configuration, showsSnapshot: $showsSnapshot)
 
       HStack {
         Button("Previous", systemImage: "chevron.left") { index -= 1 }
@@ -122,8 +80,11 @@ struct ComparisonView: View {
       }
       .padding(.horizontal)
     }
-    // Another file starts paused at the time.
-    .onChange(of: index) { isPlaying = false }
+    .onChange(of: index) {
+      source = SVGSource(url: document.url)
+      // Another file starts paused at the time.
+      isPlaying = false
+    }
     .navigationTitle(document.name)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
@@ -154,6 +115,97 @@ struct ComparisonView: View {
           Label("Timeout", systemImage: "timer")
         }
       }
+    }
+  }
+}
+
+/// The file that a comparison shows and its data.
+private struct SVGSource {
+  let url: URL
+  /// The data of the file, or no data if it can't be read.
+  let data: Data
+
+  /// Reads the file at the URL.
+  init(url: URL) {
+    self.url = url
+    data = (try? Data(contentsOf: url)) ?? Data()
+  }
+}
+
+/// The size of the views and the time of the animations in a comparison.
+private struct ComparisonControls: View {
+  @Binding var size: Double
+  @Binding var time: Double
+  @Binding var isPlaying: Bool
+
+  var body: some View {
+    HStack {
+      Text("Size")
+      Slider(value: $size, in: 0.2...1)
+      Text(size.formatted(.percent.precision(.fractionLength(0))))
+        .monospacedDigit()
+        .frame(minWidth: 44, alignment: .trailing)
+    }
+    .padding(.horizontal)
+
+    HStack {
+      Button(isPlaying ? "Stop" : "Play", systemImage: isPlaying ? "stop.fill" : "play.fill") {
+        isPlaying.toggle()
+      }
+      .labelStyle(.iconOnly)
+      Text("Time")
+      // The time doesn't change what's shown while the animations play.
+      Slider(value: $time, in: 0...10)
+        .disabled(isPlaying)
+      TextField("Time", value: $time, format: .number.precision(.fractionLength(0...3)))
+        .keyboardType(.decimalPad)
+        .multilineTextAlignment(.trailing)
+        .monospacedDigit()
+        .frame(width: 64)
+        .disabled(isPlaying)
+      Text("s")
+    }
+    .padding(.horizontal)
+  }
+}
+
+/// SVGView, the snapshot at the time and the web view of a comparison, in the same place or one above the other.
+private struct ComparisonPanes: View {
+  let source: SVGSource
+  let mode: ComparisonView.Mode
+  /// The size of the views, as a fraction of the space for each.
+  let size: Double
+  let contentMode: ContentMode
+  /// The time of the animations, in seconds.
+  let time: Double
+  let isPlaying: Bool
+  let configuration: SVGUIViewConfiguration
+  @Binding var showsSnapshot: Bool
+
+  private var svgViewTitle: String { ComparisonView.Mode.svgView.rawValue }
+
+  var body: some View {
+    // Changing the layout keeps the identity of the views, so that they are not created again.
+    let layout = mode == .sideBySide ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(ZStackLayout())
+    layout {
+      ZStack {
+        // SVGView stays until the snapshot of the file is rendered, so that the pane isn't empty in between.
+        SVGView(data: source.data, contentMode: contentMode)
+          .environment(\.svgViewConfiguration, configuration)
+          .opacity(isPlaying || time == 0 || !showsSnapshot ? 1 : 0)
+        if time != 0, !isPlaying {
+          SnapshotAtTime(
+            source: source, time: time, contentMode: contentMode, configuration: configuration,
+            showsImage: $showsSnapshot)
+        }
+      }
+      .modifier(
+        Pane(
+          title: contentMode == .fill ? "\(svgViewTitle) (Fill)" : svgViewTitle, size: size,
+          isVisible: mode != .webView))
+      // The web view always fits the file in.
+      SVGWebView(url: source.url, time: time, isPlaying: isPlaying)
+        .modifier(Pane(title: ComparisonView.Mode.webView.rawValue, size: size, isVisible: mode != .svgView))
     }
   }
 }
@@ -190,12 +242,12 @@ struct Pane: ViewModifier {
 
 /// An SVG file rendered by SVGUIView at a time of its animations, as a snapshot, since SVGView shows the start.
 private struct SnapshotAtTime: View {
-  let url: URL
+  let source: SVGSource
   /// The time of the animations, in seconds.
   let time: Double
   let contentMode: ContentMode
   let configuration: SVGUIViewConfiguration
-  /// Whether the view shows a snapshot of the file at `url`.
+  /// Whether the view shows a snapshot of the file of `source`.
   @Binding var showsImage: Bool
   @State private var snapshot: Snapshot?
 
@@ -216,17 +268,17 @@ private struct SnapshotAtTime: View {
   var body: some View {
     GeometryReader { proxy in
       ZStack {
-        if let snapshot, snapshot.url == url {
+        if let snapshot, snapshot.url == source.url {
           Image(uiImage: snapshot.image).resizable()
         }
       }
-      .task(id: Input(url: url, time: time, size: proxy.size, contentMode: contentMode)) {
+      .task(id: Input(url: source.url, time: time, size: proxy.size, contentMode: contentMode)) {
         // A rendering that a newer time cancels keeps the previous image instead of clearing it.
         if let image = await render(size: proxy.size) {
-          snapshot = Snapshot(url: url, image: image)
+          snapshot = Snapshot(url: source.url, image: image)
         }
       }
-      .onChange(of: snapshot?.url == url, initial: true) { _, shows in
+      .onChange(of: snapshot?.url == source.url, initial: true) { _, shows in
         showsImage = shows
       }
       .onDisappear {
@@ -236,9 +288,8 @@ private struct SnapshotAtTime: View {
   }
 
   private func render(size: CGSize) async -> UIImage? {
-    guard let data = try? Data(contentsOf: url) else { return nil }
-    let view = SVGUIView(frame: CGRect(origin: .zero, size: size), data: data)
-    view.contentMode = contentMode.asUIView()
+    let view = SVGUIView(frame: CGRect(origin: .zero, size: size), data: source.data)
+    view.contentMode = contentMode == .fill ? .scaleAspectFill : .scaleAspectFit
     view.configuration = configuration
     return try? await view.takeSnapshot(at: .seconds(time))
   }
