@@ -1,6 +1,6 @@
-class FontCreationContextRareData: Equatable {
-  var fontFaceFeatures: FontFeatureSettings
-  var sizeAdjust: Double
+final class FontCreationContextRareData: Equatable, Sendable {
+  let fontFaceFeatures: FontFeatureSettings
+  let sizeAdjust: Double
   init(fontFaceFeatures: FontFeatureSettings, sizeAdjust: Double) {
     self.fontFaceFeatures = fontFaceFeatures
     self.sizeAdjust = sizeAdjust

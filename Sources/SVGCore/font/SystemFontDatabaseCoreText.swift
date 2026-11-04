@@ -1,9 +1,11 @@
-import CoreText
+// CoreText doesn't mark its immutable types, such as CTFontDescriptor, Sendable, though they can be used across
+// threads.
+@preconcurrency import CoreText
 import Foundation
 import Synchronization
 import _SPI
 
-package class SystemFontDatabaseCoreText {
+package final class SystemFontDatabaseCoreText: Sendable {
   /// Makes the font descriptor of a text style, such as `UICTFontTextStyleBody`, at the user's preferred size.
   ///
   /// Only UIKit provides these descriptors, so the view sets it before it parses a document. Without it, text styles
@@ -14,7 +16,7 @@ package class SystemFontDatabaseCoreText {
   }
   private static let textStyleDescriptorLock = Mutex<(@Sendable (String) -> CTFontDescriptor)?>(nil)
 
-  private var systemFontCache = [CascadeListParameters: [CTFontDescriptor]]()
+  private let systemFontCache = Mutex([CascadeListParameters: CascadeList]())
   let textStyles: [CFString]
 
   init() {
@@ -45,21 +47,21 @@ package class SystemFontDatabaseCoreText {
     FontCache.shared.systemFontDatabaseCoreText
   }
 
-  private let lock = NSLock()
+  /// The font descriptors of a cascade list, which the cache keeps.
+  private struct CascadeList: Sendable {
+    let descriptors: [CTFontDescriptor]
+  }
 
   func systemFonts(_ value: [CTFontDescriptor], for key: CascadeListParameters) {
-    lock.lock()
-    defer { lock.unlock() }
-    systemFontCache[key] = value
+    let list = CascadeList(descriptors: value)
+    systemFontCache.withLock { $0[key] = list }
   }
 
   func systemFonts(for key: CascadeListParameters) -> [CTFontDescriptor]? {
-    lock.lock()
-    defer { lock.unlock() }
-    return systemFontCache[key]
+    systemFontCache.withLock { $0[key] }?.descriptors
   }
 
-  struct CascadeListParameters: Hashable {
+  struct CascadeListParameters: Hashable, Sendable {
     var fontName: String = ""
     var locale: String? = nil
     var weight: CGFloat = 0

@@ -1,23 +1,19 @@
 import Foundation
+import Synchronization
 
-class FontFamilySpecificationCoreTextCache {
+final class FontFamilySpecificationCoreTextCache: Sendable {
   static var shared: FontFamilySpecificationCoreTextCache {
     FontCache.shared.fontFamilySpecificationCoreTextCache
   }
 
-  private let lock = NSLock()
-
-  private var fonts = [FontFamilySpecificationKey: FontPlatformData]()
+  private let fonts = Mutex([FontFamilySpecificationKey: FontPlatformData]())
 
   func font(for key: FontFamilySpecificationKey) -> FontPlatformData? {
-    lock.lock()
-    defer { lock.unlock() }
-    return fonts[key]
+    fonts.withLock { $0[key] }
   }
 
+  /// Keeps the data of a font, or removes the data of the key for `nil`.
   func font(_ value: FontPlatformData?, for key: FontFamilySpecificationKey) {
-    lock.lock()
-    defer { lock.unlock() }
-    fonts[key] = value
+    fonts.withLock { $0[key] = value }
   }
 }
