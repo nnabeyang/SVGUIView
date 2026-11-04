@@ -275,6 +275,8 @@ extension RenderTreeBuilder {
     case let composite as SVGFeCompositeElement: [composite.input, composite.input2]
     case let displacement as SVGFeDisplacementMapElement: [displacement.input, displacement.input2]
     case let convolve as SVGFeConvolveMatrixElement: [convolve.input]
+    case let diffuse as SVGFeDiffuseLightingElement: [diffuse.input]
+    case let specular as SVGFeSpecularLightingElement: [specular.input]
     case let shadow as SVGFeDropShadowElement: [shadow.input]
     case let blur as SVGFeGaussianBlurElement: [blur.input]
     case let merge as SVGFeMergeElement: merge.children.compactMap { $0 as? SVGFeMergeNodeElement }.map(\.input)
@@ -314,6 +316,23 @@ extension RenderTreeBuilder {
       return .morphology(input: morphology.input, operator: morphology.morphologyOperator, radius: radius)
     case let convolve as SVGFeConvolveMatrixElement:
       return .convolveMatrix(input: convolve.input, Self.convolveMatrix(of: convolve))
+    case let diffuse as SVGFeDiffuseLightingElement:
+      let reflection: LightingPrimitive.Reflection? =
+        diffuse.diffuseConstant >= 0 ? .diffuse(constant: Float(diffuse.diffuseConstant)) : nil
+      return .lighting(
+        input: diffuse.input,
+        Self.lighting(
+          reflection, surfaceScale: diffuse.surfaceScale, color: diffuse.lightingColor,
+          lightSource: diffuse.lightSource))
+    case let specular as SVGFeSpecularLightingElement:
+      let reflection: LightingPrimitive.Reflection? =
+        specular.specularConstant >= 0
+        ? .specular(constant: Float(specular.specularConstant), exponent: Float(specular.specularExponent)) : nil
+      return .lighting(
+        input: specular.input,
+        Self.lighting(
+          reflection, surfaceScale: specular.surfaceScale, color: specular.lightingColor,
+          lightSource: specular.lightSource))
     case let displacement as SVGFeDisplacementMapElement:
       var scale = CGSize(width: displacement.scale, height: displacement.scale)
       if filter.primitiveUnits == .objectBoundingBox {
@@ -357,6 +376,22 @@ extension RenderTreeBuilder {
     default:
       preconditionFailure("\(element.type.rawValue) isn't a filter primitive")
     }
+  }
+
+  /// The light of a lighting primitive, or `nil` for a reflection in error, a missing light source or one that
+  /// isn't supported yet, which give transparent black.
+  ///
+  /// Wide colors of `lighting-color` are clamped to sRGB, which the filters compute in.
+  static func lighting(
+    _ reflection: LightingPrimitive.Reflection?, surfaceScale: Double, color: SVGColor,
+    lightSource: (any SVGLightSourceElement)?
+  ) -> LightingPrimitive? {
+    guard let reflection, let distant = lightSource as? SVGFeDistantLightElement else { return nil }
+    let (red, green, blue, _) = color.sRGBClampedRGBA
+    return LightingPrimitive(
+      reflection: reflection, surfaceScale: Float(surfaceScale),
+      color: SIMD3(Float(red / 255), Float(green / 255), Float(blue / 255)),
+      lightSource: .distant(azimuth: Float(distant.azimuth), elevation: Float(distant.elevation)))
   }
 
   /// The kernel of a `feConvolveMatrix`, or `nil` for a target out of the kernel, which the specification doesn't

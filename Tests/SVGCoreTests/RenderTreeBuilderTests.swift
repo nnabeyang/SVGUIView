@@ -2295,6 +2295,51 @@ struct RenderTreeBuilderTests {
     #expect(matrix == expected)
   }
 
+  /// Lighting primitives and their light, where `nil` is transparent black.
+  private static let lightings: [(String, LightingPrimitive?)] = [
+    (
+      #"<feDiffuseLighting><feDistantLight azimuth="45" elevation="30"/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .distant(azimuth: 45, elevation: 30))
+    ),
+    (
+      #"<feDiffuseLighting surfaceScale="5" diffuseConstant="2" lighting-color="lime"><feDistantLight/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 2), surfaceScale: 5, color: SIMD3(0, 1, 0),
+        lightSource: .distant(azimuth: 0, elevation: 0))
+    ),
+    (
+      #"<feSpecularLighting color="red" lighting-color="currentcolor" specularConstant="2" specularExponent="20"><feDistantLight/></feSpecularLighting>"#,
+      LightingPrimitive(
+        reflection: .specular(constant: 2, exponent: 20), surfaceScale: 1, color: SIMD3(1, 0, 0),
+        lightSource: .distant(azimuth: 0, elevation: 0))
+    ),
+    // The first light source is the one, after the children that aren't light sources.
+    (
+      #"<feDiffuseLighting><desc/><rect/><feDistantLight azimuth="10"/><fePointLight/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .distant(azimuth: 10, elevation: 0))
+    ),
+    // A missing light source, one that isn't supported yet and negative constants are in error.
+    (#"<feDiffuseLighting/>"#, nil),
+    (#"<feDiffuseLighting><fePointLight/><feDistantLight/></feDiffuseLighting>"#, nil),
+    (#"<feDiffuseLighting diffuseConstant="-1"><feDistantLight/></feDiffuseLighting>"#, nil),
+    (#"<feSpecularLighting specularConstant="-1"><feDistantLight/></feSpecularLighting>"#, nil),
+  ]
+
+  @Test("a lighting primitive has its reflection, its surface, its lighting-color and its first light source", arguments: lightings)
+  func lighting(primitive: String, expected: LightingPrimitive?) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f">"## + primitive + ##"</filter><rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .lighting(_, let lighting) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a lighting")
+      return
+    }
+    #expect(lighting == expected)
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)

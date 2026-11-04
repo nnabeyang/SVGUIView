@@ -54,6 +54,9 @@ package enum FilterPrimitive: Sendable {
   case composite(operator: SVGCompositeOperator, k: [Float], input: SVGFilterInput?, input2: SVGFilterInput?)
   /// The input convolved with a kernel, or transparent black for `nil`, which values in error give.
   case convolveMatrix(input: SVGFilterInput?, ConvolveMatrixPrimitive?)
+  /// The light that the surface of the alpha of the input reflects, or transparent black for `nil`, which a missing
+  /// light source, a light source that isn't supported yet and values in error give.
+  case lighting(input: SVGFilterInput?, LightingPrimitive?)
   /// The input thinned or fattened by radii in the user space: each component is the least or the greatest in the
   /// rectangle of the radii around its pixel. A radius of 0 doesn't change the input in its direction, and a negative
   /// radius or radii that are both 0 leave the input as it is.
@@ -114,6 +117,37 @@ package struct ConvolveMatrixPrimitive: Sendable, Equatable {
     self.targetY = targetY
     self.edgeMode = edgeMode
     self.preserveAlpha = preserveAlpha
+  }
+}
+
+/// The light of a `feDiffuseLighting` or a `feSpecularLighting`, which a surface whose heights are the alpha of the
+/// input reflects.
+package struct LightingPrimitive: Sendable, Equatable {
+  package enum Reflection: Sendable, Equatable {
+    /// The diffuse reflection of a constant, which isn't negative.
+    case diffuse(constant: Float)
+    /// The specular reflection of a constant, which isn't negative, and an exponent.
+    case specular(constant: Float, exponent: Float)
+  }
+
+  package enum LightSource: Sendable, Equatable {
+    /// A light infinitely far away, whose direction is the azimuth clockwise from the x-axis of the user space and
+    /// the elevation above its plane, in degrees.
+    case distant(azimuth: Float, elevation: Float)
+  }
+
+  package let reflection: Reflection
+  /// The height of the surface where the alpha of the input is 1.
+  package let surfaceScale: Float
+  /// The red, green and blue of `lighting-color` in sRGB, from 0 to 1. Its alpha isn't used.
+  package let color: SIMD3<Float>
+  package let lightSource: LightSource
+
+  package init(reflection: Reflection, surfaceScale: Float, color: SIMD3<Float>, lightSource: LightSource) {
+    self.reflection = reflection
+    self.surfaceScale = surfaceScale
+    self.color = color
+    self.lightSource = lightSource
   }
 }
 
