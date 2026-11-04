@@ -323,7 +323,7 @@ extension RenderTreeBuilder {
         input: diffuse.input,
         Self.lighting(
           reflection, surfaceScale: diffuse.surfaceScale, color: diffuse.lightingColor,
-          lightSource: diffuse.lightSource))
+          lightSource: diffuse.lightSource, filter: filter, frame: frame, context: context))
     case let specular as SVGFeSpecularLightingElement:
       let reflection: LightingPrimitive.Reflection? =
         specular.specularConstant >= 0
@@ -332,7 +332,7 @@ extension RenderTreeBuilder {
         input: specular.input,
         Self.lighting(
           reflection, surfaceScale: specular.surfaceScale, color: specular.lightingColor,
-          lightSource: specular.lightSource))
+          lightSource: specular.lightSource, filter: filter, frame: frame, context: context))
     case let displacement as SVGFeDisplacementMapElement:
       var scale = CGSize(width: displacement.scale, height: displacement.scale)
       if filter.primitiveUnits == .objectBoundingBox {
@@ -378,20 +378,46 @@ extension RenderTreeBuilder {
     }
   }
 
-  /// The light of a lighting primitive, or `nil` for a reflection in error, a missing light source or one that
-  /// isn't supported yet, which give transparent black.
+  /// The light of a lighting primitive, or `nil` for a reflection in error or a missing light source, which give
+  /// transparent black.
   ///
-  /// Wide colors of `lighting-color` are clamped to sRGB, which the filters compute in.
+  /// Wide colors of `lighting-color` are clamped to sRGB, which the filters compute in. The positions of the light
+  /// sources are in the units of the primitives, where `z` of the units of the bounding box is a fraction of its
+  /// diagonal divided by the square root of 2.
   static func lighting(
     _ reflection: LightingPrimitive.Reflection?, surfaceScale: Double, color: SVGColor,
-    lightSource: (any SVGLightSourceElement)?
+    lightSource: (any SVGLightSourceElement)?, filter: SVGFilterElement, frame: CGRect, context: ResolveContext
   ) -> LightingPrimitive? {
-    guard let reflection, let distant = lightSource as? SVGFeDistantLightElement else { return nil }
+    guard let reflection, let lightSource else { return nil }
+    let units = filter.primitiveUnits ?? .userSpaceOnUse
+    func position(_ x: SVGLength, _ y: SVGLength, _ z: SVGLength) -> SIMD3<Float> {
+      var depth = z.value(context: context, mode: .other, unitType: units)
+      if units == .objectBoundingBox {
+        depth *= sqrt(frame.width * frame.width + frame.height * frame.height) / sqrt(2)
+      }
+      return SIMD3(
+        Float(x.calculatedLength(frame: frame, context: context, mode: .width, unitType: units, isPosition: true)),
+        Float(y.calculatedLength(frame: frame, context: context, mode: .height, unitType: units, isPosition: true)),
+        Float(depth))
+    }
+    let light: LightingPrimitive.LightSource
+    switch lightSource {
+    case let distant as SVGFeDistantLightElement:
+      light = .distant(azimuth: Float(distant.azimuth), elevation: Float(distant.elevation))
+    case let point as SVGFePointLightElement:
+      light = .point(position: position(point.x, point.y, point.z))
+    case let spot as SVGFeSpotLightElement:
+      light = .spot(
+        position: position(spot.x, spot.y, spot.z),
+        pointsAt: position(spot.pointsAtX, spot.pointsAtY, spot.pointsAtZ),
+        specularExponent: Float(spot.specularExponent), limitingConeAngle: spot.limitingConeAngle.map(Float.init))
+    default:
+      return nil
+    }
     let (red, green, blue, _) = color.sRGBClampedRGBA
     return LightingPrimitive(
       reflection: reflection, surfaceScale: Float(surfaceScale),
-      color: SIMD3(Float(red / 255), Float(green / 255), Float(blue / 255)),
-      lightSource: .distant(azimuth: Float(distant.azimuth), elevation: Float(distant.elevation)))
+      color: SIMD3(Float(red / 255), Float(green / 255), Float(blue / 255)), lightSource: light)
   }
 
   /// The kernel of a `feConvolveMatrix`, or `nil` for a target out of the kernel, which the specification doesn't

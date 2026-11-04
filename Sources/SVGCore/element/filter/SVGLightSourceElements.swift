@@ -44,7 +44,7 @@ extension SVGFeDistantLightElement: Encodable {
   }
 }
 
-/// A `fePointLight`, which is a light source that the lighting primitives don't draw yet.
+/// A `fePointLight`, a light at a position.
 final class SVGFePointLightElement: SVGLightSourceElement {
   static var type: SVGElementName {
     .fePointLight
@@ -55,9 +55,18 @@ final class SVGFePointLightElement: SVGLightSourceElement {
   }
 
   let base: SVGBaseElement
+  /// The position of the light in the coordinates of the filter primitives, which are 0 where the attributes are
+  /// missing or aren't lengths.
+  let x: SVGLength
+  let y: SVGLength
+  let z: SVGLength
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
     self.base = base
+    let attributes = base.attributes
+    x = SVGLength(attributes["x"]) ?? .number(0)
+    y = SVGLength(attributes["y"]) ?? .number(0)
+    z = SVGLength(attributes["z"]) ?? .number(0)
   }
 }
 
@@ -67,7 +76,7 @@ extension SVGFePointLightElement: Encodable {
   }
 }
 
-/// A `feSpotLight`, which is a light source that the lighting primitives don't draw yet.
+/// A `feSpotLight`, a light at a position that points at another.
 final class SVGFeSpotLightElement: SVGLightSourceElement {
   static var type: SVGElementName {
     .feSpotLight
@@ -78,9 +87,36 @@ final class SVGFeSpotLightElement: SVGLightSourceElement {
   }
 
   let base: SVGBaseElement
+  /// The position of the light in the coordinates of the filter primitives, which are 0 where the attributes are
+  /// missing or aren't lengths.
+  let x: SVGLength
+  let y: SVGLength
+  let z: SVGLength
+  /// The position that the light points at, which are 0 where the attributes are missing or aren't lengths.
+  let pointsAtX: SVGLength
+  let pointsAtY: SVGLength
+  let pointsAtZ: SVGLength
+  /// The exponent of the focus of the light, which is 1 where the attribute is missing, isn't a number or isn't
+  /// positive, as in resvg.
+  let specularExponent: Double
+  /// The angle between the axis of the light and its cone, in degrees, or `nil` for no cone where the attribute is
+  /// missing or isn't a number.
+  let limitingConeAngle: Double?
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
     self.base = base
+    let attributes = base.attributes
+    x = SVGLength(attributes["x"]) ?? .number(0)
+    y = SVGLength(attributes["y"]) ?? .number(0)
+    z = SVGLength(attributes["z"]) ?? .number(0)
+    pointsAtX = SVGLength(attributes["pointsAtX"]) ?? .number(0)
+    pointsAtY = SVGLength(attributes["pointsAtY"]) ?? .number(0)
+    pointsAtZ = SVGLength(attributes["pointsAtZ"]) ?? .number(0)
+    func number(_ name: String) -> Double? {
+      attributes[name].flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }.flatMap { $0.isFinite ? $0 : nil }
+    }
+    specularExponent = number("specularExponent").flatMap { $0 > 0 ? $0 : nil } ?? 1
+    limitingConeAngle = number("limitingConeAngle")
   }
 }
 

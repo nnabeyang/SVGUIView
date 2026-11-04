@@ -134,6 +134,11 @@ package struct LightingPrimitive: Sendable, Equatable {
     /// A light infinitely far away, whose direction is the azimuth clockwise from the x-axis of the user space and
     /// the elevation above its plane, in degrees.
     case distant(azimuth: Float, elevation: Float)
+    /// A light at a position in the user space.
+    case point(position: SIMD3<Float>)
+    /// A light at a position in the user space, which points at another, focused by an exponent and limited to a
+    /// cone of an angle in degrees, if any.
+    case spot(position: SIMD3<Float>, pointsAt: SIMD3<Float>, specularExponent: Float, limitingConeAngle: Float?)
   }
 
   package let reflection: Reflection
