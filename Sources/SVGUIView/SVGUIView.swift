@@ -52,6 +52,8 @@ public class SVGUIView: UIView {
   private(set) var finishWaiters = [(token: Int, id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
   /// The token of the next task that waits for a CSS animation.
   private var nextFinishWaiterToken = 0
+  /// Whether the changes of the document are applied soon for the tasks that wait for the CSS animations.
+  private var appliesChangesForWaiters = false
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
   /// infinite for animations that don't end.
   private var animationEnd: Double
@@ -820,6 +822,15 @@ extension SVGUIView: DocumentHost {
   func documentDidChange() {
     // The layer is displayed once for the changes made until then.
     setNeedsDisplay()
+    // The tasks that wait for the animations go on after the changes, also in a view whose layer isn't displayed, such
+    // as one that isn't on screen. The changes made until then are applied together.
+    guard !finishWaiters.isEmpty, !appliesChangesForWaiters else { return }
+    appliesChangesForWaiters = true
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      appliesChangesForWaiters = false
+      applyDocumentChanges()
+    }
   }
 
   func cssAnimations() -> [CSSAnimationID] {
