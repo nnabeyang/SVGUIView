@@ -103,7 +103,7 @@ extension CGPainter {
       filterCgContext.saveGState()
       filterCgContext.clear(bitmapRect)
       guard
-        let clippedImage = apply(
+        let clippedImage = await apply(
           step, srcImage: srcImage, inImage: inputImage, bitmapRect: bitmapRect,
           cgContext: filterCgContext, results: results)
       else { break }
@@ -123,9 +123,12 @@ extension CGPainter {
   private func apply(
     _ step: FilterStep, srcImage: CGImage, inImage: CGImage, bitmapRect: CGRect,
     cgContext: CGContext, results: [String: CGImage]
-  ) -> CGImage? {
+  ) async -> CGImage? {
     let subregion = step.subregion
     switch step.primitive {
+    case .image(let image):
+      return await self.image(
+        image, colorSpace: step.colorSpace, subregion: subregion, bitmapRect: bitmapRect, cgContext: cgContext)
     case .blend(let mode, let input, let input2):
       return blend(
         mode: mode, input: input, input2: input2, srcImage: srcImage, inImage: inImage, subregion: subregion,

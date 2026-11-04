@@ -52,6 +52,8 @@ package enum FilterPrimitive: Sendable {
   /// The first input composited over, in, out of, atop or xor the second, or combined with it by the coefficients
   /// `k1` to `k4` of `arithmetic`.
   case composite(operator: SVGCompositeOperator, k: [Float], input: SVGFilterInput?, input2: SVGFilterInput?)
+  /// What a `feImage` draws, or transparent black for `nil`.
+  case image(ImagePrimitive?)
   /// The input convolved with a kernel, or transparent black for `nil`, which values in error give.
   case convolveMatrix(input: SVGFilterInput?, ConvolveMatrixPrimitive?)
   /// The light that the surface of the alpha of the input reflects, or transparent black for `nil`, which a missing
@@ -118,6 +120,15 @@ package struct ConvolveMatrixPrimitive: Sendable, Equatable {
     self.edgeMode = edgeMode
     self.preserveAlpha = preserveAlpha
   }
+}
+
+/// What a `feImage` draws into its subregion.
+package enum ImagePrimitive: Sendable {
+  /// An image, placed in the subregion.
+  case picture(ImagePaint)
+  /// An element of the document, in the user space of the element with the filter moved to the origin of the
+  /// subregion, as a `<use>` element of the position of the subregion draws it.
+  case element(RenderNode, origin: CGPoint)
 }
 
 /// The light of a `feDiffuseLighting` or a `feSpecularLighting`, which a surface whose heights are the alpha of the

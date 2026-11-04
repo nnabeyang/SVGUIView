@@ -29,13 +29,21 @@ extension RenderTreeBuilder {
       guard !filter.knownChildren.isEmpty else { return .filtered(nil) }
       filters[id] = filter
     }
+    // A `feImage` of a filter that draws an element with the filter again draws nothing of that element.
+    guard filters.keys.allSatisfy({ !references.filters.contains($0) }) else { return .filtered(nil) }
+    // The source keeps the filters of the `feImage` primitives that draw the element, and the `feImage` primitives of
+    // the filters add them, so that the same filter on a child of the element is no cycle.
+    var sourceReferences = ReferenceGuard()
+    sourceReferences.filters = references.filters
+    var imageReferences = ReferenceGuard()
+    imageReferences.filters = references.filters.union(filters.keys)
     let elementContext = context.styled(by: element)
     let path = await path(of: element, context: elementContext, guard: references)
     var frame = await frame(of: element, context: elementContext, path: path, guard: references)
     // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
     let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
     var source = await nodeWithoutFilter(
-      of: element, context: sourceContext, mode: .filter(isRoot: true), guard: ReferenceGuard(), instance: instance)
+      of: element, context: sourceContext, mode: .filter(isRoot: true), guard: sourceReferences, instance: instance)
     let id = RenderID(element: element.base.elementID, instance: instance)
     // The last filter draws the result with the transform, the clip path, the mask, the opacity and the blending of
     // the element, and the others draw theirs into the source of the next one as they are.
@@ -83,7 +91,9 @@ extension RenderTreeBuilder {
         effect = FilterEffect(
           effectRect: region, colorInterpolation: filter.colorInterpolation ?? .sRGB,
           colorInterpolationFilters: filter.colorInterpolationFilters ?? .linearRGB,
-          primitives: primitives(of: filter, region: region, frame: frame, context: filterContext))
+          primitives: await primitives(
+            of: filter, region: region, frame: frame, context: filterContext, guard: imageReferences,
+            instance: instance))
       } else {
         effect = functionEffect(
           of: function, element: element, source: source, frame: frame, context: functionContext)
@@ -116,9 +126,11 @@ extension RenderTreeBuilder {
   /// The steps of the primitives of a filter element, where a `feDropShadow` is the steps that it's equal to.
   ///
   /// - Parameter region: The filter region.
+  ///   - references: The guard that the elements of the `feImage` primitives are drawn with.
   private func primitives(
-    of filter: SVGFilterElement, region: CGRect, frame: CGRect, context: ResolveContext
-  ) -> [FilterStep] {
+    of filter: SVGFilterElement, region: CGRect, frame: CGRect, context: ResolveContext,
+    guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> [FilterStep] {
     var steps = [FilterStep]()
     // The subregions of the named results, and of the primitive before, which the subregions of the primitives that
     // take them default to.
@@ -151,6 +163,13 @@ extension RenderTreeBuilder {
         steps += dropShadowSteps(
           of: shadow, input: input, filter: filter, region: region, subregion: subregion, frame: frame,
           context: context, colorSpace: colorSpace)
+      } else if let image = child as? SVGFeImageElement {
+        steps.append(
+          FilterStep(
+            primitive: .image(
+              await imagePrimitive(
+                of: image, subregion: subregion, context: context, guard: references, instance: instance)),
+            subregion: subregion, result: child.result, colorSpace: colorSpace))
       } else if let tile = child as? SVGFeTileElement {
         steps.append(
           FilterStep(
@@ -180,6 +199,28 @@ extension RenderTreeBuilder {
     steps[steps.count - 1] = FilterStep(
       primitive: last.primitive, subregion: last.subregion, result: name, colorSpace: last.colorSpace)
     return .other(name)
+  }
+
+  /// What a `feImage` draws, or `nil` for nothing: an image of a data URL placed in the subregion by its
+  /// `preserveAspectRatio`, or an element of the document, drawn in the user space of the element with the filter
+  /// moved to the origin of the subregion, as the `<use>` element that the specification likens it to, Chrome and
+  /// resvg draw it.
+  private func imagePrimitive(
+    of image: SVGFeImageElement, subregion: CGRect, context: ResolveContext, guard references: ReferenceGuard,
+    instance: [ElementID]
+  ) async -> ImagePrimitive? {
+    switch image.source {
+    case nil:
+      return nil
+    case .data(let data):
+      return await imagePaint(data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false, in: subregion)
+        .map { .picture($0) }
+    case .element(let id):
+      guard let element = base[id] else { return nil }
+      return await node(
+        of: element, context: context, mode: .normal, guard: references, instance: instance + [image.base.elementID]
+      ).map { .element($0, origin: subregion.origin) }
+    }
   }
 
   /// The steps of a `feDropShadow`: a shadow of the flood color and opacity in the color space of the primitive,
