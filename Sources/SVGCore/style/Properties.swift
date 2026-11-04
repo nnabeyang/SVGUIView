@@ -1009,6 +1009,36 @@ enum FloodOpacityProperty: StyleProperty {
   }
 }
 
+enum LightingColorProperty: StyleProperty {
+  static let id = PropertyID.lightingColor
+  static let isInherited = false
+  static var initial: ColorValue { .color(.named(SVGColorName(name: "white"))) }
+  static let computed = \ComputedStyle.lightingColor
+
+  static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
+    ColorValue(text)
+  }
+
+  /// The color between two colors, with `currentColor` as the color of the element, which can be animated too.
+  static func interpolates(_ from: ColorValue, _ to: ColorValue, in resolver: StyleResolver) -> Bool {
+    resolver.style.resolved(from).interpolated(to: resolver.style.resolved(to), progress: 0.5) != nil
+  }
+
+  static func interpolated(
+    _ from: ColorValue, _ to: ColorValue, progress: Double, in resolver: StyleResolver
+  ) -> ColorValue {
+    .color(resolver.style.resolved(from).animated(to: resolver.style.resolved(to), progress: progress))
+  }
+
+  static func added(_ value: ColorValue, to underlying: ColorValue, in resolver: StyleResolver) -> ColorValue? {
+    resolver.style.resolved(underlying).adding(resolver.style.resolved(value)).map { .color($0) }
+  }
+
+  static func distance(_ from: ColorValue, _ to: ColorValue, in resolver: StyleResolver) -> Double? {
+    resolver.style.resolved(from).pacedDistance(to: resolver.style.resolved(to))
+  }
+}
+
 /// A geometry property of `<rect>`, whose computed value is `nil` for `auto`. Other elements read these attributes
 /// themselves, and style sheets don't change them.
 protocol RectGeometryProperty: StyleProperty where Specified == SVGLength, Computed == SVGLength? {}

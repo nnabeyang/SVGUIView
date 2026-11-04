@@ -102,6 +102,7 @@ struct StyleTests {
     #expect(FillProperty.declared(attribute: "bogus") == nil)
     #expect(StopColorProperty.declared(attribute: "light-dark(red, blue)") == nil)
     #expect(declared(FloodColorProperty.self, css: "bogus") == nil)
+    #expect(declared(LightingColorProperty.self, css: "bogus") == nil)
     #expect(FillProperty.declared(attribute: "green") != nil)
   }
 
