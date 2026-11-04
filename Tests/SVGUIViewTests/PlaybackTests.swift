@@ -265,19 +265,6 @@ struct PlaybackTests {
     try await wait(for: held, inLayers: false)
   }
 
-  /// The premultiplied RGBA pixels of an image.
-  private func pixels(of image: CGImage) -> [UInt8] {
-    var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
-    pixels.withUnsafeMutableBytes { buffer in
-      let context = CGContext(
-        data: buffer.baseAddress, width: image.width, height: image.height, bitsPerComponent: 8,
-        bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-      context?.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-    }
-    return pixels
-  }
-
   @Test("a view that holds its animations shows the image that a snapshot of the time shows")
   func stillFrameIsSnapshot() async throws {
     // A square that moves between the pixels and turns, which a layer would show resampled.
@@ -292,8 +279,8 @@ struct PlaybackTests {
     clock.advance(by: .milliseconds(370))
     view.pause()
     try await wait(for: view, inLayers: false)
-    let shown = pixels(of: try #require(view.layer.contents.map { $0 as! CGImage }))
-    let snapshot = pixels(of: try #require(try await view.takeSnapshot(at: view.currentTime).cgImage))
+    let shown = try pixels(of: try #require(view.layer.contents.map { $0 as! CGImage }))
+    let snapshot = try pixels(of: try #require(try await view.takeSnapshot(at: view.currentTime).cgImage))
     #expect(shown == snapshot)
   }
 

@@ -29,17 +29,6 @@ struct SnapshotScaleTests {
     return view
   }
 
-  /// The bytes of the pixels of an image, rows of 4 bytes for each pixel.
-  private func pixels(of image: CGImage) throws -> [UInt8] {
-    var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
-    let context = try #require(
-      CGContext(
-        data: &bytes, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-    context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-    return bytes
-  }
-
   @Test("the pixels of a snapshot are the rectangle times the scale", arguments: [1, 2, 3] as [CGFloat])
   func scale(scale: CGFloat) async throws {
     let view = makeView(frame: rect)

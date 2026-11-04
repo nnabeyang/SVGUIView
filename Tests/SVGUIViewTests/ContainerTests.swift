@@ -12,24 +12,6 @@ struct ContainerTests {
   private static let lime: [UInt8] = [0, 255, 0, 255]
   private static let clear: [UInt8] = [0, 0, 0, 0]
 
-  /// The red, green, blue and alpha components of a pixel of the rendered document, premultiplied, in its user space
-  /// of 20 by 20.
-  private func pixel(_ svg: String, x: Int, y: Int) async throws -> [UInt8] {
-    let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
-    view.configuration = SVGUIViewConfiguration(timeoutDuration: .seconds(60))
-    let image = try #require(try await view.takeSnapshot().cgImage)
-    let scale = image.width / 20
-    var components = [UInt8](repeating: 0, count: 4)
-    let context = try #require(
-      CGContext(
-        data: &components, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-    context.draw(
-      image,
-      in: CGRect(x: -x * scale, y: y * scale - image.height + 1, width: image.width, height: image.height))
-    return components
-  }
-
   private func document(_ content: String) -> String {
     #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">"# + content + "</svg>"
   }
@@ -44,21 +26,21 @@ struct ContainerTests {
       <g display="none"><rect width="10" height="20" fill="lime"/></g>
       <svg display="none"><rect x="10" width="10" height="20" fill="lime"/></svg>
       """#)
-    #expect(try await pixel(svg, x: 5, y: 10) == Self.clear)
-    #expect(try await pixel(svg, x: 15, y: 10) == Self.clear)
+    #expect(try await pixel(svg: svg, x: 5, y: 10) == Self.clear)
+    #expect(try await pixel(svg: svg, x: 15, y: 10) == Self.clear)
   }
 
   @Test("the root element turns about the center of the view, with the viewport that clips it")
   func rootTransform() async throws {
     let leftHalf = #"<rect width="10" height="20" fill="lime"/>"#
     let turned = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" transform="rotate(90)">"#
-    #expect(try await pixel(turned + leftHalf + "</svg>", x: 10, y: 5) == Self.lime)
-    #expect(try await pixel(turned + leftHalf + "</svg>", x: 10, y: 15) == Self.clear)
+    #expect(try await pixel(svg: turned + leftHalf + "</svg>", x: 10, y: 5) == Self.lime)
+    #expect(try await pixel(svg: turned + leftHalf + "</svg>", x: 10, y: 15) == Self.clear)
     let moved =
       #"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" transform="translate(5)">"#
     let all = #"<rect x="-20" width="60" height="20" fill="lime"/>"#
-    #expect(try await pixel(moved + all + "</svg>", x: 2, y: 10) == Self.clear)
-    #expect(try await pixel(moved + all + "</svg>", x: 7, y: 10) == Self.lime)
+    #expect(try await pixel(svg: moved + all + "</svg>", x: 2, y: 10) == Self.clear)
+    #expect(try await pixel(svg: moved + all + "</svg>", x: 7, y: 10) == Self.lime)
   }
 
   @Test("a group, an svg element and a use element are masked")
@@ -69,8 +51,8 @@ struct ContainerTests {
       ##"<defs><rect id="r" width="20" height="20" fill="lime"/></defs><use href="#r" mask="url(#m)"/>"##,
     ] {
       let svg = document(Self.leftHalf + content)
-      #expect(try await pixel(svg, x: 5, y: 10) == Self.lime, "\(content)")
-      #expect(try await pixel(svg, x: 15, y: 10) == Self.clear, "\(content)")
+      #expect(try await pixel(svg: svg, x: 5, y: 10) == Self.lime, "\(content)")
+      #expect(try await pixel(svg: svg, x: 15, y: 10) == Self.clear, "\(content)")
     }
   }
 
@@ -81,7 +63,7 @@ struct ContainerTests {
       <mask id="m"><rect width="20" height="20" fill="#808080"/></mask>
       <g mask="url(#m)"><rect width="20" height="20" fill="red"/><rect width="20" height="20" fill="lime"/></g>
       """#)
-    let pixel = try await pixel(svg, x: 10, y: 10)
+    let pixel = try await pixel(svg: svg, x: 10, y: 10)
     // Masking each child would leave some of the red rectangle under the lime one.
     #expect(pixel[0] < 4)
     #expect(abs(Int(pixel[1]) - 128) < 8)
@@ -94,7 +76,7 @@ struct ContainerTests {
       #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" opacity="0.5"><rect width="20" height="20" fill="lime"/></svg>"#,
       document(#"<svg width="20" height="20" opacity="0.5"><rect width="20" height="20" fill="lime"/></svg>"#),
     ] {
-      let pixel = try await pixel(svg, x: 10, y: 10)
+      let pixel = try await pixel(svg: svg, x: 10, y: 10)
       #expect(abs(Int(pixel[1]) - 128) < 8, "\(pixel)")
       #expect(abs(Int(pixel[3]) - 128) < 8, "\(pixel)")
     }

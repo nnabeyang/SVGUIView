@@ -51,3 +51,74 @@ func waitForGreen(
     try await Task.sleep(for: .milliseconds(10))
   }
 }
+
+/// The document of the content in a user space of 20 by 20.
+func document(_ content: String) -> String {
+  #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">"# + content + "</svg>"
+}
+
+/// The pixels of an image, the red, green, blue and alpha components of each, premultiplied, row by row from the
+/// top.
+func pixels(of image: CGImage, sourceLocation: SourceLocation = #_sourceLocation) throws -> [UInt8] {
+  var components = [UInt8](repeating: 0, count: image.width * image.height * 4)
+  let context = try #require(
+    CGContext(
+      data: &components, width: image.width, height: image.height, bitsPerComponent: 8,
+      bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+    sourceLocation: sourceLocation)
+  context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+  return components
+}
+
+/// The snapshot of a document of 20 by 20, whose pixels are indexed from the top left.
+struct Rendering {
+  let components: [UInt8]
+  let width: Int
+  /// The pixels in a unit of the user space.
+  let scale: Int
+
+  /// The red, green, blue and alpha components of a pixel, premultiplied.
+  func pixel(_ column: Int, _ row: Int) -> [UInt8] {
+    let offset = (row * width + column) * 4
+    return Array(components[offset..<(offset + 4)])
+  }
+
+  /// The components of the pixel at the top left of a point of the user space.
+  func pixel(x: Int, y: Int) -> [UInt8] {
+    pixel(x * scale, y * scale)
+  }
+}
+
+/// The snapshot of a document that a view of 20 by 20 renders.
+@MainActor
+func render(svg: String, sourceLocation: SourceLocation = #_sourceLocation) async throws -> Rendering {
+  let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(svg.utf8))
+  view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+  let image = try #require(try await view.takeSnapshot().cgImage, sourceLocation: sourceLocation)
+  return Rendering(
+    components: try pixels(of: image, sourceLocation: sourceLocation), width: image.width,
+    scale: image.width / 20)
+}
+
+/// The snapshot of the content in a user space of 20 by 20.
+@MainActor
+func render(_ content: String, sourceLocation: SourceLocation = #_sourceLocation) async throws -> Rendering {
+  try await render(svg: document(content), sourceLocation: sourceLocation)
+}
+
+/// The red, green, blue and alpha components of a pixel of the content rendered in a user space of 20 by 20,
+/// premultiplied.
+@MainActor
+func pixel(_ content: String, x: Int, y: Int, sourceLocation: SourceLocation = #_sourceLocation) async throws
+  -> [UInt8]
+{
+  try await render(content, sourceLocation: sourceLocation).pixel(x: x, y: y)
+}
+
+/// The red, green, blue and alpha components of a pixel of a document that a view of 20 by 20 renders,
+/// premultiplied.
+@MainActor
+func pixel(svg: String, x: Int, y: Int, sourceLocation: SourceLocation = #_sourceLocation) async throws -> [UInt8] {
+  try await render(svg: svg, sourceLocation: sourceLocation).pixel(x: x, y: y)
+}
