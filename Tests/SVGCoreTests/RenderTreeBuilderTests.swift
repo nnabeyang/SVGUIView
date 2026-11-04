@@ -2074,6 +2074,10 @@ struct RenderTreeBuilderTests {
       #"<feFlood x="0" y="0" width="2" height="2" result="a"/><feFlood x="5" y="6" width="2" height="2" result="a"/><feGaussianBlur in="a"/>"#,
       CGRect(x: 5, y: 6, width: 2, height: 2)
     ),
+    (
+      #"<feFlood x="0" y="0" width="2" height="2" result="a"/><feFlood x="5" y="6" width="2" height="2"/><feDisplacementMap in="a"/>"#,
+      CGRect(x: 0, y: 0, width: 7, height: 8)
+    ),
     // A flood has no inputs.
     (#"<feFlood x="1" y="2" width="3" height="4"/><feFlood/>"#, CGRect(x: -1, y: -1, width: 12, height: 12)),
   ]
@@ -2195,6 +2199,50 @@ struct RenderTreeBuilderTests {
     }
     #expect(turbulence?.baseFrequency == CGSize(width: 0.1, height: 0.1))
     #expect(filtered.primitives.first?.subregion == filtered.effectRect)
+  }
+
+  /// Attributes of a `feDisplacementMap`, and its inputs, scale and components.
+  private static let displacementMaps: [(String, SVGFilterInput?, SVGFilterInput?, CGSize, SVGChannelSelector, SVGChannelSelector)] = [
+    ("", nil, nil, .zero, .alpha, .alpha),
+    (
+      #"in="SourceAlpha" in2="SourceGraphic" scale="8" xChannelSelector="R" yChannelSelector="G""#, .sourceAlpha,
+      .sourceGraphic, CGSize(width: 8, height: 8), .red, .green
+    ),
+    (#"scale="-2" xChannelSelector="B" yChannelSelector="A""#, nil, nil, CGSize(width: -2, height: -2), .blue, .alpha),
+    // Components that aren't R, G, B or A are alpha, and a scale that isn't a number is 0.
+    (#"scale="2px" xChannelSelector="r" yChannelSelector="Z""#, nil, nil, .zero, .alpha, .alpha),
+  ]
+
+  @Test("a feDisplacementMap has its inputs, its scale, which is 0 by default, and its components, which are alpha by default", arguments: displacementMaps)
+  func displacementMap(
+    attributes: String, input expectedInput: SVGFilterInput?, input2 expectedInput2: SVGFilterInput?,
+    scale expectedScale: CGSize, x expectedX: SVGChannelSelector, y expectedY: SVGChannelSelector
+  ) async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f"><feDisplacementMap "## + attributes + ##"/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .displacementMap(let input, let input2, let scale, let x, let y) = filtered.primitives.first?.primitive
+    else {
+      Issue.record("The primitive isn't a displacement map")
+      return
+    }
+    #expect(input == expectedInput)
+    #expect(input2 == expectedInput2)
+    #expect(scale == expectedScale)
+    #expect(x == expectedX)
+    #expect(y == expectedY)
+  }
+
+  @Test("the scale of a feDisplacementMap is a fraction of the size of the element in the units of its bounding box")
+  func displacementMapBoundingBox() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f" primitiveUnits="objectBoundingBox"><feDisplacementMap scale="0.5"/></filter>"##
+        + ##"<rect width="10" height="20" filter="url(#f)"/>"##)
+    guard case .displacementMap(_, _, let scale, _, _) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a displacement map")
+      return
+    }
+    #expect(scale == CGSize(width: 5, height: 10))
   }
 
   @Test("a filter without children draws nothing")

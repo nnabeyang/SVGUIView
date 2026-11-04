@@ -38,6 +38,7 @@ enum SVGElementName: String, Equatable {
   case feMorphology
   case feTile
   case feTurbulence
+  case feDisplacementMap
   case feDropShadow
   case feFuncR
   case feFuncG

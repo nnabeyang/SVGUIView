@@ -40,7 +40,7 @@ extension StdDeviation {
   static let zero: StdDeviation = .hetero(x: SVGLength(value: 0, unit: .number), y: SVGLength(value: 0, unit: .number))
 }
 
-package enum SVGFilterInput: Sendable {
+package enum SVGFilterInput: Sendable, Equatable {
   case sourceGraphic
   case sourceAlpha
   case other(String)

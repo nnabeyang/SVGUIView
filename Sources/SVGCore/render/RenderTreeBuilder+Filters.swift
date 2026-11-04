@@ -273,6 +273,7 @@ extension RenderTreeBuilder {
     case let colorMatrix as SVGFeColorMatrixElement: [colorMatrix.input]
     case let transfer as SVGFeComponentTransferElement: [transfer.input]
     case let composite as SVGFeCompositeElement: [composite.input, composite.input2]
+    case let displacement as SVGFeDisplacementMapElement: [displacement.input, displacement.input2]
     case let shadow as SVGFeDropShadowElement: [shadow.input]
     case let blur as SVGFeGaussianBlurElement: [blur.input]
     case let merge as SVGFeMergeElement: merge.children.compactMap { $0 as? SVGFeMergeNodeElement }.map(\.input)
@@ -310,6 +311,14 @@ extension RenderTreeBuilder {
         radius = CGSize(width: radius.width * frame.width, height: radius.height * frame.height)
       }
       return .morphology(input: morphology.input, operator: morphology.morphologyOperator, radius: radius)
+    case let displacement as SVGFeDisplacementMapElement:
+      var scale = CGSize(width: displacement.scale, height: displacement.scale)
+      if filter.primitiveUnits == .objectBoundingBox {
+        scale = CGSize(width: scale.width * frame.width, height: scale.height * frame.height)
+      }
+      return .displacementMap(
+        input: displacement.input, input2: displacement.input2, scale: scale, x: displacement.xChannelSelector,
+        y: displacement.yChannelSelector)
     case let flood as SVGFeFloodElement:
       return .flood(color: floodColor(of: flood))
     case let blur as SVGFeGaussianBlurElement:
