@@ -819,17 +819,33 @@ package struct RenderTreeBuilder {
   /// The data is decoded as a bitmap, or else parsed as an SVG image: a document of its own, without animations, at
   /// time zero, which can't reference anything outside it.
   private func imagePaint(of element: SVGImageElement, in rect: CGRect) async -> ImagePaint? {
+    guard let data = element.data else { return nil }
+    let clips =
+      switch element.style.overflow {
+      case .visible, .auto: false
+      default: true
+      }
+    return await imagePaint(data: data, preserveAspectRatio: element.preserveAspectRatio, clips: clips, in: rect)
+  }
+
+  /// An image of data, a bitmap or an SVG image, placed in a rectangle by its `preserveAspectRatio`, or `nil` if the
+  /// data isn't an image.
+  ///
+  /// - Parameter clips: Whether the rectangle clips the image where it overflows the rectangle.
+  func imagePaint(
+    data: Data, preserveAspectRatio: PreserveAspectRatio, clips: Bool, in rect: CGRect
+  ) async -> ImagePaint? {
     let content: ImageContent
     let viewBox: CGRect
-    if let image = element.decodedImage(), image.width > 0, image.height > 0 {
+    if let image = EmbeddedImage.decodedImage(of: data), image.width > 0, image.height > 0 {
       content = .bitmap(image)
       viewBox = CGRect(x: 0, y: 0, width: image.width, height: image.height)
     } else {
-      guard imageDepth < Self.maxImageDepth, let data = element.svgData() else { return nil }
+      guard imageDepth < Self.maxImageDepth, let data = EmbeddedImage.svgData(of: data) else { return nil }
       let document = SVGParser.parse(data: data, languages: base.document.languages)
       guard let svg = document.root else { return nil }
       let builder = RenderTreeBuilder(
-        base: document, viewPort: rect, scale: scale, reusing: .init(), imageFit: element.preserveAspectRatio,
+        base: document, viewPort: rect, scale: scale, reusing: .init(), imageFit: preserveAspectRatio,
         imageDepth: imageDepth + 1)
       let context = ResolveContext(
         base: document, viewPort: rect, scale: scale, viewBox: CGRect(origin: .zero, size: rect.size))
@@ -840,13 +856,9 @@ package struct RenderTreeBuilder {
       viewBox = builder.imageViewBox(of: svg)
       guard viewBox.width > 0, viewBox.height > 0 else { return nil }
     }
-    let placed = viewBox.applying(element.preserveAspectRatio.getTransform(viewBox: viewBox, size: rect.size))
+    let placed = viewBox.applying(preserveAspectRatio.getTransform(viewBox: viewBox, size: rect.size))
       .offsetBy(dx: rect.minX, dy: rect.minY)
-    let clip: CGRect? =
-      switch element.style.overflow {
-      case .visible, .auto: nil
-      default: rect.contains(placed) ? nil : rect
-      }
+    let clip: CGRect? = clips && !rect.contains(placed) ? rect : nil
     return ImagePaint(content: content, rect: placed, clip: clip)
   }
 

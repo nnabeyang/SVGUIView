@@ -30,6 +30,7 @@ enum SVGElementName: String, Equatable {
   case pattern
   case filter
   case feGaussianBlur
+  case feImage
   case feFlood
   case feBlend
   case feColorMatrix

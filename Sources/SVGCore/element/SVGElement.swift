@@ -273,6 +273,8 @@ extension ElementCursor {
         SVGFeMergeElement(base: base, contents: contents)
       case .feGaussianBlur:
         SVGFeGaussianBlurElement(base: base, contents: contents)
+      case .feImage:
+        SVGFeImageElement(base: base, contents: contents)
       case .feFlood:
         SVGFeFloodElement(base: base, contents: contents)
       case .feBlend:

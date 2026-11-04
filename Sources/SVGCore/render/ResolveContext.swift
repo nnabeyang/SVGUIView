@@ -72,6 +72,9 @@ struct ReferenceGuard: Sendable {
   var masks: Set<String>?
   var patterns: Set<String>?
   var markers: Set<String>?
+  /// The IDs of the filters whose elements are being drawn, which a `feImage` that draws one of those elements again
+  /// would make a cycle of. A new level doesn't empty it, as the source of a filter begins a new guard.
+  var filters: Set<String> = []
 
   struct Kinds: OptionSet {
     let rawValue: Int

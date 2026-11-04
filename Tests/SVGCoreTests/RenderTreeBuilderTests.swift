@@ -2399,6 +2399,74 @@ struct RenderTreeBuilderTests {
     #expect(angle == 25)
   }
 
+  /// A PNG of one red pixel.
+  private static let redPixel =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+
+  /// The primitive of the first `feImage` of the filter of the last element.
+  private func imagePrimitive(_ content: String) async throws -> ImagePrimitive? {
+    let filtered = try await filteredNode(content)
+    guard case .image(let image) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't an image")
+      return nil
+    }
+    return image
+  }
+
+  @Test("a feImage places an image of a data URL in its subregion by its preserveAspectRatio")
+  func imageOfDataURL() async throws {
+    let image = try await imagePrimitive(
+      ##"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">"##
+        + ##"<feImage width="10" href=""## + Self.redPixel + ##""/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .picture(let paint) = image else {
+      Issue.record("The image isn't a picture")
+      return
+    }
+    #expect(paint.rect == CGRect(x: 0, y: 5, width: 10, height: 10))
+  }
+
+  @Test("a feImage draws an element of the document at the origin of its subregion")
+  func imageOfElement() async throws {
+    let image = try await imagePrimitive(
+      ##"<defs><rect id="r" width="4" height="4"/></defs>"##
+        + ##"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">"##
+        + ##"<feImage x="5" y="6" href="#r"/></filter><rect width="10" height="10" filter="url(#f)"/>"##,
+    )
+    guard case .element(_, let origin) = image else {
+      Issue.record("The image isn't an element")
+      return
+    }
+    #expect(origin == CGPoint(x: 5, y: 6))
+  }
+
+  @Test(
+    "a feImage without an element or an image of a data URL draws nothing",
+    arguments: [##"href="#missing""##, "", #"href="image.png""#, #"href="data:image/png;base64,AAAA""#])
+  func imageOfNothing(_ attributes: String) async throws {
+    let image = try await imagePrimitive(
+      ##"<filter id="f"><feImage "## + attributes + ##"/></filter><rect width="10" height="10" filter="url(#f)"/>"##)
+    #expect(image == nil)
+  }
+
+  @Test("an element that a feImage draws with its own filter again draws nothing, and nested filters are no cycle")
+  func imageCycle() async throws {
+    let cycle = try await imagePrimitive(
+      ##"<filter id="f"><feImage href="#r"/></filter>"##
+        + ##"<rect id="r" width="10" height="10" filter="url(#f)"/>"##)
+    #expect(cycle == nil)
+    let nested = try await renderTree(
+      ##"<filter id="f"><feOffset/></filter><g filter="url(#f)"><g filter="url(#f)"><rect width="10" height="10"/>"##
+        + ##"</g></g>"##)
+    guard case .filtered(let outer) = try children(of: nested).last, case .group(let group) = outer.source,
+      case .filtered(let inner) = group.children.first
+    else {
+      Issue.record("The nested filters aren't both drawn")
+      return
+    }
+    #expect(inner.source != nil)
+  }
+
   @Test("a filter without children draws nothing")
   func emptyFilter() async throws {
     let tree = try await renderTree(##"<filter id="f"/><rect width="10" height="10" filter="url(#f)"/>"##)
