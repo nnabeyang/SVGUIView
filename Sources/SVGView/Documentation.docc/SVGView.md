@@ -18,7 +18,7 @@ struct ContentView: View {
 ```
 
 Rendering settings come from the environment. Set
-`EnvironmentValues.svgViewConfiguration` to change them for every
+``SwiftUICore/EnvironmentValues/svgViewConfiguration`` to change them for every
 ``SVGView/SVGView`` in a subtree.
 
 ```swift
@@ -42,3 +42,7 @@ ContentView()
 ### Displaying SVG
 
 - ``SVGView/SVGView``
+
+### Configuring Rendering
+
+- ``SwiftUICore/EnvironmentValues/svgViewConfiguration``
