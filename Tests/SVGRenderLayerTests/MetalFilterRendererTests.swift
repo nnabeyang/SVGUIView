@@ -216,9 +216,10 @@ struct MetalFilterRendererTests {
     "a layer of an element whose filter changes runs the filter on the GPU where it gives the results of the CPU",
     arguments: [(changingBlur, true), (changingBoxes, false)])
   func filterLayers(content: String, runsOnGPU: Bool) async throws {
-    let renderer = try #require(renderer)
-    let gpu = try await paintedContents(content, filters: renderer)
-    let cpu = try await paintedContents(content, filters: nil)
+    // Without a GPU, both run the filters on the CPU.
+    _ = try #require(renderer)
+    let gpu = try await paintedContents(content, onGPU: true)
+    let cpu = try await paintedContents(content, onGPU: false)
     // The rectangle before the element with the filter, and the element in its layer.
     try #require(gpu.count == 2 && cpu.count == 2)
     #expect(gpu.map(\.filteredOnGPU) == [false, runsOnGPU])
@@ -272,8 +273,8 @@ private let changingBoxes = ##"""
   """##
 
 /// The contents of the painted layers of a document with the content at the time 0, at the scale 3, with the filters
-/// of the layers run by a renderer.
-private func paintedContents(_ content: String, filters: MetalFilterRenderer?) async throws -> [PaintedContents] {
+/// of the layers run on the GPU or on the CPU.
+private func paintedContents(_ content: String, onGPU: Bool) async throws -> [PaintedContents] {
   let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"# + content + "</svg>"
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
@@ -282,6 +283,6 @@ private func paintedContents(_ content: String, filters: MetalFilterRenderer?) a
   let tree = try #require(await RenderTreeBuilder(base: base.at(time: 0), viewPort: rect, scale: 3).build(fit: fit))
   let planner = LayerPlanner(
     promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: 3)
-  let layers = try #require(await planner.plan(tree, in: rect).painted(scale: 3, filters: filters))
+  let layers = try #require(await planner.plan(tree, in: rect).painted(scale: 3, runsFiltersOnGPU: onGPU))
   return layers.paintedContents
 }

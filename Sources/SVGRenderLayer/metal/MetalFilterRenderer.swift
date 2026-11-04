@@ -160,6 +160,9 @@ package final class MetalFilterRenderer: Sendable {
   }
 
   /// The table of a color operation, made once.
+  ///
+  /// The table is made outside the lock, so that the tasks that look up other tables don't block their threads while
+  /// it's made. The tasks of a frame that need a new table at the same time make it each, with the same result.
   fileprivate func table(_ operation: ColorOperation) -> [UInt8]? {
     if let table = tables.withLock({ $0[operation] }) { return table }
     guard let table = operation.table else { return nil }

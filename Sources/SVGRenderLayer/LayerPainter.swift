@@ -109,16 +109,20 @@ extension ContainerLayer {
   ///   - wideGamut: Whether the layers show colors outside sRGB, in Display P3.
   ///   - previous: The layers of another time, whose contents the painted layers that don't change show instead of
   ///     being painted again.
-  ///   - filters: The renderer that runs the filters of the layers that paint only an element with a filter on the
-  ///     GPU, or `nil` to run them on the CPU.
+  ///   - runsFiltersOnGPU: Whether the filters of the layers that paint only an element with a filter run on the
+  ///     GPU where it gives the results of the CPU, instead of on the CPU.
   package func painted(
     scale: CGFloat, wideGamut: Bool = false, reusing previous: RenderedContainer? = nil,
-    filters: MetalFilterRenderer? = nil
+    runsFiltersOnGPU: Bool = false
   ) async -> RenderedContainer? {
     let previousMasks = previous?.masksByKey ?? [:]
     let previous = previous?.contentsByKey ?? [:]
     let layers = paintedLayers.filter { $0.reusedContents(of: previous) == nil }
-    let onGPU = filters.map { filters in layers.filter { $0.runsFilterOnGPU(filters, scale: scale) } } ?? []
+    let filterLayers = runsFiltersOnGPU ? layers.filter { $0.runsFilterOnGPU(scale: scale) } : []
+    // The renderer is made when it's first used, off the main thread, since it compiles the kernels, which the
+    // threads that use it wait for. A frame without a filter that runs on the GPU doesn't use it, and doesn't wait.
+    let filters = filterLayers.isEmpty ? nil : MetalFilterRenderer.shared
+    let onGPU = filters == nil ? [] : filterLayers
     let onCPU = layers.filter { layer in !onGPU.contains { $0.key == layer.key } }
     let painted = await withTaskGroup(of: [LayerKey: PaintedContents].self) { group in
       for layer in onGPU {
@@ -223,7 +227,7 @@ extension PaintedLayer {
   }
 
   /// Whether the layer paints only an element with a filter, which the renderer runs on the GPU.
-  fileprivate func runsFilterOnGPU(_ filters: MetalFilterRenderer, scale: CGFloat) -> Bool {
+  fileprivate func runsFilterOnGPU(scale: CGFloat) -> Bool {
     filtered.map { MetalFilterRenderer.supports($0, scale: scale) } ?? false
   }
 
