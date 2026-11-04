@@ -56,6 +56,11 @@ package enum FilterPrimitive: Sendable {
   /// rectangle of the radii around its pixel. A radius of 0 doesn't change the input in its direction, and a negative
   /// radius or radii that are both 0 leave the input as it is.
   case morphology(input: SVGFilterInput?, operator: SVGMorphologyOperator, radius: CGSize)
+  /// The first input with its pixels moved by the components of the second, the map, without their alpha
+  /// premultiplied: a pixel takes the one at the scale in the user space times the component minus 0.5, which is
+  /// at most half the scale away.
+  case displacementMap(
+    input: SVGFilterInput?, input2: SVGFilterInput?, scale: CGSize, x: SVGChannelSelector, y: SVGChannelSelector)
   /// Functions that map each component of each pixel, without its alpha premultiplied, from 0 to 1.
   case componentTransfer(
     input: SVGFilterInput?, red: TransferFunction, green: TransferFunction, blue: TransferFunction,
