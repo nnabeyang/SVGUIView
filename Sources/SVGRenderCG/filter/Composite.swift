@@ -20,29 +20,16 @@ extension CGPainter {
         bitsPerComponent: 8, bitsPerPixel: 32, colorSpace: colorSpace.colorSpace,
         bitmapInfo: CGBitmapInfo(
           rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
+      let buffer1 = inputBuffer(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
-    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    guard
-      let image1 = inputImage(
-        input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer),
-      let image2 = inputImage(
-        input: input2, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer),
-      let buffer1 = try? vImage_Buffer(cgImage: image1, format: format),
-      let buffer2 = try? vImage_Buffer(cgImage: image2, format: format),
-      buffer1.width == buffer2.width, buffer1.height == buffer2.height,
+    defer { buffer1.free() }
+    guard let buffer2 = inputBuffer(input2, format: format, srcImage: srcImage, inImage: inImage, results: results)
+    else { return nil }
+    defer { buffer2.free() }
+    guard buffer1.width == buffer2.width, buffer1.height == buffer2.height,
       var output = try? vImage_Buffer(width: Int(buffer1.width), height: Int(buffer1.height), bitsPerPixel: 32)
     else { return nil }
-    defer {
-      buffer1.free()
-      buffer2.free()
-      output.free()
-    }
+    defer { output.free() }
     Self.composite(buffer1, buffer2, into: output, compositeOperator, k: k)
     // The image uses the memory of the buffer, which is freed after the image is drawn below.
     guard

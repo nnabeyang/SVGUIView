@@ -58,23 +58,9 @@ extension CGPainter {
         bitsPerComponent: 8, bitsPerPixel: 32, colorSpace: colorSpace.colorSpace,
         bitmapInfo: CGBitmapInfo(
           rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
+      let buffer = inputBuffer(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
-    // The buffers convert the images to the format, and share memory below, so free each allocation once, through
-    // the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    guard let data = malloc(inputBuffer.rowBytes * Int(inputBuffer.height)) else { return nil }
-    defer { free(data) }
-    var buffer = vImage_Buffer(
-      data: data, height: inputBuffer.height, width: inputBuffer.width, rowBytes: inputBuffer.rowBytes)
-    let resultData = inputImageBuffer(
-      input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer,
-      destBuffer: &buffer)
-    defer { free(resultData) }
+    defer { buffer.free() }
     guard var output = try? vImage_Buffer(width: Int(buffer.width), height: Int(buffer.height), bitsPerPixel: 32)
     else { return nil }
     defer { output.free() }

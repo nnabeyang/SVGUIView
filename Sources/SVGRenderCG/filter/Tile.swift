@@ -15,23 +15,12 @@ extension CGPainter {
   ) -> CGImage? {
     // The pixels are copied as 4 bytes, which they are in the bitmaps of the filter.
     guard srcImage.bitsPerPixel == 32,
-      var format = vImage_CGImageFormat(
+      let format = vImage_CGImageFormat(
         bitsPerComponent: srcImage.bitsPerComponent,
         bitsPerPixel: srcImage.bitsPerPixel,
         colorSpace: srcImage.colorSpace!,
         bitmapInfo: srcImage.bitmapInfo),
-      var srcBuffer = try? vImage_Buffer(cgImage: srcImage, format: format)
-    else { return nil }
-    // `inputImage` swaps the buffers, so free each allocation through the pointer that it returns.
-    let srcData = srcBuffer.data
-    defer { free(srcData) }
-    guard var inputBuffer = try? vImage_Buffer(cgImage: inImage, format: format) else { return nil }
-    let inputData = inputBuffer.data
-    defer { free(inputData) }
-    guard
-      let selected = inputImage(
-        input: input, format: &format, results: results, srcBuffer: &srcBuffer, inputBuffer: &inputBuffer),
-      let source = try? vImage_Buffer(cgImage: selected, format: format)
+      let source = inputBuffer(input, format: format, srcImage: srcImage, inImage: inImage, results: results)
     else { return nil }
     defer { source.free() }
     // The edges of the tile in pixels, from the left and from the top of the bitmap, whose rows start at the top.
