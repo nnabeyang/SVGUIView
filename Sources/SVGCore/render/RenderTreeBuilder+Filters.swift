@@ -336,6 +336,12 @@ extension RenderTreeBuilder {
       case .objectBoundingBox:
         .offset(input: offset.input, translation: CGAffineTransform(translationX: dx * frame.width, y: dy * frame.height))
       }
+    case let turbulence as SVGFeTurbulenceElement:
+      // The base frequencies aren't lengths, so the units of the bounding box don't change them.
+      return .turbulence(
+        TurbulencePrimitive(
+          type: turbulence.turbulenceType, baseFrequency: turbulence.baseFrequency,
+          numOctaves: turbulence.numOctaves, seed: turbulence.seed, stitchTiles: turbulence.stitchTiles))
     default:
       preconditionFailure("\(element.type.rawValue) isn't a filter primitive")
     }

@@ -68,6 +68,33 @@ package enum FilterPrimitive: Sendable {
   case offset(input: SVGFilterInput?, translation: CGAffineTransform)
   /// The rectangle `tile` of the input, which is the subregion of the input, repeated in x and y from its origin.
   case tile(input: SVGFilterInput?, tile: CGRect)
+  /// The noise of a `feTurbulence`, or transparent black for `nil`, which values in error give.
+  case turbulence(TurbulencePrimitive?)
+}
+
+/// The values of a `feTurbulence` that the reference code of the specification takes.
+package struct TurbulencePrimitive: Sendable, Equatable {
+  package let type: SVGTurbulenceType
+  /// The base frequencies in x and y, which aren't negative.
+  package let baseFrequency: CGSize
+  /// The number of octaves, which isn't negative.
+  package let numOctaves: Int
+  /// The seed, truncated to an integer.
+  package let seed: Int
+  /// Whether the noise stitches at the edges of the primitive subregion.
+  package let stitchTiles: Bool
+
+  /// The primitive of the values of an element, or `nil` if a base frequency or the number of octaves is negative,
+  /// which the specification doesn't support, and which give transparent black.
+  init?(type: SVGTurbulenceType, baseFrequency: CGSize, numOctaves: Int, seed: Double, stitchTiles: Bool) {
+    guard baseFrequency.width >= 0, baseFrequency.height >= 0, numOctaves >= 0 else { return nil }
+    self.type = type
+    self.baseFrequency = baseFrequency
+    self.numOctaves = numOctaves
+    // The seed is truncated towards 0, and the reference code makes the seeds out of its range the nearest one in it.
+    self.seed = Int(min(max(seed.rounded(.towardZero), -0x7FFF_FFFF), 0x7FFF_FFFF))
+    self.stitchTiles = stitchTiles
+  }
 }
 
 /// The transfer function of a component of a `feComponentTransfer`, from its `feFuncR`, `feFuncG`, `feFuncB` or
