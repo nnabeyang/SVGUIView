@@ -4,7 +4,7 @@ public import SwiftUI
 /// A SwiftUI view that displays a single SVG image.
 ///
 /// The view takes its rendering settings from
-/// `EnvironmentValues.svgViewConfiguration`.
+/// ``SwiftUICore/EnvironmentValues/svgViewConfiguration``.
 public struct SVGView: UIViewRepresentable {
   let data: Data
   let contentMode: SwiftUI.ContentMode
@@ -58,7 +58,7 @@ extension SwiftUI.ContentMode {
   ///
   /// `fit` becomes `UIView.ContentMode.scaleAspectFit` and `fill` becomes
   /// `UIView.ContentMode.scaleAspectFill`.
-  public func asUIView() -> UIKit.UIView.ContentMode {
+  func asUIView() -> UIKit.UIView.ContentMode {
     switch self {
     case .fit:
       return .scaleAspectFit
@@ -75,7 +75,6 @@ private struct SVGViewConfigurationKey: EnvironmentKey {
 extension EnvironmentValues {
   /// The rendering settings for ``SVGView/SVGView`` instances in this
   /// environment.
-  @MainActor
   public var svgViewConfiguration: SVGUIViewConfiguration {
     get { self[SVGViewConfigurationKey.self] }
     set { self[SVGViewConfigurationKey.self] = newValue }
