@@ -13,6 +13,16 @@ private func document(_ content: String, class name: String = "") -> SVGBaseCont
   return SVGParser.parse(data: Data(svg.utf8))
 }
 
+/// A document whose rectangle `e`, with more attributes, runs the animation `a`, which fades it in for 3 seconds, while
+/// it matches the selector, with more content in the rectangle, such as SMIL animations.
+private func document(_ content: String, selector: String, attributes: String = "") -> SVGBaseContext {
+  let svg =
+    #"<svg xmlns="http://www.w3.org/2000/svg"><style>@keyframes a { from { opacity: 0 } to { opacity: 1 } } "#
+    + selector + #" { animation: a 3s linear }</style><rect id="e" width="10" height="10" "#
+    + attributes + ">" + content + "</rect></svg>"
+  return SVGParser.parse(data: Data(svg.utf8))
+}
+
 /// The opacity of the rectangle at a time.
 private func opacity(_ base: SVGBaseContext, at time: Double) throws -> Double {
   try #require(base.at(time: time)["e"]).style.opacity
@@ -77,5 +87,25 @@ struct SMILStartedAnimationTests {
     #expect(base.animationEnd() == .infinity)
     #expect(abs(try opacity(base, at: 1.5) - 0.5 / 3) < 1e-9)
     #expect(abs(try opacity(base, at: 3.5) - 0.5 / 3) < 1e-9)
+  }
+
+  /// A `<set>` that gives the rectangle `pathLength="2"` from 2 seconds, for a second.
+  private static let setPathLength = #"<set attributeName="pathLength" to="2" begin="2s" dur="1s" fill="freeze"/>"#
+
+  @Test(
+    "an animation that a SMIL animation applies by changing an attribute that an attribute selector matches starts",
+    arguments: [("rect[pathLength]", ""), (#"rect:not([pathLength="1"])"#, #"pathLength="1""#)])
+  func attributeSelectors(selector: String, attributes: String) throws {
+    let base = document(Self.setPathLength, selector: selector, attributes: attributes)
+    #expect(try opacity(base, at: 1) == 1)
+    #expect(abs(try opacity(base, at: 2.5) - 0.5 / 3) < 1e-9)
+    #expect(base.animationEnd() == 5)
+  }
+
+  @Test("an attribute that no selector matches doesn't make the elements again to find the animations that start")
+  func unmatchedAttribute() throws {
+    let base = document(Self.setPathLength, selector: ".spin")
+    #expect(base.animations.smilStarted == SMILStartedAnimations())
+    #expect(base.animationEnd() == 3)
   }
 }

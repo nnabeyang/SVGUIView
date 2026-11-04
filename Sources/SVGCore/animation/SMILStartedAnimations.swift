@@ -28,7 +28,10 @@ struct SMILStartedAnimations: Sendable, Equatable {
   ///
   /// - Parameter passes: The most passes of the schedule of the SMIL animations, as their end is found with.
   init(document: DocumentTree, stylesheet: Stylesheet, animations: DocumentAnimations, passes: Int) {
-    let changing = animations.smil.indices.filter { Self.changesAttribute(animations.smil[$0]) }
+    let changing = animations.smil.indices.filter {
+      Self.changesAttribute(animations.smil[$0])
+        && Self.changesStyle(animations.smil[$0].attributeName, stylesheet: stylesheet)
+    }
     guard !changing.isEmpty, !animations.keyframes.isEmpty, let root = document.root else { return }
     let schedule = SMILSchedule(animations: animations.smil, until: .infinity, passes: passes)
     var times = Set<Double>()
@@ -94,6 +97,17 @@ struct SMILStartedAnimations: Sendable, Equatable {
     SMILEffect(
       animation: animation, state: SMILState(intervalBegin: 0, iteration: 0, progress: 0, isFrozen: false), order: 0
     ).changesAttribute
+  }
+
+  /// The attributes that always change which rules match an element, or what they declare: the classes and the ID
+  /// that selectors match, the language that `:lang()` matches, and the declarations of `style`.
+  private static let styledAttributes: Set<String> = ["class", "id", "lang", "xml:lang", "style"]
+
+  /// Whether changing an attribute that isn't a property can change the style of the elements, which only these
+  /// attributes and the ones that the attribute selectors match do, so that the elements are made again only for them.
+  private static func changesStyle(_ name: String?, stylesheet: Stylesheet) -> Bool {
+    guard let name else { return false }
+    return styledAttributes.contains(name) || stylesheet.selectorAttributes.contains(name)
   }
 
   /// The times in an interval of a SMIL animation at which the value that it gives can change: the begin and the end
