@@ -44,6 +44,11 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feDistantLight"))
+    func feDistantLight(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(in: "basic", "filters", "feDropShadow"))
     func feDropShadow(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
@@ -76,6 +81,11 @@ extension SnapshotTests {
 
     @Test(arguments: SVGFile.all(in: "basic", "filters", "feOffset"))
     func feOffset(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "filters", "feSpecularLighting"))
+    func feSpecularLighting(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
 
