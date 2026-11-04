@@ -73,6 +73,38 @@ struct LightingTests {
     #expect(rendering.pixel(10 * rendering.scale, 10 * rendering.scale) == [0, 128, 0, 128])
   }
 
+  @Test("a point light far above a flat surface lights it as from above")
+  func pointFromAbove() async throws {
+    let rendering = try await render(
+      flat(#"<feDiffuseLighting lighting-color="lime"><fePointLight x="10" y="10" z="10000"/></feDiffuseLighting>"#))
+    let pixel = rendering.pixel(10 * rendering.scale, 10 * rendering.scale)
+    #expect(pixel[0] == 0 && pixel[1] >= 253 && pixel[2] == 0 && pixel[3] == 255)
+  }
+
+  @Test("a spot light lights its cone, whose edge fades out, and nothing outside it")
+  func spotCone() async throws {
+    let rendering = try await render(
+      flat(
+        #"<feDiffuseLighting lighting-color="lime"><feSpotLight x="10" y="10" z="10" pointsAtX="10" pointsAtY="10" limitingConeAngle="10"/></feDiffuseLighting>"#
+      ))
+    let s = rendering.scale
+    #expect(rendering.pixel(10 * s, 10 * s)[1] > 200)
+    // Half the radius of the cone, 10 times tan(10°), from its axis, where the light fades.
+    let half = rendering.pixel(10 * s + Int((0.88 * Double(s)).rounded()), 10 * s)[1]
+    #expect(half > 100 && half < 230)
+    #expect(rendering.pixel(13 * s, 10 * s) == [0, 0, 0, 255])
+  }
+
+  @Test("a spot light points at its pointsAt")
+  func spotPointsAt() async throws {
+    let rendering = try await render(
+      flat(
+        #"<feDiffuseLighting><feSpotLight x="10" y="10" z="5" pointsAtX="14" pointsAtY="10" specularExponent="20"/></feDiffuseLighting>"#
+      ))
+    let s = rendering.scale
+    #expect(rendering.pixel(12 * s, 10 * s)[0] > rendering.pixel(8 * s, 10 * s)[0] + 64)
+  }
+
   @Test(
     "a missing light source and negative constants are transparent black",
     arguments: [

@@ -2322,9 +2322,39 @@ struct RenderTreeBuilderTests {
         reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
         lightSource: .distant(azimuth: 10, elevation: 0))
     ),
-    // A missing light source, one that isn't supported yet and negative constants are in error.
+    (
+      #"<feDiffuseLighting><fePointLight/><feDistantLight/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1), lightSource: .point(position: .zero))
+    ),
+    (
+      #"<feDiffuseLighting><fePointLight x="1" y="2" z="-3"/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .point(position: SIMD3(1, 2, -3)))
+    ),
+    (
+      #"<feDiffuseLighting><feSpotLight/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .spot(position: .zero, pointsAt: .zero, specularExponent: 1, limitingConeAngle: nil))
+    ),
+    // An exponent of a spot light that isn't positive is 1.
+    (
+      #"<feDiffuseLighting><feSpotLight x="1" y="2" z="3" pointsAtX="4" pointsAtY="5" pointsAtZ="6" specularExponent="-1" limitingConeAngle="30"/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .spot(
+          position: SIMD3(1, 2, 3), pointsAt: SIMD3(4, 5, 6), specularExponent: 1, limitingConeAngle: 30))
+    ),
+    (
+      #"<feDiffuseLighting><feSpotLight specularExponent="0.5" limitingConeAngle="-20"/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .spot(position: .zero, pointsAt: .zero, specularExponent: 0.5, limitingConeAngle: -20))
+    ),
+    // A missing light source and negative constants are in error.
     (#"<feDiffuseLighting/>"#, nil),
-    (#"<feDiffuseLighting><fePointLight/><feDistantLight/></feDiffuseLighting>"#, nil),
     (#"<feDiffuseLighting diffuseConstant="-1"><feDistantLight/></feDiffuseLighting>"#, nil),
     (#"<feSpecularLighting specularConstant="-1"><feDistantLight/></feSpecularLighting>"#, nil),
   ]
@@ -2338,6 +2368,35 @@ struct RenderTreeBuilderTests {
       return
     }
     #expect(lighting == expected)
+  }
+
+  @Test("the positions of the light sources are fractions of the bounding box, and z of its diagonal divided by √2")
+  func lightSourceBoundingBox() async throws {
+    let filtered = try await filteredNode(
+      ##"<filter id="f" primitiveUnits="objectBoundingBox"><feDiffuseLighting>"##
+        + ##"<fePointLight x="0.5" y="0.25" z="0.1"/></feDiffuseLighting></filter>"##
+        + ##"<rect x="10" width="10" height="20" filter="url(#f)"/>"##)
+    guard case .lighting(_, let lighting) = filtered.primitives.first?.primitive else {
+      Issue.record("The primitive isn't a lighting")
+      return
+    }
+    #expect(lighting?.lightSource == .point(position: SIMD3(15, 5, Float(0.1 * (sqrt(500.0) / sqrt(2.0))))))
+  }
+
+  @Test("SMIL animates the attributes of a light source")
+  func animatedLightSource() async throws {
+    let tree = try await renderTree(
+      ##"<filter id="f"><feDiffuseLighting><feSpotLight limitingConeAngle="0">"##
+        + ##"<animate attributeName="limitingConeAngle" from="0" to="50" dur="10s" fill="freeze"/>"##
+        + ##"</feSpotLight></feDiffuseLighting></filter><rect width="10" height="10" filter="url(#f)"/>"##, at: 5)
+    guard case .filtered(let filtered) = try children(of: tree).last,
+      case .lighting(_, let lighting) = filtered.primitives.first?.primitive,
+      case .spot(_, _, _, let angle) = lighting?.lightSource
+    else {
+      Issue.record("The primitive isn't a spot light")
+      return
+    }
+    #expect(angle == 25)
   }
 
   @Test("a filter without children draws nothing")
