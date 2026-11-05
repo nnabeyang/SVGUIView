@@ -186,7 +186,46 @@ enum WritingModeProperty: StyleProperty {
   static let computed = \ComputedStyle.writingMode
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> WritingMode? {
+    if let value: WritingMode = keyword(text, origin: origin) { return value }
+    // SVG 2 keeps the values of SVG 1.1, which compute to the values of CSS.
+    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = origin == .css ? text.lowercased() : text
+    return switch value {
+    case "lr", "lr-tb", "rl", "rl-tb": .horizontalTB
+    case "tb", "tb-rl": .verticalRL
+    default: nil
+    }
+  }
+}
+
+/// `text-orientation`, which way the glyphs of vertical text stand.
+enum TextOrientationProperty: StyleProperty {
+  static let id = PropertyID.textOrientation
+  static let isInherited = true
+  static let initial = TextOrientation.mixed
+  static let computed = \ComputedStyle.textOrientation
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TextOrientation? {
     keyword(text, origin: origin)
+  }
+}
+
+/// `glyph-orientation-vertical` of SVG 1.1, which SVG 2 keeps as `text-orientation`: `auto` is `mixed`, `0` is
+/// `upright`, and `90` is `sideways`.
+enum GlyphOrientationVerticalProperty: StyleProperty {
+  static let id = PropertyID.glyphOrientationVertical
+  static let isInherited = true
+  static let initial: TextOrientation? = nil
+  static let computed = \ComputedStyle.glyphOrientationVertical
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TextOrientation?? {
+    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return switch origin == .css ? text.lowercased() : text {
+    case "auto": .some(nil)
+    case "0", "0deg": .some(.upright)
+    case "90", "90deg": .some(.sideways)
+    default: nil
+    }
   }
 }
 
