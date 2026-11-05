@@ -5,8 +5,9 @@ Display an SVG image in a UIKit view.
 ## Overview
 
 ``SVGUIView/SVGUIView`` parses SVG data and draws it into its layer. Rendering runs
-in a background task, so parsing and drawing a large document does not block
-the main thread.
+in a background task, so drawing a large document does not block the main
+thread. ``SVGUIView/SVGUIView/setData(_:)`` parses the data in the background
+too.
 
 ```swift
 let url = Bundle.main.url(forResource: "example", withExtension: "svg")!
@@ -21,10 +22,21 @@ intrinsic content size. The view's `contentMode` decides how the document's
 viewport is fitted into the view's bounds.
 
 To show a different image, assign new data to ``SVGUIView/SVGUIView/data``. The
-view parses it and redraws asynchronously.
+view parses it at once and redraws asynchronously.
 
 ```swift
 svgView.data = try Data(contentsOf: anotherURL)
+```
+
+Parsing a larger document takes longer, and assigning ``SVGUIView/SVGUIView/data``
+parses it on the main actor. ``SVGUIView/SVGUIView/setData(_:)`` parses the data
+off the main actor instead, and shows it when it's parsed, unless newer data is
+given meanwhile:
+
+```swift
+Task {
+  await svgView.setData(try Data(contentsOf: anotherURL))
+}
 ```
 
 ### Controlling rendering
