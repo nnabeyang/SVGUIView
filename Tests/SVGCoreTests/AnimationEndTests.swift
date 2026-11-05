@@ -63,4 +63,20 @@ struct AnimationEndTests {
   func animationEnds(content: String, expected: Double) {
     #expect(end(content) == expected)
   }
+
+  /// A chain of animations of a second each, which begin when the one before ends.
+  private func chain(_ count: Int) -> String {
+    let animations = (0..<count).map { index in
+      let begin = index == 0 ? "0s" : "a\(index - 1).end"
+      return #"<animate id="a\#(index)" attributeName="x" to="5" begin="\#(begin)" dur="1s"/>"#
+    }
+    return smil(animations.joined())
+  }
+
+  @Test("a chain of syncbase values ends after its last animation, unless it's longer than the passes of the schedule")
+  func chainEnds() {
+    #expect(end(chain(19)) == 19)
+    // The schedule doesn't find the end of a longer chain, which keeps the clock running.
+    #expect(end(chain(21)) == .infinity)
+  }
 }
