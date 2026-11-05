@@ -3,10 +3,21 @@ public import SwiftUI
 
 /// A SwiftUI view that displays a single SVG image.
 ///
+/// The view parses its SVG data off the main actor, so that a larger document
+/// doesn't block the main actor. It shows the image when the data is parsed,
+/// and when the data changes, it keeps showing the previous image until the new
+/// data is parsed.
+///
 /// The view takes its rendering settings from
 /// ``SwiftUICore/EnvironmentValues/svgViewConfiguration``.
 public struct SVGView: UIViewRepresentable {
-  let data: Data
+  /// The SVG data that the view displays, or the file that it's read from.
+  enum Content: Equatable {
+    case data(Data)
+    case file(URL)
+  }
+
+  let content: Content
   let contentMode: SwiftUI.ContentMode
 
   /// Creates a view that displays the given SVG data.
@@ -15,19 +26,25 @@ public struct SVGView: UIViewRepresentable {
   ///   - data: The SVG data to display.
   ///   - contentMode: How the image fits into the view's bounds.
   public init(data: Data, contentMode: SwiftUI.ContentMode = .fit) {
-    self.data = data
+    content = .data(data)
     self.contentMode = contentMode
   }
 
   /// Creates a view that displays the SVG file at the given URL.
   ///
+  /// The view reads the file off the main actor when it's shown, and reads it
+  /// again only when the URL changes, also if the file changes.
+  ///
   /// - Parameters:
-  ///   - url: The URL of an SVG file. The file is read synchronously. If it
-  ///     cannot be read, the view is empty.
+  ///   - url: The URL of an SVG file. If it cannot be read, the view is empty.
   ///   - contentMode: How the image fits into the view's bounds.
   public init(contentsOf url: URL, contentMode: SwiftUI.ContentMode = .fit) {
-    let data = (try? Data(contentsOf: url)) ?? Data()
-    self.init(data: data, contentMode: contentMode)
+    content = .file(url)
+    self.contentMode = contentMode
+  }
+
+  public func makeCoordinator() -> Coordinator {
+    Coordinator()
   }
 
   public func makeUIView(context _: Context) -> SVGUIView {
@@ -36,9 +53,51 @@ public struct SVGView: UIViewRepresentable {
   }
 
   public func updateUIView(_ uiView: SVGUIView, context: Context) {
-    uiView.data = data
+    context.coordinator.load(content, into: uiView)
     uiView.contentMode = contentMode.asUIView()
     uiView.configuration = context.environment.svgViewConfiguration
+  }
+
+  public static func dismantleUIView(_: SVGUIView, coordinator: Coordinator) {
+    coordinator.cancel()
+  }
+
+  /// Loads the content of the view into its SVGUIView, off the main actor.
+  @MainActor
+  public final class Coordinator {
+    /// The content that the coordinator loads or loaded last.
+    private var content: Content?
+    /// The loading in progress, which loading other content cancels.
+    private(set) var task: Task<Void, Never>?
+
+    /// Starts loading the content, unless it's the content that the coordinator already loads.
+    func load(_ content: Content, into uiView: SVGUIView) {
+      // The SwiftUI view is updated whenever its parent's body is, mostly with the same content.
+      guard content != self.content else { return }
+      self.content = content
+      task?.cancel()
+      task = Task { [weak uiView] in
+        let data =
+          switch content {
+          case .data(let data): data
+          case .file(let url): await Self.read(url)
+          }
+        guard !Task.isCancelled else { return }
+        await uiView?.setData(data)
+      }
+    }
+
+    /// Stops the loading in progress.
+    func cancel() {
+      task?.cancel()
+      task = nil
+    }
+
+    /// Reads a file off the main actor, or returns empty data if it can't be read.
+    @concurrent
+    nonisolated private static func read(_ url: URL) async -> Data {
+      (try? Data(contentsOf: url)) ?? Data()
+    }
   }
 
   /// Takes the size that SwiftUI proposes, and the size of the document in a dimension without a proposal.

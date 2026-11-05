@@ -22,14 +22,16 @@ import os
 /// have ended, it shows the image that ``takeSnapshot(rect:at:scale:)`` renders for
 /// the time.
 public class SVGUIView: UIView {
-  private var baseContext: SVGBaseContext {
+  /// The context of the document, with the values that the view finds in it.
+  private var loaded: LoadedDocument {
     didSet {
-      animationEnd = baseContext.animationEnd()
-      promoted = baseContext.elementsWithAnimatedCompositing()
-      painting = baseContext.elementsWithAnimatedPainting()
       // The values of another context aren't compared with the frame that the view shows.
       shownStyled = nil
     }
+  }
+  private var baseContext: SVGBaseContext {
+    get { loaded.context }
+    set { loaded = LoadedDocument(context: newValue) }
   }
   /// The document that the view displays, which an app reads and changes.
   ///
@@ -44,9 +46,9 @@ public class SVGUIView: UIView {
     }
   }
   /// The elements whose transform or opacity can change, which get layers of their own.
-  private var promoted: Set<ElementID>
+  private var promoted: Set<ElementID> { loaded.promoted }
   /// The elements whose painting changes in other ways, which tells the layers that frames paint again.
-  private var painting: Set<ElementID>
+  private var painting: Set<ElementID> { loaded.painting }
   /// The CSS animations whose ends tasks wait for, which ``SVGDocument/Animation/finished()`` adds, with the tokens
   /// that the cancellations of the tasks find them by.
   private(set) var finishWaiters = [(token: Int, id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
@@ -56,7 +58,10 @@ public class SVGUIView: UIView {
   private var appliesChangesForWaiters = false
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
   /// infinite for animations that don't end.
-  private var animationEnd: Double
+  private var animationEnd: Double { loaded.animationEnd }
+  /// Counts the data that the view loads, so that the data that ``setData(_:)`` parses isn't shown if newer data was
+  /// given meanwhile.
+  private var loadGeneration = 0
   /// The rendering in progress, which a new rendering and the release of the view cancel.
   private(set) var renderingTask: Task<Void, Never>?
   /// The settings that control background rendering and the animations.
@@ -166,12 +171,9 @@ public class SVGUIView: UIView {
   }
 
   init(frame: CGRect, baseContext: SVGBaseContext, data: Data = Data()) {
-    self.data = data
-    self.baseContext = baseContext
+    storedData = data
+    loaded = LoadedDocument(context: baseContext)
     document = SVGDocument(tree: baseContext.document)
-    animationEnd = baseContext.animationEnd()
-    promoted = baseContext.elementsWithAnimatedCompositing()
-    painting = baseContext.elementsWithAnimatedPainting()
     super.init(frame: frame)
     // The default configuration plays the animations, which a change of the configuration doesn't start.
     isPlaying = configuration.animation == .play
@@ -212,22 +214,81 @@ public class SVGUIView: UIView {
     return SVGParser.parse(data: data)
   }
 
+  /// Parses SVG data off the main actor, with the values that the view finds in the document. The fonts of text
+  /// styles are installed on the main actor before.
+  @concurrent
+  nonisolated private static func load(_ data: Data) async -> LoadedDocument {
+    await parseObserver?()
+    return LoadedDocument(context: SVGParser.parse(data: data))
+  }
+
+  /// Called off the main actor where ``setData(_:)`` parses its data, which tests check, and hold to give other data
+  /// meanwhile.
+  nonisolated(unsafe) static var parseObserver: (@Sendable () async -> Void)?
+
+  /// The SVG data that the view displays.
+  private var storedData: Data
+
   /// The SVG data that the view displays.
   ///
-  /// Setting this property parses the new data and redraws the view
-  /// asynchronously. A rendering in progress stops, so that the view renders
-  /// only the latest data. The new data also replaces ``document``. Setting the
-  /// data that the view already displays does nothing.
+  /// Setting this property parses the new data on the main actor, which takes
+  /// longer for a larger document, and redraws the view asynchronously. A
+  /// rendering in progress stops, so that the view renders only the latest
+  /// data. The new data also replaces ``document`` at once. Setting the data
+  /// that the view already displays does nothing.
+  ///
+  /// To parse a larger document without blocking the main actor, use
+  /// ``setData(_:)``.
   public var data: Data {
-    didSet {
+    get { storedData }
+    set {
+      // A newer data replaces the data that `setData(_:)` is parsing.
+      loadGeneration += 1
       // SVGView sets its data on every update of the SwiftUI view.
-      guard data != oldValue else { return }
-      baseContext = Self.parse(data)
-      document = SVGDocument(tree: baseContext.document)
-      currentTime = .zero
-      updatePlayback()
-      setNeedsDisplay()
+      guard newValue != storedData else { return }
+      show(newValue, loaded: LoadedDocument(context: Self.parse(newValue)))
     }
+  }
+
+  /// Parses SVG data off the main actor and shows it.
+  ///
+  /// The view keeps showing its current document while the data is parsed,
+  /// and then replaces ``data`` and ``document`` and redraws, as setting
+  /// ``data`` does. Parsing a larger document this way doesn't block the main
+  /// actor, which setting ``data`` does.
+  ///
+  /// If newer data is given to the view before the parsing ends, by this
+  /// method or by setting ``data``, or if the task is canceled, the parsed data
+  /// isn't shown. Giving the data that the view already displays does nothing.
+  ///
+  /// ```swift
+  /// Task {
+  ///     let data = try await loadData()
+  ///     await svgView.setData(data)
+  /// }
+  /// ```
+  ///
+  /// - Parameter data: The SVG data to display.
+  public func setData(_ data: Data) async {
+    loadGeneration += 1
+    let generation = loadGeneration
+    guard data != storedData else { return }
+    _ = Self.installTextStyleFonts
+    let loaded = await Self.load(data)
+    guard generation == loadGeneration, !Task.isCancelled else { return }
+    show(data, loaded: loaded)
+  }
+
+  /// Shows new data with its document at time zero.
+  private func show(_ data: Data, loaded: LoadedDocument) {
+    storedData = data
+    self.loaded = loaded
+    document = SVGDocument(tree: loaded.context.document)
+    currentTime = .zero
+    updatePlayback()
+    setNeedsDisplay()
+    // The size of the document can be another one.
+    invalidateIntrinsicContentSize()
   }
 
   override public var contentMode: UIView.ContentMode {
@@ -980,5 +1041,24 @@ extension ContentFit {
 
   private init(alignedTo preserveAspectRatio: PreserveAspectRatio) {
     self.init(preserveAspectRatio: preserveAspectRatio, stretches: false, scales: false)
+  }
+}
+
+/// The context of a document, with the values that a view finds in it to play its animations, which can be made off
+/// the main actor.
+private struct LoadedDocument: Sendable {
+  let context: SVGBaseContext
+  /// The time in seconds after which the document doesn't change.
+  let animationEnd: Double
+  /// The elements whose transform or opacity can change.
+  let promoted: Set<ElementID>
+  /// The elements whose painting changes in other ways.
+  let painting: Set<ElementID>
+
+  init(context: SVGBaseContext) {
+    self.context = context
+    animationEnd = context.animationEnd()
+    promoted = context.elementsWithAnimatedCompositing()
+    painting = context.elementsWithAnimatedPainting()
   }
 }

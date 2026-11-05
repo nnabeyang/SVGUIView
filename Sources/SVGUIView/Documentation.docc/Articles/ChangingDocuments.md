@@ -64,7 +64,8 @@ changes made in one turn of the run loop are rendered together.
 ``SVGUIView/SVGUIView/takeSnapshot(rect:at:scale:)`` includes the changes that the
 view hasn't rendered yet.
 
-Assigning new ``SVGUIView/SVGUIView/data`` to the view replaces its document.
+Assigning new ``SVGUIView/SVGUIView/data`` to the view, or giving it to
+``SVGUIView/SVGUIView/setData(_:)``, replaces its document.
 The document that it replaces can still be read and changed, but the view no
 longer shows it.
 
