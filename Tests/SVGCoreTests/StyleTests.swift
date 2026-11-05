@@ -195,6 +195,47 @@ struct StyleTests {
     #expect(marker.overflow == .visible)
   }
 
+  @Test("the initial style has the initial value of every property, which properties that nothing sets keep")
+  func initialValues() {
+    struct Check: StylePropertyVisitor {
+      mutating func visit<P: StyleProperty>(_: P.Type) -> Bool {
+        ComputedStyle.initial[keyPath: P.computed] == P.initial
+      }
+    }
+    var check = Check()
+    for id in PropertyID.allCases {
+      #expect(id.visit(&check), "\(id)")
+    }
+    // The properties that nothing sets are kept in a set of 128 bits.
+    #expect(PropertyID.allCases.count <= 128)
+  }
+
+  @Test("properties that nothing sets take the values that computing them gives")
+  func unsetProperties() throws {
+    func declaration<P: StyleProperty>(_ property: P.Type, _ text: String) throws -> PropertyDeclaration {
+      PropertyDeclaration(property, try #require(declared(property, css: text)))
+    }
+    let root = style([try declaration(FontSizeProperty.self, "20px")])
+    let parent = style(
+      [
+        try declaration(FillProperty.self, "red"), try declaration(StrokeWidthProperty.self, "3"),
+        try declaration(OpacityProperty.self, "0.5"), try declaration(DirectionProperty.self, "rtl"),
+        try declaration(TextDecorationProperty.self, "underline"), try declaration(FontSizeProperty.self, "2em"),
+      ], parent: root, root: root)
+    let children: [[PropertyDeclaration]] = [
+      [],
+      [try declaration(OpacityProperty.self, "inherit"), try declaration(FillProperty.self, "initial")],
+      [try declaration(StrokeWidthProperty.self, "unset"), try declaration(VisibilityProperty.self, "hidden")],
+      [try declaration(FontSizeProperty.self, "50%"), try declaration(StrokeWidthProperty.self, "1em")],
+    ]
+    for declarations in children {
+      let cascaded = CascadedValues(declarations)
+      #expect(
+        ComputedStyle(cascaded: cascaded, parent: parent, root: root)
+          == ComputedStyle(cascaded: cascaded, parent: parent, root: root, computesEveryProperty: true))
+    }
+  }
+
   @Test("shape-rendering is a keyword, case-sensitive in attributes, which is inherited and is auto initially")
   func shapeRendering() throws {
     #expect(ShapeRenderingProperty.parse("crispEdges", origin: .attribute) == .crispEdges)
