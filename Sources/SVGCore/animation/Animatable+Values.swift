@@ -1,9 +1,9 @@
 import CoreGraphics
 import Foundation
 
-/// Lengths are animated when they have the same unit or are both absolute. A percentage or a length relative to
-/// the viewport isn't animated with a length in another unit, since their sum isn't known until the render tree
-/// is built.
+/// Lengths are animated in their unit when they have the same unit, and in pixels when they're both absolute. Lengths
+/// in other units, such as `10px` and `50%`, are animated unit by unit, as their sum, which is resolved when the render
+/// tree is built, as CSS Values interpolates them as `calc()`.
 extension SVGLength: Animatable {
   func interpolated(to other: SVGLength, progress: Double) -> SVGLength? {
     combined(with: other) { $0 + ($1 - $0) * progress }
@@ -22,17 +22,39 @@ extension SVGLength: Animatable {
   }
 
   /// The length that combines the numbers of two lengths, in their unit, or in pixels if their units are
-  /// different absolute units.
+  /// different absolute units, or else unit by unit, as a sum.
   private func combined(with other: SVGLength, _ combine: (CGFloat, CGFloat) -> CGFloat) -> SVGLength? {
     if hasSameUnit(as: other) {
       return with(magnitude: combine(magnitude, other.magnitude))
     }
-    guard let pixels = absolutePixels, let otherPixels = other.absolutePixels else { return nil }
-    return .pixel(combine(pixels, otherPixels))
+    if let pixels = absolutePixels, let otherPixels = other.absolutePixels {
+      return .pixel(combine(pixels, otherPixels))
+    }
+    // The terms of both lengths by their units, in the order that they come in, where the absolute ones are in
+    // pixels.
+    var units = [SVGLength]()
+    var magnitudes = [(CGFloat, CGFloat)]()
+    func add(_ length: SVGLength, isOther: Bool) {
+      for term in length.terms {
+        let (unit, value) = term.absolutePixels.map { (SVGLength.pixel(0), $0) } ?? (term.with(magnitude: 0), term.magnitude)
+        let index =
+          units.firstIndex(of: unit)
+          ?? {
+            units.append(unit)
+            magnitudes.append((0, 0))
+            return units.count - 1
+          }()
+        if isOther { magnitudes[index].1 += value } else { magnitudes[index].0 += value }
+      }
+    }
+    add(self, isOther: false)
+    add(other, isOther: true)
+    return .sum(of: zip(units, magnitudes).map { unit, values in unit.with(magnitude: combine(values.0, values.1)) })
   }
 
   private func hasSameUnit(as other: SVGLength) -> Bool {
-    with(magnitude: 0) == other.with(magnitude: 0)
+    if case .sum = self { return false }
+    return with(magnitude: 0) == other.with(magnitude: 0)
   }
 
   /// The length, or zero in its unit if it's negative.
@@ -62,6 +84,8 @@ extension SVGLength: Animatable {
       .picas(let value), .chs(let value), .ic(let value), .lhs(let value), .rlhs(let value), .vw(let value),
       .vh(let value), .vi(let value), .vb(let value), .vmin(let value), .vmax(let value), .q(let value):
       value
+    // A sum has a number in each of its units, and isn't negative as a whole until it's resolved.
+    case .sum: 0
     }
   }
 
@@ -90,6 +114,7 @@ extension SVGLength: Animatable {
     case .vmin: .vmin(value)
     case .vmax: .vmax(value)
     case .q: .q(value)
+    case .sum: self
     }
   }
 }

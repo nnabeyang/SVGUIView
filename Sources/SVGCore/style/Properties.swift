@@ -39,6 +39,9 @@ private func resolvingFontRelative(_ length: SVGLength, in resolver: StyleResolv
   default:
     break
   }
+  if case .sum = length {
+    return .sum(of: length.terms.map { resolvingFontRelative($0, in: resolver) })
+  }
   switch length {
   case .ems, .rems, .exs, .chs, .ic, .lhs, .rlhs:
     let context = FontLengthContext(font: resolver.style.font, rootFont: resolver.root.font)
@@ -110,6 +113,9 @@ enum FontSizeProperty: StyleProperty {
       case .rems(let value):
         return scaled(resolver.root.fontSize, by: value, family: resolver.root.fontFamily)
       case .vw, .vh, .vi, .vb, .vmin, .vmax:
+        return size
+      case .sum:
+        // Only an interpolation of computed sizes makes a sum, whose terms are in pixels and in viewport units.
         return size
       case .exs, .chs, .ic, .lhs, .rlhs:
         // Measure the font of the parent, or of the root for `rlh`. A font in viewport units is measured at

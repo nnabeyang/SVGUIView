@@ -56,8 +56,27 @@ enum SVGLength: Equatable, Sendable {
   case vmin(CGFloat)
   case vmax(CGFloat)
   case q(CGFloat)
+  /// The sum of two lengths in different units, as `calc()` of CSS adds them. Only an interpolation or an addition of
+  /// lengths in units that can't be added before they're resolved makes one, such as `10px` and `50%`.
+  indirect case sum(SVGLength, SVGLength)
 
   static let pixelsPerInch: CGFloat = 96.0
+
+  /// The lengths that the length adds: itself, or the terms of a sum.
+  var terms: [SVGLength] {
+    if case .sum(let first, let second) = self { first.terms + second.terms } else { [self] }
+  }
+
+  /// The sum of lengths, or a length of 0 if there are none.
+  static func sum(of terms: [SVGLength]) -> SVGLength {
+    guard let first = terms.first else { return .number(0) }
+    return terms.dropFirst().reduce(first) { .sum($0, $1) }
+  }
+
+  /// Whether the length is a percentage or a sum with one, which needs the length that it's a percentage of.
+  var hasPercent: Bool {
+    terms.contains { if case .percent = $0 { true } else { false } }
+  }
   static var zeroCodePoint: UniChar {
     get { 0x30 }
     set {}
@@ -138,6 +157,9 @@ enum SVGLength: Equatable, Sendable {
         self = .number(value * percent / 100.0)
       case .q(let value):
         self = .number(value * percent / 100.0)
+      case .sum:
+        // A percentage of a sum is the sum of the percentages of its terms.
+        self = .sum(of: parent.terms.map { SVGLength(child: child, parent: $0) })
       }
     default:
       self = child
@@ -258,7 +280,7 @@ enum SVGLength: Equatable, Sendable {
 
   func value(context: any SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse) -> CGFloat {
     let total: CGFloat
-    if case .percent = self {
+    if hasPercent {
       let size: CGSize
       switch unitType {
       case .userSpaceOnUse:
@@ -284,7 +306,7 @@ enum SVGLength: Equatable, Sendable {
 
   func fontValue(context: any SVGLengthContext) -> CGFloat {
     let total: CGFloat
-    if case .percent = self {
+    if hasPercent {
       total = context.font?.sizeValue(context: context, textScale: 1.0) ?? 16.0
     } else {
       total = 0
@@ -362,6 +384,8 @@ enum SVGLength: Equatable, Sendable {
       return value * max(context.viewPort.width, context.viewPort.height) / 100.0
     case .q(let value):
       return value * Self.pixelsPerInch / (25.4 * 4.0)
+    case .sum(let first, let second):
+      return first.value(total: total, context: context) + second.value(total: total, context: context)
     }
   }
 
@@ -421,6 +445,7 @@ extension SVGLength: CustomStringConvertible {
     case .vmin(let value): return "\(value)vmin"
     case .vmax(let value): return "\(value)vmax"
     case .q(let value): return "\(value)Q"
+    case .sum: return "calc(\(terms.map(\.description).joined(separator: " + ")))"
     }
   }
 }
