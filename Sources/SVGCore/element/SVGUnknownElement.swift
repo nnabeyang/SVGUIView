@@ -49,9 +49,3 @@ final class SVGUnknownElement: SVGElement {
     children.contains(where: { $0.index == index })
   }
 }
-
-extension SVGUnknownElement {
-  func encode(to encoder: any Encoder) throws {
-    fatalError()
-  }
-}

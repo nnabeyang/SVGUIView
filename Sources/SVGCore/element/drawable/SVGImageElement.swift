@@ -54,20 +54,3 @@ final class SVGImageElement: ShapeGeometry {
     data.flatMap(EmbeddedImage.svgData(of:))
   }
 }
-
-extension SVGImageElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case x
-    case y
-    case width
-    case height
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(x, forKey: .x)
-    try container.encode(y, forKey: .y)
-    try container.encode(width, forKey: .width)
-    try container.encode(height, forKey: .height)
-  }
-}

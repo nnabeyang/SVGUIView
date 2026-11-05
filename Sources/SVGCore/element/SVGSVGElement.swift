@@ -40,12 +40,6 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
 
   var textScale: Double { 1.0 }
 
-  private enum CodingKeys: String, CodingKey {
-    case width
-    case height
-    case viewBox
-  }
-
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
@@ -139,15 +133,6 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
       height: height.value(context: self, mode: .height))
   }
 
-}
-
-extension SVGSVGElement {
-  package func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(width, forKey: .width)
-    try container.encode(height, forKey: .height)
-    try container.encodeIfPresent(viewBox, forKey: .viewBox)
-  }
 }
 
 extension SVGSVGElement {

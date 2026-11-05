@@ -33,9 +33,3 @@ final class SVGFeMergeElement: SVGElement, SVGFilterPrimitiveElement {
   }
 
 }
-
-extension SVGFeMergeElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

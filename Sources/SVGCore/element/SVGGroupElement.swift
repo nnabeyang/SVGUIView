@@ -52,9 +52,3 @@ final class SVGGroupElement: SVGDrawableElement {
     children.contains(where: { $0.index == index })
   }
 }
-
-extension SVGGroupElement {
-  func encode(to encoder: any Encoder) throws {
-    fatalError()
-  }
-}

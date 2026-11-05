@@ -51,9 +51,3 @@ final class SVGFeMorphologyElement: SVGElement, SVGFilterPrimitiveElement {
       }
   }
 }
-
-extension SVGFeMorphologyElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

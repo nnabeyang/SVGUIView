@@ -51,9 +51,3 @@ final class SVGDefsElement: SVGDrawableElement {
     children.contains(where: { $0.index == index })
   }
 }
-
-extension SVGDefsElement {
-  func encode(to encoder: any Encoder) throws {
-    fatalError()
-  }
-}

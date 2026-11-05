@@ -77,9 +77,3 @@ final class SVGFeConvolveMatrixElement: SVGElement, SVGFilterPrimitiveElement {
     preserveAlpha = attributes["preserveAlpha"] == "true"
   }
 }
-
-extension SVGFeConvolveMatrixElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

@@ -56,9 +56,3 @@ final class SVGFeDisplacementMapElement: SVGElement, SVGFilterPrimitiveElement {
     yChannelSelector = SVGChannelSelector(rawValue: attributes["yChannelSelector", default: ""]) ?? .alpha
   }
 }
-
-extension SVGFeDisplacementMapElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

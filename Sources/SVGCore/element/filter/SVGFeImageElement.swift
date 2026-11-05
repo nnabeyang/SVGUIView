@@ -54,9 +54,3 @@ final class SVGFeImageElement: SVGElement, SVGFilterPrimitiveElement {
       PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""]) ?? PreserveAspectRatio()
   }
 }
-
-extension SVGFeImageElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

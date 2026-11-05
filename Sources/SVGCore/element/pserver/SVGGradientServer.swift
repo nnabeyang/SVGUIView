@@ -82,10 +82,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
 
   let parentIds: [String]
 
-  private enum CodingKeys: String, CodingKey {
-    case stops
-  }
-
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
@@ -167,12 +163,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
   }
 }
 
-extension SVGLinearGradientServer {
-  func encode(to encoder: any Encoder) throws {
-    fatalError()
-  }
-}
-
 final class SVGRadialGradientServer: SVGGradientServer {
   static var type: SVGElementName {
     .radialGradient
@@ -199,10 +189,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
   /// The radius of the focal circle, which is a point without it.
   let fr: SVGLength?
   let r: SVGLength?
-
-  private enum CodingKeys: String, CodingKey {
-    case stops
-  }
 
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
@@ -290,11 +276,5 @@ final class SVGRadialGradientServer: SVGGradientServer {
       RadialGradientPaint(
         units: gradientUnits, transform: transform(context: context), cx: cx, cy: cy, r: r, fx: fx, fy: fy, fr: fr,
         spreadMethod: spreadMethod ?? .pad, colors: colors, locations: locations))
-  }
-}
-
-extension SVGRadialGradientServer {
-  func encode(to encoder: any Encoder) throws {
-    fatalError()
   }
 }

@@ -28,7 +28,7 @@ enum SVGColorType: String {
   case current = "currentcolor"
 }
 
-protocol SVGUIColor: CustomStringConvertible, Codable {
+protocol SVGUIColor: CustomStringConvertible {
   func toCGColor(opacity: Double) -> CGColor?
   var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) { get }
 }
@@ -297,23 +297,6 @@ struct SVGColorName: SVGUIColor {
   ]
 }
 
-extension SVGColorName: Codable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    try container.encode(SVGColorType.named.rawValue)
-    try container.encode(name)
-  }
-
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    precondition(type == .named)
-    name = try container.decode(String.self)
-  }
-}
-
 extension SVGColorName: CustomStringConvertible {
   var description: String {
     name
@@ -358,27 +341,6 @@ struct SVGHexColor: SVGUIColor {
   }
 }
 
-extension SVGHexColor: Codable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    try container.encode(SVGColorType.hex.rawValue)
-    try container.encode(hex)
-  }
-
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    precondition(type == .hex)
-    let hex = try container.decode(String.self)
-    guard let color = SVGHexColor(hex: hex) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    self = color
-  }
-}
-
 extension SVGHexColor: CustomStringConvertible {
   var description: String {
     "#\(value)"
@@ -401,34 +363,6 @@ enum ColorDimension {
       return CGFloat(v)
     case .percent(let v):
       return CGFloat(v) / 100.0 * 255.0
-    }
-  }
-}
-
-extension ColorDimension: Codable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    switch self {
-    case .absolute(let v):
-      try container.encode(ColorDimentionName.absolute.rawValue)
-      try container.encode(v)
-    case .percent(let v):
-      try container.encode(ColorDimentionName.percent.rawValue)
-      try container.encode(v)
-    }
-  }
-
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    guard let type = try ColorDimentionName(rawValue: container.decode(String.self)) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    let value = try container.decode(Double.self)
-    switch type {
-    case .absolute:
-      self = .absolute(value)
-    case .percent:
-      self = .percent(value)
     }
   }
 }
@@ -462,27 +396,6 @@ struct SVGRGBColor: SVGUIColor {
   }
 }
 
-extension SVGRGBColor: Codable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    try container.encode(SVGColorType.rgb.rawValue)
-    try container.encode(r)
-    try container.encode(g)
-    try container.encode(b)
-  }
-
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    precondition(type == .rgb)
-    r = try container.decode(ColorDimension.self)
-    g = try container.decode(ColorDimension.self)
-    b = try container.decode(ColorDimension.self)
-  }
-}
-
 extension SVGRGBColor: CustomStringConvertible {
   var description: String {
     "rgb(\(r), \(g), \(b))"
@@ -505,29 +418,6 @@ struct SVGRGBAColor: SVGUIColor {
 
   var rgba: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
     (red: r.value, green: g.value, blue: b.value, alpha: a * 255.0)
-  }
-}
-
-extension SVGRGBAColor: Codable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    try container.encode(SVGColorType.rgba.rawValue)
-    try container.encode(r)
-    try container.encode(g)
-    try container.encode(b)
-    try container.encode(a)
-  }
-
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    guard let type = try SVGColorType(rawValue: container.decode(String.self)) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    precondition(type == .rgba)
-    r = try container.decode(ColorDimension.self)
-    g = try container.decode(ColorDimension.self)
-    b = try container.decode(ColorDimension.self)
-    a = try container.decode(Double.self)
   }
 }
 

@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-struct SVGUIPoints: Encodable {
+struct SVGUIPoints {
   let points: [CGPoint]
 
   init(description: String) {

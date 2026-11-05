@@ -1,6 +1,6 @@
 import Foundation
 
-struct SVGElementRect: Encodable {
+struct SVGElementRect {
   let x: Double
   let y: Double
   let width: Double

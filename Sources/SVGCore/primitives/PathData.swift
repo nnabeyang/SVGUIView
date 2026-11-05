@@ -156,26 +156,6 @@ enum PathSegmentType: UInt8, Equatable, Sendable {
   }
 }
 
-extension PathSegmentType: Encodable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.singleValueContainer()
-    try container.encode(name)
-  }
-}
-
-extension PathCommand: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case type
-    case args
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(type, forKey: .type)
-    try container.encode(values, forKey: .args)
-  }
-}
-
 // for d attribute of path tag
 extension SVGAttributeScanner {
   /// The commands of path data, up to the first command without a complete group of numbers. A group that isn't

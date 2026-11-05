@@ -31,17 +31,6 @@ final class SVGPathElement: ShapeGeometry {
   }
 }
 
-extension SVGPathElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case d
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(data.commands, forKey: .d)
-  }
-}
-
 final class SVGPathContext {
   var path: CGMutablePath?
   var cubicPoint: CGPoint?

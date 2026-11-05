@@ -1,6 +1,6 @@
 import Foundation
 
-enum SVGOpacity: Equatable, Encodable {
+enum SVGOpacity: Equatable {
   case number(CGFloat)
   case percent(CGFloat)
 

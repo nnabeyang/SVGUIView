@@ -32,14 +32,3 @@ final class SVGClipPathElement: SVGElement {
     }
   }
 }
-
-extension SVGClipPathElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case d
-    case fill
-  }
-
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

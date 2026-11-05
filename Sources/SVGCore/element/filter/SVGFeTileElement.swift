@@ -33,9 +33,3 @@ final class SVGFeTileElement: SVGElement, SVGFilterPrimitiveElement {
     input = SVGFilterInput(rawValue: attributes["in", default: ""])
   }
 }
-
-extension SVGFeTileElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

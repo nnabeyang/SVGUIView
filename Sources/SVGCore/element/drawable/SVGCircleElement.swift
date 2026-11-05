@@ -42,18 +42,3 @@ final class SVGCircleElement: ShapeGeometry {
     return path
   }
 }
-
-extension SVGCircleElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case cx
-    case cy
-    case r
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(cx, forKey: .cx)
-    try container.encode(cy, forKey: .cy)
-    try container.encode(r, forKey: .r)
-  }
-}

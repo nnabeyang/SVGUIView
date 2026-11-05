@@ -26,14 +26,3 @@ final class SVGPolygonElement: ShapeGeometry {
     points.pathData(isClosed: true)
   }
 }
-
-extension SVGPolygonElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case points
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(points, forKey: .points)
-  }
-}

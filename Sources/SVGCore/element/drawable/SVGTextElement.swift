@@ -598,14 +598,3 @@ private struct TextCollector {
     return characters
   }
 }
-
-extension SVGTextElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case text
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(text, forKey: .text)
-  }
-}
