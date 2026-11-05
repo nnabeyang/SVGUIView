@@ -13,8 +13,8 @@ protocol SVGLengthContext {
 /// What the geometry of an element depends on: lengths, and the box that percentages are relative to.
 protocol GeometryContext: SVGLengthContext {
   var viewBox: CGRect { get }
-  /// The path that a `<textPath>` lays its characters out along, in the user space of its text, or `nil` if it
-  /// references no `<path>`.
+  /// The path that a `<textPath>` lays its characters out along, in the user space of its text, or `nil` if it has
+  /// no path data and references no `<path>` or basic shape.
   func path(of textPath: SVGTSpanElement) -> PathMeasure?
 }
 
@@ -64,14 +64,27 @@ struct ResolveContext: GeometryContext {
   }
 
   func path(of textPath: SVGTSpanElement) -> PathMeasure? {
-    guard let id = textPath.pathID, let path = base[id] as? SVGPathElement else { return nil }
-    let context = styled(by: path)
-    let style = path.style
-    // The transform of the path applies to it, and the transforms of its ancestors don't.
+    guard let measure = unsidedPath(of: textPath) else { return nil }
+    return textPath.isOnRightSide ? measure.reversed() : measure
+  }
+
+  /// The path of a `<textPath>` in its direction: its `path` attribute if it has a segment, or the path of the
+  /// `<path>` or the basic shape that it references.
+  private func unsidedPath(of textPath: SVGTSpanElement) -> PathMeasure? {
+    if let data = textPath.pathData {
+      let measure = PathMeasure(data)
+      if measure.vertexDistances.count > 1 { return measure }
+    }
+    guard let id = textPath.pathID, let shape = base[id] as? any ShapeGeometry else { return nil }
+    let context = styled(by: shape)
+    // Text and images have no path data.
+    guard let data = shape.markerPath(in: context) else { return nil }
+    let style = shape.style
+    // The transform of the shape applies to it, and the transforms of its ancestors don't.
     let box =
       style.transformBox == .viewBox
-      ? CGRect(origin: .zero, size: viewBoxSize) : path.path(in: context)?.boundingBoxOfPath ?? .zero
-    return PathMeasure(path.data, transform: context.transform(of: style, box: box))
+      ? CGRect(origin: .zero, size: viewBoxSize) : shape.path(in: context)?.boundingBoxOfPath ?? .zero
+    return PathMeasure(data, transform: context.transform(of: style, box: box))
   }
 
   /// The transform of computed values about their transform origin in a reference box.

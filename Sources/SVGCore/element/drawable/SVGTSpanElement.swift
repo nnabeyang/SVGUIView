@@ -26,12 +26,29 @@ final class SVGTSpanElement: SVGDrawableElement {
     positions = CharacterPositions(attributes: base.name == .textPath ? [:] : base.attributes)
   }
 
-  /// The ID of the `<path>` that a `<textPath>` lays its characters out along, or `nil` if it references none.
+  /// The ID of the `<path>` or the basic shape that a `<textPath>` lays its characters out along, or `nil` if it
+  /// references none.
   var pathID: String? {
     guard let href = base.attributes["href"]?.trimmingCharacters(in: .whitespaces), href.hasPrefix("#") else {
       return nil
     }
     return String(href.dropFirst())
+  }
+
+  /// The path data of the `path` attribute of a `<textPath>` up to its first error, which it lays its characters out
+  /// along instead of the path that it references if the data has a segment.
+  var pathData: PathData? {
+    base.attributes["path"].map(PathData.init)
+  }
+
+  /// Whether a `<textPath>` places its characters on the right side of its path, which reverses the path.
+  var isOnRightSide: Bool {
+    base.attributes["side"]?.trimmingCharacters(in: .whitespaces) == "right"
+  }
+
+  /// Whether a `<textPath>` bends its glyphs along its path, instead of only placing them on it.
+  var stretchesGlyphs: Bool {
+    base.attributes["method"]?.trimmingCharacters(in: .whitespaces) == "stretch"
   }
 
   /// How far along its path a `<textPath>` starts its characters, where a percentage is of the length of the path.

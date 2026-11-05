@@ -60,6 +60,19 @@ struct PathMeasureTests {
     #expect(!PathMeasure(PathData("M0 0 H10 Z M20 0 H30 Z")).isClosed)
   }
 
+  @Test("a reversed path goes from its end to its start")
+  func reversedPath() throws {
+    let measure = PathMeasure(PathData("M0 0 L10 0 M20 0 L20 10")).reversed()
+    #expect(isClose(measure.length, 20))
+    #expect(measure.start == CGPoint(x: 20, y: 10))
+    #expect(measure.end == CGPoint(x: 0, y: 0))
+    let first = try #require(measure.point(onPathAt: 5))
+    #expect(first.point == CGPoint(x: 20, y: 5))
+    #expect(isClose(first.angle, -90))
+    #expect(measure.point(onPathAt: 15)?.point == CGPoint(x: 5, y: 0))
+    #expect(PathMeasure(PathData("M0 0 H10 V10 Z")).reversed().isClosed)
+  }
+
   @Test("a path is measured with its transform")
   func transformed() throws {
     let measure = PathMeasure(PathData("M0 0 L10 0"), transform: CGAffineTransform(scaleX: 2, y: 2).rotated(by: .pi / 2))

@@ -561,6 +561,22 @@ struct RenderTreeBuilderTests {
     (##"<text><textPath href="#s">ab</textPath></text>"##, ##"<text x="2" y="10">a</text>"##),
     // The characters after a path start at its end.
     (##"<text><textPath href="#s">a</textPath>b</text>"##, ##"<text x="2" y="10">a</text><text x="4.5" y="10">b</text>"##),
+    // The path attribute is used instead of the reference, up to its first error, unless it has no segment.
+    (##"<text><textPath path="M2 10 H100" href="#s">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    (##"<text><textPath path="M2 10 H4.5 error H100">ab</textPath></text>"##, ##"<text x="2" y="10">a</text>"##),
+    (##"<text><textPath path="error" href="#h">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    (##"<text><textPath path="M2 10" href="#h">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    // A basic shape is a path of the same shape, as SVG 2 specifies.
+    (##"<defs><line id="l" x1="2" y1="10" x2="100" y2="10"/></defs><text><textPath href="#l">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    (##"<defs><rect id="r" x="2" y="10" width="98" height="5"/></defs><text><textPath href="#r">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    // The right side reverses the path.
+    (##"<text><textPath path="M100 10 H2" side="right">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    // On a straight path, bending the glyphs along it draws them as they are.
+    (##"<text><textPath href="#h" method="stretch">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    (
+      ##"<text><textPath href="#h" method="stretch" text-decoration="underline">ab</textPath></text>"##,
+      ##"<text x="2" y="10" text-decoration="underline">ab</text>"##
+    ),
     // A textPath that references no path isn't rendered with its characters, and neither is one in a textPath.
     (##"<text x="2" y="10">a<textPath href="#none">b</textPath>c</text>"##, ##"<text x="2" y="10">ac</text>"##),
     (##"<text><textPath href="#h">a<textPath href="#h">b</textPath></textPath></text>"##, ##"<text x="2" y="10">a</text>"##),
@@ -599,6 +615,21 @@ struct RenderTreeBuilderTests {
     let moved = try await glyphBounds(##"<text dy="3"><textPath href="#v">T</textPath></text>"##)
     #expect(abs(moved.minX - (plain.minX - 3)) < 0.001)
     #expect(abs(moved.minY - plain.minY) < 0.001)
+  }
+
+  @Test("method=\"stretch\" moves each point of the glyphs to a curved path, instead of placing the glyphs whole")
+  func textPathStretch() async throws {
+    func glyphs(_ method: String) async throws -> CGPath {
+      let tree = try await renderTree(
+        ##"<g font-size="4"><text><textPath path="M2 12 A8 8 0 0 1 18 12" method=""## + method + ##"">——</textPath></text></g>"##)
+      let paths = try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath }
+      return try #require(paths.first)
+    }
+    // The corners of a dash move to the arc on their own, so the dash isn't the rectangle that's placed whole.
+    let bent = try await glyphs("stretch")
+    let placed = try await glyphs("align")
+    #expect(bent.boundingBoxOfPath != placed.boundingBoxOfPath)
+    #expect(!bent.boundingBoxOfPath.isEmpty)
   }
 
   /// The shapes of the nodes and their descendants, in order.

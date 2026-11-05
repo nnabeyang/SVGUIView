@@ -114,12 +114,95 @@ struct PlacedGlyph {
   let transform: CGAffineTransform
   /// The advance of the glyph, in the coordinates of the line.
   let advance: CGFloat
+  /// How the glyph is bent along its path, instead of the transform, or `nil` if it isn't.
+  var warp: GlyphWarp? = nil
+
+  /// Adds a path in the coordinates of the line, with the origin at the origin of the glyph, to a path in the user
+  /// space.
+  func add(_ path: CGPath, to target: CGMutablePath) {
+    if let warp {
+      target.addPath(warp.bend(path))
+    } else {
+      target.addPath(path, transform: transform)
+    }
+  }
+
+  /// Adds a rectangle in the coordinates of the line, with the origin at the origin of the glyph, to a path in the
+  /// user space. A glyph that's bent bends the rectangle with it, in pieces along its width.
+  func add(_ rect: CGRect, to target: CGMutablePath) {
+    guard let warp else {
+      target.addRect(rect, transform: transform)
+      return
+    }
+    let pieces = 8
+    let xs = (0...pieces).map { rect.minX + rect.width * CGFloat($0) / CGFloat(pieces) }
+    let outline = CGMutablePath()
+    outline.addLines(between: xs.map { CGPoint(x: $0, y: rect.minY) } + xs.reversed().map { CGPoint(x: $0, y: rect.maxY) })
+    outline.closeSubpath()
+    target.addPath(warp.bend(outline))
+  }
 }
 
-/// A path that text is laid out along: the path of a `<textPath>`, and the distance along it that the text starts at.
+/// How a glyph is bent along a path, as `method="stretch"` of a `<textPath>` bends it: each point of its outline,
+/// with the control points of its curves, is moved to the point of the path at its distance along the path, and
+/// across the path by its distance from the baseline. Beyond the ends of the path, the points go on in the direction
+/// of the path at its end.
+struct GlyphWarp {
+  let measure: PathMeasure
+  /// The transform of the outline in the coordinates of the line before it's bent, with the origin at the origin of
+  /// the glyph.
+  let transform: CGAffineTransform
+  /// The distance along the path of the origin of the glyph.
+  let start: CGFloat
+  /// How far across the path the baseline is.
+  let y: CGFloat
+  let textScale: CGFloat
+
+  /// A point in the coordinates of the line, with the origin at the origin of the glyph, bent to the user space.
+  func point(_ point: CGPoint) -> CGPoint {
+    let point = point.applying(transform)
+    let distance = start + point.x / textScale
+    let across = y - point.y / textScale
+    let onPath = min(max(distance, 0), measure.length)
+    guard let (pathPoint, angle) = measure.point(atDistance: onPath) else { return point }
+    let radians = angle * .pi / 180
+    let (cosine, sine) = (cos(radians), sin(radians))
+    let along = distance - onPath
+    return CGPoint(
+      x: pathPoint.x + cosine * along - sine * across, y: pathPoint.y + sine * along + cosine * across)
+  }
+
+  /// A path in the coordinates of the line, with the origin at the origin of the glyph, bent to the user space.
+  func bend(_ path: CGPath) -> CGPath {
+    let bent = CGMutablePath()
+    path.applyWithBlock { element in
+      let element = element.pointee
+      switch element.type {
+      case .moveToPoint:
+        bent.move(to: point(element.points[0]))
+      case .addLineToPoint:
+        bent.addLine(to: point(element.points[0]))
+      case .addQuadCurveToPoint:
+        bent.addQuadCurve(to: point(element.points[1]), control: point(element.points[0]))
+      case .addCurveToPoint:
+        bent.addCurve(
+          to: point(element.points[2]), control1: point(element.points[0]), control2: point(element.points[1]))
+      case .closeSubpath:
+        bent.closeSubpath()
+      @unknown default:
+        break
+      }
+    }
+    return bent
+  }
+}
+
+/// A path that text is laid out along: the path of a `<textPath>`, the distance along it that the text starts at,
+/// and whether the glyphs are bent along it.
 struct TextPathLayout {
   let measure: PathMeasure
   let startOffset: CGFloat
+  var stretches = false
 }
 
 /// Text laid out in runs of characters, with the positions that its elements give them.
@@ -248,9 +331,8 @@ struct TextLayout {
             let middle = origin + (position.x + advance.width / 2) / textScale
             return Self.place(
               at: middle, on: path, advance: advance.width,
-              transform: rotation.concatenating(CGAffineTransform(translationX: 0, y: position.y))
-                .concatenating(CGAffineTransform(scaleX: 1.0 / textScale, y: -1.0 / textScale))
-                .concatenating(CGAffineTransform(translationX: -advance.width / textScale / 2, y: run.y)))
+              transform: rotation.concatenating(CGAffineTransform(translationX: 0, y: position.y)), y: run.y,
+              textScale: textScale)
           }
         }
         return PlacedTextRun(
@@ -266,10 +348,11 @@ struct TextLayout {
   ///
   /// - Parameters:
   ///   - advance: The advance of the glyph, in the coordinates of the line.
-  ///   - transform: The transform of the glyph from the coordinates of the line to the coordinates whose origin is
-  ///     the point on the path and whose x-axis is in the direction of the path.
+  ///   - transform: The transform of the glyph in the coordinates of the line, with the origin at its origin.
+  ///   - y: How far across the path the baseline is.
   private static func place(
-    at middle: CGFloat, on path: TextPathLayout, advance: CGFloat, transform: CGAffineTransform
+    at middle: CGFloat, on path: TextPathLayout, advance: CGFloat, transform: CGAffineTransform, y: CGFloat,
+    textScale: CGFloat
   ) -> PlacedGlyph? {
     let measure = path.measure
     var distance = middle
@@ -280,10 +363,16 @@ struct TextLayout {
       if distance < 0 { distance += measure.length }
     }
     guard let (point, angle) = measure.point(onPathAt: distance) else { return nil }
+    let halfAdvance = advance / textScale / 2
     return PlacedGlyph(
-      transform: transform.concatenating(CGAffineTransform(rotationAngle: angle * .pi / 180))
+      transform: transform.concatenating(CGAffineTransform(scaleX: 1.0 / textScale, y: -1.0 / textScale))
+        .concatenating(CGAffineTransform(translationX: -halfAdvance, y: y))
+        .concatenating(CGAffineTransform(rotationAngle: angle * .pi / 180))
         .concatenating(CGAffineTransform(translationX: point.x, y: point.y)),
-      advance: advance)
+      advance: advance,
+      warp: path.stretches
+        ? GlyphWarp(
+          measure: measure, transform: transform, start: distance - halfAdvance, y: y, textScale: textScale) : nil)
   }
 
   /// The bounds of the lines of the runs of the elements, which are larger than the bounds of their glyphs. A run on
@@ -293,10 +382,11 @@ struct TextLayout {
       .map { run in
         let bounds = CTLineGetBoundsWithOptions(run.line, CTLineBoundsOptions())
         guard let glyphs = run.glyphs else { return bounds.applying(run.transform) }
-        return glyphs.compactMap(\.self).reduce(CGRect.null) { frame, glyph in
-          frame.union(
-            CGRect(x: 0, y: bounds.minY, width: glyph.advance, height: bounds.height).applying(glyph.transform))
+        let boxes = CGMutablePath()
+        for glyph in glyphs.compactMap(\.self) {
+          glyph.add(CGRect(x: 0, y: bounds.minY, width: glyph.advance, height: bounds.height), to: boxes)
         }
+        return boxes.isEmpty ? CGRect.null : boxes.boundingBoxOfPath
       }
       .reduce(CGRect.null) { $0.union($1) }
   }
@@ -333,15 +423,15 @@ struct TextLayout {
     for glyphRun in glyphRuns(of: run.line) {
       for (glyph, position) in zip(glyphRun.glyphs, glyphRun.positions) {
         defer { number += 1 }
-        let transform: CGAffineTransform
         if let glyphs = run.glyphs {
-          guard let placed = glyphs[number] else { continue }
-          transform = placed.transform
+          guard let placed = glyphs[number], let letter = CTFontCreatePathForGlyph(glyphRun.font, glyph, nil)
+          else { continue }
+          placed.add(letter, to: letters)
         } else {
-          transform = rotation.concatenating(CGAffineTransform(translationX: position.x, y: position.y))
+          guard let letter = CTFontCreatePathForGlyph(glyphRun.font, glyph, nil) else { continue }
+          letters.addPath(
+            letter, transform: rotation.concatenating(CGAffineTransform(translationX: position.x, y: position.y)))
         }
-        guard let letter = CTFontCreatePathForGlyph(glyphRun.font, glyph, nil) else { continue }
-        letters.addPath(letter, transform: transform)
       }
     }
     return letters
