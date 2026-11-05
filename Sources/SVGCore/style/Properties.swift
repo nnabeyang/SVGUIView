@@ -545,6 +545,30 @@ enum TextAnchorProperty: StyleProperty {
   }
 }
 
+/// `direction`, the direction that bidirectional text goes in, which `text-anchor` and `unicode-bidi` use.
+enum DirectionProperty: StyleProperty {
+  static let id = PropertyID.direction
+  static let isInherited = true
+  static let initial = TextDirection.ltr
+  static let computed = \ComputedStyle.direction
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> TextDirection? {
+    keyword(text, origin: origin)
+  }
+}
+
+/// `unicode-bidi`, how the characters of an element are embedded in the bidirectional text around them.
+enum UnicodeBidiProperty: StyleProperty {
+  static let id = PropertyID.unicodeBidi
+  static let isInherited = false
+  static let initial = UnicodeBidi.normal
+  static let computed = \ComputedStyle.unicodeBidi
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> UnicodeBidi? {
+    keyword(text, origin: origin)
+  }
+}
+
 enum WhiteSpaceProperty: StyleProperty {
   static let id = PropertyID.whiteSpace
   static let isInherited = true
