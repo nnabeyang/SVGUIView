@@ -1038,6 +1038,73 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  /// The bounds of the outlines of the glyphs of text, and of the shape of each element that has glyphs.
+  private func textBounds(_ content: String) async throws -> (all: CGRect, shapes: [CGRect]) {
+    let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+    let shapes = try shapes(of: children(of: tree)).map { try #require($0.geometry).path.cgPath.boundingBoxOfPath }
+    return (shapes.reduce(CGRect.null) { $0.union($1) }, shapes)
+  }
+
+  @Test("textLength with spacing moves the end of the text by the change of the length")
+  func textLengthSpacing() async throws {
+    let short = try await textBounds(#"<text x="2" y="10" textLength="20">abc</text>"#).all
+    let long = try await textBounds(#"<text x="2" y="10" textLength="30">abc</text>"#).all
+    #expect(abs(long.minX - short.minX) < 0.01)
+    #expect(abs(long.maxX - short.maxX - 10) < 0.01)
+    // The glyphs keep their sizes.
+    #expect(abs(long.height - short.height) < 0.01)
+  }
+
+  @Test("textLength with spacingAndGlyphs stretches the glyphs from the start of the text")
+  func textLengthStretch() async throws {
+    let short = try await textBounds(#"<text x="2" y="10" textLength="20" lengthAdjust="spacingAndGlyphs">abc</text>"#)
+    let long = try await textBounds(#"<text x="2" y="10" textLength="40" lengthAdjust="spacingAndGlyphs">abc</text>"#)
+    #expect(abs((long.all.maxX - 2) - 2 * (short.all.maxX - 2)) < 0.01)
+    #expect(abs(long.all.height - short.all.height) < 0.01)
+  }
+
+  @Test("textLength of a tspan moves the characters after it, with the space after its last character")
+  func tspanTextLength() async throws {
+    let short = try await textBounds(#"<text x="2" y="10">a<tspan textLength="10">bc</tspan>d</text>"#).shapes
+    let long = try await textBounds(#"<text x="2" y="10">a<tspan textLength="14">bc</tspan>d</text>"#).shapes
+    // The text has a and d, and the tspan has b and c, with one space between them.
+    #expect(abs(long[0].maxX - short[0].maxX - 8) < 0.01)
+    #expect(abs(long[1].maxX - short[1].maxX - 4) < 0.01)
+  }
+
+  @Test("textLength doesn't move characters with absolute positions, and the textLength of descendants applies first")
+  func textLengthAbsolutePositions() async throws {
+    let lines = #"<tspan x="2" y="10" textLength="10">ab</tspan><tspan x="2" y="20" textLength="12">cd</tspan>"#
+    let adjusted = try await textBounds(#"<text textLength="60">"# + lines + "</text>").shapes
+    let plain = try await textBounds("<text>" + lines + "</text>").shapes
+    #expect(adjusted.count == 2)
+    for (a, p) in zip(adjusted, plain) {
+      #expect(abs(a.minX - p.minX) < 0.01 && abs(a.maxX - p.maxX) < 0.01, "\(a) isn't \(p)")
+    }
+  }
+
+  @Test("textLength of vertical text is along the line")
+  func verticalTextLength() async throws {
+    let short = try await textBounds(#"<text x="10" y="2" writing-mode="tb" textLength="20">abc</text>"#).all
+    let long = try await textBounds(#"<text x="10" y="2" writing-mode="tb" textLength="30">abc</text>"#).all
+    #expect(abs(long.maxY - short.maxY - 10) < 0.01)
+    #expect(abs(long.width - short.width) < 0.01)
+  }
+
+  /// Text with a textLength that doesn't apply.
+  private static let ignoredTextLengths = [
+    #"<text x="2" y="10" textLength="-5">abc</text>"#,
+    #"<text x="2" y="10" textLength="inherit">abc</text>"#,
+    #"<g textLength="30"><text x="2" y="10">abc</text></g>"#,
+  ]
+
+  @Test("textLength that's negative, inherit, or on another element doesn't apply", arguments: ignoredTextLengths)
+  func ignoredTextLength(text: String) async throws {
+    let actual = try await textBounds(text).all
+    let expected = try await textBounds(#"<text x="2" y="10">abc</text>"#).all
+    #expect(actual == expected)
+  }
+
   @Test("a spacing of 0 keeps the kerning of the font")
   func zeroSpacing() async throws {
     func glyphBounds(_ content: String) async throws -> CGRect {
