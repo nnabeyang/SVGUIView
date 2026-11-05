@@ -13,6 +13,9 @@ protocol SVGLengthContext {
 /// What the geometry of an element depends on: lengths, and the box that percentages are relative to.
 protocol GeometryContext: SVGLengthContext {
   var viewBox: CGRect { get }
+  /// The path that a `<textPath>` lays its characters out along, in the user space of its text, or `nil` if it
+  /// references no `<path>`.
+  func path(of textPath: SVGTSpanElement) -> PathMeasure?
 }
 
 /// What resolving lengths and building geometry reads while a render tree is built: the rendered rectangle and
@@ -58,6 +61,30 @@ struct ResolveContext: GeometryContext {
     var context = self
     context.viewBox = viewBox
     return context
+  }
+
+  func path(of textPath: SVGTSpanElement) -> PathMeasure? {
+    guard let id = textPath.pathID, let path = base[id] as? SVGPathElement else { return nil }
+    let context = styled(by: path)
+    let style = path.style
+    // The transform of the path applies to it, and the transforms of its ancestors don't.
+    let box =
+      style.transformBox == .viewBox
+      ? CGRect(origin: .zero, size: viewBoxSize) : path.path(in: context)?.boundingBoxOfPath ?? .zero
+    return PathMeasure(path.data, transform: context.transform(of: style, box: box))
+  }
+
+  /// The transform of computed values about their transform origin in a reference box.
+  func transform(of style: ComputedStyle, box: CGRect) -> CGAffineTransform {
+    let list = style.transform
+    guard !list.functions.isEmpty else { return .identity }
+    let matrix = list.matrix(box: box.size, context: self)
+    let origin = CGPoint(
+      x: box.minX + style.transformOrigin.x.value(total: box.width, context: self),
+      y: box.minY + style.transformOrigin.y.value(total: box.height, context: self))
+    guard origin != .zero else { return matrix }
+    return CGAffineTransform(translationX: -origin.x, y: -origin.y).concatenating(matrix)
+      .concatenating(CGAffineTransform(translationX: origin.x, y: origin.y))
   }
 }
 

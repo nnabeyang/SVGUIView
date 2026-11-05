@@ -8,6 +8,7 @@ enum SVGElementName: String, Equatable {
   case a
   case text
   case tspan
+  case textPath
   case image
   case line
   case circle
@@ -92,11 +93,11 @@ package final class SVGParser: NSObject {
     let localName: String
     let attributes: [String: String]
     var children: [DocumentElement] = []
-    /// The character data so far before each child and after the last one, which only `<text>`, `<tspan>`, `<a>`
-    /// and `<style>` keep. An `<a>` uses it only in text.
+    /// The character data so far before each child and after the last one, which only `<text>`, `<tspan>`,
+    /// `<textPath>`, `<a>` and `<style>` keep. An `<a>` uses it only in text.
     var texts = [""]
 
-    var keepsText: Bool { name == .text || name == .tspan || name == .a || name == .style }
+    var keepsText: Bool { name == .text || name == .tspan || name == .textPath || name == .a || name == .style }
   }
 
   private var rules: [CSSRule] = []

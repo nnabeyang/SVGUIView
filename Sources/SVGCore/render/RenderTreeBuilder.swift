@@ -616,7 +616,7 @@ package struct RenderTreeBuilder {
     of element: any SVGDrawableElement, context: ResolveContext, frame: CGRect?, guard references: ReferenceGuard
   ) async -> CGAffineTransform {
     if let svg = element as? SVGSVGElement, svg.base.elementID == base.root?.base.elementID {
-      return transform(of: svg.style, box: rootBox(of: svg, context: context), context: context)
+      return context.transform(of: svg.style, box: rootBox(of: svg, context: context))
     }
     let transform = await transform(of: element.style, context: context) { box in
       if box == .fillBox, let frame { return frame }
@@ -639,7 +639,7 @@ package struct RenderTreeBuilder {
     // The box of `view-box` starts at the origin of user space, also for a `viewBox` that doesn't.
     let box =
       style.transformBox == .viewBox ? CGRect(origin: .zero, size: context.viewBoxSize) : await reference(style.transformBox)
-    return transform(of: style, box: box, context: context)
+    return context.transform(of: style, box: box)
   }
 
   /// The box of CSS layout of the root element, which is the reference box of its transform for every
@@ -650,19 +650,6 @@ package struct RenderTreeBuilder {
     return CGRect(
       x: 0, y: 0, width: (svg.width ?? .percent(100)).value(context: context, mode: .width),
       height: (svg.height ?? .percent(100)).value(context: context, mode: .height))
-  }
-
-  /// The transform of computed values about their transform origin in a reference box.
-  private func transform(of style: ComputedStyle, box: CGRect, context: ResolveContext) -> CGAffineTransform {
-    let list = style.transform
-    guard !list.functions.isEmpty else { return .identity }
-    let matrix = list.matrix(box: box.size, context: context)
-    let origin = CGPoint(
-      x: box.minX + style.transformOrigin.x.value(total: box.width, context: context),
-      y: box.minY + style.transformOrigin.y.value(total: box.height, context: context))
-    guard origin != .zero else { return matrix }
-    return CGAffineTransform(translationX: -origin.x, y: -origin.y).concatenating(matrix)
-      .concatenating(CGAffineTransform(translationX: origin.x, y: origin.y))
   }
 
   /// The bounds that units relative to an element use, in a context styled by the element.
