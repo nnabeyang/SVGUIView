@@ -301,9 +301,11 @@ struct ComputedStyle: Sendable, Equatable {
   ///   - element: The element, whose CSS animations play as the document keeps for them and whose transitions
   ///     override every other value, or `nil` for animations that play from the time that the document was loaded
   ///     and no transitions.
+  ///   - computesEveryProperty: Whether the properties that nothing sets are computed as the others are, instead of
+  ///     taking the values of the parent or the initial values at once, which tests compare.
   init(
     cascaded: CascadedValues, parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations? = nil,
-    smil: [SMILEffect] = [], element: ElementID? = nil
+    smil: [SMILEffect] = [], element: ElementID? = nil, computesEveryProperty: Bool = false
   ) {
     var computer = Computer(
       cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial),
@@ -317,7 +319,17 @@ struct ComputedStyle: Sendable, Equatable {
       computer.animations = ElementAnimation.animations(
         of: computer.resolver.style, element: element, in: animations)
     }
-    for id in PropertyID.allCases {
+    // Most properties of most elements have no declaration and no animation, and take the values of the parent or
+    // the initial values, which the style starts with.
+    var isSet = PropertyIndexSet()
+    if !computesEveryProperty {
+      for id in cascaded.properties { isSet.insert(id) }
+      for (id, _) in computer.smil { isSet.insert(id) }
+      for id in computer.transitions.keys { isSet.insert(id) }
+    }
+    let isAnimated = !computer.animations.isEmpty
+    for (index, id) in PropertyID.ordered.enumerated() {
+      computer.isUnset = !computesEveryProperty && !isSet.contains(index) && !(isAnimated && id.isAnimatable)
       id.visit(&computer)
     }
     // Motions apply in the order of the sandwich model, each over the ones under it.
@@ -342,13 +354,22 @@ struct ComputedStyle: Sendable, Equatable {
     let time: Double
     /// The animations that the element runs, in the order of `animation-name`.
     var animations = [ElementAnimation]()
+    /// Whether nothing sets the property that's visited: no declaration, no animation and no transition.
+    var isUnset = false
 
     mutating func visit<P: StyleProperty>(_: P.Type) {
+      if isUnset {
+        // The style starts with the initial values.
+        if P.isInherited {
+          resolver.style[keyPath: P.computed] = resolver.parent[keyPath: P.computed]
+        }
+        return
+      }
       var value = resolver.computed(cascaded[P.self], of: P.self)
       // Animations override the cascaded values except for important declarations. SMIL animations come first, and
       // CSS animations override them. A later animation overrides an earlier one, with the value under it as the
       // value that it starts from.
-      if P.id.isAnimatable, !cascaded.important.contains(P.id) {
+      if P.id.isAnimatable, !smil.isEmpty || !animations.isEmpty, !cascaded.important.contains(P.id) {
         for (property, effect) in smil where property == P.id {
           if let animated = effect.value(of: P.self, over: value, in: resolver) {
             value = animated
@@ -361,7 +382,7 @@ struct ComputedStyle: Sendable, Equatable {
         }
       }
       // Transitions override the animations and important declarations.
-      if let transition = transitions[P.id], let transitioned = transition.value(of: P.self, at: time, in: resolver) {
+      if !transitions.isEmpty, let transition = transitions[P.id], let transitioned = transition.value(of: P.self, at: time, in: resolver) {
         value = transitioned
       }
       resolver.style[keyPath: P.computed] = value
@@ -483,5 +504,30 @@ struct ComputedStyle: Sendable, Equatable {
     case .currentColor: color
     case .expression(let expression): expression.resolved(currentColor: color)
     }
+  }
+}
+
+extension PropertyID {
+  /// The properties in the order that their computed values are computed in, which is the order of their cases.
+  static let ordered = allCases
+
+  /// The index of the property in ``ordered``.
+  var index: Int {
+    Self.ordered.firstIndex(of: self)!
+  }
+}
+
+/// A set of properties by their indexes in ``PropertyID/ordered``, which doesn't hash their names.
+private struct PropertyIndexSet {
+  private var low: UInt64 = 0
+  private var high: UInt64 = 0
+
+  mutating func insert(_ id: PropertyID) {
+    let index = id.index
+    if index < 64 { low |= 1 << index } else { high |= 1 << (index - 64) }
+  }
+
+  func contains(_ index: Int) -> Bool {
+    index < 64 ? low & (1 << index) != 0 : high & (1 << (index - 64)) != 0
   }
 }
