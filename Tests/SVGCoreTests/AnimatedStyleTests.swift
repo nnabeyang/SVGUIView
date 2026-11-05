@@ -4,6 +4,11 @@ import Testing
 
 @testable import SVGCore
 
+/// The sum of lengths in different units.
+private func sum(_ terms: SVGLength...) -> SVGLength {
+  SVGLength.sum(of: terms)!
+}
+
 /// The document of the content, with its computed values at the time.
 private func document(_ content: String, at time: Double) -> SVGBaseContext {
   let svg = #"<svg xmlns="http://www.w3.org/2000/svg">"# + content + "</svg>"
@@ -101,7 +106,7 @@ struct AnimatedStyleTests {
     let style = try style(
       "<style>@keyframes w { from { stroke-width: 10px } to { stroke-width: 50% } }</style>"
         + #"<rect id="r" style="animation: w 1s linear"/>"#, at: 0.5)
-    #expect(style.strokeWidth == .sum(.pixel(5), .percent(25)))
+    #expect(style.strokeWidth == sum(.pixel(5), .percent(25)))
   }
 
   @Test("currentColor is the animated color, also in keyframes")
