@@ -3,7 +3,11 @@ import Foundation
 extension SVGBaseContext {
   /// The most passes of the schedule that finds the end of the SMIL animations, which is how many animations a
   /// chain of syncbase values can have.
-  static let endPasses = 100
+  ///
+  /// The time grows with the square of the passes for animations that keep beginning again, which never end, and the
+  /// chains of the documents have few animations, which take 3 passes at most in the test suite, so 20 is enough. A
+  /// longer chain gives an infinite end, which only keeps the clock running.
+  static let endPasses = 20
 
   /// The time in seconds after which the computed values of the document don't change, which is 0 for a document
   /// without animations and infinite for animations that don't end.
