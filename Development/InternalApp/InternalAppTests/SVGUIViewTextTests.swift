@@ -98,5 +98,15 @@ extension SnapshotTests {
     func writingMode(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "direction"))
+    func direction(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "unicode-bidi"))
+    func unicodeBidi(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }
