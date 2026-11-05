@@ -126,6 +126,20 @@ struct PathMeasure: Sendable {
     }
   }
 
+  /// The path in the other direction, from its end to its start.
+  func reversed() -> PathMeasure {
+    var reversed = self
+    var distance = 0.0
+    reversed.segments = segments.reversed().map { segment in
+      distance += hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y)
+      return Segment(start: segment.end, end: segment.start, distance: distance)
+    }
+    reversed.start = end
+    reversed.end = start
+    reversed.vertexDistances = vertexDistances.reversed().map { length - $0 }
+    return reversed
+  }
+
   /// The point at a distance along the path, which is clamped to the path, and the angle in degrees of the
   /// direction that the path goes in there, or `nil` for path data without a moveto.
   func point(atDistance distance: Double) -> (point: CGPoint, angle: Double)? {

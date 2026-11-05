@@ -50,8 +50,8 @@ final class SVGTextElement: ShapeGeometry {
   /// The positions that the text gives its characters.
   var positions: CharacterPositions { CharacterPositions(attributes: base.attributes) }
 
-  /// The characters of the text and its spans, and the paths of its `<textPath>` elements. A `<textPath>` that
-  /// references no `<path>` isn't rendered, with its characters.
+  /// The characters of the text and its spans, and the paths of its `<textPath>` elements. A `<textPath>` without a
+  /// path isn't rendered, with its characters.
   private func renderedContent(in context: any GeometryContext) -> (content: TextContent, paths: [PathMeasure]) {
     let paths = content.textPaths.map { context.path(of: $0) }
     if !paths.contains(where: { $0 == nil }) { return (content, paths.compactMap(\.self)) }
@@ -75,7 +75,8 @@ final class SVGTextElement: ShapeGeometry {
         } else {
           textPath.startOffset.value(context: context, mode: .other)
         }
-      return TextPathLayout(measure: measure, startOffset: offset.isFinite ? offset : 0)
+      return TextPathLayout(
+        measure: measure, startOffset: offset.isFinite ? offset : 0, stretches: textPath.stretchesGlyphs)
     }
     return TextLayout(
       characters: characters, anchors: owners.map(\.style.textAnchor),
@@ -157,7 +158,7 @@ final class SVGTextElement: ShapeGeometry {
         if let glyphs = run.glyphs {
           for glyph in glyphs.compactMap(\.self) {
             let rect = CGRect(x: 0, y: center - thickness / 2, width: glyph.advance, height: thickness)
-            path.addRect(rect, transform: glyph.transform)
+            glyph.add(rect, to: path)
           }
         } else {
           let rect = CGRect(x: 0, y: center - thickness / 2, width: run.width, height: thickness)
