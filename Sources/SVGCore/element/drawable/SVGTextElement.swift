@@ -68,6 +68,7 @@ final class SVGTextElement: ShapeGeometry {
       (span?.positions ?? positions).apply(to: &characters[range], context: context)
     }
     let owners = owners(of: content)
+    guard let line = Self.line(of: characters, owners: owners, context: context) else { return nil }
     let pathLayouts = zip(content.textPaths, paths).map { textPath, measure in
       let offset: CGFloat =
         if case .percent(let percent) = textPath.startOffset {
@@ -79,12 +80,9 @@ final class SVGTextElement: ShapeGeometry {
         measure: measure, startOffset: offset.isFinite ? offset : 0, stretches: textPath.stretchesGlyphs)
     }
     return TextLayout(
-      characters: characters, anchors: owners.map(\.style.textAnchor),
+      characters: characters, line: line, anchors: owners.map(\.style.textAnchor),
       baselineOffsets: baselineOffsets(of: content, context: context), textScale: context.textScale,
-      paths: pathLayouts
-    ) { text, owner in
-      Self.line(of: text, style: owners[owner].style, context: context)
-    }
+      paths: pathLayouts)
   }
 
   /// The text laid out, with the characters that it's laid out from, or `nil` if it isn't drawn.
@@ -102,7 +100,7 @@ final class SVGTextElement: ShapeGeometry {
   func spans(in context: any GeometryContext) -> [TextSpan]? {
     guard let (layout, content) = layout(context: context) else { return nil }
     let owners = owners(of: content)
-    let glyphs = Set(layout.runs.map(\.owner))
+    let glyphs = Set(layout.glyphs.map(\.owner)).union(layout.glyphs.isEmpty ? [0] : [])
     let lines = decorationLines(of: layout, content: content, context: context)
     var spans = [TextSpan]()
     for owner in owners.indices where glyphs.contains(owner) || lines.under[owner] != nil {
@@ -129,17 +127,31 @@ final class SVGTextElement: ShapeGeometry {
   /// A line decorates the characters of the element that declares it and of its descendants, and it's drawn with
   /// the styles and the font of that element, or of the text if an element around the text declares it.
   ///
-  /// A run on a path has a piece of each line under each of its glyphs.
+  /// The glyphs of an element next to each other on a horizontal baseline have one line, and each other glyph, such as
+  /// one on a path or a rotated one, has a piece of the line of its own.
   private func decorationLines(
     of layout: TextLayout, content: TextContent, context: any GeometryContext
   ) -> (under: [Int: CGMutablePath], through: [Int: CGMutablePath]) {
     var under = [Int: CGMutablePath]()
     var through = [Int: CGMutablePath]()
     let owners = owners(of: content)
-    for run in layout.runs {
+    // The glyphs that have one line, with their first glyph and their advance in the coordinates of the line.
+    var segments = [(glyph: PlacedGlyph, advance: CGFloat)]()
+    for glyph in layout.glyphs {
+      if glyph.isStraight, let last = segments.last, last.glyph.isStraight, last.glyph.owner == glyph.owner {
+        let a = last.glyph.transform
+        let b = glyph.transform
+        if a.a == b.a, a.b == b.b, a.c == b.c, a.d == b.d, a.ty == b.ty, abs(a.tx + a.a * last.advance - b.tx) < 1e-6 {
+          segments[segments.count - 1].advance += glyph.advance
+          continue
+        }
+      }
+      segments.append((glyph, glyph.advance))
+    }
+    for (glyph, advance) in segments {
       for line in [TextDecorationLines.underline, .overline, .lineThrough]
-      where owners[run.owner].style.textDecoration.contains(line) {
-        let decorator = decorator(of: line, for: run.owner, content: content)
+      where owners[glyph.owner].style.textDecoration.contains(line) {
+        let decorator = decorator(of: line, for: glyph.owner, content: content)
         guard let font = Self.font(of: owners[decorator].style, context: context) else { continue }
         var thickness = CTFontGetUnderlineThickness(font)
         let center: CGFloat
@@ -155,15 +167,7 @@ final class SVGTextElement: ShapeGeometry {
         }
         let paths = line == .lineThrough ? through : under
         let path = paths[decorator] ?? CGMutablePath()
-        if let glyphs = run.glyphs {
-          for glyph in glyphs.compactMap(\.self) {
-            let rect = CGRect(x: 0, y: center - thickness / 2, width: glyph.advance, height: thickness)
-            glyph.add(rect, to: path)
-          }
-        } else {
-          let rect = CGRect(x: 0, y: center - thickness / 2, width: run.width, height: thickness)
-          path.addRect(rect, transform: TextLayout.rotation(of: run).concatenating(run.transform))
-        }
+        glyph.add(CGRect(x: 0, y: center - thickness / 2, width: advance, height: thickness), to: path)
         if line == .lineThrough {
           through[decorator] = path
         } else {
@@ -264,17 +268,20 @@ final class SVGTextElement: ShapeGeometry {
     return 0
   }
 
-  /// The line of a run of characters in the font of a style, spaced by its `letter-spacing` and `word-spacing`, and
-  /// the space after its last character, or `nil` if it isn't drawn.
+  /// The characters of text as one line, each in the font of its element and spaced by its `letter-spacing` and
+  /// `word-spacing`, or `nil` if none of them are drawn. The characters of an element without a font aren't drawn,
+  /// and text without characters is an empty line if the text has a font.
   private static func line(
-    of text: String, style: ComputedStyle, context: any SVGLengthContext
-  ) -> (line: CTLine, trailingSpace: CGFloat)? {
-    guard let font = font(of: style, context: context),
-      let attributedText = CFAttributedStringCreate(
-        kCFAllocatorDefault, text as NSString, [kCTFontAttributeName: font] as CFDictionary)
-    else { return nil }
-    // The line is in the font, which is scaled by the text scale. A percentage is of the size of the font.
-    func spacing(_ length: SVGLength) -> CGFloat {
+    of characters: [TextCharacter], owners: [any SVGDrawableElement], context: any SVGLengthContext
+  ) -> TextLine? {
+    let fonts = owners.map { font(of: $0.style, context: context) }
+    guard let text = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0) else { return nil }
+    if characters.isEmpty {
+      guard fonts.first.flatMap(\.self) != nil else { return nil }
+      return TextLine(line: CTLineCreateWithAttributedString(text), characters: [], spacings: [])
+    }
+    // The line is in the fonts, which are scaled by the text scale. A percentage is of the size of the font.
+    func spacing(_ length: SVGLength, font: CTFont) -> CGFloat {
       let value: CGFloat =
         if case .percent(let percent) = length {
           percent / 100 * CTFontGetSize(font)
@@ -283,25 +290,37 @@ final class SVGTextElement: ShapeGeometry {
         }
       return value.isFinite ? value : 0
     }
-    let letter = spacing(style.letterSpacing)
-    let word = spacing(style.wordSpacing)
-    // A kern of 0 turns the kerning of the font off, so text without spacings has no kern.
-    guard letter != 0 || word != 0,
-      let spaced = CFAttributedStringCreateMutableCopy(kCFAllocatorDefault, 0, attributedText)
-    else { return (CTLineCreateWithAttributedString(attributedText), 0) }
-    var offset = 0
-    var kern: CGFloat = 0
-    for character in text {
-      let length = character.utf16.count
-      // word-spacing applies to the spaces that separate words.
-      kern = letter + (character == " " || character == "\u{A0}" ? word : 0)
-      if kern != 0 {
-        CFAttributedStringSetAttribute(
-          spaced, CFRange(location: offset, length: length), kCTKernAttributeName, kern as CFNumber)
-      }
-      offset += length
+    let spacings = owners.indices.map { owner -> (letter: CGFloat, word: CGFloat) in
+      guard let font = fonts[owner] else { return (0, 0) }
+      let style = owners[owner].style
+      return (spacing(style.letterSpacing, font: font), spacing(style.wordSpacing, font: font))
     }
-    return (CTLineCreateWithAttributedString(spaced), kern)
+    var characterOfIndex = [Int]()
+    var kerns = [CGFloat](repeating: 0, count: characters.count)
+    CFAttributedStringBeginEditing(text)
+    for (index, character) in characters.enumerated() {
+      guard let font = fonts[character.owner] else { continue }
+      let string = String(character.character)
+      let location = characterOfIndex.count
+      let length = string.utf16.count
+      CFAttributedStringReplaceString(text, CFRange(location: location, length: 0), string as CFString)
+      characterOfIndex += Array(repeating: index, count: length)
+      var attributes: [CFString: Any] = [kCTFontAttributeName: font]
+      // A kern of 0 turns the kerning of the font off, so text without spacings has no kern. word-spacing applies to
+      // the spaces that separate words.
+      let (letter, word) = spacings[character.owner]
+      let kern = letter + (character.character == " " || character.character == "\u{A0}" ? word : 0)
+      if kern != 0 {
+        attributes[kCTKernAttributeName] = kern
+        kerns[index] = kern
+      }
+      // Characters added to the string take the attributes of the character before them, which are replaced.
+      CFAttributedStringSetAttributes(
+        text, CFRange(location: location, length: length), attributes as CFDictionary, true)
+    }
+    CFAttributedStringEndEditing(text)
+    guard !characterOfIndex.isEmpty else { return nil }
+    return TextLine(line: CTLineCreateWithAttributedString(text), characters: characterOfIndex, spacings: kerns)
   }
 
   /// The font of a style, scaled by the text scale, or `nil` if its text isn't drawn.

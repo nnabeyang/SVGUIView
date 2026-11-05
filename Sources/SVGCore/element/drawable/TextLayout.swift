@@ -83,39 +83,35 @@ struct TextCharacter {
     self.path = path
   }
 
-  /// Whether the character starts a run of its own, because it has a position of its own or is rotated.
-  var startsRun: Bool { x != nil || y != nil || dx != nil || dy != nil || rotate != nil }
-
   /// Whether the character starts a text chunk, because it has an absolute position.
   var startsChunk: Bool { x != nil || y != nil }
 }
 
-/// A run of the characters of text, laid out on one line, and where its glyphs are drawn.
-struct PlacedTextRun {
+/// The characters of text shaped as one line, and ordered for bidirectional text, before they're placed.
+struct TextLine {
   let line: CTLine
-  /// The element of the characters, as an index into the elements of the text.
-  let owner: Int
-  /// The width of the line, in the coordinates of the line.
-  let width: CGFloat
-  /// The transform from the coordinates of the line, which the font is scaled in and whose y-axis points up, to the
-  /// user space.
-  let transform: CGAffineTransform
-  /// The rotation of each glyph about its origin, in degrees, or `nil` if the glyphs aren't rotated.
-  let rotation: Double?
-  /// Where each glyph of the line is drawn if the run is laid out along a path, in the order of the glyph runs of
-  /// the line, or `nil` if it isn't. A glyph that isn't on the path is `nil`, and isn't drawn. The transform of the
-  /// run is then the identity.
-  var glyphs: [PlacedGlyph?]? = nil
+  /// The character of each UTF-16 code unit of the line, as an index into the characters of the text.
+  let characters: [Int]
+  /// The space that `letter-spacing` and `word-spacing` add after each character of the text, in the coordinates of
+  /// the line.
+  let spacings: [CGFloat]
 }
 
-/// A glyph of text laid out along a path.
+/// A glyph of text and where it's drawn.
 struct PlacedGlyph {
+  /// The element of the character of the glyph, as an index into the elements of the text.
+  var owner = 0
+  var font: CTFont? = nil
+  var glyph = CGGlyph()
   /// The transform from the coordinates of the line, with the origin at the origin of the glyph, to the user space.
   let transform: CGAffineTransform
   /// The advance of the glyph, in the coordinates of the line.
   let advance: CGFloat
   /// How the glyph is bent along its path, instead of the transform, or `nil` if it isn't.
   var warp: GlyphWarp? = nil
+  /// Whether the glyph is on a line of the text with its baseline horizontal, so that the lines of `text-decoration`
+  /// of the glyphs next to it go on as one line.
+  var isStraight = false
 
   /// Adds a path in the coordinates of the line, with the origin at the origin of the glyph, to a path in the user
   /// space.
@@ -205,141 +201,165 @@ struct TextPathLayout {
   var stretches = false
 }
 
-/// Text laid out in runs of characters, with the positions that its elements give them.
+/// Text laid out as the text layout algorithm of SVG 2 lays it out: its characters are shaped and ordered as one
+/// line, and then each glyph is placed with the positions that the elements give its character.
 ///
-/// The characters are split into runs where they have positions of their own or belong to another element, and each
-/// run is a line of its own. A text chunk starts at each character with an absolute position, and is anchored by the
-/// `text-anchor` of the element of its first character with its width. Text of one element without positions of its
-/// characters is one run, as one line.
+/// The positions apply in the order of the characters: `x` and `y` move a character and the characters after it to an
+/// absolute position, and `dx` and `dy` move them by a distance. A text chunk starts at each character with an
+/// absolute position, and is anchored by the `text-anchor` of the element of its first character at the position of
+/// that character, with the bounds of its glyphs. The space that spacing adds after the last character of a chunk
+/// doesn't count.
 ///
-/// The characters of a `<textPath>` are a chunk of their own, laid out along its path as the text layout algorithm of
-/// SVG 2 does: each glyph is placed at the point of the path where its middle is, turned in the direction of the path,
-/// and `dy` and the baselines move it across the path. A glyph whose middle isn't on the path isn't drawn. The
-/// characters after the `<textPath>` start a chunk at the end of the path.
+/// The characters of a `<textPath>` are a chunk of their own, laid out along its path: each glyph is placed at the
+/// point of the path where its middle is, turned in the direction of the path, and `dy` and the baselines move it
+/// across the path. A glyph whose middle isn't on the path isn't drawn. The characters after the `<textPath>` start a
+/// chunk at the end of the path.
 struct TextLayout {
-  let runs: [PlacedTextRun]
+  /// The glyphs, in the order of the line.
+  let glyphs: [PlacedGlyph]
+  /// The metrics of the fonts of each element: the largest ascent, and the largest descent with the leading, in the
+  /// coordinates of the line, which the bounds of its glyphs have.
+  private let metrics: [Int: (ascent: CGFloat, descent: CGFloat)]
+  /// The bounds of text without glyphs, at the current text position.
+  private let emptyFrame: CGRect
 
   /// - Parameters:
-  ///   - characters: The characters, with their white space processed.
+  ///   - characters: The characters, with their white space processed and their positions.
+  ///   - line: The characters shaped as one line, without the characters that aren't drawn.
   ///   - anchors: The `text-anchor` of each element of the text.
   ///   - baselineOffsets: How far down the glyphs of each element of the text are drawn from the current text
   ///     position, in the user space, for its baselines and its `baseline-shift`.
   ///   - paths: The paths that the characters in `<textPath>` elements are laid out along.
-  ///   - line: Makes the line of a run of characters of an element, with the space after its last character, or
-  ///     returns `nil` if they aren't drawn. The space after the last character of a chunk doesn't count in its
-  ///     width, which it's anchored with.
-  init?(
-    characters: [TextCharacter], anchors: [TextAnchor], baselineOffsets: [CGFloat], textScale: CGFloat,
-    paths: [TextPathLayout] = [], line: (String, Int) -> (line: CTLine, trailingSpace: CGFloat)?
+  init(
+    characters: [TextCharacter], line: TextLine, anchors: [TextAnchor], baselineOffsets: [CGFloat],
+    textScale: CGFloat, paths: [TextPathLayout] = []
   ) {
-    // The runs, with the index of their first character.
-    var starts = [0]
-    for index in characters.indices.dropFirst()
-    where characters[index].startsRun || characters[index].owner != characters[index - 1].owner
-      || characters[index].path != characters[index - 1].path
-    {
-      starts.append(index)
+    struct LineGlyph {
+      let font: CTFont
+      let glyph: CGGlyph
+      let position: CGPoint
+      let advance: CGFloat
+      let character: Int
     }
-    struct Run {
-      let line: CTLine
-      let owner: Int
-      /// The width of the line in the coordinates of the line.
-      let width: CGFloat
-      /// The position of the baseline below the current text position, or across the path for a chunk on a path.
-      let y: CGFloat
-      /// The distance from the start of the chunk, in the coordinates of the line.
-      let offset: CGFloat
-      let rotation: Double?
+    var lineGlyphs = [LineGlyph]()
+    var metrics = [Int: (ascent: CGFloat, descent: CGFloat)]()
+    for run in Self.glyphRuns(of: line.line) {
+      for index in run.glyphs.indices {
+        let character = line.characters[run.stringIndices[index]]
+        lineGlyphs.append(
+          LineGlyph(
+            font: run.font, glyph: run.glyphs[index], position: run.positions[index],
+            advance: run.advances[index].width, character: character))
+        let owner = characters[character].owner
+        let current = metrics[owner] ?? (0, 0)
+        metrics[owner] = (max(current.ascent, run.ascent), max(current.descent, run.descent))
+      }
+    }
+    self.metrics = metrics
+    emptyFrame = CGRect(x: 0, y: baselineOffsets.first ?? 0, width: 0, height: 0)
+    // The position of each character in the line, which its first glyph is drawn at, in the user space. A character
+    // without a glyph of its own, such as one in a ligature, is where the character before it is.
+    var linePositions = [CGFloat?](repeating: nil, count: characters.count)
+    for glyph in lineGlyphs {
+      let x = glyph.position.x / textScale
+      linePositions[glyph.character] = min(linePositions[glyph.character] ?? x, x)
+    }
+    var previous: CGFloat = 0
+    let positions = linePositions.map { position in
+      defer { previous = position ?? previous }
+      return position ?? previous
     }
     struct Chunk {
-      /// The position of the chunk, or the distance along the path for a chunk on a path.
-      let x: CGFloat
+      let start: Int
       let anchor: TextAnchor
-      /// The path that the chunk is laid out along, as an index into the paths.
       let path: Int?
-      var width: CGFloat = 0
-      var runs = [Run]()
     }
     var chunks = [Chunk]()
+    // How far each character is moved along the line, the position of its baseline below the line or across its
+    // path, and its chunk.
+    var offsets = [CGFloat](repeating: 0, count: characters.count)
+    var ys = [CGFloat](repeating: 0, count: characters.count)
+    var chunkOfCharacter = [Int](repeating: 0, count: characters.count)
+    var offset: CGFloat = 0
     var y: CGFloat = 0
-    var x: CGFloat = 0
     // How far `dy` has moved the characters of a `<textPath>` across its path.
     var pathY: CGFloat = 0
-    for (number, start) in starts.enumerated() {
-      let end = number + 1 < starts.count ? starts[number + 1] : characters.count
-      // Text without characters is one empty run of the text itself.
-      let first = start < characters.count ? characters[start] : TextCharacter(character: " ", owner: 0)
-      let previousPath = start > 0 && start < characters.count ? characters[start - 1].path : nil
-      let entersPath = first.path != nil && first.path != previousPath
-      let leavesPath = previousPath != nil && first.path == nil
+    for (index, character) in characters.enumerated() {
+      let previousPath = index > 0 ? characters[index - 1].path : nil
+      let entersPath = character.path != nil && character.path != previousPath
+      let leavesPath = previousPath != nil && character.path == nil
       if entersPath {
         // The characters on a path start at its start, and the `y` of a character on a path doesn't apply.
-        x = 0
+        offset = -positions[index]
         pathY = 0
       } else if leavesPath, let previousPath, let pathEnd = paths[previousPath].measure.end {
-        x = pathEnd.x
+        offset = pathEnd.x - positions[index]
         y = pathEnd.y
       }
-      x = first.x ?? x
-      x += first.dx ?? 0
-      if first.path == nil {
-        y = first.y ?? y
-        y += first.dy ?? 0
+      if let x = character.x { offset = x - positions[index] }
+      offset += character.dx ?? 0
+      if character.path == nil {
+        y = character.y ?? y
+        y += character.dy ?? 0
       } else {
-        pathY += first.dy ?? 0
+        pathY += character.dy ?? 0
       }
-      if chunks.isEmpty || first.startsChunk || entersPath || leavesPath {
+      if chunks.isEmpty || character.startsChunk || entersPath || leavesPath {
         // The characters after a path start at its end, whatever their `text-anchor` is.
-        let anchor = leavesPath && !first.startsChunk ? .start : anchors[first.owner]
-        chunks.append(Chunk(x: x, anchor: anchor, path: first.path))
+        let anchor = leavesPath && !character.startsChunk ? .start : anchors[character.owner]
+        chunks.append(Chunk(start: index, anchor: anchor, path: character.path))
       }
-      guard let (runLine, trailingSpace) = line(String(characters[start..<end].map(\.character)), first.owner)
-      else { continue }
-      let width = CTLineGetBoundsWithOptions(runLine, CTLineBoundsOptions()).width
-      let chunk = chunks.count - 1
-      // The offset of the first run of a chunk is 0, so that text without positions is laid out as one line.
-      let offset = chunks[chunk].runs.isEmpty ? 0 : (x - chunks[chunk].x) * textScale
-      chunks[chunk].runs.append(
-        Run(
-          line: runLine, owner: first.owner, width: width,
-          y: (first.path == nil ? y : pathY) + baselineOffsets[first.owner], offset: offset, rotation: first.rotate))
-      chunks[chunk].width = offset + width - trailingSpace
-      x += width / textScale
+      offsets[index] = offset
+      ys[index] = (character.path == nil ? y : pathY) + baselineOffsets[character.owner]
+      chunkOfCharacter[index] = chunks.count - 1
     }
-    runs = chunks.flatMap { chunk in
-      let anchorOffset: CGFloat =
-        switch chunk.anchor {
-        case .start: 0
-        case .middle: -chunk.width / 2
-        case .end: -chunk.width
-        }
-      return chunk.runs.map { run in
-        guard let pathIndex = chunk.path else {
-          return PlacedTextRun(
-            line: run.line, owner: run.owner, width: run.width,
-            transform: CGAffineTransform(translationX: chunk.x, y: run.y)
-              .scaledBy(x: 1.0 / textScale, y: -1.0 / textScale)
-              .translatedBy(x: anchorOffset + run.offset, y: 0),
-            rotation: run.rotation)
-        }
-        let rotation = Self.rotation(of: run.rotation)
+    // Each chunk is moved so that its anchor is at the position of its first character.
+    var bounds = [(start: CGFloat, end: CGFloat)](repeating: (.infinity, -.infinity), count: chunks.count)
+    for glyph in lineGlyphs {
+      let chunk = chunkOfCharacter[glyph.character]
+      let start = glyph.position.x / textScale + offsets[glyph.character]
+      let isLast = chunk + 1 < chunks.count ? glyph.character + 1 == chunks[chunk + 1].start : glyph.character + 1 == characters.count
+      let end = start + (glyph.advance - (isLast ? line.spacings[glyph.character] : 0)) / textScale
+      bounds[chunk] = (min(bounds[chunk].start, start), max(bounds[chunk].end, end))
+    }
+    let shifts = chunks.indices.map { number -> CGFloat in
+      let (start, end) = bounds[number]
+      guard start <= end else { return 0 }
+      let first = chunks[number].start
+      let position = positions[first] + offsets[first]
+      return switch chunks[number].anchor {
+      case .start: position - start
+      case .middle: position - (start + end) / 2
+      case .end: position - end
+      }
+    }
+    glyphs = lineGlyphs.compactMap { glyph in
+      let character = characters[glyph.character]
+      let chunk = chunkOfCharacter[glyph.character]
+      let rotation = Self.rotation(of: character.rotate)
+      let x = glyph.position.x / textScale + offsets[glyph.character] + shifts[chunk]
+      let local = rotation.concatenating(CGAffineTransform(translationX: 0, y: glyph.position.y))
+      var placed: PlacedGlyph
+      if let pathIndex = chunks[chunk].path {
         let path = paths[pathIndex]
-        // The distance along the path of the origin of the line.
-        let origin = path.startOffset + chunk.x + (anchorOffset + run.offset) / textScale
-        let glyphs = Self.glyphRuns(of: run.line).flatMap { glyphRun in
-          zip(glyphRun.positions, glyphRun.advances).map { position, advance in
-            let middle = origin + (position.x + advance.width / 2) / textScale
-            return Self.place(
-              at: middle, on: path, advance: advance.width,
-              transform: rotation.concatenating(CGAffineTransform(translationX: 0, y: position.y)), y: run.y,
-              textScale: textScale)
-          }
-        }
-        return PlacedTextRun(
-          line: run.line, owner: run.owner, width: run.width, transform: .identity, rotation: nil, glyphs: glyphs)
+        let middle = path.startOffset + x + glyph.advance / textScale / 2
+        guard
+          let onPath = Self.place(
+            at: middle, on: path, advance: glyph.advance, transform: local, y: ys[glyph.character],
+            textScale: textScale)
+        else { return nil }
+        placed = onPath
+      } else {
+        placed = PlacedGlyph(
+          transform: local.concatenating(CGAffineTransform(scaleX: 1.0 / textScale, y: -1.0 / textScale))
+            .concatenating(CGAffineTransform(translationX: x, y: ys[glyph.character])),
+          advance: glyph.advance, isStraight: character.rotate == nil)
       }
+      placed.owner = character.owner
+      placed.font = glyph.font
+      placed.glyph = glyph.glyph
+      return placed
     }
-    if runs.isEmpty { return nil }
   }
 
   /// A glyph placed with its middle at a distance along a path, or `nil` if the middle isn't on the path.
@@ -375,25 +395,16 @@ struct TextLayout {
           measure: measure, transform: transform, start: distance - halfAdvance, y: y, textScale: textScale) : nil)
   }
 
-  /// The bounds of the lines of the runs of the elements, which are larger than the bounds of their glyphs. A run on
-  /// a path has the bounds of the boxes of its glyphs, as high as its line.
+  /// The bounds of the glyphs of the elements as high as the fonts of the elements, which are larger than the bounds
+  /// of their outlines.
   func frame(of owners: Set<Int>? = nil) -> CGRect {
-    runs.filter { owners?.contains($0.owner) ?? true }
-      .map { run in
-        let bounds = CTLineGetBoundsWithOptions(run.line, CTLineBoundsOptions())
-        guard let glyphs = run.glyphs else { return bounds.applying(run.transform) }
-        let boxes = CGMutablePath()
-        for glyph in glyphs.compactMap(\.self) {
-          glyph.add(CGRect(x: 0, y: bounds.minY, width: glyph.advance, height: bounds.height), to: boxes)
-        }
-        return boxes.isEmpty ? CGRect.null : boxes.boundingBoxOfPath
-      }
-      .reduce(CGRect.null) { $0.union($1) }
-  }
-
-  /// The rotation of the glyphs of a run about their origins, in the coordinates of its line.
-  static func rotation(of run: PlacedTextRun) -> CGAffineTransform {
-    rotation(of: run.rotation)
+    let boxes = CGMutablePath()
+    for glyph in glyphs where owners?.contains(glyph.owner) ?? true {
+      let (ascent, descent) = metrics[glyph.owner] ?? (0, 0)
+      glyph.add(CGRect(x: 0, y: -descent, width: glyph.advance, height: ascent + descent), to: boxes)
+    }
+    if boxes.isEmpty { return glyphs.isEmpty && (owners?.contains(0) ?? true) ? emptyFrame : .null }
+    return boxes.boundingBoxOfPath
   }
 
   /// A rotation in degrees of glyphs about their origins, in the coordinates of their line.
@@ -404,44 +415,22 @@ struct TextLayout {
 
   /// The outlines of the glyphs of the elements.
   func path(of owners: Set<Int>? = nil) -> CGPath {
-    let runs = runs.filter { owners?.contains($0.owner) ?? true }
-    if runs.count == 1 {
-      return Self.glyphs(of: runs[0]).applying(runs[0].transform)
-    }
     let path = CGMutablePath()
-    for run in runs {
-      path.addPath(Self.glyphs(of: run), transform: run.transform)
+    for glyph in glyphs where owners?.contains(glyph.owner) ?? true {
+      guard let font = glyph.font, let letter = CTFontCreatePathForGlyph(font, glyph.glyph, nil) else { continue }
+      glyph.add(letter, to: path)
     }
     return path
   }
 
-  /// The outlines of the glyphs of a run, in the coordinates of its line.
-  private static func glyphs(of run: PlacedTextRun) -> CGMutablePath {
-    let letters = CGMutablePath()
-    let rotation = rotation(of: run)
-    var number = 0
-    for glyphRun in glyphRuns(of: run.line) {
-      for (glyph, position) in zip(glyphRun.glyphs, glyphRun.positions) {
-        defer { number += 1 }
-        if let glyphs = run.glyphs {
-          guard let placed = glyphs[number], let letter = CTFontCreatePathForGlyph(glyphRun.font, glyph, nil)
-          else { continue }
-          placed.add(letter, to: letters)
-        } else {
-          guard let letter = CTFontCreatePathForGlyph(glyphRun.font, glyph, nil) else { continue }
-          letters.addPath(
-            letter, transform: rotation.concatenating(CGAffineTransform(translationX: position.x, y: position.y)))
-        }
-      }
-    }
-    return letters
-  }
-
-  /// The glyph runs of a line: the font, the glyphs, their positions and their advances, in the coordinates of the
-  /// line.
+  /// The glyph runs of a line: the font, the glyphs, their positions, their advances and the UTF-16 offsets of their
+  /// characters, and the ascent and the descent with the leading of the font, in the coordinates of the line.
   static func glyphRuns(
     of line: CTLine
-  ) -> [(font: CTFont, glyphs: [CGGlyph], positions: [CGPoint], advances: [CGSize])] {
+  ) -> [(
+    font: CTFont, glyphs: [CGGlyph], positions: [CGPoint], advances: [CGSize], stringIndices: [Int], ascent: CGFloat,
+    descent: CGFloat
+  )] {
     let glyphRuns = CTLineGetGlyphRuns(line)
     return (0..<CFArrayGetCount(glyphRuns)).map { i in
       let glyphRun = unsafeBitCast(CFArrayGetValueAtIndex(glyphRuns, i), to: CTRun.self)
@@ -456,7 +445,14 @@ struct TextLayout {
       CTRunGetGlyphs(glyphRun, range, &glyphs)
       CTRunGetPositions(glyphRun, range, &positions)
       CTRunGetAdvances(glyphRun, range, &advances)
-      return (runFont, glyphs, positions, advances)
+      var stringIndices = [CFIndex](repeating: 0, count: length)
+      CTRunGetStringIndices(glyphRun, range, &stringIndices)
+      var ascent: CGFloat = 0
+      var descent: CGFloat = 0
+      var leading: CGFloat = 0
+      CTRunGetTypographicBounds(glyphRun, CFRange(location: 0, length: 0), &ascent, &descent, &leading)
+      // The bounds of a line go down by the leading below the descent.
+      return (runFont, glyphs, positions, advances, stringIndices, ascent, descent + leading)
     }
   }
 }

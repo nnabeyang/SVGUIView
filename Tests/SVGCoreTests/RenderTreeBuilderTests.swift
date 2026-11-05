@@ -632,6 +632,31 @@ struct RenderTreeBuilderTests {
     #expect(!bent.boundingBoxOfPath.isEmpty)
   }
 
+  /// Text whose characters are shaped as one line across its spans, and text that draws the same glyphs.
+  private static let textLines: [(String, String)] = [
+    // The glyphs of a font are kerned across the span.
+    (#"<text x="2" y="10">A<tspan>V</tspan>A</text>"#, #"<text x="2" y="10">AVA</text>"#),
+    // The spacing of a character doesn't go on to the characters after it.
+    (#"<text x="2" y="10" word-spacing="3">a bc</text>"#, #"<text x="2" y="10">a <tspan dx="3">bc</tspan></text>"#),
+    // The letters of Arabic join across the span.
+    (#"<text x="2" y="10">مر<tspan>حبا</tspan></text>"#, #"<text x="2" y="10">مرحبا</text>"#),
+  ]
+
+  @Test("text is shaped as one line across its spans", arguments: textLines)
+  func textLine(text: String, same: String) async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+      return try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    let actual = try await glyphBounds(text)
+    let expected = try await glyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.001, "\(actual) isn't \(expected)")
+    }
+  }
+
   /// The shapes of the nodes and their descendants, in order.
   private func shapes(of nodes: [RenderNode]) -> [ShapeNode] {
     nodes.flatMap { node -> [ShapeNode] in
