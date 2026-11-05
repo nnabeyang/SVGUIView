@@ -110,6 +110,15 @@ final class SVGTextElement: ShapeGeometry {
       return TextPathLayout(
         measure: measure, startOffset: offset.isFinite ? offset : 0, stretches: textPath.stretchesGlyphs)
     }
+    // A percentage of `textLength` is of the width of the viewport, or of its height in vertical text.
+    let lengthAdjustments = zip(content.owners, content.ranges).reversed().compactMap {
+      span, range -> TextLengthAdjustment? in
+      guard !range.isEmpty, let (length, stretches) = TextLengthAdjustment.length(attributes: (span?.base ?? base).attributes)
+      else { return nil }
+      return TextLengthAdjustment(
+        characters: range, length: length.value(context: context, mode: isVertical ? .height : .width),
+        stretchesGlyphs: stretches)
+    }
     return TextLayout(
       characters: characters, line: line, anchors: owners.map(\.style.textAnchor),
       directions: owners.map(\.style.direction),
@@ -118,7 +127,7 @@ final class SVGTextElement: ShapeGeometry {
       centralBaselines: isVertical
         ? owners.map { owner in
           Self.font(of: owner.style, context: context).map { Self.position(of: .central, in: $0) / context.textScale } ?? 0
-        } : [])
+        } : [], lengthAdjustments: lengthAdjustments)
   }
 
   /// The text laid out, with the characters that it's laid out from, or `nil` if it isn't drawn.
