@@ -27,6 +27,8 @@ enum PropertyID: String, CaseIterable, Sendable {
   case shapeRendering = "shape-rendering"
   case clipRule = "clip-rule"
   case textAnchor = "text-anchor"
+  case direction
+  case unicodeBidi = "unicode-bidi"
   case whiteSpace = "white-space"
   case textDecoration = "text-decoration"
   case letterSpacing = "letter-spacing"
@@ -105,6 +107,8 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .shapeRendering: visitor.visit(ShapeRenderingProperty.self)
     case .clipRule: visitor.visit(ClipRuleProperty.self)
     case .textAnchor: visitor.visit(TextAnchorProperty.self)
+    case .direction: visitor.visit(DirectionProperty.self)
+    case .unicodeBidi: visitor.visit(UnicodeBidiProperty.self)
     case .whiteSpace: visitor.visit(WhiteSpaceProperty.self)
     case .textDecoration: visitor.visit(TextDecorationProperty.self)
     case .letterSpacing: visitor.visit(LetterSpacingProperty.self)
@@ -187,6 +191,8 @@ struct ComputedStyle: Sendable, Equatable {
   var shapeRendering: ShapeRendering
   var clipRule: FillRule
   var textAnchor: TextAnchor
+  var direction = TextDirection.ltr
+  var unicodeBidi = UnicodeBidi.normal
   var whiteSpace: CSSWhiteSpace
   /// The lines of `text-decoration` of the element and its ancestors, which the lines decorate the text of.
   var textDecoration: TextDecorationLines

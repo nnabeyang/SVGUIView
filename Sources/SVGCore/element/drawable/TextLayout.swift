@@ -227,12 +227,14 @@ struct TextLayout {
   ///   - characters: The characters, with their white space processed and their positions.
   ///   - line: The characters shaped as one line, without the characters that aren't drawn.
   ///   - anchors: The `text-anchor` of each element of the text.
+  ///   - directions: The `direction` of each element of the text, which the start and the end of its `text-anchor` are
+  ///     in.
   ///   - baselineOffsets: How far down the glyphs of each element of the text are drawn from the current text
   ///     position, in the user space, for its baselines and its `baseline-shift`.
   ///   - paths: The paths that the characters in `<textPath>` elements are laid out along.
   init(
-    characters: [TextCharacter], line: TextLine, anchors: [TextAnchor], baselineOffsets: [CGFloat],
-    textScale: CGFloat, paths: [TextPathLayout] = []
+    characters: [TextCharacter], line: TextLine, anchors: [TextAnchor], directions: [TextDirection]? = nil,
+    baselineOffsets: [CGFloat], textScale: CGFloat, paths: [TextPathLayout] = []
   ) {
     struct LineGlyph {
       let font: CTFont
@@ -240,6 +242,7 @@ struct TextLayout {
       let position: CGPoint
       let advance: CGFloat
       let character: Int
+      let isRightToLeft: Bool
     }
     var lineGlyphs = [LineGlyph]()
     var metrics = [Int: (ascent: CGFloat, descent: CGFloat)]()
@@ -249,7 +252,7 @@ struct TextLayout {
         lineGlyphs.append(
           LineGlyph(
             font: run.font, glyph: run.glyphs[index], position: run.positions[index],
-            advance: run.advances[index].width, character: character))
+            advance: run.advances[index].width, character: character, isRightToLeft: run.isRightToLeft))
         let owner = characters[character].owner
         let current = metrics[owner] ?? (0, 0)
         metrics[owner] = (max(current.ascent, run.ascent), max(current.descent, run.descent))
@@ -257,12 +260,18 @@ struct TextLayout {
     }
     self.metrics = metrics
     emptyFrame = CGRect(x: 0, y: baselineOffsets.first ?? 0, width: 0, height: 0)
-    // The position of each character in the line, which its first glyph is drawn at, in the user space. A character
-    // without a glyph of its own, such as one in a ligature, is where the character before it is.
+    // The position of each character in the line, in the user space, which is the start of its glyphs: their left
+    // end, or their right end in a right-to-left run, as SVG 2 has the advances of right-to-left characters go left.
+    // A character without a glyph of its own, such as one in a ligature, is where the character before it is.
     var linePositions = [CGFloat?](repeating: nil, count: characters.count)
     for glyph in lineGlyphs {
-      let x = glyph.position.x / textScale
-      linePositions[glyph.character] = min(linePositions[glyph.character] ?? x, x)
+      if glyph.isRightToLeft {
+        let x = (glyph.position.x + glyph.advance) / textScale
+        linePositions[glyph.character] = max(linePositions[glyph.character] ?? x, x)
+      } else {
+        let x = glyph.position.x / textScale
+        linePositions[glyph.character] = min(linePositions[glyph.character] ?? x, x)
+      }
     }
     var previous: CGFloat = 0
     let positions = linePositions.map { position in
@@ -272,6 +281,7 @@ struct TextLayout {
     struct Chunk {
       let start: Int
       let anchor: TextAnchor
+      let direction: TextDirection
       let path: Int?
     }
     var chunks = [Chunk]()
@@ -307,7 +317,8 @@ struct TextLayout {
       if chunks.isEmpty || character.startsChunk || entersPath || leavesPath {
         // The characters after a path start at its end, whatever their `text-anchor` is.
         let anchor = leavesPath && !character.startsChunk ? .start : anchors[character.owner]
-        chunks.append(Chunk(start: index, anchor: anchor, path: character.path))
+        chunks.append(
+          Chunk(start: index, anchor: anchor, direction: directions?[character.owner] ?? .ltr, path: character.path))
       }
       offsets[index] = offset
       ys[index] = (character.path == nil ? y : pathY) + baselineOffsets[character.owner]
@@ -327,10 +338,10 @@ struct TextLayout {
       guard start <= end else { return 0 }
       let first = chunks[number].start
       let position = positions[first] + offsets[first]
-      return switch chunks[number].anchor {
-      case .start: position - start
-      case .middle: position - (start + end) / 2
-      case .end: position - end
+      return switch (chunks[number].anchor, chunks[number].direction) {
+      case (.start, .ltr), (.end, .rtl): position - start
+      case (.middle, _): position - (start + end) / 2
+      case (.end, .ltr), (.start, .rtl): position - end
       }
     }
     glyphs = lineGlyphs.compactMap { glyph in
@@ -424,12 +435,13 @@ struct TextLayout {
   }
 
   /// The glyph runs of a line: the font, the glyphs, their positions, their advances and the UTF-16 offsets of their
-  /// characters, and the ascent and the descent with the leading of the font, in the coordinates of the line.
+  /// characters, the ascent and the descent with the leading of the font, in the coordinates of the line, and whether
+  /// the run goes from right to left.
   static func glyphRuns(
     of line: CTLine
   ) -> [(
     font: CTFont, glyphs: [CGGlyph], positions: [CGPoint], advances: [CGSize], stringIndices: [Int], ascent: CGFloat,
-    descent: CGFloat
+    descent: CGFloat, isRightToLeft: Bool
   )] {
     let glyphRuns = CTLineGetGlyphRuns(line)
     return (0..<CFArrayGetCount(glyphRuns)).map { i in
@@ -452,7 +464,8 @@ struct TextLayout {
       var leading: CGFloat = 0
       CTRunGetTypographicBounds(glyphRun, CFRange(location: 0, length: 0), &ascent, &descent, &leading)
       // The bounds of a line go down by the leading below the descent.
-      return (runFont, glyphs, positions, advances, stringIndices, ascent, descent + leading)
+      let isRightToLeft = CTRunGetStatus(glyphRun).contains(.rightToLeft)
+      return (runFont, glyphs, positions, advances, stringIndices, ascent, descent + leading, isRightToLeft)
     }
   }
 }

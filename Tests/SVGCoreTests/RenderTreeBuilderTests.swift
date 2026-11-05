@@ -657,6 +657,60 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  // MARK: - Bidirectional text
+
+  /// Text in a direction, and text that draws the same glyphs.
+  private static let textDirections: [(String, String)] = [
+    // The start of text in the right-to-left direction is its right end, and its end is its left end.
+    (#"<text x="10" y="10" direction="rtl">Text</text>"#, #"<text x="10" y="10" text-anchor="end">Text</text>"#),
+    (#"<text x="10" y="10" direction="rtl" text-anchor="end">Text</text>"#, #"<text x="10" y="10">Text</text>"#),
+    (
+      #"<text x="10" y="10" direction="rtl" text-anchor="middle">Text</text>"#,
+      #"<text x="10" y="10" text-anchor="middle">Text</text>"#
+    ),
+    // Cursive scripts aren't spaced by letter-spacing.
+    (#"<text x="2" y="10" letter-spacing="2">مرحبا</text>"#, #"<text x="2" y="10">مرحبا</text>"#),
+  ]
+
+  @Test("direction sets the start and the end of text-anchor, and cursive scripts aren't spaced", arguments: textDirections)
+  func textDirection(text: String, same: String) async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+      return try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    let actual = try await glyphBounds(text)
+    let expected = try await glyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.001, "\(actual) isn't \(expected)")
+    }
+  }
+
+  /// Text with two spans, and whether the first span is left of the second one.
+  private static let spanOrders: [(String, Bool)] = [
+    // The paragraph is in the direction of the text, also if it starts with a right-to-left character.
+    (#"<text x="2" y="10"><tspan>א</tspan> <tspan>b</tspan></text>"#, true),
+    (#"<text x="2" y="10" direction="rtl"><tspan>א</tspan> <tspan>b</tspan></text>"#, false),
+    (#"<text x="2" y="10"><tspan>a</tspan><tspan>b</tspan></text>"#, true),
+    // bidi-override orders the characters in the direction.
+    (#"<text x="2" y="10" direction="rtl" unicode-bidi="bidi-override"><tspan>a</tspan><tspan>b</tspan></text>"#, false),
+    (#"<text x="2" y="10"><tspan>א</tspan><tspan>ב</tspan></text>"#, false),
+    (
+      #"<text x="2" y="10"><tspan unicode-bidi="bidi-override"><tspan>א</tspan><tspan>ב</tspan></tspan></text>"#,
+      true
+    ),
+  ]
+
+  @Test("the characters of text are ordered by the direction of the text and unicode-bidi", arguments: spanOrders)
+  func textOrder(text: String, isFirstLeft: Bool) async throws {
+    let tree = try await renderTree(#"<g font-size="4">"# + text + "</g>")
+    let frames = try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath.boundingBoxOfPath }
+      .filter { !$0.isEmpty }
+    try #require(frames.count == 2)
+    #expect((frames[0].midX < frames[1].midX) == isFirstLeft, "\(frames)")
+  }
+
   /// The shapes of the nodes and their descendants, in order.
   private func shapes(of nodes: [RenderNode]) -> [ShapeNode] {
     nodes.flatMap { node -> [ShapeNode] in

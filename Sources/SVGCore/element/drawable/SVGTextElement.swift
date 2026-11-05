@@ -8,6 +8,22 @@ enum TextAnchor: String, CaseIterable {
   case end
 }
 
+/// The values of `direction`.
+enum TextDirection: String, CaseIterable, Sendable {
+  case ltr
+  case rtl
+}
+
+/// The values of `unicode-bidi`.
+enum UnicodeBidi: String, CaseIterable, Sendable {
+  case normal
+  case embed
+  case isolate
+  case bidiOverride = "bidi-override"
+  case isolateOverride = "isolate-override"
+  case plaintext
+}
+
 final class SVGTextElement: ShapeGeometry {
   static var type: SVGElementName {
     .text
@@ -68,7 +84,9 @@ final class SVGTextElement: ShapeGeometry {
       (span?.positions ?? positions).apply(to: &characters[range], context: context)
     }
     let owners = owners(of: content)
-    guard let line = Self.line(of: characters, owners: owners, context: context) else { return nil }
+    guard let line = Self.line(of: characters, owners: owners, parents: content.parents, context: context) else {
+      return nil
+    }
     let pathLayouts = zip(content.textPaths, paths).map { textPath, measure in
       let offset: CGFloat =
         if case .percent(let percent) = textPath.startOffset {
@@ -81,6 +99,7 @@ final class SVGTextElement: ShapeGeometry {
     }
     return TextLayout(
       characters: characters, line: line, anchors: owners.map(\.style.textAnchor),
+      directions: owners.map(\.style.direction),
       baselineOffsets: baselineOffsets(of: content, context: context), textScale: context.textScale,
       paths: pathLayouts)
   }
@@ -271,8 +290,15 @@ final class SVGTextElement: ShapeGeometry {
   /// The characters of text as one line, each in the font of its element and spaced by its `letter-spacing` and
   /// `word-spacing`, or `nil` if none of them are drawn. The characters of an element without a font aren't drawn,
   /// and text without characters is an empty line if the text has a font.
+  ///
+  /// The line is a paragraph in the `direction` of the text, and each element whose `unicode-bidi` isn't `normal`
+  /// embeds its characters in its `direction`, or overrides their directions. `isolate` and `plaintext` embed, and
+  /// `isolate-override` overrides, as Core Text has no isolates in its attributes. Characters of cursive scripts
+  /// aren't spaced by `letter-spacing`, as CSS Text says.
+  ///
+  /// - Parameter parents: The element that each element is in, or `nil` for the text itself.
   private static func line(
-    of characters: [TextCharacter], owners: [any SVGDrawableElement], context: any SVGLengthContext
+    of characters: [TextCharacter], owners: [any SVGDrawableElement], parents: [Int?], context: any SVGLengthContext
   ) -> TextLine? {
     let fonts = owners.map { font(of: $0.style, context: context) }
     guard let text = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0) else { return nil }
@@ -295,6 +321,18 @@ final class SVGTextElement: ShapeGeometry {
       let style = owners[owner].style
       return (spacing(style.letterSpacing, font: font), spacing(style.wordSpacing, font: font))
     }
+    // The embeddings of the characters of each element, from the outermost one, as Core Text takes them.
+    var embeddings = [[NSNumber]]()
+    for owner in owners.indices {
+      var levels = parents[owner].map { embeddings[$0] } ?? []
+      let style = owners[owner].style
+      if style.unicodeBidi != .normal {
+        let direction = style.direction == .rtl ? CTWritingDirection.rightToLeft : .leftToRight
+        let overrides = style.unicodeBidi == .bidiOverride || style.unicodeBidi == .isolateOverride
+        levels.append(NSNumber(value: Int(direction.rawValue) | (overrides ? kCTWritingDirectionOverride : 0)))
+      }
+      embeddings.append(levels)
+    }
     var characterOfIndex = [Int]()
     var kerns = [CGFloat](repeating: 0, count: characters.count)
     CFAttributedStringBeginEditing(text)
@@ -306,10 +344,15 @@ final class SVGTextElement: ShapeGeometry {
       CFAttributedStringReplaceString(text, CFRange(location: location, length: 0), string as CFString)
       characterOfIndex += Array(repeating: index, count: length)
       var attributes: [CFString: Any] = [kCTFontAttributeName: font]
+      if !embeddings[character.owner].isEmpty {
+        attributes[kCTWritingDirectionAttributeName] = embeddings[character.owner]
+      }
       // A kern of 0 turns the kerning of the font off, so text without spacings has no kern. word-spacing applies to
       // the spaces that separate words.
       let (letter, word) = spacings[character.owner]
-      let kern = letter + (character.character == " " || character.character == "\u{A0}" ? word : 0)
+      let kern =
+        (Self.isCursive(character.character) ? 0 : letter)
+        + (character.character == " " || character.character == "\u{A0}" ? word : 0)
       if kern != 0 {
         attributes[kCTKernAttributeName] = kern
         kerns[index] = kern
@@ -318,9 +361,29 @@ final class SVGTextElement: ShapeGeometry {
       CFAttributedStringSetAttributes(
         text, CFRange(location: location, length: length), attributes as CFDictionary, true)
     }
+    var direction = owners[0].style.direction == .rtl ? CTWritingDirection.rightToLeft : .leftToRight
+    let paragraph = withUnsafeBytes(of: &direction) { bytes in
+      var setting = CTParagraphStyleSetting(
+        spec: .baseWritingDirection, valueSize: MemoryLayout<CTWritingDirection>.size, value: bytes.baseAddress!)
+      return CTParagraphStyleCreate(&setting, 1)
+    }
+    CFAttributedStringSetAttribute(
+      text, CFRange(location: 0, length: characterOfIndex.count), kCTParagraphStyleAttributeName, paragraph)
     CFAttributedStringEndEditing(text)
     guard !characterOfIndex.isEmpty else { return nil }
     return TextLine(line: CTLineCreateWithAttributedString(text), characters: characterOfIndex, spacings: kerns)
+  }
+
+  /// Whether a character is of a cursive script, whose letters join: Arabic, Syriac, N'Ko, Mandaic, Mongolian,
+  /// Phags-pa and Hanifi Rohingya.
+  private static func isCursive(_ character: Character) -> Bool {
+    guard let scalar = character.unicodeScalars.first?.value else { return false }
+    let ranges: [ClosedRange<UInt32>] = [
+      0x0600...0x06FF, 0x0700...0x074F, 0x0750...0x077F, 0x07C0...0x07FF, 0x0840...0x085F, 0x0860...0x086F,
+      0x0870...0x089F, 0x08A0...0x08FF, 0x1800...0x18AF, 0xA840...0xA87F, 0xFB50...0xFDFF, 0xFE70...0xFEFF,
+      0x10D00...0x10D3F, 0x10EC0...0x10EFF, 0x11660...0x1167F,
+    ]
+    return ranges.contains { $0.contains(scalar) }
   }
 
   /// The font of a style, scaled by the text scale, or `nil` if its text isn't drawn.
