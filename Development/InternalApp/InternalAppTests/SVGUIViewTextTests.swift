@@ -68,5 +68,35 @@ extension SnapshotTests {
     func alignmentBaseline(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "font"))
+    func font(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "font-kerning"))
+    func fontKerning(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "glyph-orientation-horizontal"))
+    func glyphOrientationHorizontal(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "textLength"))
+    func textLength(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "textPath"))
+    func textPath(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "writing-mode"))
+    func writingMode(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }
