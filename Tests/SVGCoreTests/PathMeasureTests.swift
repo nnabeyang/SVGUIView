@@ -42,6 +42,33 @@ struct PathMeasureTests {
     #expect(PathMeasure(PathData("M3 4")).point(atDistance: 0)?.point == CGPoint(x: 3, y: 4))
   }
 
+  @Test("points on a path, which a distance outside the path has none of")
+  func pointsOnPath() throws {
+    let measure = PathMeasure(PathData("M0 0 L10 0 L10 10"))
+    #expect(measure.point(onPathAt: 15)?.point == CGPoint(x: 10, y: 5))
+    #expect(measure.point(onPathAt: 20)?.point == CGPoint(x: 10, y: 10))
+    #expect(measure.point(onPathAt: 20.5) == nil)
+    #expect(measure.point(onPathAt: -0.5) == nil)
+    #expect(measure.end == CGPoint(x: 10, y: 10))
+  }
+
+  @Test("a path is closed if it's one subpath that ends with a closepath")
+  func closed() {
+    #expect(PathMeasure(PathData("M0 0 H10 V10 Z")).isClosed)
+    #expect(PathMeasure(PathData("M0 0 H10 V10 Z")).end == CGPoint(x: 0, y: 0))
+    #expect(!PathMeasure(PathData("M0 0 H10 V10")).isClosed)
+    #expect(!PathMeasure(PathData("M0 0 H10 Z M20 0 H30 Z")).isClosed)
+  }
+
+  @Test("a path is measured with its transform")
+  func transformed() throws {
+    let measure = PathMeasure(PathData("M0 0 L10 0"), transform: CGAffineTransform(scaleX: 2, y: 2).rotated(by: .pi / 2))
+    #expect(isClose(measure.length, 20))
+    let end = try #require(measure.point(onPathAt: 20))
+    #expect(isClose(end.point.x, 0) && isClose(end.point.y, 20))
+    #expect(isClose(end.angle, 90))
+  }
+
   @Test("a moveto jumps to its point")
   func jumps() throws {
     let measure = PathMeasure(PathData("M0 0 L10 0 M50 50 L50 60"))

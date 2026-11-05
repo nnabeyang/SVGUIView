@@ -50,10 +50,11 @@ extension ElementCursor: Element {
     return ElementCursor(element: parent.element, ancestors: Array(ancestors.dropLast()))
   }
 
-  /// Whether the element is a span of text: a `<tspan>` or an `<a>` whose ancestors up to a `<text>` are spans.
+  /// Whether the element is a span of text: a `<tspan>`, a `<textPath>` or an `<a>` whose ancestors up to a `<text>`
+  /// are spans.
   var isInText: Bool {
     var cursor = self
-    while cursor.element.name == .tspan || cursor.element.name == .a, let parent = cursor.parent {
+    while [.tspan, .textPath, .a].contains(cursor.element.name), let parent = cursor.parent {
       if parent.element.name == .text { return true }
       cursor = parent
     }

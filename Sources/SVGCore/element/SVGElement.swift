@@ -234,9 +234,12 @@ extension ElementCursor {
     // rendered, so the character data around them goes together.
     var texts = [element.texts[0]]
     for index in element.children.indices {
-      // A `<tspan>` is rendered only in text, and text renders only its spans: `<tspan>` and `<a>` children.
+      // A `<tspan>` is rendered only in text, and text renders only its spans: `<tspan>` and `<a>` children, and
+      // `<textPath>` children of the `<text>` itself.
       let childName = element.children[index].name
-      if isText ? (childName == .tspan || childName == .a) : childName != .tspan,
+      if isText
+        ? (childName == .tspan || childName == .a || (childName == .textPath && name == .text))
+        : childName != .tspan && childName != .textPath,
         let child = child(at: index).makeElement(
           with: css, languages: languages, parent: style, root: root ?? style, animations: animations)
       {
@@ -315,7 +318,7 @@ extension ElementCursor {
         SVGFeMergeNodeElement(base: base, contents: contents)
       case .text:
         SVGTextElement(base: base, contents: contents)
-      case .tspan:
+      case .tspan, .textPath:
         SVGTSpanElement(base: base, contents: contents)
       case .image:
         SVGImageElement(base: base, contents: contents)

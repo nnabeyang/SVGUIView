@@ -543,6 +543,64 @@ struct RenderTreeBuilderTests {
     #expect(glyphs.minY >= 9.999 && glyphs.maxY > 10)
   }
 
+  /// Text on a path, and text that draws the same glyphs. The paths are in `<defs>`, and the glyphs are 4 high.
+  private static let textPaths: [(String, String)] = [
+    // On a straight path, the glyphs are where they are on a line from its start.
+    (##"<text><textPath href="#h">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    (##"<defs><path id="t" d="M0 0 H100" transform="translate(2 10)"/></defs><text><textPath href="#t">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    (##"<text><textPath href="#h" startOffset="3">ab</textPath></text>"##, ##"<text x="5" y="10">ab</text>"##),
+    (##"<text><textPath href="#h" startOffset="10%">ab</textPath></text>"##, ##"<text x="11.8" y="10">ab</text>"##),
+    // The x of a character on a path is a distance along it, and its y doesn't apply.
+    (##"<text x="4" y="30"><textPath href="#h">ab</textPath></text>"##, ##"<text x="6" y="10">ab</text>"##),
+    (##"<text><textPath href="#h">a<tspan dx="1" dy="2">b</tspan></textPath></text>"##, ##"<text x="2" y="10">a<tspan dx="1" dy="2">b</tspan></text>"##),
+    (
+      ##"<text text-anchor="middle"><textPath href="#h" startOffset="50">ab</textPath></text>"##,
+      ##"<text x="52" y="10" text-anchor="middle">ab</text>"##
+    ),
+    // A glyph whose middle isn't on the path isn't drawn.
+    (##"<text><textPath href="#s">ab</textPath></text>"##, ##"<text x="2" y="10">a</text>"##),
+    // The characters after a path start at its end.
+    (##"<text><textPath href="#s">a</textPath>b</text>"##, ##"<text x="2" y="10">a</text><text x="4.5" y="10">b</text>"##),
+    // A textPath that references no path isn't rendered with its characters, and neither is one in a textPath.
+    (##"<text x="2" y="10">a<textPath href="#none">b</textPath>c</text>"##, ##"<text x="2" y="10">ac</text>"##),
+    (##"<text><textPath href="#h">a<textPath href="#h">b</textPath></textPath></text>"##, ##"<text x="2" y="10">a</text>"##),
+  ]
+
+  @Test("the glyphs of textPath are placed along its path", arguments: textPaths)
+  func textPath(text: String, same: String) async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let defs = ##"<defs><path id="h" d="M2 10 H100"/><path id="s" d="M2 10 H4.5"/></defs>"##
+      let tree = try await renderTree(##"<g font-size="4">"## + defs + content + "</g>")
+      // The `<defs>` is a shape without geometry.
+      return try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    let actual = try await glyphBounds(text)
+    let expected = try await glyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.001, "\(actual) isn't \(expected)")
+    }
+  }
+
+  @Test("a glyph on a path turns in the direction of the path, and dy moves it across the path")
+  func textPathDirection() async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let defs = ##"<defs><path id="v" d="M10 2 V100"/></defs>"##
+      let tree = try await renderTree(##"<g font-size="4">"## + defs + content + "</g>")
+      // The `<defs>` is a shape without geometry.
+      return try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    // Down the path, the tops of the glyphs are to the right of it, and dy moves them to the left.
+    let plain = try await glyphBounds(##"<text><textPath href="#v">T</textPath></text>"##)
+    #expect(plain.minX >= 10 - 0.001 && plain.maxX > 12)
+    #expect(plain.minY >= 2 - 0.001)
+    let moved = try await glyphBounds(##"<text dy="3"><textPath href="#v">T</textPath></text>"##)
+    #expect(abs(moved.minX - (plain.minX - 3)) < 0.001)
+    #expect(abs(moved.minY - plain.minY) < 0.001)
+  }
+
   /// The shapes of the nodes and their descendants, in order.
   private func shapes(of nodes: [RenderNode]) -> [ShapeNode] {
     nodes.flatMap { node -> [ShapeNode] in

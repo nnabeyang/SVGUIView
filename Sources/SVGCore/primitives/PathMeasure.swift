@@ -20,6 +20,10 @@ struct PathMeasure: Sendable {
   /// The distances along the path at the ends of its commands, which are the vertices that the linear and discrete
   /// calculation modes of `<animateMotion>` go through. The first is 0, at the first moveto.
   private(set) var vertexDistances = [Double]()
+  /// The point that the path ends at, or `nil` for path data without a moveto.
+  private(set) var end: CGPoint?
+  /// Whether the path is one subpath that's closed.
+  private(set) var isClosed = false
 
   /// The length of the path.
   var length: Double { segments.last?.distance ?? 0 }
@@ -27,8 +31,13 @@ struct PathMeasure: Sendable {
   /// The number of lines that each curve is divided into.
   private static let curveSteps = 64
 
-  init(_ data: PathData) {
+  /// - Parameter transform: The transform that the points of the path are measured in.
+  init(_ data: PathData, transform: CGAffineTransform = .identity) {
     let context = SVGPathContext()
+    // The subpaths that draw something, and whether a moveto has begun one that hasn't drawn yet. A closepath is
+    // followed by a moveto to the start of its subpath.
+    var subpaths = 0
+    var begins = false
     var count = 0
     var current = CGPoint.zero
     var subpathStart = CGPoint.zero
@@ -50,14 +59,20 @@ struct PathMeasure: Sendable {
           case .addCurveToPoint: 3
           default: 0
           }
-        elements.append((element.type, (0..<pointCount).map { element.points[$0] }))
+        elements.append((element.type, (0..<pointCount).map { element.points[$0].applying(transform) }))
       }
       for (type, points) in elements {
+        if type != .moveToPoint, begins {
+          subpaths += 1
+          begins = false
+          isClosed = false
+        }
         switch type {
         case .moveToPoint:
           current = points[0]
           subpathStart = current
           if start == nil { start = current }
+          begins = true
         case .addLineToPoint:
           add(from: current, to: points[0])
           current = points[0]
@@ -86,6 +101,7 @@ struct PathMeasure: Sendable {
         case .closeSubpath:
           add(from: current, to: subpathStart)
           current = subpathStart
+          isClosed = subpaths == 1
         @unknown default:
           break
         }
@@ -93,6 +109,7 @@ struct PathMeasure: Sendable {
       count = index
       vertexDistances.append(length)
     }
+    if start != nil { end = current }
   }
 
   private mutating func add(from start: CGPoint, to end: CGPoint) {
@@ -112,8 +129,14 @@ struct PathMeasure: Sendable {
   /// The point at a distance along the path, which is clamped to the path, and the angle in degrees of the
   /// direction that the path goes in there, or `nil` for path data without a moveto.
   func point(atDistance distance: Double) -> (point: CGPoint, angle: Double)? {
-    guard let start else { return nil }
-    let distance = min(max(distance, 0), length)
+    guard start != nil else { return nil }
+    return point(onPathAt: min(max(distance, 0), length))
+  }
+
+  /// The point at a distance along the path, and the angle in degrees of the direction that the path goes in there,
+  /// or `nil` if the distance isn't on the path.
+  func point(onPathAt distance: Double) -> (point: CGPoint, angle: Double)? {
+    guard let start, distance >= 0, distance <= length else { return nil }
     var previous = 0.0
     for segment in segments {
       defer { previous = segment.distance }
