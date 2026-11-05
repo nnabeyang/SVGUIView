@@ -38,9 +38,3 @@ final class SVGFeOffsetElement: SVGElement, SVGFilterPrimitiveElement {
   }
 
 }
-
-extension SVGFeOffsetElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

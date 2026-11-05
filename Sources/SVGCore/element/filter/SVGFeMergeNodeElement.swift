@@ -16,9 +16,3 @@ final class SVGFeMergeNodeElement: SVGElement {
     input = SVGFilterInput(rawValue: attributes["in", default: ""])
   }
 }
-
-extension SVGFeMergeNodeElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

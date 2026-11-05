@@ -104,7 +104,8 @@ final class SVGTextElement: ShapeGeometry {
         if case .percent(let percent) = textPath.startOffset {
           percent / 100 * measure.length
         } else {
-          textPath.startOffset.value(context: context, mode: .other)
+          // A sum of a percentage and a length, which an animation makes, has the percentage of the path too.
+          textPath.startOffset.value(total: measure.length, context: context)
         }
       return TextPathLayout(
         measure: measure, startOffset: offset.isFinite ? offset : 0, stretches: textPath.stretchesGlyphs)
@@ -265,7 +266,8 @@ final class SVGTextElement: ShapeGeometry {
         case .length(.percent(let percent)):
           shift += percent / 100 * CTFontGetSize(font) / textScale
         case .length(let length):
-          shift += length.value(context: context, mode: .other)
+          // A percentage in a sum, which an animation makes, is of the size of the font too.
+          shift += length.value(total: CTFontGetSize(font) / textScale, context: context)
         }
       }
       shifts.append(shift)
@@ -341,7 +343,8 @@ final class SVGTextElement: ShapeGeometry {
         if case .percent(let percent) = length {
           percent / 100 * CTFontGetSize(font)
         } else {
-          length.value(context: context, mode: .other) * context.textScale
+          // A percentage in a sum, which an animation makes, is of the size of the font too.
+          length.value(total: CTFontGetSize(font) / context.textScale, context: context) * context.textScale
         }
       return value.isFinite ? value : 0
     }
@@ -596,16 +599,5 @@ private struct TextCollector {
       ranges[index] = ranges[index].clamped(to: 0..<characters.count)
     }
     return characters
-  }
-}
-
-extension SVGTextElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case text
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(text, forKey: .text)
   }
 }

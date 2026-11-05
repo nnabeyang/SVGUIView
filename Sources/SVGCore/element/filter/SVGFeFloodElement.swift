@@ -36,9 +36,3 @@ final class SVGFeFloodElement: SVGElement, SVGFilterPrimitiveElement {
   }
 
 }
-
-extension SVGFeFloodElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

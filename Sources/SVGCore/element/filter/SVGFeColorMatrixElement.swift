@@ -47,9 +47,3 @@ final class SVGFeColorMatrixElement: SVGElement, SVGFilterPrimitiveElement {
     values = attributes["values"].flatMap(numberList)
   }
 }
-
-extension SVGFeColorMatrixElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

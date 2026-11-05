@@ -57,14 +57,3 @@ final class SVGMaskElement: SVGDrawableElement {
     }
   }
 }
-
-extension SVGMaskElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case d
-    case fill
-  }
-
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

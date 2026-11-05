@@ -45,7 +45,7 @@ struct AnimatableTests {
     #expect(isURL(Paint.none.animated(to: .url("#a", fallback: nil), progress: 0.5), "#a"))
   }
 
-  /// Lengths and their interpolations halfway, or `nil` where they can't be interpolated.
+  /// Lengths and their interpolations halfway.
   private static let lengths: [(SVGLength, SVGLength, SVGLength?)] = [
     (.pixel(10), .pixel(20), .pixel(15)),
     (.number(10), .pixel(20), .pixel(15)),
@@ -54,11 +54,14 @@ struct AnimatableTests {
     (.vw(10), .vw(20), .vw(15)),
     (.inches(1), .pixel(48), .pixel(72)),
     (.points(72), .picas(12), .pixel(144)),
-    (.percent(10), .pixel(20), nil),
-    (.vw(10), .pixel(20), nil),
+    // Lengths in other units are interpolated unit by unit, as their sum.
+    (.percent(10), .pixel(20), .sum(.percent(5), .pixel(10))),
+    (.vw(10), .pixel(20), .sum(.vw(5), .pixel(10))),
+    (.sum(.pixel(2), .percent(10)), .inches(1), .sum(.pixel(49), .percent(5))),
+    (.sum(.pixel(2), .percent(10)), .sum(.percent(30), .ems(2)), .sum(.sum(.pixel(1), .percent(20)), .ems(1))),
   ]
 
-  @Test("lengths are interpolated in the same unit or in pixels", arguments: lengths)
+  @Test("lengths are interpolated in the same unit, in pixels, or unit by unit as their sum", arguments: lengths)
   func lengthInterpolation(from: SVGLength, to: SVGLength, halfway: SVGLength?) {
     #expect(from.interpolated(to: to, progress: 0.5) == halfway)
   }
@@ -67,7 +70,7 @@ struct AnimatableTests {
   func lengthSumAndDistance() {
     #expect(SVGLength.percent(10).adding(.percent(20)) == .percent(30))
     #expect(SVGLength.inches(1).adding(.pixel(4)) == .pixel(100))
-    #expect(SVGLength.percent(10).adding(.pixel(4)) == nil)
+    #expect(SVGLength.percent(10).adding(.pixel(4)) == .sum(.percent(10), .pixel(4)))
     #expect(SVGLength.inches(1).pacedDistance(to: .pixel(100)) == 4)
     #expect(SVGLength.percent(10).pacedDistance(to: .pixel(4)) == nil)
   }
@@ -142,10 +145,27 @@ struct AnimatableTests {
         == halfway?.map { .number($0) })
   }
 
-  @Test("dash arrays with lengths in units that can't be interpolated together change discretely")
+  @Test("dash arrays with lengths in different units are interpolated unit by unit")
   func dashArraysInUnits() {
     #expect([SVGLength.pixel(2), .percent(10)].interpolated(to: [.pixel(4), .percent(20)], progress: 0.5) == [.pixel(3), .percent(15)])
-    #expect([SVGLength.pixel(2)].interpolated(to: [.percent(20)], progress: 0.5) == nil)
+    #expect([SVGLength.pixel(2)].interpolated(to: [.percent(20)], progress: 0.5) == [.sum(.pixel(1), .percent(10))])
+  }
+
+  @Test("a sum of lengths is resolved term by term, with the percentages of the length that they're of")
+  func lengthSums() {
+    struct Context: SVGLengthContext {
+      var viewBoxSize: CGSize { CGSize(width: 200, height: 100) }
+      var font: SVGUIFont? { nil }
+      var textScale: Double { 1 }
+      var rootFont: SVGUIFont? { nil }
+      var viewPort: CGRect { .zero }
+      var writingMode: WritingMode? { nil }
+    }
+    let sum = SVGLength.sum(.pixel(5), .percent(25))
+    #expect(sum.value(context: Context(), mode: .width) == 55)
+    #expect(sum.value(context: Context(), mode: .height) == 30)
+    #expect(sum.value(total: 40, context: Context()) == 15)
+    #expect(sum.description == "calc(5.0px + 25.0%)")
   }
 
   @Test("visibility stays visible between visible and another value")
@@ -250,7 +270,9 @@ struct AnimatableTests {
     #expect(
       from.interpolated(to: TransformOrigin(x: .percent(100), y: .percent(50)), progress: 0.5)
         == TransformOrigin(x: .percent(50), y: .percent(25)))
-    #expect(from.interpolated(to: TransformOrigin(x: .pixel(10), y: .percent(50)), progress: 0.5) == nil)
+    #expect(
+      from.interpolated(to: TransformOrigin(x: .pixel(10), y: .percent(50)), progress: 0.5)
+        == TransformOrigin(x: .sum(.percent(0), .pixel(5)), y: .percent(25)))
   }
 
   private static func matrix(_ list: TransformList) -> CGAffineTransform? {

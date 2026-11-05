@@ -60,9 +60,3 @@ final class SVGTSpanElement: SVGDrawableElement {
     fatalError()
   }
 }
-
-extension SVGTSpanElement {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

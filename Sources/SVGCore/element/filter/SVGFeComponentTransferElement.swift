@@ -36,12 +36,6 @@ final class SVGFeComponentTransferElement: SVGElement, SVGFilterPrimitiveElement
   }
 }
 
-extension SVGFeComponentTransferElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}
-
 /// The kind of transfer function of a `feFuncR`, `feFuncG`, `feFuncB` or `feFuncA`, the value of its `type`.
 enum SVGTransferFunctionType: String {
   case identity
@@ -86,11 +80,5 @@ final class SVGFeFuncElement: SVGElement {
     amplitude = number("amplitude")
     exponent = number("exponent")
     offset = number("offset")
-  }
-}
-
-extension SVGFeFuncElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
   }
 }

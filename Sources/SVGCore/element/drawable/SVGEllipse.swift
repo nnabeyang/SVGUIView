@@ -49,20 +49,3 @@ final class SVGEllipseElement: ShapeGeometry {
     geometry(in: context).map { PathData.ellipse(center: $0.center, radii: $0.radii) }
   }
 }
-
-extension SVGEllipseElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case cx
-    case cy
-    case rx
-    case ry
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(cx, forKey: .cx)
-    try container.encode(cy, forKey: .cy)
-    try container.encode(rx, forKey: .rx)
-    try container.encode(ry, forKey: .ry)
-  }
-}

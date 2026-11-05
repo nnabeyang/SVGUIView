@@ -46,9 +46,3 @@ final class SVGFeDropShadowElement: SVGElement, SVGFilterPrimitiveElement {
     floodOpacity = base.style.floodOpacity
   }
 }
-
-extension SVGFeDropShadowElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

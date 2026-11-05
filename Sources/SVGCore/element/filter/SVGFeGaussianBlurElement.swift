@@ -18,24 +18,6 @@ enum StdDeviation: Equatable {
   }
 }
 
-extension StdDeviation: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case x
-    case y
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    switch self {
-    case .iso(let x):
-      try container.encode(x, forKey: .x)
-    case .hetero(let x, let y):
-      try container.encode(x, forKey: .x)
-      try container.encode(y, forKey: .y)
-    }
-  }
-}
-
 extension StdDeviation {
   static let zero: StdDeviation = .hetero(x: SVGLength(value: 0, unit: .number), y: SVGLength(value: 0, unit: .number))
 }
@@ -93,15 +75,4 @@ final class SVGFeGaussianBlurElement: SVGElement, SVGFilterPrimitiveElement {
     input = SVGFilterInput(rawValue: attributes["in", default: ""])
   }
 
-}
-
-extension SVGFeGaussianBlurElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case stdDeviation
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encodeIfPresent(stdDeviation, forKey: .stdDeviation)
-  }
 }

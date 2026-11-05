@@ -96,6 +96,14 @@ struct AnimatedStyleTests {
     #expect(style.strokeWidth == .pixel(15))
   }
 
+  @Test("a length and a percentage are animated as their sum")
+  func animatedLengthAndPercentage() throws {
+    let style = try style(
+      "<style>@keyframes w { from { stroke-width: 10px } to { stroke-width: 50% } }</style>"
+        + #"<rect id="r" style="animation: w 1s linear"/>"#, at: 0.5)
+    #expect(style.strokeWidth == .sum(.pixel(5), .percent(25)))
+  }
+
   @Test("currentColor is the animated color, also in keyframes")
   func animatedCurrentColor() throws {
     let color = try style(

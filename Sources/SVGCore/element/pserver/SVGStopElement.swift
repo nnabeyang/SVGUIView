@@ -53,16 +53,3 @@ final class SVGStopElement: SVGElement {
     opacity = base.style.stopOpacity
   }
 }
-
-extension SVGStopElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case offset
-    case color = "stop-color"
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(offset.description, forKey: .offset)
-    try container.encode(color, forKey: .color)
-  }
-}

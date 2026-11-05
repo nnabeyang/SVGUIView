@@ -76,20 +76,3 @@ final class SVGLineElement: ShapeGeometry {
     return .zero
   }
 }
-
-extension SVGLineElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case x1
-    case y1
-    case x2
-    case y2
-  }
-
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: Self.CodingKeys.self)
-    try container.encode(x1, forKey: .x1)
-    try container.encode(y1, forKey: .y1)
-    try container.encode(x1, forKey: .x2)
-    try container.encode(y1, forKey: .y2)
-  }
-}

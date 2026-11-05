@@ -116,14 +116,3 @@ final class SVGPatternElement: SVGDrawableElement {
     return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
   }
 }
-
-extension SVGPatternElement: Encodable {
-  private enum CodingKeys: String, CodingKey {
-    case d
-    case fill
-  }
-
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

@@ -85,9 +85,3 @@ final class SVGMarkerElement: SVGElement {
     }
   }
 }
-
-extension SVGMarkerElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

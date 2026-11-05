@@ -56,8 +56,27 @@ enum SVGLength: Equatable, Sendable {
   case vmin(CGFloat)
   case vmax(CGFloat)
   case q(CGFloat)
+  /// The sum of two lengths in different units, as `calc()` of CSS adds them. Only an interpolation or an addition of
+  /// lengths in units that can't be added before they're resolved makes one, such as `10px` and `50%`.
+  indirect case sum(SVGLength, SVGLength)
 
   static let pixelsPerInch: CGFloat = 96.0
+
+  /// The lengths that the length adds: itself, or the terms of a sum.
+  var terms: [SVGLength] {
+    if case .sum(let first, let second) = self { first.terms + second.terms } else { [self] }
+  }
+
+  /// The sum of lengths, or a length of 0 if there are none.
+  static func sum(of terms: [SVGLength]) -> SVGLength {
+    guard let first = terms.first else { return .number(0) }
+    return terms.dropFirst().reduce(first) { .sum($0, $1) }
+  }
+
+  /// Whether the length is a percentage or a sum with one, which needs the length that it's a percentage of.
+  var hasPercent: Bool {
+    terms.contains { if case .percent = $0 { true } else { false } }
+  }
   static var zeroCodePoint: UniChar {
     get { 0x30 }
     set {}
@@ -138,6 +157,9 @@ enum SVGLength: Equatable, Sendable {
         self = .number(value * percent / 100.0)
       case .q(let value):
         self = .number(value * percent / 100.0)
+      case .sum:
+        // A percentage of a sum is the sum of the percentages of its terms.
+        self = .sum(of: parent.terms.map { SVGLength(child: child, parent: $0) })
       }
     default:
       self = child
@@ -258,7 +280,7 @@ enum SVGLength: Equatable, Sendable {
 
   func value(context: any SVGLengthContext, mode: SVGLengthMode, unitType: SVGUnitType = .userSpaceOnUse) -> CGFloat {
     let total: CGFloat
-    if case .percent = self {
+    if hasPercent {
       let size: CGSize
       switch unitType {
       case .userSpaceOnUse:
@@ -284,7 +306,7 @@ enum SVGLength: Equatable, Sendable {
 
   func fontValue(context: any SVGLengthContext) -> CGFloat {
     let total: CGFloat
-    if case .percent = self {
+    if hasPercent {
       total = context.font?.sizeValue(context: context, textScale: 1.0) ?? 16.0
     } else {
       total = 0
@@ -362,6 +384,8 @@ enum SVGLength: Equatable, Sendable {
       return value * max(context.viewPort.width, context.viewPort.height) / 100.0
     case .q(let value):
       return value * Self.pixelsPerInch / (25.4 * 4.0)
+    case .sum(let first, let second):
+      return first.value(total: total, context: context) + second.value(total: total, context: context)
     }
   }
 
@@ -421,137 +445,7 @@ extension SVGLength: CustomStringConvertible {
     case .vmin(let value): return "\(value)vmin"
     case .vmax(let value): return "\(value)vmax"
     case .q(let value): return "\(value)Q"
-    }
-  }
-}
-
-extension SVGLength: Codable {
-  func encode(to encoder: any Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    switch self {
-    case .number(let v):
-      try container.encode(SVGLengthType.number.rawValue)
-      try container.encode(v)
-    case .pixel(let v):
-      try container.encode(SVGLengthType.pixels.rawValue)
-      try container.encode(v)
-    case .percent(let v):
-      try container.encode(SVGLengthType.percentage.rawValue)
-      try container.encode(v)
-    case .ems(let v):
-      try container.encode(SVGLengthType.ems.rawValue)
-      try container.encode(v)
-    case .rems(let v):
-      try container.encode(SVGLengthType.rems.rawValue)
-      try container.encode(v)
-    case .exs(let v):
-      try container.encode(SVGLengthType.exs.rawValue)
-      try container.encode(v)
-    case .centimeters(let v):
-      try container.encode(SVGLengthType.centimeters.rawValue)
-      try container.encode(v)
-    case .millimeters(let v):
-      try container.encode(SVGLengthType.millimeters.rawValue)
-      try container.encode(v)
-    case .inches(let v):
-      try container.encode(SVGLengthType.inches.rawValue)
-      try container.encode(v)
-    case .points(let v):
-      try container.encode(SVGLengthType.points.rawValue)
-      try container.encode(v)
-    case .picas(let v):
-      try container.encode(SVGLengthType.picas.rawValue)
-      try container.encode(v)
-    case .chs(let v):
-      try container.encode(SVGLengthType.chs.rawValue)
-      try container.encode(v)
-    case .ic(let v):
-      try container.encode(SVGLengthType.ic.rawValue)
-      try container.encode(v)
-    case .lhs(let v):
-      try container.encode(SVGLengthType.lhs.rawValue)
-      try container.encode(v)
-    case .rlhs(let v):
-      try container.encode(SVGLengthType.rlhs.rawValue)
-      try container.encode(v)
-    case .vw(let v):
-      try container.encode(SVGLengthType.vw.rawValue)
-      try container.encode(v)
-    case .vh(let v):
-      try container.encode(SVGLengthType.vh.rawValue)
-      try container.encode(v)
-    case .vi(let v):
-      try container.encode(SVGLengthType.vi.rawValue)
-      try container.encode(v)
-    case .vb(let v):
-      try container.encode(SVGLengthType.vb.rawValue)
-      try container.encode(v)
-    case .vmin(let v):
-      try container.encode(SVGLengthType.vmin.rawValue)
-      try container.encode(v)
-    case .vmax(let v):
-      try container.encode(SVGLengthType.vmax.rawValue)
-      try container.encode(v)
-    case .q(let v):
-      try container.encode(SVGLengthType.q.rawValue)
-      try container.encode(v)
-    }
-  }
-
-  init(from decoder: any Decoder) throws {
-    var container = try decoder.unkeyedContainer()
-    let typeString = try container.decode(String.self)
-    guard let type = SVGLengthType(rawValue: typeString) else {
-      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: ""))
-    }
-    let value = try container.decode(Double.self)
-    switch type {
-    case .number:
-      self = .number(value)
-    case .pixels:
-      self = .pixel(value)
-    case .percentage:
-      self = .percent(value)
-    case .ems:
-      self = .ems(value)
-    case .rems:
-      self = .rems(value)
-    case .exs:
-      self = .ems(value)
-    case .centimeters:
-      self = .centimeters(value)
-    case .millimeters:
-      self = .millimeters(value)
-    case .inches:
-      self = .inches(value)
-    case .points:
-      self = .points(value)
-    case .picas:
-      self = .picas(value)
-    case .chs:
-      self = .chs(value)
-    case .ic:
-      self = .ic(value)
-    case .lhs:
-      self = .lhs(value)
-    case .rlhs:
-      self = .rlhs(value)
-    case .vw:
-      self = .vw(value)
-    case .vh:
-      self = .vh(value)
-    case .vi:
-      self = .vi(value)
-    case .vb:
-      self = .vb(value)
-    case .vmin:
-      self = .vmin(value)
-    case .vmax:
-      self = .vmax(value)
-    case .q:
-      self = .q(value)
-    case .unknown:
-      self = .pixel(0)
+    case .sum: return "calc(\(terms.map(\.description).joined(separator: " + ")))"
     }
   }
 }

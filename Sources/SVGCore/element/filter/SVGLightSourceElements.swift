@@ -38,12 +38,6 @@ final class SVGFeDistantLightElement: SVGLightSourceElement {
   }
 }
 
-extension SVGFeDistantLightElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}
-
 /// A `fePointLight`, a light at a position.
 final class SVGFePointLightElement: SVGLightSourceElement {
   static var type: SVGElementName {
@@ -67,12 +61,6 @@ final class SVGFePointLightElement: SVGLightSourceElement {
     x = SVGLength(attributes["x"]) ?? .number(0)
     y = SVGLength(attributes["y"]) ?? .number(0)
     z = SVGLength(attributes["z"]) ?? .number(0)
-  }
-}
-
-extension SVGFePointLightElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
   }
 }
 
@@ -117,11 +105,5 @@ final class SVGFeSpotLightElement: SVGLightSourceElement {
     }
     specularExponent = number("specularExponent").flatMap { $0 > 0 ? $0 : nil } ?? 1
     limitingConeAngle = number("limitingConeAngle")
-  }
-}
-
-extension SVGFeSpotLightElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
   }
 }

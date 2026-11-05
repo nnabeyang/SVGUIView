@@ -94,9 +94,3 @@ final class SVGFeBlendElement: SVGElement, SVGFilterPrimitiveElement {
   }
 
 }
-
-extension SVGFeBlendElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

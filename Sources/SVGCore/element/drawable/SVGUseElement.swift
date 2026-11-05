@@ -46,9 +46,3 @@ final class SVGUseElement: SVGDrawableElement {
     self.index == index || children.contains(where: { $0.index == index })
   }
 }
-
-extension SVGUseElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

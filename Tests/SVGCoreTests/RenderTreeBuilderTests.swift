@@ -1350,6 +1350,28 @@ struct RenderTreeBuilderTests {
     #expect(try contentMask(of: nested) != nil)
   }
 
+  @Test("a stroke width that's animated from a length to a percentage is their sum, resolved in the viewBox")
+  func animatedStrokeWidthSum() async throws {
+    let tree = try await renderTree(
+      #"<style>@keyframes w { from { stroke-width: 10px } to { stroke-width: 50% } }</style>"#
+        + #"<rect width="10" height="10" stroke="black" style="animation: w 1s linear"/>"#, at: 0.5)
+    guard case .vector(_, let stroke?, _)? = try shape(try children(of: tree).last).content else {
+      Issue.record("The rect has no stroke")
+      return
+    }
+    // 5px and 25% of the viewBox of 20 by 20.
+    #expect(abs(stroke.width - 10) < 0.001)
+  }
+
+  @Test("a width that SMIL animates from a number to a percentage is their sum")
+  func smilWidthSum() async throws {
+    let tree = try await renderTree(
+      #"<rect height="10" width="10"><animate attributeName="width" from="10" to="50%" dur="1s"/></rect>"#, at: 0.5)
+    let frame = try #require(try shape(try children(of: tree).last).geometry).frame
+    // 5 and 25% of the viewBox of 20.
+    #expect(abs(frame.width - 10) < 0.001)
+  }
+
   @Test("the children of a mask are nodes of any kind, which keep their strokes")
   func maskContentNodes() async throws {
     let mask = try await lastMask(

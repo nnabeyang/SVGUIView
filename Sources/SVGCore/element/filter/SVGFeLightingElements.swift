@@ -53,12 +53,6 @@ final class SVGFeDiffuseLightingElement: SVGElement, SVGFilterPrimitiveElement {
   }
 }
 
-extension SVGFeDiffuseLightingElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}
-
 final class SVGFeSpecularLightingElement: SVGElement, SVGFilterPrimitiveElement {
   static var type: SVGElementName {
     .feSpecularLighting
@@ -106,11 +100,5 @@ final class SVGFeSpecularLightingElement: SVGElement, SVGFilterPrimitiveElement 
     specularExponent = number("specularExponent", of: attributes) ?? 1
     lightingColor = base.style.resolved(base.style.lightingColor)
     lightSource = firstLightSource(in: children)
-  }
-}
-
-extension SVGFeSpecularLightingElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
   }
 }

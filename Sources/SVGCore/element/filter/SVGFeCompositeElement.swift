@@ -61,9 +61,3 @@ final class SVGFeCompositeElement: SVGElement, SVGFilterPrimitiveElement {
     k4 = number("k4")
   }
 }
-
-extension SVGFeCompositeElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

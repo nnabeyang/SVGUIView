@@ -61,9 +61,3 @@ final class SVGFeTurbulenceElement: SVGElement, SVGFilterPrimitiveElement {
     stitchTiles = attributes["stitchTiles"] == "stitch"
   }
 }
-
-extension SVGFeTurbulenceElement: Encodable {
-  func encode(to _: any Encoder) throws {
-    fatalError()
-  }
-}

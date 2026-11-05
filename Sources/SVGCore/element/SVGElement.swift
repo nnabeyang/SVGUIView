@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import _SelectorParser
 
-protocol SVGElement: AnyObject, Encodable, Sendable {
+protocol SVGElement: AnyObject, Sendable {
   static var type: SVGElementName { get }
   var type: SVGElementName { get }
   var base: SVGBaseElement { get }
