@@ -4,6 +4,11 @@ import Testing
 
 @testable import SVGCore
 
+/// The sum of lengths in different units.
+private func sum(_ terms: SVGLength...) -> SVGLength {
+  SVGLength.sum(of: terms)!
+}
+
 /// Whether two numbers are equal, apart from the error of the arithmetic.
 private func isClose(_ a: Double, _ b: Double) -> Bool {
   abs(a - b) < 1e-9
@@ -55,10 +60,10 @@ struct AnimatableTests {
     (.inches(1), .pixel(48), .pixel(72)),
     (.points(72), .picas(12), .pixel(144)),
     // Lengths in other units are interpolated unit by unit, as their sum.
-    (.percent(10), .pixel(20), .sum(.percent(5), .pixel(10))),
-    (.vw(10), .pixel(20), .sum(.vw(5), .pixel(10))),
-    (.sum(.pixel(2), .percent(10)), .inches(1), .sum(.pixel(49), .percent(5))),
-    (.sum(.pixel(2), .percent(10)), .sum(.percent(30), .ems(2)), .sum(.sum(.pixel(1), .percent(20)), .ems(1))),
+    (.percent(10), .pixel(20), sum(.percent(5), .pixel(10))),
+    (.vw(10), .pixel(20), sum(.vw(5), .pixel(10))),
+    (sum(.pixel(2), .percent(10)), .inches(1), sum(.pixel(49), .percent(5))),
+    (sum(.pixel(2), .percent(10)), sum(.percent(30), .ems(2)), sum(sum(.pixel(1), .percent(20)), .ems(1))),
   ]
 
   @Test("lengths are interpolated in the same unit, in pixels, or unit by unit as their sum", arguments: lengths)
@@ -70,7 +75,7 @@ struct AnimatableTests {
   func lengthSumAndDistance() {
     #expect(SVGLength.percent(10).adding(.percent(20)) == .percent(30))
     #expect(SVGLength.inches(1).adding(.pixel(4)) == .pixel(100))
-    #expect(SVGLength.percent(10).adding(.pixel(4)) == .sum(.percent(10), .pixel(4)))
+    #expect(SVGLength.percent(10).adding(.pixel(4)) == sum(.percent(10), .pixel(4)))
     #expect(SVGLength.inches(1).pacedDistance(to: .pixel(100)) == 4)
     #expect(SVGLength.percent(10).pacedDistance(to: .pixel(4)) == nil)
   }
@@ -148,7 +153,7 @@ struct AnimatableTests {
   @Test("dash arrays with lengths in different units are interpolated unit by unit")
   func dashArraysInUnits() {
     #expect([SVGLength.pixel(2), .percent(10)].interpolated(to: [.pixel(4), .percent(20)], progress: 0.5) == [.pixel(3), .percent(15)])
-    #expect([SVGLength.pixel(2)].interpolated(to: [.percent(20)], progress: 0.5) == [.sum(.pixel(1), .percent(10))])
+    #expect([SVGLength.pixel(2)].interpolated(to: [.percent(20)], progress: 0.5) == [sum(.pixel(1), .percent(10))])
   }
 
   @Test("a sum of lengths is resolved term by term, with the percentages of the length that they're of")
@@ -161,11 +166,26 @@ struct AnimatableTests {
       var viewPort: CGRect { .zero }
       var writingMode: WritingMode? { nil }
     }
-    let sum = SVGLength.sum(.pixel(5), .percent(25))
-    #expect(sum.value(context: Context(), mode: .width) == 55)
-    #expect(sum.value(context: Context(), mode: .height) == 30)
-    #expect(sum.value(total: 40, context: Context()) == 15)
-    #expect(sum.description == "calc(5.0px + 25.0%)")
+    let length = sum(.pixel(5), .percent(25))
+    #expect(length.value(context: Context(), mode: .width) == 55)
+    #expect(length.value(context: Context(), mode: .height) == 30)
+    #expect(length.value(total: 40, context: Context()) == 15)
+    #expect(length.description == "calc(5.0px + 25.0%)")
+  }
+
+  @Test("a length is trivial to copy, and a sum takes no more room than a length in one unit")
+  func lengthLayout() {
+    #expect(_isPOD(SVGLength.self))
+    #expect(MemoryLayout<SVGLength>.stride == MemoryLayout<CGFloat>.stride * 2)
+  }
+
+  @Test("lengths whose sum would have more terms than a sum keeps change discretely")
+  func lengthSumCapacity() {
+    let from = sum(.pixel(2), .percent(10), .ems(1))
+    #expect(from.interpolated(to: .vw(4), progress: 0.5) == nil)
+    #expect(from.animated(to: .vw(4), progress: 0.4) == from)
+    #expect(from.animated(to: .vw(4), progress: 0.6) == .vw(4))
+    #expect(from.interpolated(to: .ems(3), progress: 0.5) == sum(.pixel(1), .percent(5), .ems(2)))
   }
 
   @Test("visibility stays visible between visible and another value")
@@ -272,7 +292,7 @@ struct AnimatableTests {
         == TransformOrigin(x: .percent(50), y: .percent(25)))
     #expect(
       from.interpolated(to: TransformOrigin(x: .pixel(10), y: .percent(50)), progress: 0.5)
-        == TransformOrigin(x: .sum(.percent(0), .pixel(5)), y: .percent(25)))
+        == TransformOrigin(x: sum(.percent(0), .pixel(5)), y: .percent(25)))
   }
 
   private static func matrix(_ list: TransformList) -> CGAffineTransform? {

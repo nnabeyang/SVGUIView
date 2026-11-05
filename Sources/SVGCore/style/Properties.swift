@@ -40,7 +40,8 @@ private func resolvingFontRelative(_ length: SVGLength, in resolver: StyleResolv
     break
   }
   if case .sum = length {
-    return .sum(of: length.terms.map { resolvingFontRelative($0, in: resolver) })
+    // The terms are as many as the terms of the sum, which fit in a sum.
+    return .sum(of: length.terms.map { resolvingFontRelative($0, in: resolver) }) ?? length
   }
   switch length {
   case .ems, .rems, .exs, .chs, .ic, .lhs, .rlhs:

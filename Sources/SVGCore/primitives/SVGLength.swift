@@ -56,26 +56,35 @@ enum SVGLength: Equatable, Sendable {
   case vmin(CGFloat)
   case vmax(CGFloat)
   case q(CGFloat)
-  /// The sum of two lengths in different units, as `calc()` of CSS adds them. Only an interpolation or an addition of
+  /// The sum of lengths in different units, as `calc()` of CSS adds them. Only an interpolation or an addition of
   /// lengths in units that can't be added before they're resolved makes one, such as `10px` and `50%`.
-  indirect case sum(SVGLength, SVGLength)
+  case sum(SVGLengthSum)
 
   static let pixelsPerInch: CGFloat = 96.0
 
   /// The lengths that the length adds: itself, or the terms of a sum.
   var terms: [SVGLength] {
-    if case .sum(let first, let second) = self { first.terms + second.terms } else { [self] }
+    if case .sum(let sum) = self { sum.terms } else { [self] }
   }
 
-  /// The sum of lengths, or a length of 0 if there are none.
-  static func sum(of terms: [SVGLength]) -> SVGLength {
-    guard let first = terms.first else { return .number(0) }
-    return terms.dropFirst().reduce(first) { .sum($0, $1) }
+  /// The sum of lengths, the length if there's one, or a length of 0 if there are none. It's `nil` if the sum has more
+  /// terms than ``SVGLengthSum/capacity``.
+  static func sum(of lengths: [SVGLength]) -> SVGLength? {
+    let terms = lengths.flatMap(\.terms)
+    switch terms.count {
+    case 0: return .number(0)
+    case 1: return terms[0]
+    default: return SVGLengthSum(terms: terms).map { .sum($0) }
+    }
   }
 
   /// Whether the length is a percentage or a sum with one, which needs the length that it's a percentage of.
   var hasPercent: Bool {
-    terms.contains { if case .percent = $0 { true } else { false } }
+    switch self {
+    case .percent: true
+    case .sum(let sum): sum.hasPercent
+    default: false
+    }
   }
   static var zeroCodePoint: UniChar {
     get { 0x30 }
@@ -158,8 +167,8 @@ enum SVGLength: Equatable, Sendable {
       case .q(let value):
         self = .number(value * percent / 100.0)
       case .sum:
-        // A percentage of a sum is the sum of the percentages of its terms.
-        self = .sum(of: parent.terms.map { SVGLength(child: child, parent: $0) })
+        // A percentage of a sum is the sum of the percentages of its terms, which are as many as the terms.
+        self = .sum(of: parent.terms.map { SVGLength(child: child, parent: $0) }) ?? child
       }
     default:
       self = child
@@ -384,8 +393,8 @@ enum SVGLength: Equatable, Sendable {
       return value * max(context.viewPort.width, context.viewPort.height) / 100.0
     case .q(let value):
       return value * Self.pixelsPerInch / (25.4 * 4.0)
-    case .sum(let first, let second):
-      return first.value(total: total, context: context) + second.value(total: total, context: context)
+    case .sum(let sum):
+      return sum.terms.reduce(0) { $0 + $1.value(total: total, context: context) }
     }
   }
 
@@ -446,6 +455,78 @@ extension SVGLength: CustomStringConvertible {
     case .vmax(let value): return "\(value)vmax"
     case .q(let value): return "\(value)Q"
     case .sum: return "calc(\(terms.map(\.description).joined(separator: " + ")))"
+    }
+  }
+}
+
+/// The terms of a sum of lengths in different units, which a length keeps in itself, so that a length is trivial to
+/// copy, as copying lengths is a large part of building a render tree. The numbers of the terms are in `Float`, which
+/// keeps the terms in 15 bytes, and a length in 16, as a length in one unit is.
+struct SVGLengthSum: Equatable, Sendable {
+  /// The most terms that a sum has. An interpolation of two lengths in different units makes two terms.
+  static let capacity = 3
+
+  private var magnitudes: (Float, Float, Float)
+  /// The units of the terms, and `unknown` after the last term.
+  private var units: (SVGLengthType, SVGLengthType, SVGLengthType)
+
+  /// A sum of the given terms, each in one unit, or `nil` if there are more than ``capacity``.
+  init?(terms: [SVGLength]) {
+    guard terms.count <= Self.capacity else { return nil }
+    var magnitudes: [Float] = [0, 0, 0]
+    var units: [SVGLengthType] = [.unknown, .unknown, .unknown]
+    for (index, term) in terms.enumerated() {
+      guard let (unit, magnitude) = term.unitAndMagnitude else { return nil }
+      units[index] = unit
+      magnitudes[index] = Float(magnitude)
+    }
+    self.magnitudes = (magnitudes[0], magnitudes[1], magnitudes[2])
+    self.units = (units[0], units[1], units[2])
+  }
+
+  /// The terms, each in one unit.
+  var terms: [SVGLength] {
+    [(units.0, magnitudes.0), (units.1, magnitudes.1), (units.2, magnitudes.2)].compactMap { unit, magnitude in
+      SVGLength(value: CGFloat(magnitude), type: unit)
+    }
+  }
+
+  var hasPercent: Bool {
+    units.0 == .percentage || units.1 == .percentage || units.2 == .percentage
+  }
+
+  static func == (lhs: SVGLengthSum, rhs: SVGLengthSum) -> Bool {
+    lhs.terms == rhs.terms
+  }
+}
+
+extension SVGLength {
+  /// The unit and the number of a length in one unit, or `nil` for a sum.
+  fileprivate var unitAndMagnitude: (SVGLengthType, CGFloat)? {
+    switch self {
+    case .number(let value): (.number, value)
+    case .pixel(let value): (.pixels, value)
+    case .percent(let value): (.percentage, value)
+    case .ems(let value): (.ems, value)
+    case .rems(let value): (.rems, value)
+    case .exs(let value): (.exs, value)
+    case .centimeters(let value): (.centimeters, value)
+    case .millimeters(let value): (.millimeters, value)
+    case .inches(let value): (.inches, value)
+    case .points(let value): (.points, value)
+    case .picas(let value): (.picas, value)
+    case .chs(let value): (.chs, value)
+    case .ic(let value): (.ic, value)
+    case .lhs(let value): (.lhs, value)
+    case .rlhs(let value): (.rlhs, value)
+    case .vw(let value): (.vw, value)
+    case .vh(let value): (.vh, value)
+    case .vi(let value): (.vi, value)
+    case .vb(let value): (.vb, value)
+    case .vmin(let value): (.vmin, value)
+    case .vmax(let value): (.vmax, value)
+    case .q(let value): (.q, value)
+    case .sum: nil
     }
   }
 }

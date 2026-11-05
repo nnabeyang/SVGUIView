@@ -3,7 +3,8 @@ import Foundation
 
 /// Lengths are animated in their unit when they have the same unit, and in pixels when they're both absolute. Lengths
 /// in other units, such as `10px` and `50%`, are animated unit by unit, as their sum, which is resolved when the render
-/// tree is built, as CSS Values interpolates them as `calc()`.
+/// tree is built, as CSS Values interpolates them as `calc()`. A sum keeps up to three units, and lengths whose sum
+/// would have more change discretely halfway.
 extension SVGLength: Animatable {
   func interpolated(to other: SVGLength, progress: Double) -> SVGLength? {
     combined(with: other) { $0 + ($1 - $0) * progress }
@@ -49,6 +50,7 @@ extension SVGLength: Animatable {
     }
     add(self, isOther: false)
     add(other, isOther: true)
+    // A sum with more terms than a length keeps is `nil`, and the lengths change discretely.
     return .sum(of: zip(units, magnitudes).map { unit, values in unit.with(magnitude: combine(values.0, values.1)) })
   }
 
