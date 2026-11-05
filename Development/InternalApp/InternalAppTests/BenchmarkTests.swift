@@ -55,10 +55,26 @@ final class BenchmarkTests: XCTestCase {
       XCTOSSignpostMetric(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering", name: $0)
     }
     measure(metrics: [XCTClockMetric(), XCTCPUMetric()] + stages) {
-      for frame in 1...Self.frames {
-        view.seek(to: .seconds(Double(frame) / 60))
-        run { !view.isRendering }
+      // The frames wait for their renderings in one task, so that the run loop, which runs a millisecond at a time,
+      // doesn't add its wait to each frame.
+      var isDone = false
+      Task {
+        for frame in 1...Self.frames {
+          view.seek(to: .seconds(Double(frame) / 60))
+          await waitForRendering(of: view)
+        }
+        isDone = true
       }
+      run { isDone }
+    }
+  }
+
+  /// Waits until the renderings that the view has started have finished.
+  @MainActor
+  private func waitForRendering(of view: SVGUIView) async {
+    while let task = view.renderingTask {
+      await task.value
+      if view.renderingTask == task { break }
     }
   }
 
