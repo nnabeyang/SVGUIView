@@ -104,9 +104,14 @@ struct PlacedGlyph {
   var font: CTFont? = nil
   var glyph = CGGlyph()
   /// The transform from the coordinates of the line, with the origin at the origin of the glyph, to the user space.
+  /// In vertical text, the line is turned clockwise, and the bounds and the lines of `text-decoration` of the glyph
+  /// are in it.
   let transform: CGAffineTransform
-  /// The advance of the glyph, in the coordinates of the line.
+  /// The advance of the glyph along the line, in the coordinates of the line.
   let advance: CGFloat
+  /// The transform of the outline of a glyph that stands upright in vertical text, instead of the transform, or
+  /// `nil` if the glyph is in the line.
+  var outline: CGAffineTransform? = nil
   /// How the glyph is bent along its path, instead of the transform, or `nil` if it isn't.
   var warp: GlyphWarp? = nil
   /// Whether the glyph is on a line of the text with its baseline horizontal, so that the lines of `text-decoration`
@@ -119,7 +124,7 @@ struct PlacedGlyph {
     if let warp {
       target.addPath(warp.bend(path))
     } else {
-      target.addPath(path, transform: transform)
+      target.addPath(path, transform: outline ?? transform)
     }
   }
 
@@ -230,11 +235,18 @@ struct TextLayout {
   ///   - directions: The `direction` of each element of the text, which the start and the end of its `text-anchor` are
   ///     in.
   ///   - baselineOffsets: How far down the glyphs of each element of the text are drawn from the current text
-  ///     position, in the user space, for its baselines and its `baseline-shift`.
+  ///     position, in the user space, for its baselines and its `baseline-shift`. In vertical text, the line is
+  ///     turned clockwise, and they're how far left.
   ///   - paths: The paths that the characters in `<textPath>` elements are laid out along.
+  ///   - isVertical: Whether the text is in a vertical writing mode, where the line goes down: the `y` and `dy` of a
+  ///     character are along the line, and its `x` and `dx` across it.
+  ///   - uprights: Whether each character stands upright in vertical text, instead of being turned with the line.
+  ///   - centralBaselines: How far up the central baseline of the font of each element is, in the user space, which
+  ///     the glyphs that stand upright are centered on.
   init(
     characters: [TextCharacter], line: TextLine, anchors: [TextAnchor], directions: [TextDirection]? = nil,
-    baselineOffsets: [CGFloat], textScale: CGFloat, paths: [TextPathLayout] = []
+    baselineOffsets: [CGFloat], textScale: CGFloat, paths: [TextPathLayout] = [], isVertical: Bool = false,
+    uprights: [Bool] = [], centralBaselines: [CGFloat] = []
   ) {
     struct LineGlyph {
       let font: CTFont
@@ -243,19 +255,49 @@ struct TextLayout {
       let advance: CGFloat
       let character: Int
       let isRightToLeft: Bool
+      /// Where the glyph starts along the line, and its advance along it, in the coordinates of the line.
+      var inlineStart: CGFloat
+      var inlineAdvance: CGFloat
+      var isUpright = false
     }
     var lineGlyphs = [LineGlyph]()
     var metrics = [Int: (ascent: CGFloat, descent: CGFloat)]()
     for run in Self.glyphRuns(of: line.line) {
       for index in run.glyphs.indices {
         let character = line.characters[run.stringIndices[index]]
+        let advance = run.advances[index].width
         lineGlyphs.append(
           LineGlyph(
-            font: run.font, glyph: run.glyphs[index], position: run.positions[index],
-            advance: run.advances[index].width, character: character, isRightToLeft: run.isRightToLeft))
+            font: run.font, glyph: run.glyphs[index], position: run.positions[index], advance: advance,
+            character: character, isRightToLeft: run.isRightToLeft, inlineStart: run.positions[index].x,
+            inlineAdvance: advance))
         let owner = characters[character].owner
         let current = metrics[owner] ?? (0, 0)
         metrics[owner] = (max(current.ascent, run.ascent), max(current.descent, run.descent))
+      }
+    }
+    if isVertical {
+      // Down a vertical line, a glyph that stands upright advances by its vertical advance with the spacing after
+      // its character, and the glyphs turned with the line keep their places in the line from where they start.
+      var pen: CGFloat = 0
+      var lineShift: CGFloat?
+      for index in lineGlyphs.indices {
+        let glyph = lineGlyphs[index]
+        if uprights.indices.contains(glyph.character) && uprights[glyph.character] {
+          var verticalGlyph = glyph.glyph
+          var advance = CGSize.zero
+          CTFontGetAdvancesForGlyphs(glyph.font, .vertical, &verticalGlyph, &advance, 1)
+          let isLastOfCharacter = index + 1 == lineGlyphs.count || lineGlyphs[index + 1].character != glyph.character
+          lineGlyphs[index].isUpright = true
+          lineGlyphs[index].inlineStart = pen
+          lineGlyphs[index].inlineAdvance = advance.width + (isLastOfCharacter ? line.spacings[glyph.character] : 0)
+          lineShift = nil
+        } else {
+          let shift = lineShift ?? pen - glyph.position.x
+          lineShift = shift
+          lineGlyphs[index].inlineStart = glyph.position.x + shift
+        }
+        pen = lineGlyphs[index].inlineStart + lineGlyphs[index].inlineAdvance
       }
     }
     self.metrics = metrics
@@ -266,10 +308,10 @@ struct TextLayout {
     var linePositions = [CGFloat?](repeating: nil, count: characters.count)
     for glyph in lineGlyphs {
       if glyph.isRightToLeft {
-        let x = (glyph.position.x + glyph.advance) / textScale
+        let x = (glyph.inlineStart + glyph.inlineAdvance) / textScale
         linePositions[glyph.character] = max(linePositions[glyph.character] ?? x, x)
       } else {
-        let x = glyph.position.x / textScale
+        let x = glyph.inlineStart / textScale
         linePositions[glyph.character] = min(linePositions[glyph.character] ?? x, x)
       }
     }
@@ -285,34 +327,39 @@ struct TextLayout {
       let path: Int?
     }
     var chunks = [Chunk]()
-    // How far each character is moved along the line, the position of its baseline below the line or across its
-    // path, and its chunk.
+    // How far each character is moved along the line, the position of the line across it or across its path, the
+    // position of its baseline below that, and its chunk.
     var offsets = [CGFloat](repeating: 0, count: characters.count)
+    var crosses = [CGFloat](repeating: 0, count: characters.count)
     var ys = [CGFloat](repeating: 0, count: characters.count)
     var chunkOfCharacter = [Int](repeating: 0, count: characters.count)
     var offset: CGFloat = 0
     var y: CGFloat = 0
-    // How far `dy` has moved the characters of a `<textPath>` across its path.
+    // How far `dy`, or `dx` in vertical text, has moved the characters of a `<textPath>` across its path.
     var pathY: CGFloat = 0
     for (index, character) in characters.enumerated() {
       let previousPath = index > 0 ? characters[index - 1].path : nil
       let entersPath = character.path != nil && character.path != previousPath
       let leavesPath = previousPath != nil && character.path == nil
+      // The positions along the line and across it.
+      let (inline, cross) = isVertical ? (character.y, character.x) : (character.x, character.y)
+      let (inlineDelta, crossDelta) = isVertical ? (character.dy, character.dx) : (character.dx, character.dy)
       if entersPath {
-        // The characters on a path start at its start, and the `y` of a character on a path doesn't apply.
+        // The characters on a path start at its start, and the position across the line of a character on a path
+        // doesn't apply.
         offset = -positions[index]
         pathY = 0
       } else if leavesPath, let previousPath, let pathEnd = paths[previousPath].measure.end {
-        offset = pathEnd.x - positions[index]
-        y = pathEnd.y
+        offset = (isVertical ? pathEnd.y : pathEnd.x) - positions[index]
+        y = isVertical ? pathEnd.x : pathEnd.y
       }
-      if let x = character.x { offset = x - positions[index] }
-      offset += character.dx ?? 0
+      if let inline { offset = inline - positions[index] }
+      offset += inlineDelta ?? 0
       if character.path == nil {
-        y = character.y ?? y
-        y += character.dy ?? 0
+        y = cross ?? y
+        y += crossDelta ?? 0
       } else {
-        pathY += character.dy ?? 0
+        pathY += crossDelta ?? 0
       }
       if chunks.isEmpty || character.startsChunk || entersPath || leavesPath {
         // The characters after a path start at its end, whatever their `text-anchor` is.
@@ -321,6 +368,7 @@ struct TextLayout {
           Chunk(start: index, anchor: anchor, direction: directions?[character.owner] ?? .ltr, path: character.path))
       }
       offsets[index] = offset
+      crosses[index] = character.path == nil ? y : pathY
       ys[index] = (character.path == nil ? y : pathY) + baselineOffsets[character.owner]
       chunkOfCharacter[index] = chunks.count - 1
     }
@@ -328,9 +376,11 @@ struct TextLayout {
     var bounds = [(start: CGFloat, end: CGFloat)](repeating: (.infinity, -.infinity), count: chunks.count)
     for glyph in lineGlyphs {
       let chunk = chunkOfCharacter[glyph.character]
-      let start = glyph.position.x / textScale + offsets[glyph.character]
-      let isLast = chunk + 1 < chunks.count ? glyph.character + 1 == chunks[chunk + 1].start : glyph.character + 1 == characters.count
-      let end = start + (glyph.advance - (isLast ? line.spacings[glyph.character] : 0)) / textScale
+      let start = glyph.inlineStart / textScale + offsets[glyph.character]
+      let isLast =
+        chunk + 1 < chunks.count
+        ? glyph.character + 1 == chunks[chunk + 1].start : glyph.character + 1 == characters.count
+      let end = start + (glyph.inlineAdvance - (isLast ? line.spacings[glyph.character] : 0)) / textScale
       bounds[chunk] = (min(bounds[chunk].start, start), max(bounds[chunk].end, end))
     }
     let shifts = chunks.indices.map { number -> CGFloat in
@@ -348,10 +398,46 @@ struct TextLayout {
       let character = characters[glyph.character]
       let chunk = chunkOfCharacter[glyph.character]
       let rotation = Self.rotation(of: character.rotate)
-      let x = glyph.position.x / textScale + offsets[glyph.character] + shifts[chunk]
+      let x = glyph.inlineStart / textScale + offsets[glyph.character] + shifts[chunk]
       let local = rotation.concatenating(CGAffineTransform(translationX: 0, y: glyph.position.y))
       var placed: PlacedGlyph
-      if let pathIndex = chunks[chunk].path {
+      let scale = CGAffineTransform(scaleX: 1.0 / textScale, y: -1.0 / textScale)
+      if isVertical {
+        // The line is turned clockwise, and the baselines move the glyphs left. A glyph that stands upright has its
+        // vertical origin on the central baseline of its element at its start, and Core Text gives it a position
+        // and a font for the vertical forms, which aren't the ones of the line.
+        let baseline = baselineOffsets[character.owner]
+        let line = scale.concatenating(CGAffineTransform(translationX: 0, y: baseline))
+          .concatenating(CGAffineTransform(rotationAngle: .pi / 2))
+        let along = CGAffineTransform(translationX: crosses[glyph.character], y: chunks[chunk].path == nil ? x : 0)
+        let frame = (glyph.isUpright ? rotation : local).concatenating(line).concatenating(along)
+        var outline: CGAffineTransform?
+        if glyph.isUpright {
+          var verticalGlyph = glyph.glyph
+          var translation = CGSize.zero
+          CTFontGetVerticalTranslationsForGlyphs(glyph.font, &verticalGlyph, &translation, 1)
+          let central = centralBaselines.indices.contains(character.owner) ? centralBaselines[character.owner] : 0
+          let origin = CGPoint(x: central - baseline, y: 0).applying(along)
+          outline = rotation.concatenating(scale).concatenating(
+            CGAffineTransform(
+              translationX: origin.x + translation.width / textScale, y: origin.y - translation.height / textScale))
+        }
+        if let pathIndex = chunks[chunk].path {
+          // On a path, the line goes along the path, which turns it back.
+          let path = paths[pathIndex]
+          let toPath = CGAffineTransform(rotationAngle: -.pi / 2)
+          let middle = path.startOffset + x + glyph.inlineAdvance / textScale / 2
+          guard
+            let onPath = Self.place(
+              at: middle, on: path, advance: glyph.inlineAdvance, frame: frame.concatenating(toPath),
+              outline: outline?.concatenating(toPath), textScale: textScale)
+          else { return nil }
+          placed = onPath
+        } else {
+          placed = PlacedGlyph(
+            transform: frame, advance: glyph.inlineAdvance, outline: outline, isStraight: character.rotate == nil)
+        }
+      } else if let pathIndex = chunks[chunk].path {
         let path = paths[pathIndex]
         let middle = path.startOffset + x + glyph.advance / textScale / 2
         guard
@@ -375,8 +461,6 @@ struct TextLayout {
 
   /// A glyph placed with its middle at a distance along a path, or `nil` if the middle isn't on the path.
   ///
-  /// For a path that's one closed subpath, the glyphs go around it once from the start offset.
-  ///
   /// - Parameters:
   ///   - advance: The advance of the glyph, in the coordinates of the line.
   ///   - transform: The transform of the glyph in the coordinates of the line, with the origin at its origin.
@@ -386,14 +470,8 @@ struct TextLayout {
     textScale: CGFloat
   ) -> PlacedGlyph? {
     let measure = path.measure
-    var distance = middle
-    if measure.isClosed {
-      guard measure.length > 0, middle - path.startOffset >= 0, middle - path.startOffset <= measure.length
-      else { return nil }
-      distance = middle.truncatingRemainder(dividingBy: measure.length)
-      if distance < 0 { distance += measure.length }
-    }
-    guard let (point, angle) = measure.point(onPathAt: distance) else { return nil }
+    guard let distance = distance(of: middle, on: path), let (point, angle) = measure.point(onPathAt: distance)
+    else { return nil }
     let halfAdvance = advance / textScale / 2
     return PlacedGlyph(
       transform: transform.concatenating(CGAffineTransform(scaleX: 1.0 / textScale, y: -1.0 / textScale))
@@ -416,6 +494,37 @@ struct TextLayout {
     }
     if boxes.isEmpty { return glyphs.isEmpty && (owners?.contains(0) ?? true) ? emptyFrame : .null }
     return boxes.boundingBoxOfPath
+  }
+
+  /// A glyph placed with its middle at a distance along a path, or `nil` if the middle isn't on the path, from its
+  /// transform to the coordinates whose origin is its start on the path, and whose x-axis is in the direction of the
+  /// path. Its glyph isn't bent.
+  ///
+  /// - Parameter outline: The transform of the outline of a glyph that stands upright, or `nil` if it's in the line.
+  private static func place(
+    at middle: CGFloat, on path: TextPathLayout, advance: CGFloat, frame: CGAffineTransform,
+    outline: CGAffineTransform?, textScale: CGFloat
+  ) -> PlacedGlyph? {
+    guard let distance = distance(of: middle, on: path), let (point, angle) = path.measure.point(onPathAt: distance)
+    else { return nil }
+    let along = CGAffineTransform(translationX: -advance / textScale / 2, y: 0)
+      .concatenating(CGAffineTransform(rotationAngle: angle * .pi / 180))
+      .concatenating(CGAffineTransform(translationX: point.x, y: point.y))
+    return PlacedGlyph(
+      transform: frame.concatenating(along), advance: advance, outline: outline?.concatenating(along))
+  }
+
+  /// The distance along a path where the middle of a glyph is, or `nil` if the middle isn't on the path.
+  ///
+  /// For a path that's one closed subpath, the glyphs go around it once from the start offset.
+  private static func distance(of middle: CGFloat, on path: TextPathLayout) -> CGFloat? {
+    let measure = path.measure
+    guard measure.isClosed else { return middle }
+    guard measure.length > 0, middle - path.startOffset >= 0, middle - path.startOffset <= measure.length else {
+      return nil
+    }
+    let distance = middle.truncatingRemainder(dividingBy: measure.length)
+    return distance < 0 ? distance + measure.length : distance
   }
 
   /// A rotation in degrees of glyphs about their origins, in the coordinates of their line.

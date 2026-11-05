@@ -108,5 +108,10 @@ extension SnapshotTests {
     func unicodeBidi(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
     }
+
+    @Test(arguments: SVGFile.all(in: "basic", "text", "glyph-orientation-vertical"))
+    func glyphOrientationVertical(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
   }
 }

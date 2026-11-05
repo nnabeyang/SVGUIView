@@ -711,6 +711,76 @@ struct RenderTreeBuilderTests {
     #expect((frames[0].midX < frames[1].midX) == isFirstLeft, "\(frames)")
   }
 
+  // MARK: - Vertical text
+
+  /// The bounds of the outlines of the glyphs of text in a group with a font size of 4.
+  private func verticalGlyphBounds(_ content: String) async throws -> CGRect {
+    let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
+    return try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath.boundingBoxOfPath }
+      .reduce(CGRect.null) { $0.union($1) }
+  }
+
+  /// Vertical text, and text that draws the same glyphs.
+  private static let verticalTexts: [(String, String)] = [
+    // SVG 1.1 values are the values of CSS, and writing-mode applies to text and not to its spans.
+    (#"<text x="10" y="2" writing-mode="tb">Ab</text>"#, #"<text x="10" y="2" writing-mode="vertical-rl">Ab</text>"#),
+    (#"<text x="10" y="2" writing-mode="tb-rl">Ab</text>"#, #"<text x="10" y="2" writing-mode="vertical-rl">Ab</text>"#),
+    (#"<g writing-mode="tb"><text x="10" y="2">Ab</text></g>"#, #"<text x="10" y="2" writing-mode="vertical-rl">Ab</text>"#),
+    (#"<text x="2" y="10" writing-mode="lr">Ab</text>"#, #"<text x="2" y="10">Ab</text>"#),
+    (#"<text x="2" y="10"><tspan writing-mode="tb">Ab</tspan></text>"#, #"<text x="2" y="10">Ab</text>"#),
+    // dy moves vertical text along its line, and dx across it.
+    (#"<text x="10" y="2" dx="1" dy="3" writing-mode="tb">Ab</text>"#, #"<text x="11" y="5" writing-mode="tb">Ab</text>"#),
+  ]
+
+  @Test("vertical text is laid out down its line", arguments: verticalTexts)
+  func verticalText(text: String, same: String) async throws {
+    let actual = try await verticalGlyphBounds(text)
+    let expected = try await verticalGlyphBounds(same)
+    #expect(!actual.isEmpty)
+    for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
+      #expect(abs(a - e) < 0.001, "\(actual) isn't \(expected)")
+    }
+  }
+
+  @Test("Latin letters in vertical text are turned with the line, and stand upright with glyph-orientation-vertical 0")
+  func verticalLetters() async throws {
+    let horizontal = try await verticalGlyphBounds(#"<text x="2" y="10">Ab</text>"#)
+    let vertical = try await verticalGlyphBounds(#"<text x="10" y="2" writing-mode="tb">Ab</text>"#)
+    #expect(abs(vertical.width - horizontal.height) < 0.001)
+    #expect(abs(vertical.height - horizontal.width) < 0.001)
+    // The central baseline is at x.
+    #expect(vertical.minX < 10 && vertical.maxX > 10)
+    // A narrow letter that stands upright is narrow across the line, and tall when it's turned.
+    let upright = try await verticalGlyphBounds(#"<text x="10" y="2" writing-mode="tb" glyph-orientation-vertical="0">ll</text>"#)
+    let turned = try await verticalGlyphBounds(#"<text x="10" y="2" writing-mode="tb">ll</text>"#)
+    #expect(upright.width < 1.5, "\(upright) \(turned)")
+    #expect(turned.width > 2)
+  }
+
+  @Test("ideographs in vertical text stand upright down the line, centered on x")
+  func verticalIdeographs() async throws {
+    let tree = try await renderTree(#"<g font-size="4"><text x="10" y="2" writing-mode="tb"><tspan>日</tspan><tspan>本</tspan></text></g>"#)
+    let frames = try shapes(of: children(of: tree)).compactMap { $0.geometry?.path.cgPath.boundingBoxOfPath }
+      .filter { !$0.isEmpty }
+    try #require(frames.count == 2)
+    #expect(frames[1].midY > frames[0].midY + 2)
+    #expect(abs(frames[0].midX - 10) < 0.5 && abs(frames[1].midX - 10) < 0.5, "\(frames)")
+  }
+
+  @Test("text-anchor anchors vertical text along its line")
+  func verticalAnchors() async throws {
+    func bounds(_ anchor: String) async throws -> CGRect {
+      try await verticalGlyphBounds(#"<text x="10" y="10" writing-mode="tb" text-anchor=""# + anchor + #"">Ab</text>"#)
+    }
+    let start = try await bounds("start")
+    let middle = try await bounds("middle")
+    let end = try await bounds("end")
+    #expect(start.minY >= 10 - 0.001)
+    #expect(end.maxY <= 10 + 0.001)
+    #expect(abs((start.minY + end.minY) / 2 - middle.minY) < 0.001)
+    #expect(abs(start.midX - end.midX) < 0.001)
+  }
+
   /// The shapes of the nodes and their descendants, in order.
   private func shapes(of nodes: [RenderNode]) -> [ShapeNode] {
     nodes.flatMap { node -> [ShapeNode] in

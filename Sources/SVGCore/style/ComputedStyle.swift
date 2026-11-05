@@ -29,6 +29,8 @@ enum PropertyID: String, CaseIterable, Sendable {
   case textAnchor = "text-anchor"
   case direction
   case unicodeBidi = "unicode-bidi"
+  case textOrientation = "text-orientation"
+  case glyphOrientationVertical = "glyph-orientation-vertical"
   case whiteSpace = "white-space"
   case textDecoration = "text-decoration"
   case letterSpacing = "letter-spacing"
@@ -109,6 +111,8 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .textAnchor: visitor.visit(TextAnchorProperty.self)
     case .direction: visitor.visit(DirectionProperty.self)
     case .unicodeBidi: visitor.visit(UnicodeBidiProperty.self)
+    case .textOrientation: visitor.visit(TextOrientationProperty.self)
+    case .glyphOrientationVertical: visitor.visit(GlyphOrientationVerticalProperty.self)
     case .whiteSpace: visitor.visit(WhiteSpaceProperty.self)
     case .textDecoration: visitor.visit(TextDecorationProperty.self)
     case .letterSpacing: visitor.visit(LetterSpacingProperty.self)
@@ -193,6 +197,10 @@ struct ComputedStyle: Sendable, Equatable {
   var textAnchor: TextAnchor
   var direction = TextDirection.ltr
   var unicodeBidi = UnicodeBidi.normal
+  var textOrientation = TextOrientation.mixed
+  /// The orientation that `glyph-orientation-vertical` sets, or `nil` for `auto`, which leaves it to
+  /// `text-orientation`.
+  var glyphOrientationVertical: TextOrientation? = nil
   var whiteSpace: CSSWhiteSpace
   /// The lines of `text-decoration` of the element and its ancestors, which the lines decorate the text of.
   var textDecoration: TextDecorationLines

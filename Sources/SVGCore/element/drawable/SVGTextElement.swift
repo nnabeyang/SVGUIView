@@ -14,6 +14,13 @@ enum TextDirection: String, CaseIterable, Sendable {
   case rtl
 }
 
+/// The values of `text-orientation`.
+enum TextOrientation: String, CaseIterable, Sendable {
+  case mixed
+  case upright
+  case sideways
+}
+
 /// The values of `unicode-bidi`.
 enum UnicodeBidi: String, CaseIterable, Sendable {
   case normal
@@ -84,7 +91,12 @@ final class SVGTextElement: ShapeGeometry {
       (span?.positions ?? positions).apply(to: &characters[range], context: context)
     }
     let owners = owners(of: content)
-    guard let line = Self.line(of: characters, owners: owners, parents: content.parents, context: context) else {
+    let isVertical = owners[0].style.writingMode != .horizontalTB
+    let uprights = isVertical ? characters.map { Self.isUpright($0, style: owners[$0.owner].style) } : []
+    guard
+      let line = Self.line(
+        of: characters, owners: owners, parents: content.parents, uprights: uprights, context: context)
+    else {
       return nil
     }
     let pathLayouts = zip(content.textPaths, paths).map { textPath, measure in
@@ -101,7 +113,11 @@ final class SVGTextElement: ShapeGeometry {
       characters: characters, line: line, anchors: owners.map(\.style.textAnchor),
       directions: owners.map(\.style.direction),
       baselineOffsets: baselineOffsets(of: content, context: context), textScale: context.textScale,
-      paths: pathLayouts)
+      paths: pathLayouts, isVertical: isVertical, uprights: uprights,
+      centralBaselines: isVertical
+        ? owners.map { owner in
+          Self.font(of: owner.style, context: context).map { Self.position(of: .central, in: $0) / context.textScale } ?? 0
+        } : [])
   }
 
   /// The text laid out, with the characters that it's laid out from, or `nil` if it isn't drawn.
@@ -160,7 +176,10 @@ final class SVGTextElement: ShapeGeometry {
       if glyph.isStraight, let last = segments.last, last.glyph.isStraight, last.glyph.owner == glyph.owner {
         let a = last.glyph.transform
         let b = glyph.transform
-        if a.a == b.a, a.b == b.b, a.c == b.c, a.d == b.d, a.ty == b.ty, abs(a.tx + a.a * last.advance - b.tx) < 1e-6 {
+        // The next glyph starts where the line of the last one ends, along the line.
+        if a.a == b.a, a.b == b.b, a.c == b.c, a.d == b.d, abs(a.tx + a.a * last.advance - b.tx) < 1e-6,
+          abs(a.ty + a.b * last.advance - b.ty) < 1e-6
+        {
           segments[segments.count - 1].advance += glyph.advance
           continue
         }
@@ -219,6 +238,7 @@ final class SVGTextElement: ShapeGeometry {
   /// position of the baseline that it aligns by, minus the sum of the `baseline-shift` of the tspans from the text
   /// to the owner.
   private func baselineOffsets(of content: TextContent, context: any GeometryContext) -> [CGFloat] {
+    let isVertical = style.writingMode != .horizontalTB
     let owners = owners(of: content)
     let parents = content.parents
     let textScale = context.textScale
@@ -249,7 +269,10 @@ final class SVGTextElement: ShapeGeometry {
         }
       }
       shifts.append(shift)
-      let baseline = style.alignmentBaseline.baseline ?? style.dominantBaseline.baseline
+      // Vertical text aligns by its central baseline by default.
+      let dominant: TextBaseline =
+        isVertical && [.auto, .useScript].contains(style.dominantBaseline) ? .central : style.dominantBaseline.baseline
+      let baseline = style.alignmentBaseline.baseline ?? dominant
       offsets.append(Self.position(of: baseline, in: font) / textScale - shift)
     }
     return offsets
@@ -296,9 +319,15 @@ final class SVGTextElement: ShapeGeometry {
   /// `isolate-override` overrides, as Core Text has no isolates in its attributes. Characters of cursive scripts
   /// aren't spaced by `letter-spacing`, as CSS Text says.
   ///
-  /// - Parameter parents: The element that each element is in, or `nil` for the text itself.
+  /// The characters of East Asia that stand upright in vertical text take their vertical forms, such as those of
+  /// punctuation.
+  ///
+  /// - Parameters:
+  ///   - parents: The element that each element is in, or `nil` for the text itself.
+  ///   - uprights: Whether each character stands upright in vertical text.
   private static func line(
-    of characters: [TextCharacter], owners: [any SVGDrawableElement], parents: [Int?], context: any SVGLengthContext
+    of characters: [TextCharacter], owners: [any SVGDrawableElement], parents: [Int?], uprights: [Bool],
+    context: any SVGLengthContext
   ) -> TextLine? {
     let fonts = owners.map { font(of: $0.style, context: context) }
     guard let text = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0) else { return nil }
@@ -344,6 +373,11 @@ final class SVGTextElement: ShapeGeometry {
       CFAttributedStringReplaceString(text, CFRange(location: location, length: 0), string as CFString)
       characterOfIndex += Array(repeating: index, count: length)
       var attributes: [CFString: Any] = [kCTFontAttributeName: font]
+      // The vertical forms of a font turn Latin letters, so only the characters that stand upright in mixed text
+      // take them.
+      if uprights.indices.contains(index) && uprights[index] && Self.isEastAsian(character.character) {
+        attributes[kCTVerticalFormsAttributeName] = true
+      }
       if !embeddings[character.owner].isEmpty {
         attributes[kCTWritingDirectionAttributeName] = embeddings[character.owner]
       }
@@ -372,6 +406,30 @@ final class SVGTextElement: ShapeGeometry {
     CFAttributedStringEndEditing(text)
     guard !characterOfIndex.isEmpty else { return nil }
     return TextLine(line: CTLineCreateWithAttributedString(text), characters: characterOfIndex, spacings: kerns)
+  }
+
+  /// Whether a character stands upright in vertical text, by the `text-orientation` of its element, or by its
+  /// `glyph-orientation-vertical` if it isn't `auto`. With `mixed`, the characters of East Asia stand upright, and
+  /// the others are turned with the line.
+  private static func isUpright(_ character: TextCharacter, style: ComputedStyle) -> Bool {
+    switch style.glyphOrientationVertical ?? style.textOrientation {
+    case .upright: true
+    case .sideways: false
+    case .mixed: isEastAsian(character.character)
+    }
+  }
+
+  /// Whether a character is of the scripts and the symbols of East Asia, whose Vertical_Orientation of Unicode is
+  /// mostly U, Tu or Tr.
+  private static func isEastAsian(_ character: Character) -> Bool {
+    guard let scalar = character.unicodeScalars.first?.value else { return false }
+    let ranges: [ClosedRange<UInt32>] = [
+      0x1100...0x11FF, 0x2E80...0x2FFF, 0x3000...0x303F, 0x3040...0x30FF, 0x3100...0x318F, 0x3190...0x31FF,
+      0x3200...0x33FF, 0x3400...0x4DBF, 0x4DC0...0x4DFF, 0x4E00...0x9FFF, 0xA000...0xA4CF, 0xA960...0xA97F,
+      0xAC00...0xD7FF, 0xF900...0xFAFF, 0xFE10...0xFE1F, 0xFE30...0xFE4F, 0xFF00...0xFF60, 0xFFE0...0xFFEF,
+      0x1F000...0x1FAFF, 0x20000...0x3FFFF,
+    ]
+    return ranges.contains { $0.contains(scalar) }
   }
 
   /// Whether a character is of a cursive script, whose letters join: Arabic, Syriac, N'Ko, Mandaic, Mongolian,
