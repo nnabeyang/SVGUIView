@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreText
 import Foundation
 
 /// The identity of a node of a render tree: the element that it comes from, and the `<use>` elements that show
@@ -105,6 +106,25 @@ package enum ShapeContent: Sendable {
   case vector(fill: FillPaint?, stroke: StrokeStyle?, fillRule: CGPathDrawingMode)
   /// An image, or `nil` if its data can't be decoded.
   case image(ImagePaint?, stroke: StrokeStyle?)
+  /// Glyphs that are drawn in their own colors, such as emoji, with the opacity of the fill.
+  case colorGlyphs([ColorGlyph], opacity: CGFloat)
+}
+
+/// A glyph that a font draws in its own colors, such as an emoji of Apple Color Emoji, which has no outline to fill.
+/// The font is immutable, which Core Text doesn't mark `Sendable`.
+package struct ColorGlyph: @unchecked Sendable {
+  package let font: CTFont
+  package let glyph: CGGlyph
+  /// The transform from the coordinates of the font, with the origin at the origin of the glyph, to the user space.
+  package let transform: CGAffineTransform
+
+  /// The bounds of the glyph in the user space.
+  var bounds: CGRect {
+    var glyph = glyph
+    var rect = CGRect.zero
+    CTFontGetBoundingRectsForGlyphs(font, .default, &glyph, &rect, 1)
+    return rect.applying(transform)
+  }
 }
 
 /// An image placed in the rectangle of its element by its `preserveAspectRatio`.

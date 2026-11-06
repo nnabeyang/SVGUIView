@@ -757,6 +757,18 @@ struct TextLayout {
     }
   }
 
+  /// The glyphs of the element that the fonts draw in their colors, such as emoji, which have no outlines.
+  func colorGlyphs(of owner: Int) -> [ColorGlyph] {
+    glyphs.compactMap { glyph in
+      guard glyph.owner == owner, let font = glyph.font,
+        CTFontGetSymbolicTraits(font).contains(.traitColorGlyphs),
+        CTFontCreatePathForGlyph(font, glyph.glyph, nil) == nil
+      else { return nil }
+      // A bent glyph is placed on its path unbent, as a bitmap doesn't bend.
+      return ColorGlyph(font: font, glyph: glyph.glyph, transform: glyph.outline ?? glyph.transform)
+    }
+  }
+
   /// The outline of each glyph that has one, in the user space.
   func glyphPaths() -> [CGPath] {
     glyphs.compactMap { glyph in

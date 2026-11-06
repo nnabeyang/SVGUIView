@@ -173,10 +173,10 @@ package struct RenderTreeBuilder {
     let references = beginsLevel(mode) ? references.beginning(.all) : references
     // Text is laid out apart from its outline only when it has spans, or glyphs that `rotate` turns with a paint server.
     if let text = element as? SVGTextElement,
-      !text.children.isEmpty
+      !text.children.isEmpty || text.mayHaveColorGlyphs
         || (!text.positions.rotate.isEmpty && (text.style.fill.isServer || text.style.stroke.isServer)),
       let spans = text.spans(in: context),
-      spans.contains(where: { $0.element !== text || !$0.turned.isEmpty })
+      spans.contains(where: { $0.element !== text || !$0.turned.isEmpty || !$0.colorGlyphs.isEmpty })
     {
       return await textNode(
         of: text, spans: spans, context: context, mode: mode, guard: references, instance: instance)
@@ -354,6 +354,22 @@ package struct RenderTreeBuilder {
                 id: partID(id, part: part), transform: .identity,
                 geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
                 content: content)), span.spans
+          ))
+      }
+      // The glyphs that the fonts draw in their colors are drawn after the other glyphs, without the paints of the
+      // element: a fill that isn't `none` draws them with its opacity, as browsers draw them.
+      if !span.colorGlyphs.isEmpty {
+        let bounds = CGMutablePath()
+        for glyph in span.colorGlyphs { bounds.addRect(glyph.bounds) }
+        let draws = element.style.visibility == .visible && element.style.fill != .none
+        children.append(
+          (
+            .shape(
+              ShapeNode(
+                id: partID(id, part: 1 << 17), transform: .identity,
+                geometry: Geometry(path: RenderPath(bounds), frame: frame), clip: nil, mask: .none, opacity: 1,
+                content: draws ? .colorGlyphs(span.colorGlyphs, opacity: element.style.fillOpacity) : nil)),
+            span.spans
           ))
       }
       // Each glyph that `rotate` turns is a shape whose transform is its turn, so that its paint turns with it.

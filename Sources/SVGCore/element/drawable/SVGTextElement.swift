@@ -52,10 +52,17 @@ final class SVGTextElement: ShapeGeometry {
   /// The characters of the text, with their white space processed.
   var text: String { String(characters.map(\.character)) }
 
+  /// Whether the text has characters that fonts can draw in their colors, such as emoji, which are drawn apart from
+  /// the outlines of the other glyphs.
+  let mayHaveColorGlyphs: Bool
+
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
     content = TextContent(base: base, children: children) { _ in true }
+    mayHaveColorGlyphs = content.characters.contains { character in
+      character.character.unicodeScalars.contains { $0.properties.isEmojiPresentation || $0.value == 0xFE0F }
+    }
   }
 
   convenience init(base: SVGBaseElement, text _: String, attributes _: [String: String]) {
@@ -174,6 +181,9 @@ final class SVGTextElement: ShapeGeometry {
       var span = TextSpan(element: owners[owner], path: path, frame: layout.frame(of: [owner]), spans: spansAround(owner))
       if turned.contains(owner) {
         span.turned = layout.turnedGlyphPaths(of: owner) + (lines.turnedUnder[owner] ?? [])
+      }
+      if mayHaveColorGlyphs {
+        span.colorGlyphs = layout.colorGlyphs(of: owner)
       }
       spans.append(span)
     }
@@ -581,6 +591,8 @@ struct TextSpan {
   /// The outlines of the glyphs that `rotate` turns, and the pieces of the lines under them, which are painted apart in
   /// their turned coordinates, in the user space with their turns.
   var turned: [(path: CGPath, rotation: CGAffineTransform)] = []
+  /// The glyphs that the fonts draw in their colors, such as emoji, which are drawn after the other glyphs.
+  var colorGlyphs: [ColorGlyph] = []
 }
 
 /// The characters of text and its spans, and the elements that they belong to.
