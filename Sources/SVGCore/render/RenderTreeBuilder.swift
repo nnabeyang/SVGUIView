@@ -312,7 +312,8 @@ package struct RenderTreeBuilder {
     let transform =
       mode != .filter(isRoot: true)
       ? await transform(of: text, context: context, frame: frame, guard: references) : .identity
-    var children = [RenderNode]()
+    // The nodes of the shapes, with the spans that each one is in.
+    var children = [(node: RenderNode, spans: [any SVGDrawableElement])]()
     for span in spans {
       let element = span.element
       let context = context.styled(by: element)
@@ -333,17 +334,83 @@ package struct RenderTreeBuilder {
       let id = renderID(of: element, instance: instance)
       for (part, content) in contents.enumerated() {
         children.append(
-          .shape(
-            ShapeNode(
-              id: partID(id, part: part), transform: .identity,
-              geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
-              content: content)))
+          (
+            .shape(
+              ShapeNode(
+                id: partID(id, part: part), transform: .identity,
+                geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
+                content: content)), span.spans
+          ))
+      }
+    }
+    // The shapes of each span with an opacity, a clip path, a mask, a filter or a blend mode, which SVG 2 applies to
+    // spans as to graphics elements, are a group of their own, from the innermost spans out, at the place of their
+    // first shape. Their units are the bounds of the whole text, as the units of their paints are.
+    let spanMode: DrawMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
+    var effected = [any SVGDrawableElement]()
+    for span in spans {
+      for element in span.spans where hasEffect(element) && !effected.contains(where: { $0 === element }) {
+        effected.append(element)
+      }
+    }
+    for element in effected.reversed() {
+      let members = children.indices.filter { index in children[index].spans.contains { $0 === element } }
+      guard let first = members.first else { continue }
+      let outer = Array(children[first].spans.prefix { $0 !== element })
+      let node = await effectNode(
+        of: element, children: members.map { children[$0].node }, frame: frame, context: context, mode: spanMode,
+        guard: references, instance: instance)
+      for index in members.reversed() {
+        children.remove(at: index)
+      }
+      if let node {
+        children.insert((node, outer), at: first)
       }
     }
     return .group(
       GroupNode(
         id: renderID(of: text, instance: instance), transform: transform, opacity: opacity(of: text, mode: mode), clip: clip,
-        mask: mask, children: children, blendMode: blendMode(of: text, mode: mode)))
+        mask: mask, children: children.map(\.node), blendMode: blendMode(of: text, mode: mode)))
+  }
+
+  /// Whether a span has an opacity, a clip path, a mask, a filter or a blend mode, which make its shapes a group.
+  private func hasEffect(_ span: any SVGDrawableElement) -> Bool {
+    span.opacity != 1 || span.clipPath != nil || mask(of: span) != nil || span.filter != nil
+      || span.style.mixBlendMode != .normal
+  }
+
+  /// The shapes of a span in a group with its opacity, clip path, mask, filter and blending, whose units are the
+  /// bounds of the whole text, or `nil` if its filter draws nothing.
+  ///
+  /// - Parameter context: The context of the text.
+  private func effectNode(
+    of span: any SVGDrawableElement, children: [RenderNode], frame: CGRect, context: ResolveContext, mode: DrawMode,
+    guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> RenderNode? {
+    let context = context.styled(by: span)
+    let id = renderID(of: span, instance: instance)
+    let clip = await clipEffect(span.clipPath, frame: frame, context: context, guard: references)
+    let mask = await maskEffect(
+      self.mask(of: span), frame: frame, context: context, guard: references, instance: instance + [span.base.elementID])
+    if let functions = span.filter {
+      switch filterElements(of: functions, guard: references) {
+      case .none:
+        break
+      case .drawsNothing:
+        return nil
+      case .filters(let filters):
+        let source = RenderNode.group(
+          GroupNode(id: partID(id, part: functions.count), transform: .identity, opacity: 1, clip: nil, mask: nil, children: children))
+        return await applyingFilters(
+          functions, filters: filters, of: span, to: source, frame: frame, transform: .identity, clip: clip,
+          mask: mask.map { .mask($0) } ?? .none, filterContext: context, functionContext: context, guard: references,
+          id: id, instance: instance)
+      }
+    }
+    return .group(
+      GroupNode(
+        id: id, transform: .identity, opacity: opacity(of: span, mode: mode), clip: clip, mask: mask, children: children,
+        blendMode: blendMode(of: span, mode: mode)))
   }
 
   private func groupNode(
