@@ -1073,6 +1073,26 @@ struct RenderTreeBuilderTests {
     #expect(span.children.count == 3)
   }
 
+  @Test("the glyphs of a rotated character turn together about the position of the character")
+  func clusterRotation() async throws {
+    func glyphBounds(_ content: String) async throws -> CGRect {
+      let tree = try await renderTree(#"<g font-size="8">"# + content + "</g>")
+      return try shapes(of: children(of: tree)).map { try #require($0.geometry).path.cgPath.boundingBoxOfPath }
+        .reduce(CGRect.null) { $0.union($1) }
+    }
+    // An o with a combining low line, whose glyphs Core Text gives apart.
+    let plain = try await glyphBounds("<text x=\"5\" y=\"10\">o\u{0332}</text>")
+    let rotated = try await glyphBounds("<text x=\"5\" y=\"10\" rotate=\"90\">o\u{0332}</text>")
+    // A quarter turn clockwise about the position of the character, (5, 10).
+    let expected = CGRect(x: 5 - (plain.maxY - 10), y: 10 + (plain.minX - 5), width: plain.height, height: plain.width)
+    for (a, e) in [
+      (rotated.minX, expected.minX), (rotated.minY, expected.minY), (rotated.maxX, expected.maxX),
+      (rotated.maxY, expected.maxY),
+    ] {
+      #expect(abs(a - e) < 0.01, "\(rotated) isn't \(expected)")
+    }
+  }
+
   /// Text with spacings, and text with the same glyphs placed by `dx`.
   private static let spacedTexts: [(String, String)] = [
     (#"<text x="2" y="10" letter-spacing="2">ab</text>"#, #"<text x="2" y="10" dx="0 2">ab</text>"#),

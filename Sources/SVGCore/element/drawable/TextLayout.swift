@@ -441,11 +441,20 @@ struct TextLayout {
       let chunk = chunkOfCharacter[glyph.character]
       let rotation = Self.rotation(of: character.rotate)
       let stretch = scales[glyph.character]
-      let x = stretch * glyph.inlineStart / textScale + offsets[glyph.character] + shifts[chunk]
+      // The glyphs of a rotated character, such as a base and its combining marks, turn together about the position
+      // of the character, as resvg and WebKit turn them, from how far along the line the glyph is from it.
+      let pivot: CGFloat? =
+        character.rotate != nil && chunks[chunk].path == nil && !glyph.isUpright
+        ? glyph.inlineStart - positions[glyph.character] * textScale : nil
+      let x = stretch * (glyph.inlineStart - (pivot ?? 0)) / textScale + offsets[glyph.character] + shifts[chunk]
       let addedSpace = lastGlyphs.contains(index) ? addedSpaces[glyph.character] * textScale / stretch : 0
       let stretching = CGAffineTransform(scaleX: stretch, y: 1)
-      let local = rotation.concatenating(stretching).concatenating(
-        CGAffineTransform(translationX: 0, y: glyph.position.y))
+      let local =
+        if let pivot {
+          CGAffineTransform(translationX: pivot, y: glyph.position.y).concatenating(rotation).concatenating(stretching)
+        } else {
+          rotation.concatenating(stretching).concatenating(CGAffineTransform(translationX: 0, y: glyph.position.y))
+        }
       var placed: PlacedGlyph
       let scale = CGAffineTransform(scaleX: 1.0 / textScale, y: -1.0 / textScale)
       if isVertical {
