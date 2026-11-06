@@ -186,6 +186,34 @@ enum FontWeightProperty: StyleProperty {
   }
 }
 
+/// `font-style`, whether the glyphs are italic or oblique, which chooses the face of the font.
+enum FontStyleProperty: StyleProperty {
+  static let id = PropertyID.fontStyle
+  static let isInherited = true
+  static let initial = FontStyle.normal
+  static let computed = \ComputedStyle.fontStyle
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> FontStyle? {
+    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let words = (origin == .css ? text.lowercased() : text).split(whereSeparator: \.isWhitespace)
+    switch (words.first, words.count) {
+    case ("normal", 1): return .normal
+    case ("italic", 1): return .italic
+    case ("oblique", 1): return .oblique(nil)
+    case ("oblique", 2):
+      // An angle of CSS Fonts 4, from -90deg to 90deg.
+      let angle = words[1]
+      let units: [(String, Double)] = [("deg", 1), ("grad", 0.9), ("rad", 180 / .pi), ("turn", 360)]
+      guard let (unit, factor) = units.first(where: { angle.hasSuffix($0.0) }),
+        let value = Double(angle.dropLast(unit.count)), abs(value * factor) <= 90
+      else { return nil }
+      return .oblique(value * factor)
+    default:
+      return nil
+    }
+  }
+}
+
 enum WritingModeProperty: StyleProperty {
   static let id = PropertyID.writingMode
   static let isInherited = true

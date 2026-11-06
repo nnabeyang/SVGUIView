@@ -1,3 +1,4 @@
+import CoreGraphics
 import CoreText
 import Testing
 
@@ -7,6 +8,26 @@ import Testing
 struct FontCacheTests {
   /// Font sizes to look up at the same time, so that each lookup adds a new entry to the shared caches.
   private static let sizes = (1...500).map { 1000 + Double($0) / 8 }
+
+  @Test("a font with font-style italic or oblique has an italic face, and a normal one doesn't")
+  func italicFont() {
+    struct Context: SVGLengthContext {
+      var viewBoxSize: CGSize { .zero }
+      var font: SVGUIFont? { nil }
+      var textScale: Double { 1 }
+      var rootFont: SVGUIFont? { nil }
+      var viewPort: CGRect { .zero }
+      var writingMode: WritingMode? { nil }
+    }
+    func isItalic(_ style: FontStyle) -> Bool {
+      let font = SVGUIFont(name: "Times New Roman", size: .length(.pixel(20)), weight: .normal, style: style)
+        .ctFont(context: Context())
+      return CTFontGetSymbolicTraits(font).contains(.traitItalic)
+    }
+    #expect(isItalic(.italic))
+    #expect(isItalic(.oblique(nil)))
+    #expect(!isItalic(.normal))
+  }
 
   @Test("system font cascade lists can be looked up from many tasks at once")
   func cascadeListsConcurrently() async {

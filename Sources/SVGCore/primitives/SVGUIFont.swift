@@ -2,20 +2,22 @@ import CoreGraphics
 import CoreText
 import Foundation
 
-/// A font with the computed values of `font-family`, `font-size` and `font-weight`.
+/// A font with the computed values of `font-family`, `font-size`, `font-weight` and `font-style`.
 struct SVGUIFont {
   let name: String
   let size: Size
   let weight: Weight
+  let style: FontStyle
   /// The font families, in order of preference.
   let families: [String]
   /// The locale for choosing fonts, such as the fonts for Han characters, or `nil` for none.
   let specifiedLocale: String?
 
-  init(name: String, size: Size, weight: Weight) {
+  init(name: String, size: Size, weight: Weight, style: FontStyle = .normal) {
     self.name = name
     self.size = size
     self.weight = weight
+    self.style = style
     var name = name
     let families = name.withUTF8 {
       let bytes = BufferView(unsafeBufferPointer: $0)!
@@ -47,11 +49,13 @@ struct SVGUIFont {
   }
 
   func fontCascade(textScale: Double, context: any SVGLengthContext) -> FontCascade {
-    Self.createFontCascade(size: size, weight: weight, fontDescription: makeDescription(), textScale: textScale, context: context)
+    Self.createFontCascade(
+      size: size, weight: weight, style: style, fontDescription: makeDescription(), textScale: textScale,
+      context: context)
   }
 
   static func createFontCascade(
-    size: Size?, weight: Weight?, fontDescription: FontCascadeDescription,
+    size: Size?, weight: Weight?, style: FontStyle = .normal, fontDescription: FontCascadeDescription,
     textScale: Double, context: any SVGLengthContext
   ) -> FontCascade {
     let weight = weight ?? .normal
@@ -62,7 +66,8 @@ struct SVGUIFont {
     fontDescription.computedSize = computedSize
     fontDescription.fontSelectionRequest = FontSelectionRequest(
       weight: weight.value,
-      width: .normalStretchValue
+      width: .normalStretchValue,
+      slope: style.slope
     )
     return FontCascade(fontDescription: fontDescription, fonts: FontCascadeFonts(fontSelector: fontSelector))
   }
@@ -257,5 +262,23 @@ extension SVGUIFont {
       }
     }
 
+  }
+}
+
+/// The values of `font-style`.
+enum FontStyle: Equatable, Sendable {
+  case normal
+  case italic
+  /// An oblique face, at an angle in degrees, or the angle that faces of `italic` have if it has none, as WebKit
+  /// chooses faces for `oblique`.
+  case oblique(Double?)
+
+  /// The slope that a face is chosen by, or `nil` for an upright face.
+  var slope: FontSelectionValue? {
+    switch self {
+    case .normal: nil
+    case .italic, .oblique(nil): .italicValue
+    case .oblique(let angle?): FontSelectionValue(angle)
+    }
   }
 }

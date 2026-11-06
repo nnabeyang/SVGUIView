@@ -236,6 +236,28 @@ struct StyleTests {
     }
   }
 
+  @Test("font-style is normal, italic, oblique or oblique with an angle, which is inherited")
+  func fontStyle() throws {
+    #expect(FontStyleProperty.parse("italic", origin: .attribute) == .italic)
+    #expect(FontStyleProperty.parse(" oblique ", origin: .attribute) == .oblique(nil))
+    #expect(FontStyleProperty.parse("oblique 20deg", origin: .attribute) == .oblique(20))
+    #expect(FontStyleProperty.parse("oblique 0.5rad", origin: .attribute) == .oblique(0.5 * 180 / .pi))
+    #expect(FontStyleProperty.parse("oblique 91deg", origin: .attribute) == nil)
+    #expect(FontStyleProperty.parse("Italic", origin: .attribute) == nil)
+    #expect(FontStyleProperty.parse("bold", origin: .attribute) == nil)
+    let declared = try #require(declared(FontStyleProperty.self, css: "ITALIC"))
+    let parent = style([PropertyDeclaration(FontStyleProperty.self, declared)])
+    #expect(parent.fontStyle == .italic)
+    #expect(style([], parent: parent).fontStyle == .italic)
+    #expect(ComputedStyle.initial.fontStyle == .normal)
+    // Italic and oblique faces are chosen by the slope of italic faces, and an oblique angle by its angle.
+    #expect(FontStyle.italic.slope == .italicValue)
+    #expect(FontStyle.oblique(nil).slope == .italicValue)
+    #expect(FontStyle.oblique(10).slope == FontSelectionValue(10))
+    #expect(FontStyle.normal.slope == nil)
+    #expect(FontSelectionValue.isItalic(slope: FontStyle.italic.slope))
+  }
+
   @Test("shape-rendering is a keyword, case-sensitive in attributes, which is inherited and is auto initially")
   func shapeRendering() throws {
     #expect(ShapeRenderingProperty.parse("crispEdges", origin: .attribute) == .crispEdges)
