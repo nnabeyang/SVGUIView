@@ -44,4 +44,43 @@ struct GradientStopTests {
     #expect(left[0] > 245 && left[2] < 10, "\(left)")
     #expect(right[2] > 245 && right[0] < 10, "\(right)")
   }
+
+  /// A gradient of the kind with the attributes, whose first stops share the offset 0: transparent and then red, which
+  /// goes on to blue at 1, on a rectangle that covers the document.
+  private func sharedStart(_ kind: String, _ attributes: String) -> String {
+    #"<\#(kind) id="g" gradientUnits="userSpaceOnUse" "# + attributes + ">"
+      + #"<stop offset="0" stop-color="red" stop-opacity="0"/><stop offset="0" stop-color="red"/>"#
+      + #"<stop offset="1" stop-color="blue"/></\#(kind)><rect width="20" height="20" fill="url(#g)"/>"#
+  }
+
+  @Test("a padded linear gradient pads its start with the first of the stops at the first offset")
+  func paddedLinearGradientStart() async throws {
+    let content = sharedStart("linearGradient", #"x1="10" x2="20""#)
+    let before = try await pixel(content, x: 5, y: 10)
+    let inside = try await pixel(content, x: 10, y: 10)
+    #expect(before[3] == 0, "\(before)")
+    #expect(inside[0] > 230 && inside[3] > 245, "\(inside)")
+  }
+
+  @Test(
+    "a radial gradient pads the inside of its focal circle with the first of the stops at the first offset",
+    arguments: ["pad", "reflect"])
+  func radialGradientFocalCircle(spreadMethod: String) async throws {
+    let content = sharedStart(
+      "radialGradient", #"cx="10" cy="10" r="8" fr="4" spreadMethod="\#(spreadMethod)""#)
+    let inside = try await pixel(content, x: 10, y: 10)
+    let start = try await pixel(content, x: 14, y: 10)
+    #expect(inside[3] == 0, "\(inside)")
+    #expect(start[0] > 200 && start[3] > 245, "\(start)")
+  }
+
+  @Test("a padded linear gradient pads its start with its first stop")
+  func paddedLinearGradientWithoutSharedOffsets() async throws {
+    let content =
+      #"<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="10" x2="20">"#
+      + #"<stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>"#
+      + #"<rect width="20" height="20" fill="url(#g)"/>"#
+    let before = try await pixel(content, x: 5, y: 10)
+    #expect(before[0] > 245 && before[2] < 10 && before[3] > 245, "\(before)")
+  }
 }

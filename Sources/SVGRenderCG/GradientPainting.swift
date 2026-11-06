@@ -46,7 +46,12 @@ extension LinearGradientPaint {
     // A gradient without a length, or with too many bands to draw, is padded.
     guard spreadMethod != .pad, lengthSquared > 0, last - first <= 1_000_000 else {
       let end = CGPoint(x: x2, y: y2)
-      let options: CGGradientDrawingOptions = [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+      var options: CGGradientDrawingOptions = [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+      if lengthSquared > 0, let padding = startPadding(colors: colors, locations: locations, space: space) {
+        let before = CGPoint(x: start.x - vector.dx, y: start.y - vector.dy)
+        graphics.drawLinearGradient(padding, start: before, end: start, options: .drawsBeforeStartLocation)
+        options.remove(.drawsBeforeStartLocation)
+      }
       graphics.drawLinearGradient(gradient, start: start, end: end, options: options)
       return
     }
@@ -96,10 +101,18 @@ extension RadialGradientPaint {
       }.max() ?? 0
     let last = growth > 0 ? ((farthest - fr) / growth).rounded(.up) : 0
     // A gradient that doesn't grow, or with too many bands to draw, is padded.
+    // The inside of the focal circle takes the color at its start, which `padding` paints when CG would take
+    // another color. A cone has no inside to pad.
+    let padding = fr > 0 && growth > 0 ? startPadding(colors: colors, locations: locations, space: space) : nil
+    if let padding {
+      graphics.drawRadialGradient(
+        padding, startCenter: focus, startRadius: 0, endCenter: focus, endRadius: fr, options: [])
+    }
+    let before: CGGradientDrawingOptions = padding == nil ? .drawsBeforeStartLocation : []
     guard spreadMethod != .pad, growth > 0, last <= 10_000 else {
       graphics.drawRadialGradient(
         gradient, startCenter: focus, startRadius: fr, endCenter: center, endRadius: r,
-        options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        options: before.union(.drawsAfterEndLocation))
       return
     }
     let reflected =
@@ -108,10 +121,9 @@ extension RadialGradientPaint {
       let start = circle(CGFloat(band))
       let end = circle(CGFloat(band + 1))
       let bandGradient = band.isMultiple(of: 2) ? gradient : (reflected ?? gradient)
-      // The inside of the focal circle takes the color at its start.
       graphics.drawRadialGradient(
         bandGradient, startCenter: start.center, startRadius: start.radius, endCenter: end.center,
-        endRadius: end.radius, options: band == 0 ? [.drawsBeforeStartLocation] : [])
+        endRadius: end.radius, options: band == 0 ? before : [])
     }
   }
 }
@@ -128,6 +140,16 @@ private let extendedSRGB = CGColorSpace(name: CGColorSpace.extendedSRGB)!
 /// bands of a reflected gradient are painted with.
 private func reflectedGradient(colors: [CGColor], locations: [CGFloat], space: CGColorSpace) -> CGGradient? {
   CGGradient(colorsSpace: space, colors: colors.reversed() as CFArray, locations: locations.reversed().map { 1 - $0 })
+}
+
+/// The gradient of the first color, which paints what's before the start of a gradient whose first stops share an
+/// offset, or `nil` if they don't.
+///
+/// CG paints what's before the start with the last of the stops at the first offset, while SVG pads it with the
+/// first stop.
+private func startPadding(colors: [CGColor], locations: [CGFloat], space: CGColorSpace) -> CGGradient? {
+  guard locations.count > 1, locations[0] == locations[1], let first = colors.first else { return nil }
+  return CGGradient(colorsSpace: space, colors: [first, first] as CFArray, locations: [0, 1])
 }
 
 /// The transform from the coordinates of a gradient to user space, or `nil` if it can't be inverted, such as for
