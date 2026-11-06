@@ -26,15 +26,26 @@ extension RenderTreeBuilder {
         !(content is SVGGroupElement || content is SVGLineElement || content is SVGImageElement),
         content.base.passesConditions,
         content.visibility != .hidden,
-        content.display != CSSDisplay.none,
-        let path = await path(of: content, context: context.styled(by: content), guard: references)
+        content.display != CSSDisplay.none
       else { continue }
-      shapes.append(
-        ClipShape(
-          path: RenderPath(path),
-          transform: await transform(of: content, context: context.styled(by: content), frame: nil, guard: references),
-          clip: await clipEffect(content.clipPath, frame: frame, context: context, guard: references),
-          fillRule: await clipRule(of: content, context: context, guard: references) == .evenodd ? .eoFill : .fill))
+      // The glyphs of text are shapes of their own, which the clip rule fills one by one, as resvg and WebKit fill
+      // them, so that glyphs over each other don't cut holes in each other.
+      let paths: [CGPath]
+      if let text = content as? SVGTextElement {
+        paths = text.clipPaths(in: context.styled(by: content))
+      } else if let path = await path(of: content, context: context.styled(by: content), guard: references) {
+        paths = [path]
+      } else {
+        paths = []
+      }
+      guard !paths.isEmpty else { continue }
+      let transform = await transform(of: content, context: context.styled(by: content), frame: nil, guard: references)
+      let clip = await clipEffect(content.clipPath, frame: frame, context: context, guard: references)
+      let fillRule: CGPathDrawingMode =
+        await clipRule(of: content, context: context, guard: references) == .evenodd ? .eoFill : .fill
+      for path in paths {
+        shapes.append(ClipShape(path: RenderPath(path), transform: transform, clip: clip, fillRule: fillRule))
+      }
     }
     // The box of a `<clipPath>` element is the one of its content, as the box of a group is.
     let transform = await transform(of: element.style, context: context.styled(by: element)) { box in

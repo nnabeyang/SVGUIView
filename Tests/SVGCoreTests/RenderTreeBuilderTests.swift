@@ -1093,6 +1093,33 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  @Test("the glyphs that rotate turns, painted with a pattern, are shapes turned with them, and colors aren't")
+  func turnedGlyphPaint() async throws {
+    let pattern =
+      #"<pattern id="p" patternUnits="userSpaceOnUse" width="2" height="2"><rect width="1" height="1"/></pattern>"#
+    let tree = try await renderTree(
+      pattern + #"<g font-size="8"><text x="2" y="15" rotate="30" fill="url(#p)">ab</text></g>"#)
+    let turned = shapes(of: try children(of: tree))
+    #expect(turned.count == 2)
+    let plain = shapes(of: try children(of: try await renderTree(#"<g font-size="8"><text x="2" y="15">ab</text></g>"#)))
+    let colored = shapes(
+      of: try children(of: try await renderTree(#"<g font-size="8"><text x="2" y="15" rotate="30">ab</text></g>"#)))
+    #expect(colored.count == 1)
+    // The shapes with their transforms are the glyphs that rotate turns, and the transform turns 30 degrees.
+    let bounds = try turned.map { shape in
+      let path = try #require(shape.geometry).path.cgPath
+      var transform = shape.transform
+      return (path.copy(using: &transform) ?? path).boundingBoxOfPath
+    }.reduce(CGRect.null) { $0.union($1) }
+    let expected = try #require(colored.first?.geometry).path.cgPath.boundingBoxOfPath
+    for (a, e) in [(bounds.minX, expected.minX), (bounds.minY, expected.minY), (bounds.maxX, expected.maxX)] {
+      #expect(abs(a - e) < 0.01, "\(bounds) isn't \(expected)")
+    }
+    let first = try #require(turned.first).transform
+    #expect(abs(atan2(first.b, first.a) - .pi / 6) < 1e-6)
+    #expect(!plain.isEmpty)
+  }
+
   /// Text with spacings, and text with the same glyphs placed by `dx`.
   private static let spacedTexts: [(String, String)] = [
     (#"<text x="2" y="10" letter-spacing="2">ab</text>"#, #"<text x="2" y="10" dx="0 2">ab</text>"#),
@@ -1422,6 +1449,20 @@ struct RenderTreeBuilderTests {
       """##)
     let clip = try #require(try shape(try children(of: tree).last).clip)
     #expect(clip.shapes.map(\.fillRule) == [.eoFill, .eoFill, .fill])
+  }
+
+  @Test("each glyph of text in a clip path is a shape of its own, which its clip rule fills apart")
+  func textInClipPath() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <clipPath id="c" clip-rule="evenodd">
+        <text x="2" y="15" font-size="8">ab<tspan x="3">ab</tspan></text>
+      </clipPath>
+      <rect width="20" height="20" clip-path="url(#c)"/>
+      """##)
+    let clip = try #require(try shape(try children(of: tree).last).clip)
+    #expect(clip.shapes.count == 4)
+    #expect(clip.shapes.allSatisfy { $0.fillRule == .eoFill })
   }
 
   @Test("a mask covers its region, and a pattern in it paints, stopping a cycle of patterns")

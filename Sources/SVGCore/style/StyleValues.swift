@@ -13,6 +13,11 @@ indirect enum Paint: Sendable, Equatable {
   /// paint: `none`, a color or `currentColor`.
   case url(String, fallback: Paint?)
 
+  /// Whether the paint is a paint server, whose coordinates the element that it paints sets.
+  var isServer: Bool {
+    if case .url = self { true } else { false }
+  }
+
   init?(_ text: String) {
     var data = text
     let paint = data.withUTF8 {
