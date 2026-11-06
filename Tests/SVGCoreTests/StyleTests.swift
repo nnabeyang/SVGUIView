@@ -236,6 +236,18 @@ struct StyleTests {
     }
   }
 
+  @Test("the language is xml:lang, then lang, or the language of the parent, in the canonical case")
+  func language() {
+    var parent = ComputedStyle.initial
+    parent.language = Language("ja")
+    #expect(ElementLanguage(attributes: ["xml:lang": "zh-HANT", "lang": "ko"]).resolved(parent: parent)?.tag == "zh-Hant")
+    #expect(ElementLanguage(attributes: ["lang": "ko"]).resolved(parent: parent)?.tag == "ko")
+    #expect(ElementLanguage(attributes: [:]).resolved(parent: parent)?.tag == "ja")
+    #expect(ElementLanguage(attributes: [:]).resolved(parent: nil)?.tag == nil)
+    // An empty language is unknown, without the language of the parent.
+    #expect(ElementLanguage(attributes: ["xml:lang": ""]).resolved(parent: parent)?.tag == nil)
+  }
+
   @Test("font-style is normal, italic, oblique or oblique with an angle, which is inherited")
   func fontStyle() throws {
     #expect(FontStyleProperty.parse("italic", origin: .attribute) == .italic)

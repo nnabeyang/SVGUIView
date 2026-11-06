@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Synchronization
 
 /// The properties that styles set, by their names in CSS.
 ///
@@ -181,6 +182,9 @@ struct ComputedStyle: Sendable, Equatable {
   var fontSize: SVGUIFont.Size
   var fontWeight: SVGUIFont.Weight
   var fontStyle = FontStyle.normal
+  /// The language of the element, from `xml:lang` or `lang` of it or of its nearest ancestor that has one, which
+  /// chooses the fonts and the glyphs of text, or `nil` if it's unknown. It isn't a property of CSS.
+  var language: Language? = nil
   var writingMode: WritingMode
   var color: SVGColor
   var fill: Paint
@@ -487,7 +491,7 @@ struct ComputedStyle: Sendable, Equatable {
 
   /// The font, with its size resolved except for viewport units.
   var font: SVGUIFont {
-    SVGUIFont(name: fontFamily, size: fontSize, weight: fontWeight, style: fontStyle)
+    SVGUIFont(name: fontFamily, size: fontSize, weight: fontWeight, style: fontStyle, language: language?.tag)
   }
 
   /// The paint with `currentColor` resolved.
@@ -532,5 +536,59 @@ private struct PropertyIndexSet {
 
   func contains(_ index: Int) -> Bool {
     index < 64 ? low & (1 << index) != 0 : high & (1 << (index - 64)) != 0
+  }
+}
+
+/// The language that `xml:lang` or `lang` of an element gives it, as `xml:lang` comes first in HTML.
+enum ElementLanguage: Sendable, Equatable {
+  /// The element has neither, and takes the language of its parent.
+  case inherited
+  /// An empty value makes the language unknown, without the language of the parent.
+  case unknown
+  /// A language in the canonical case of BCP 47, such as `zh-Hant` for `zh-HANT`, which Core Text takes.
+  case language(Language)
+
+  init(attributes: [String: String]) {
+    guard let value = attributes["xml:lang"] ?? attributes["lang"] else {
+      self = .inherited
+      return
+    }
+    let language = value.trimmingCharacters(in: .whitespaces)
+    self = language.isEmpty ? .unknown : .language(Language(Locale.canonicalLanguageIdentifier(from: language)))
+  }
+
+  /// The language of the element whose parent has the computed values.
+  func resolved(parent: ComputedStyle?) -> Language? {
+    switch self {
+    case .inherited: parent?.language
+    case .unknown: nil
+    case .language(let language): language
+    }
+  }
+}
+
+/// A language tag as a number of the tags that the process has seen, so that the computed values that keep it stay
+/// trivial to copy: a `String` in them made copying them a few percent slower.
+struct Language: Sendable, Hashable {
+  private let index: UInt16
+
+  /// The tags by their numbers, and the numbers by their tags. A document has few languages, and the tags that more
+  /// than the numbers can count share the last number.
+  private static let tags = Mutex<(tags: [String], numbers: [String: UInt16])>(([], [:]))
+
+  init(_ tag: String) {
+    index = Self.tags.withLock { tags in
+      if let number = tags.numbers[tag] { return number }
+      guard tags.tags.count < Int(UInt16.max) else { return UInt16.max - 1 }
+      let number = UInt16(tags.tags.count)
+      tags.tags.append(tag)
+      tags.numbers[tag] = number
+      return number
+    }
+  }
+
+  /// The tag, such as `ja` or `zh-Hant`.
+  var tag: String {
+    Self.tags.withLock { $0.tags[Int(index)] }
   }
 }

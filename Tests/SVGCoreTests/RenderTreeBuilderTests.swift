@@ -1120,6 +1120,19 @@ struct RenderTreeBuilderTests {
     #expect(!plain.isEmpty)
   }
 
+  @Test("the language of text chooses the glyphs of Han characters, and an element inherits it")
+  func textLanguage() async throws {
+    func outline(_ content: String) async throws -> CGPath {
+      let tree = try await renderTree(#"<g font-size="16">"# + content + "</g>")
+      return try #require(shapes(of: try children(of: tree)).first?.geometry).path.cgPath
+    }
+    let japanese = try await outline(#"<text x="2" y="16" xml:lang="ja">直</text>"#)
+    let chinese = try await outline(#"<text x="2" y="16" xml:lang="zh-HANT">直</text>"#)
+    let inherited = try await outline(#"<g lang="zh-Hant"><text x="2" y="16">直</text></g>"#)
+    #expect(japanese != chinese)
+    #expect(chinese == inherited)
+  }
+
   /// Text with spacings, and text with the same glyphs placed by `dx`.
   private static let spacedTexts: [(String, String)] = [
     (#"<text x="2" y="10" letter-spacing="2">ab</text>"#, #"<text x="2" y="10" dx="0 2">ab</text>"#),
