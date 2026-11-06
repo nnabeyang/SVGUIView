@@ -84,14 +84,18 @@ final class SVGBaseElement: Sendable {
   let style: ComputedStyle
   /// Whether the conditional processing attributes of the element evaluate to true, which renders it.
   let passesConditions: Bool
+  /// The language that `xml:lang` or `lang` of the element gives it, which is read once, since restyling the element
+  /// for each time of its animations doesn't change it.
+  let language: ElementLanguage
 
   /// The character data of the element itself, without its children's.
   var text: String { texts.joined() }
 
   init(
     elementID: ElementID, name: SVGElementName, texts: [String], attributes: [String: String],
-    cascaded: CascadedValues, style: ComputedStyle, passesConditions: Bool
+    cascaded: CascadedValues, style: ComputedStyle, passesConditions: Bool, language: ElementLanguage? = nil
   ) {
+    self.language = language ?? ElementLanguage(attributes: attributes)
     self.elementID = elementID
     self.name = name
     self.texts = texts
@@ -116,12 +120,13 @@ final class SVGBaseElement: Sendable {
     userAgentDeclarations: [PropertyDeclaration] = []
   ) -> SVGBaseElement {
     let cascaded = cascaded.addingUserAgentDeclarations(userAgentDeclarations)
+    var style = ComputedStyle(
+      cascaded: cascaded, parent: parent, root: root, animations: animations,
+      smil: animations?.smilEffects[elementID] ?? [], element: elementID)
+    style.language = language.resolved(parent: parent)
     return SVGBaseElement(
-      elementID: elementID, name: name, texts: texts, attributes: attributes, cascaded: cascaded,
-      style: ComputedStyle(
-        cascaded: cascaded, parent: parent, root: root, animations: animations,
-        smil: animations?.smilEffects[elementID] ?? [], element: elementID),
-      passesConditions: passesConditions)
+      elementID: elementID, name: name, texts: texts, attributes: attributes, cascaded: cascaded, style: style,
+      passesConditions: passesConditions, language: language)
   }
 }
 
@@ -225,9 +230,11 @@ extension ElementCursor {
     let name = element.name
     if !name.isRendered { return nil }
     let cascaded = cascade(element: self, stylesheet: css)
-    let style = ComputedStyle(
+    var style = ComputedStyle(
       cascaded: cascaded, parent: parent, root: root, animations: animations,
       smil: animations?.smilEffects[element.id] ?? [], element: element.id)
+    let language = ElementLanguage(attributes: element.attributes)
+    style.language = language.resolved(parent: parent)
     let isText = name == .text || isInText
     var contents = [any SVGElement]()
     // The character data of text before each span child and after the last one. The other children of text aren't
@@ -252,7 +259,8 @@ extension ElementCursor {
     }
     let base = SVGBaseElement(
       elementID: element.id, name: name, texts: texts, attributes: element.attributes, cascaded: cascaded,
-      style: style, passesConditions: ConditionalProcessing.passes(attributes: element.attributes, languages: languages))
+      style: style, passesConditions: ConditionalProcessing.passes(attributes: element.attributes, languages: languages),
+      language: language)
     let rendered: any SVGElement =
       switch name {
       case .svg:

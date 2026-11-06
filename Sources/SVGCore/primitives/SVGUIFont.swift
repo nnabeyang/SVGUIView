@@ -13,7 +13,9 @@ struct SVGUIFont {
   /// The locale for choosing fonts, such as the fonts for Han characters, or `nil` for none.
   let specifiedLocale: String?
 
-  init(name: String, size: Size, weight: Weight, style: FontStyle = .normal) {
+  /// - Parameter language: The language of the text, which chooses the fonts of its characters, such as the fonts
+  ///   for Han characters, or `nil` for the language of the app.
+  init(name: String, size: Size, weight: Weight, style: FontStyle = .normal, language: String? = nil) {
     self.name = name
     self.size = size
     self.weight = weight
@@ -25,7 +27,7 @@ struct SVGUIFont {
       return scanner.scanFontFamilies()
     }
     self.families = families
-    specifiedLocale = Locale.current.identifier
+    specifiedLocale = language ?? Locale.current.identifier
   }
 
   func sizeValue(context: any SVGLengthContext, textScale: Double = 1.0) -> CGFloat {

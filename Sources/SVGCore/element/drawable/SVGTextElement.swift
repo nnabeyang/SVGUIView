@@ -381,6 +381,7 @@ final class SVGTextElement: ShapeGeometry {
     context: any SVGLengthContext
   ) -> TextLine? {
     let fonts = owners.map { font(of: $0.style, context: context) }
+    let languages = owners.map { $0.style.language?.tag }
     guard let text = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0) else { return nil }
     if characters.isEmpty {
       guard fonts.first.flatMap(\.self) != nil else { return nil }
@@ -432,6 +433,10 @@ final class SVGTextElement: ShapeGeometry {
       }
       if !embeddings[character.owner].isEmpty {
         attributes[kCTWritingDirectionAttributeName] = embeddings[character.owner]
+      }
+      // The language chooses the glyphs of the language in a font, such as the forms of Han characters.
+      if let language = languages[character.owner] {
+        attributes[kCTLanguageAttributeName] = language
       }
       // A kern of 0 turns the kerning of the font off, so text without spacings has no kern. word-spacing applies to
       // the spaces that separate words.
@@ -506,7 +511,9 @@ final class SVGTextElement: ShapeGeometry {
           return nil
         }
         if value < 0 {
-          return SVGUIFont(name: style.fontFamily, size: .medium, weight: style.fontWeight, style: style.fontStyle)
+          return SVGUIFont(
+            name: style.fontFamily, size: .medium, weight: style.fontWeight, style: style.fontStyle,
+            language: style.language?.tag)
         }
       default:
         break
