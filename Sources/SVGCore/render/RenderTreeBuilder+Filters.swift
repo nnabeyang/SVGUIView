@@ -253,8 +253,10 @@ extension RenderTreeBuilder {
     case nil:
       return nil
     case .data(let data):
-      return await imagePaint(data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false, in: subregion)
-        .map { .picture($0) }
+      return await imagePaint(
+        data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false,
+        interpolates: image.base.style.imageRendering.interpolates, in: subregion
+      ).map { .picture($0) }
     case .element(let id):
       guard let element = base[id] else { return nil }
       return await node(

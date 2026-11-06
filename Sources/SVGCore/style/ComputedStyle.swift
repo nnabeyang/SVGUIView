@@ -27,6 +27,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case strokeDashoffset = "stroke-dashoffset"
   case paintOrder = "paint-order"
   case shapeRendering = "shape-rendering"
+  case imageRendering = "image-rendering"
   case clipRule = "clip-rule"
   case textAnchor = "text-anchor"
   case direction
@@ -110,6 +111,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .strokeDashoffset: visitor.visit(StrokeDashoffsetProperty.self)
     case .paintOrder: visitor.visit(PaintOrderProperty.self)
     case .shapeRendering: visitor.visit(ShapeRenderingProperty.self)
+    case .imageRendering: visitor.visit(ImageRenderingProperty.self)
     case .clipRule: visitor.visit(ClipRuleProperty.self)
     case .textAnchor: visitor.visit(TextAnchorProperty.self)
     case .direction: visitor.visit(DirectionProperty.self)
@@ -200,6 +202,7 @@ struct ComputedStyle: Sendable, Equatable {
   var strokeDashoffset: SVGLength
   var paintOrder: PaintOrder
   var shapeRendering: ShapeRendering
+  var imageRendering = ImageRendering.auto
   var clipRule: FillRule
   var textAnchor: TextAnchor
   var direction = TextDirection.ltr

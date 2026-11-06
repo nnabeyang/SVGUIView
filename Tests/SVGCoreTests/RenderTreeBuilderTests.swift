@@ -194,6 +194,38 @@ struct RenderTreeBuilderTests {
     #expect(image.clip == clip)
   }
 
+  /// Content with an image, and whether the image is interpolated where it's scaled.
+  private static let imageRenderings: [(String, Bool)] = [
+    ("", true),
+    (#"image-rendering="optimizeQuality""#, true),
+    (#"image-rendering="optimizeSpeed""#, false),
+    (#"image-rendering="pixelated""#, false),
+    (#"style="image-rendering: crisp-edges""#, false),
+    (#"image-rendering="invalid""#, true),
+  ]
+
+  @Test("image-rendering decides whether an image is interpolated", arguments: imageRenderings)
+  func imageRendering(attributes: String, interpolates: Bool) async throws {
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII="
+    let tree = try await renderTree(
+      #"<image width="10" height="10" href="data:image/png;base64,\#(png)" "# + attributes + "/>")
+    #expect(try imagePaint(of: tree).interpolates == interpolates)
+  }
+
+  @Test("image-rendering is inherited by an image")
+  func imageRenderingInherited() async throws {
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII="
+    let tree = try await renderTree(
+      #"<g image-rendering="pixelated"><image width="10" height="10" href="data:image/png;base64,\#(png)"/></g>"#)
+    guard case .group(let group) = try children(of: tree).first,
+      case .image(let image?, _)? = try shape(group.children.first).content
+    else {
+      Issue.record("The image isn't in the group")
+      return
+    }
+    #expect(!image.interpolates)
+  }
+
   /// An `<image>` element in the rectangle of 10 by 10 at 5, 5 with an SVG image of the data, and more attributes.
   private func svgImage(_ data: String, _ attributes: String = "") -> String {
     #"<image x="5" y="5" width="10" height="10" href="\#(data)" "# + attributes + "/>"
@@ -2911,6 +2943,18 @@ struct RenderTreeBuilderTests {
       return
     }
     #expect(paint.rect == CGRect(x: 0, y: 5, width: 10, height: 10))
+  }
+
+  @Test("image-rendering of a feImage decides whether its image is interpolated")
+  func imageRenderingOfFeImage() async throws {
+    let image = try await imagePrimitive(
+      ##"<filter id="f"><feImage image-rendering="optimizeSpeed" href=""## + Self.redPixel + ##""/></filter>"##
+        + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
+    guard case .picture(let paint) = image else {
+      Issue.record("The image isn't a picture")
+      return
+    }
+    #expect(!paint.interpolates)
   }
 
   @Test("a feImage draws an element of the document at the origin of its subregion")

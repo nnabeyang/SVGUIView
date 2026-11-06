@@ -76,4 +76,23 @@ struct ImagePlacementTests {
     #expect(inside[0] > 245 && inside[3] > 245, "\(inside)")
     #expect(outside[3] < 10, "\(outside)")
   }
+
+  /// An image of a red pixel and a blue pixel, stretched to the user space of 20 by 20, with the attributes.
+  private func redAndBlue(_ attributes: String) -> String {
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg=="
+    return #"<image width="20" height="20" preserveAspectRatio="none" href="data:image/png;base64,\#(png)" "#
+      + attributes + "/>"
+  }
+
+  @Test("a bitmap is interpolated where it's scaled by default, and isn't for pixelated, crisp-edges and optimizeSpeed")
+  func imageRendering() async throws {
+    let smooth = try await pixel(redAndBlue(""), x: 9, y: 10)
+    #expect(smooth[2] > 20, "\(smooth)")
+    for value in ["pixelated", "crisp-edges", "optimizeSpeed"] {
+      let left = try await pixel(redAndBlue(#"image-rendering="\#(value)""#), x: 9, y: 10)
+      let right = try await pixel(redAndBlue(#"image-rendering="\#(value)""#), x: 10, y: 10)
+      #expect(left[0] > 245 && left[2] < 10, "\(value) \(left)")
+      #expect(right[2] > 245 && right[0] < 10, "\(value) \(right)")
+    }
+  }
 }

@@ -284,6 +284,21 @@ struct StyleTests {
     #expect(ShapeRendering.allCases.filter(\.antialiases) == [.auto, .geometricPrecision])
   }
 
+  @Test("image-rendering is a keyword of SVG 1.1 or CSS Images, which is inherited and is auto initially")
+  func imageRendering() throws {
+    #expect(ImageRenderingProperty.parse("optimizeSpeed", origin: .attribute) == .optimizeSpeed)
+    #expect(ImageRenderingProperty.parse("crisp-edges", origin: .attribute) == .crispEdges)
+    #expect(ImageRenderingProperty.parse("optimizespeed", origin: .attribute) == nil)
+    #expect(ImageRenderingProperty.parse("crispEdges", origin: .attribute) == nil)
+    let declared = try #require(declared(ImageRenderingProperty.self, css: "Pixelated"))
+    let parent = style([PropertyDeclaration(ImageRenderingProperty.self, declared)])
+    #expect(parent.imageRendering == .pixelated)
+    #expect(style([], parent: parent).imageRendering == .pixelated)
+    #expect(ComputedStyle.initial.imageRendering == .auto)
+    #expect(
+      ImageRendering.allCases.filter { !$0.interpolates } == [.optimizeSpeed, .crispEdges, .pixelated])
+  }
+
   @Test("mix-blend-mode and isolation are keywords that aren't presentation attributes or inherited")
   func blending() throws {
     let modes: [(String, MixBlendMode?)] = [
