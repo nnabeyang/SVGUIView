@@ -1424,6 +1424,20 @@ struct RenderTreeBuilderTests {
     #expect(clip.shapes.map(\.fillRule) == [.eoFill, .eoFill, .fill])
   }
 
+  @Test("each glyph of text in a clip path is a shape of its own, which its clip rule fills apart")
+  func textInClipPath() async throws {
+    let tree = try await renderTree(
+      ##"""
+      <clipPath id="c" clip-rule="evenodd">
+        <text x="2" y="15" font-size="8">ab<tspan x="3">ab</tspan></text>
+      </clipPath>
+      <rect width="20" height="20" clip-path="url(#c)"/>
+      """##)
+    let clip = try #require(try shape(try children(of: tree).last).clip)
+    #expect(clip.shapes.count == 4)
+    #expect(clip.shapes.allSatisfy { $0.fillRule == .eoFill })
+  }
+
   @Test("a mask covers its region, and a pattern in it paints, stopping a cycle of patterns")
   func maskWithPattern() async throws {
     let tree = try await renderTree(

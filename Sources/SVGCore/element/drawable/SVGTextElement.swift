@@ -509,6 +509,24 @@ final class SVGTextElement: ShapeGeometry {
     return path
   }
 
+  /// The outlines of the glyphs of the text and its `<tspan>` descendants, each glyph apart, and then the lines of
+  /// their `text-decoration` as one path, which a clip path fills one by one with its clip rule, so that glyphs over
+  /// each other don't cut holes in each other.
+  func clipPaths(in context: any GeometryContext) -> [CGPath] {
+    guard let (layout, content) = layout(context: context) else { return [] }
+    var paths = layout.glyphPaths()
+    let owners = owners(of: content)
+    if content.characters.contains(where: { !owners[$0.owner].style.textDecoration.isEmpty }) {
+      let lines = decorationLines(of: layout, content: content, context: context)
+      let path = CGMutablePath()
+      for line in Array(lines.under.values) + Array(lines.through.values) {
+        path.addPath(line)
+      }
+      paths.append(path)
+    }
+    return paths
+  }
+
   static func withUnsafeMutablePointer<T>(array: inout [T], from: Int) -> UnsafeMutablePointer<T> {
     let baseAddress = array.withUnsafeMutableBufferPointer { $0.baseAddress! }
     return baseAddress.advanced(by: from)

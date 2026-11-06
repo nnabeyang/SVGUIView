@@ -732,6 +732,16 @@ struct TextLayout {
     return path
   }
 
+  /// The outline of each glyph that has one, in the user space.
+  func glyphPaths() -> [CGPath] {
+    glyphs.compactMap { glyph in
+      guard let font = glyph.font, let letter = CTFontCreatePathForGlyph(font, glyph.glyph, nil) else { return nil }
+      let path = CGMutablePath()
+      glyph.add(letter, to: path)
+      return path
+    }
+  }
+
   /// The glyph runs of a line: the font, the glyphs, their positions, their advances and the UTF-16 offsets of their
   /// characters, the ascent and the descent with the leading of the font, in the coordinates of the line, and whether
   /// the run goes from right to left.
