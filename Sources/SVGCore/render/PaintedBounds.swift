@@ -68,6 +68,7 @@ extension ShapeNode {
       switch content {
       case .vector(_, let stroke, _): stroke
       case .image(_, let stroke): stroke
+      case .colorGlyphs: nil
       }
     if let stroke, stroke.width > 0 {
       let stroked = path.copy(

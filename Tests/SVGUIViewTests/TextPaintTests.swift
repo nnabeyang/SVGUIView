@@ -35,6 +35,17 @@ struct TextPaintTests {
     #expect(!hasRed(rendering))
   }
 
+  @Test("an emoji is drawn in its own colors, whatever the color of the fill is")
+  func emoji() async throws {
+    let rendering = try await render(#"<text x="1" y="16" font-size="16" fill="black">😀</text>"#)
+    // A pixel that isn't gray, as the yellow of the face.
+    let colored = stride(from: 0, to: rendering.components.count, by: 4).contains { index in
+      let pixel = rendering.components[index..<(index + 4)].map(Int.init)
+      return pixel[3] > 200 && pixel[0] - pixel[2] > 100
+    }
+    #expect(colored)
+  }
+
   @Test("the fill of a tspan is painted in the bounds of the whole text")
   func tspanBounds() async throws {
     // Red in the left half of the text, where the tspan isn't.

@@ -1133,6 +1133,29 @@ struct RenderTreeBuilderTests {
     #expect(chinese == inherited)
   }
 
+  /// The color glyphs of a shape of the text in a group, with their opacity, or `nil` if no shape has them.
+  private func colorGlyphs(_ content: String) async throws -> (glyphs: [ColorGlyph], opacity: CGFloat)? {
+    let tree = try await renderTree(#"<g font-size="16">"# + content + "</g>")
+    for shape in shapes(of: try children(of: tree)) {
+      if case .colorGlyphs(let glyphs, let opacity)? = shape.content { return (glyphs, opacity) }
+    }
+    return nil
+  }
+
+  @Test("emoji are color glyphs drawn with the opacity of the fill, and fill none draws none")
+  func emojiGlyphs() async throws {
+    let emoji = try #require(try await colorGlyphs(#"<text x="2" y="16" fill-opacity="0.5">a😀😁</text>"#))
+    #expect(emoji.glyphs.count == 2)
+    #expect(emoji.opacity == 0.5)
+    // The glyphs go along the line after the a, at the baseline.
+    let first = try #require(emoji.glyphs.first).transform
+    let second = try #require(emoji.glyphs.last).transform
+    #expect(first.tx > 2 && second.tx > first.tx)
+    #expect(abs(first.ty - 16) < 0.01)
+    #expect(try await colorGlyphs(#"<text x="2" y="16" fill="none">😀</text>"#) == nil)
+    #expect(try await colorGlyphs(#"<text x="2" y="16">ab</text>"#) == nil)
+  }
+
   /// Text with spacings, and text with the same glyphs placed by `dx`.
   private static let spacedTexts: [(String, String)] = [
     (#"<text x="2" y="10" letter-spacing="2">ab</text>"#, #"<text x="2" y="10" dx="0 2">ab</text>"#),

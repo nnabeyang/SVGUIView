@@ -34,6 +34,8 @@ extension ShapeContent {
       fill?.usesWideGamut == true || stroke?.paint.usesWideGamut == true
     case .image(let image, let stroke):
       image?.content.usesWideGamut == true || stroke?.paint.usesWideGamut == true
+    case .colorGlyphs:
+      false
     }
   }
 }

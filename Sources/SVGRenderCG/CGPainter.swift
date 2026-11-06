@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreText
 import Foundation
 import SVGCore
 
@@ -142,6 +143,19 @@ package struct CGPainter {
       }
       if let stroke {
         await paint(stroke, path: path, frame: frame, into: graphics)
+      }
+    case .colorGlyphs(let glyphs, let opacity):
+      // The glyphs are drawn by the font in their colors, which no fill paints.
+      graphics.saveGState()
+      defer { graphics.restoreGState() }
+      graphics.setAlpha(opacity)
+      for colorGlyph in glyphs {
+        graphics.saveGState()
+        graphics.concatenate(colorGlyph.transform)
+        var glyph = colorGlyph.glyph
+        var position = CGPoint.zero
+        CTFontDrawGlyphs(colorGlyph.font, &glyph, &position, 1, graphics)
+        graphics.restoreGState()
       }
     }
   }
