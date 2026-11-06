@@ -135,6 +135,9 @@ package struct ImagePaint: Sendable {
   /// The rectangle of the element, which clips the image where its overflow is hidden and the image overflows it,
   /// or `nil` if nothing clips it.
   package let clip: CGRect?
+  /// Whether a bitmap is interpolated where it's scaled, which `image-rendering` decides. An SVG image is drawn as
+  /// shapes, which it doesn't apply to.
+  package var interpolates = true
 }
 
 /// What an image is drawn from.

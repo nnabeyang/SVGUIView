@@ -924,15 +924,19 @@ package struct RenderTreeBuilder {
       case .visible, .auto: false
       default: true
       }
-    return await imagePaint(data: data, preserveAspectRatio: element.preserveAspectRatio, clips: clips, in: rect)
+    return await imagePaint(
+      data: data, preserveAspectRatio: element.preserveAspectRatio, clips: clips,
+      interpolates: element.style.imageRendering.interpolates, in: rect)
   }
 
   /// An image of data, a bitmap or an SVG image, placed in a rectangle by its `preserveAspectRatio`, or `nil` if the
   /// data isn't an image.
   ///
-  /// - Parameter clips: Whether the rectangle clips the image where it overflows the rectangle.
+  /// - Parameters:
+  ///   - clips: Whether the rectangle clips the image where it overflows the rectangle.
+  ///   - interpolates: Whether a bitmap is interpolated where it's scaled.
   func imagePaint(
-    data: Data, preserveAspectRatio: PreserveAspectRatio, clips: Bool, in rect: CGRect
+    data: Data, preserveAspectRatio: PreserveAspectRatio, clips: Bool, interpolates: Bool, in rect: CGRect
   ) async -> ImagePaint? {
     let content: ImageContent
     let viewBox: CGRect
@@ -958,7 +962,7 @@ package struct RenderTreeBuilder {
     let placed = viewBox.applying(preserveAspectRatio.getTransform(viewBox: viewBox, size: rect.size))
       .offsetBy(dx: rect.minX, dy: rect.minY)
     let clip: CGRect? = clips && !rect.contains(placed) ? rect : nil
-    return ImagePaint(content: content, rect: placed, clip: clip)
+    return ImagePaint(content: content, rect: placed, clip: clip, interpolates: interpolates)
   }
 
   /// The view box of the root element of an SVG image, or the box of its width and height if it has none. The

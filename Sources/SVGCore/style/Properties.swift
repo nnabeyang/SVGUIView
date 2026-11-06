@@ -565,6 +565,17 @@ enum ShapeRenderingProperty: StyleProperty {
   }
 }
 
+enum ImageRenderingProperty: StyleProperty {
+  static let id = PropertyID.imageRendering
+  static let isInherited = true
+  static let initial = ImageRendering.auto
+  static let computed = \ComputedStyle.imageRendering
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> ImageRendering? {
+    keyword(text, origin: origin)
+  }
+}
+
 /// How an element blends with what's behind it. It isn't a presentation attribute.
 enum MixBlendModeProperty: StyleProperty {
   static let id = PropertyID.mixBlendMode

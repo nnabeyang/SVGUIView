@@ -119,6 +119,26 @@ enum ShapeRendering: String, CaseIterable, Sendable {
   }
 }
 
+/// How a bitmap image is scaled: the values of SVG 1.1 and of CSS Images.
+enum ImageRendering: String, CaseIterable, Sendable {
+  case auto
+  case optimizeQuality
+  case optimizeSpeed
+  case smooth
+  case highQuality = "high-quality"
+  case crispEdges = "crisp-edges"
+  case pixelated
+
+  /// Whether a bitmap scaled for it is interpolated. CSS Images scales an image for `optimizeSpeed` as for
+  /// `pixelated`, without interpolating it, as resvg does.
+  var interpolates: Bool {
+    switch self {
+    case .auto, .optimizeQuality, .smooth, .highQuality: true
+    case .optimizeSpeed, .crispEdges, .pixelated: false
+    }
+  }
+}
+
 /// The order in which a shape or text paints its fill, its stroke and its markers.
 struct PaintOrder: Equatable, Sendable {
   enum Layer: Sendable {
