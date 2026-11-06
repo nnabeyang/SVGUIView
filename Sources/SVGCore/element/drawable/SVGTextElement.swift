@@ -147,6 +147,16 @@ final class SVGTextElement: ShapeGeometry {
     let owners = owners(of: content)
     let glyphs = Set(layout.glyphs.map(\.owner)).union(layout.glyphs.isEmpty ? [0] : [])
     let lines = decorationLines(of: layout, content: content, context: context)
+    // The spans that each owner is in, from the outermost one, and the owner itself if it's a span.
+    func spansAround(_ owner: Int) -> [any SVGDrawableElement] {
+      var chain = [any SVGDrawableElement]()
+      var current: Int? = owner
+      while let index = current, index != 0 {
+        chain.insert(owners[index], at: 0)
+        current = content.parents[index]
+      }
+      return chain
+    }
     var spans = [TextSpan]()
     for owner in owners.indices where glyphs.contains(owner) || lines.under[owner] != nil {
       let path = CGMutablePath()
@@ -156,11 +166,12 @@ final class SVGTextElement: ShapeGeometry {
       if let under = lines.under[owner] {
         path.addPath(under)
       }
-      spans.append(TextSpan(element: owners[owner], path: path, frame: layout.frame(of: [owner])))
+      spans.append(
+        TextSpan(element: owners[owner], path: path, frame: layout.frame(of: [owner]), spans: spansAround(owner)))
     }
     for owner in owners.indices {
       if let through = lines.through[owner] {
-        spans.append(TextSpan(element: owners[owner], path: through, frame: .null))
+        spans.append(TextSpan(element: owners[owner], path: through, frame: .null, spans: spansAround(owner)))
       }
     }
     return spans
@@ -510,6 +521,9 @@ struct TextSpan {
   let path: CGPath
   /// The bounds of the lines of the glyphs.
   let frame: CGRect
+  /// The `<tspan>` and `<textPath>` elements that the shape is in, from the outermost one, with its element if it's
+  /// one of them, whose opacity, clip path, mask and filter apply to it.
+  var spans: [any SVGDrawableElement] = []
 }
 
 /// The characters of text and its spans, and the elements that they belong to.

@@ -21,32 +21,22 @@ extension RenderTreeBuilder {
     instance: [ElementID]
   ) async -> Filtering {
     guard let functions = element.filter else { return .none }
-    // A reference to something that isn't a filter element makes the element have no filters.
-    var filters = [String: SVGFilterElement]()
-    for case .url(let id) in functions {
-      guard let filter = base.filters[id] else { return .none }
-      // A filter element without children draws nothing, which nothing after it can draw from.
-      guard !filter.knownChildren.isEmpty else { return .filtered(nil) }
-      filters[id] = filter
+    let filters: [String: SVGFilterElement]
+    switch filterElements(of: functions, guard: references) {
+    case .none: return .none
+    case .drawsNothing: return .filtered(nil)
+    case .filters(let elements): filters = elements
     }
-    // A `feImage` of a filter that draws an element with the filter again draws nothing of that element.
-    guard filters.keys.allSatisfy({ !references.filters.contains($0) }) else { return .filtered(nil) }
-    // The source keeps the filters of the `feImage` primitives that draw the element, and the `feImage` primitives of
-    // the filters add them, so that the same filter on a child of the element is no cycle.
+    // The source keeps the filters of the `feImage` primitives that draw the element.
     var sourceReferences = ReferenceGuard()
     sourceReferences.filters = references.filters
-    var imageReferences = ReferenceGuard()
-    imageReferences.filters = references.filters.union(filters.keys)
     let elementContext = context.styled(by: element)
     let path = await path(of: element, context: elementContext, guard: references)
     var frame = await frame(of: element, context: elementContext, path: path, guard: references)
     // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
     let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
-    var source = await nodeWithoutFilter(
+    let source = await nodeWithoutFilter(
       of: element, context: sourceContext, mode: .filter(isRoot: true), guard: sourceReferences, instance: instance)
-    let id = RenderID(element: element.base.elementID, instance: instance)
-    // The last filter draws the result with the transform, the clip path, the mask, the opacity and the blending of
-    // the element, and the others draw theirs into the source of the next one as they are.
     var transform = await transform(of: element, context: elementContext, frame: frame, guard: references)
     // The filter of an `<svg>` element applies in the coordinates of its content, as Chrome and Firefox draw it: the
     // filter region and the values of the primitives are resolved there, and the result moves to the viewport and
@@ -83,6 +73,56 @@ extension RenderTreeBuilder {
       mask = await maskApplication(
         of: element, frame: frame, context: elementContext, guard: references, instance: instance)
     }
+    return .filtered(
+      await applyingFilters(
+        functions, filters: filters, of: element, to: source, frame: frame, transform: transform, clip: clip,
+        mask: mask, filterContext: filterContext, functionContext: functionContext, guard: references,
+        id: RenderID(element: element.base.elementID, instance: instance), instance: instance))
+  }
+
+  /// The filter elements that the filters of an element reference.
+  enum FilterElements {
+    /// A reference to something that isn't a filter element makes the element have no filters.
+    case none
+    /// A filter element without children, or one that the element is drawn by already, draws nothing.
+    case drawsNothing
+    case filters([String: SVGFilterElement])
+  }
+
+  /// The filter elements of the filters of an element, or what the element draws without them.
+  func filterElements(of functions: [SVGFilterFunction], guard references: ReferenceGuard) -> FilterElements {
+    var filters = [String: SVGFilterElement]()
+    for case .url(let id) in functions {
+      guard let filter = base.filters[id] else { return .none }
+      // A filter element without children draws nothing, which nothing after it can draw from.
+      guard !filter.knownChildren.isEmpty else { return .drawsNothing }
+      filters[id] = filter
+    }
+    // A `feImage` of a filter that draws an element with the filter again draws nothing of that element.
+    guard filters.keys.allSatisfy({ !references.filters.contains($0) }) else { return .drawsNothing }
+    return .filters(filters)
+  }
+
+  /// Applies filters to the source of an element one after another, where the last one draws the result with the
+  /// transform, the clip path, the mask, the opacity and the blending of the element, and the others draw theirs
+  /// into the source of the next one as they are.
+  ///
+  /// - Parameters:
+  ///   - frame: The bounds of the element, which the units of the filters are of.
+  ///   - filterContext: The context that the filter regions and the primitives are resolved in.
+  ///   - functionContext: The context that the filter functions are resolved in.
+  ///   - references: The guard that the element is drawn with.
+  func applyingFilters(
+    _ functions: [SVGFilterFunction], filters: [String: SVGFilterElement], of element: any SVGDrawableElement,
+    to source: RenderNode?, frame: CGRect, transform: CGAffineTransform, clip: ClipPathEffect?, mask: MaskApplication,
+    filterContext: ResolveContext, functionContext: ResolveContext, guard references: ReferenceGuard, id: RenderID,
+    instance: [ElementID]
+  ) async -> RenderNode? {
+    // The `feImage` primitives of the filters add the filters to the filters that draw the element, so that the same
+    // filter on a child of the element is no cycle.
+    var imageReferences = ReferenceGuard()
+    imageReferences.filters = references.filters.union(filters.keys)
+    var source = source
     for (i, function) in functions.enumerated() {
       let isLast = i == functions.count - 1
       let effect: FilterEffect?
@@ -112,7 +152,7 @@ extension RenderTreeBuilder {
           blendMode: isLast ? element.style.mixBlendMode.cgBlendMode : .normal, clip: isLast ? clip : nil,
           mask: isLast ? mask : .none))
     }
-    return .filtered(source)
+    return source
   }
 
   /// What a filter element or a filter function does to its source.

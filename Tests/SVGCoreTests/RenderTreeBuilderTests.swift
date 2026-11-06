@@ -1010,6 +1010,69 @@ struct RenderTreeBuilderTests {
     #expect(shapes.last.flatMap(fillColor(of:))?.components == [0, 1, 0, 1])
   }
 
+  /// The children of the group of the text in a group, after the definitions.
+  private func textChildren(_ content: String, definitions: String = "") async throws -> [RenderNode] {
+    let tree = try await renderTree("<defs>" + definitions + #"</defs><g font-size="4">"# + content + "</g>")
+    guard case .group(let text)? = try children(of: tree).last,
+      case .group(let group)? = text.children.first
+    else {
+      Issue.record("The text isn't a group in a group")
+      return []
+    }
+    return group.children
+  }
+
+  private func group(_ node: RenderNode?) throws -> GroupNode {
+    guard case .group(let group) = node else { throw NodeError.unexpected(node) }
+    return group
+  }
+
+  @Test("the glyphs of a tspan with opacity are a group with it, and the glyphs around it aren't")
+  func tspanOpacity() async throws {
+    let nodes = try await textChildren(#"<text x="2" y="10">a<tspan opacity="0.5">b</tspan>c</text>"#)
+    // The text has a and c, and the tspan has b.
+    #expect(nodes.count == 2)
+    _ = try shape(nodes.first)
+    let span = try group(nodes.last)
+    #expect(span.opacity == 0.5)
+    #expect(span.children.count == 1)
+  }
+
+  @Test("the group of a tspan has its clip path and mask, with the bounds of the whole text as their units")
+  func tspanClipAndMask() async throws {
+    let defs =
+      #"<clipPath id="c" clipPathUnits="objectBoundingBox"><rect width="0.5" height="1"/></clipPath>"#
+      + #"<mask id="m"><rect width="20" height="20" fill="white"/></mask>"#
+    let nodes = try await textChildren(
+      #"<text x="2" y="10">a<tspan clip-path="url(#c)" mask="url(#m)">b</tspan></text>"#, definitions: defs)
+    let span = try group(nodes.last)
+    #expect(span.clip != nil)
+    #expect(span.mask != nil)
+  }
+
+  @Test("a tspan with a filter is filtered with the bounds of the whole text")
+  func tspanFilter() async throws {
+    let nodes = try await textChildren(
+      #"<text x="2" y="10">aaaa<tspan filter="url(#f)">b</tspan></text>"#,
+      definitions: #"<filter id="f"><feOffset dx="1"/></filter>"#)
+    let textFrame = try #require(try shape(nodes.first).geometry).frame
+    guard case .filtered(let filtered)? = nodes.last else {
+      Issue.record("The tspan isn't filtered")
+      return
+    }
+    #expect(filtered.frame == textFrame)
+  }
+
+  @Test("the opacity of a tspan applies to the glyphs and the lines of the spans in it")
+  func nestedTspanOpacity() async throws {
+    let nodes = try await textChildren(
+      #"<text x="2" y="10">a<tspan opacity="0.5" text-decoration="line-through">b<tspan>c</tspan></tspan>d</text>"#)
+    // The text has a and d, and the outer tspan has the glyphs of b and of c, and the line through them.
+    #expect(nodes.count == 2)
+    let span = try group(nodes.last)
+    #expect(span.children.count == 3)
+  }
+
   /// Text with spacings, and text with the same glyphs placed by `dx`.
   private static let spacedTexts: [(String, String)] = [
     (#"<text x="2" y="10" letter-spacing="2">ab</text>"#, #"<text x="2" y="10" dx="0 2">ab</text>"#),
