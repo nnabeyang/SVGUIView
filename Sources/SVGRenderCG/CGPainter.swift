@@ -131,7 +131,7 @@ package struct CGPainter {
     switch content {
     case .vector(let fill, let stroke, let fillRule):
       if let fill {
-        await paint(fill, path: path, frame: path.boundingBoxOfPath, fillRule: fillRule, into: graphics)
+        await paint(fill, path: path, frame: frame, fillRule: fillRule, into: graphics)
       }
       if let stroke {
         await paint(stroke, path: path, frame: frame, into: graphics)
