@@ -477,7 +477,7 @@ final class SVGTextElement: ShapeGeometry {
           return nil
         }
         if value < 0 {
-          return SVGUIFont(name: style.fontFamily, size: .medium, weight: style.fontWeight)
+          return SVGUIFont(name: style.fontFamily, size: .medium, weight: style.fontWeight, style: style.fontStyle)
         }
       default:
         break

@@ -10,6 +10,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case fontFamily = "font-family"
   case fontSize = "font-size"
   case fontWeight = "font-weight"
+  case fontStyle = "font-style"
   case writingMode = "writing-mode"
   case color
   case fill
@@ -92,6 +93,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .fontFamily: visitor.visit(FontFamilyProperty.self)
     case .fontSize: visitor.visit(FontSizeProperty.self)
     case .fontWeight: visitor.visit(FontWeightProperty.self)
+    case .fontStyle: visitor.visit(FontStyleProperty.self)
     case .writingMode: visitor.visit(WritingModeProperty.self)
     case .color: visitor.visit(ColorProperty.self)
     case .fill: visitor.visit(FillProperty.self)
@@ -178,6 +180,7 @@ struct ComputedStyle: Sendable, Equatable {
   var fontFamily: String
   var fontSize: SVGUIFont.Size
   var fontWeight: SVGUIFont.Weight
+  var fontStyle = FontStyle.normal
   var writingMode: WritingMode
   var color: SVGColor
   var fill: Paint
@@ -484,7 +487,7 @@ struct ComputedStyle: Sendable, Equatable {
 
   /// The font, with its size resolved except for viewport units.
   var font: SVGUIFont {
-    SVGUIFont(name: fontFamily, size: fontSize, weight: fontWeight)
+    SVGUIFont(name: fontFamily, size: fontSize, weight: fontWeight, style: fontStyle)
   }
 
   /// The paint with `currentColor` resolved.

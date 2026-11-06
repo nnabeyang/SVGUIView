@@ -22,7 +22,7 @@ struct FontSelectionValue {
 
   static var maximumValue: FontSelectionValue { .init(backing: Int16.max) }
 
-  static var italicValue: FontSelectionValue { .init(backing: 14) }
+  static var italicValue: FontSelectionValue { .init(20) }
 
   static var normalItalicValue: FontSelectionValue { .zero }
 
@@ -30,7 +30,7 @@ struct FontSelectionValue {
 
   static var normalStretchValue: FontSelectionValue { .init(100) }
 
-  static var italicThreshold: FontSelectionValue { .init(14) }
+  static var italicThreshold: FontSelectionValue { .init(20) }
 
   static var boldThreshold: FontSelectionValue { .init(600) }
 
