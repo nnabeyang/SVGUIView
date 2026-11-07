@@ -195,7 +195,7 @@ extension SVGDrawableElement {
   var opacity: Double { style.opacity }
   var className: String? { base.className }
   // `nil` for `none`, so that the frame of an element without a clip path isn't found for it.
-  var clipPath: SVGClipPath? { if case .url = style.clipPath { style.clipPath } else { nil } }
+  var clipPath: SVGClipPath? { if case .none = style.clipPath { nil } else { style.clipPath } }
   var mask: SVGMask? { if case .url = style.mask { style.mask } else { nil } }
   /// The filters of the element, or `nil` if it has none.
   var filter: [SVGFilterFunction]? { if case .list(let functions) = style.filter { functions } else { nil } }

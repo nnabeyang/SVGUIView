@@ -64,6 +64,16 @@ extension SVGLength: Animatable {
     magnitude < 0 ? with(magnitude: 0) : self
   }
 
+  /// Whether the number of the length is negative. A sum isn't negative until it's resolved.
+  var isNegative: Bool {
+    magnitude < 0
+  }
+
+  /// The length with the opposite sign in each of its units.
+  var negated: SVGLength {
+    .sum(of: terms.map { $0.with(magnitude: -$0.magnitude) }) ?? self
+  }
+
   /// The length in pixels, if its unit is absolute. A number is in pixels.
   fileprivate var absolutePixels: CGFloat? {
     switch self {

@@ -1492,6 +1492,48 @@ struct RenderTreeBuilderTests {
     #expect(try #require(group.clip).frame == CGRect(x: 0, y: 0, width: 15, height: 15))
   }
 
+  /// Shapes clipped by basic shapes, and the bounds of their clip paths.
+  private static let clipShapes: [(String, CGRect?)] = [
+    // A circle in the stroke box by default, which goes past the bounds of the rectangle.
+    (#"<rect x="5" y="5" width="10" height="10" stroke="black" stroke-width="4" style="clip-path: circle()"/>"#, CGRect(x: 3, y: 3, width: 14, height: 14)),
+    (#"<rect x="5" y="5" width="10" height="10" stroke="black" stroke-width="4" style="clip-path: circle() fill-box"/>"#, CGRect(x: 5, y: 5, width: 10, height: 10)),
+    // The view box starts at the origin of the viewport.
+    (#"<rect x="5" y="5" width="10" height="10" clip-path="circle() view-box"/>"#, CGRect(x: 0, y: 0, width: 20, height: 20)),
+    (#"<rect x="5" y="5" width="10" height="10" style="clip-path: inset(1px 2px)"/>"#, CGRect(x: 7, y: 6, width: 6, height: 8)),
+    (#"<rect x="5" y="5" width="10" height="10" style="clip-path: fill-box"/>"#, CGRect(x: 5, y: 5, width: 10, height: 10)),
+    // An empty shape clips everything.
+    (#"<rect x="5" y="5" width="10" height="10" style="clip-path: inset(50%)"/>"#, nil),
+    (#"<rect x="5" y="5" width="10" height="10" style="clip-path: circle(0)"/>"#, nil),
+  ]
+
+  @Test("a basic shape clips an element in its reference box", arguments: clipShapes)
+  func basicShapeClip(content: String, frame: CGRect?) async throws {
+    let tree = try await renderTree(content)
+    let clip = try #require(try shape(try children(of: tree).first).clip)
+    if let frame {
+      let box = clip.frame
+      #expect(abs(box.minX - frame.minX) < 0.001 && abs(box.minY - frame.minY) < 0.001, "\(box) isn't \(frame)")
+      #expect(abs(box.maxX - frame.maxX) < 0.001 && abs(box.maxY - frame.maxY) < 0.001, "\(box) isn't \(frame)")
+    } else {
+      #expect(clip.frame.isNull)
+    }
+    #expect(clip.units == .userSpaceOnUse && clip.shapes.count == 1)
+  }
+
+  @Test("a basic shape clips a group in the bounds of its children, and keeps the fill rule of a polygon")
+  func basicShapeClipOfGroup() async throws {
+    let tree = try await renderTree(
+      #"""
+      <g style="clip-path: polygon(evenodd, 0 0, 100% 0, 0 100%) fill-box">
+        <rect x="5" y="5" width="10" height="10"/>
+        <rect x="10" y="10" width="5" height="5"/>
+      </g>
+      """#)
+    let clip = try #require(try group(try children(of: tree).last).clip)
+    #expect(clip.frame == CGRect(x: 5, y: 5, width: 10, height: 10))
+    #expect(clip.shapes.first?.fillRule == .eoFill)
+  }
+
   @Test("a clip path that a shape in it references again clips nothing more")
   func clipPathCycle() async throws {
     let tree = try await renderTree(

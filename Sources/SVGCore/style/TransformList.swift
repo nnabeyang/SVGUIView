@@ -148,14 +148,14 @@ private func arguments(
 ) -> [TransformFunction]? {
   switch name {
   case "translate":
-    guard let x = length(&input, origin: origin) else { return nil }
+    guard let x = lengthPercentage(&input, origin: origin) else { return nil }
     if input.isExhausted() { return [.translate(x, .number(0))] }
-    guard separator(&input, origin: origin), let y = length(&input, origin: origin) else { return nil }
+    guard separator(&input, origin: origin), let y = lengthPercentage(&input, origin: origin) else { return nil }
     return [.translate(x, y)]
   case "translateX":
-    return length(&input, origin: origin).map { [.translate($0, .number(0))] }
+    return lengthPercentage(&input, origin: origin).map { [.translate($0, .number(0))] }
   case "translateY":
-    return length(&input, origin: origin).map { [.translate(.number(0), $0)] }
+    return lengthPercentage(&input, origin: origin).map { [.translate(.number(0), $0)] }
   case "scale":
     guard let x = scale(&input) else { return nil }
     if input.isExhausted() { return [.scale(x, x)] }
@@ -239,7 +239,7 @@ private func scale(_ input: inout _CSSParser.Parser) -> Double? {
 }
 
 /// A length or a percentage. A number is a length in user units in an attribute, and only zero is in CSS.
-private func length(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> SVGLength? {
+func lengthPercentage(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> SVGLength? {
   switch numeric(&input) {
   case .number(let value) where origin == .attribute || value == 0: .number(value)
   case .percentage(let value): .percent(value)
@@ -290,7 +290,7 @@ extension TransformOrigin {
     }
     if values.count == 2, !input.isExhausted() {
       // A length along the z axis can't be a percentage.
-      guard let z = length(&input, origin: origin) else { return nil }
+      guard let z = lengthPercentage(&input, origin: origin) else { return nil }
       if case .percent = z { return nil }
     }
     guard input.isExhausted() else { return nil }
@@ -313,7 +313,7 @@ extension TransformOrigin {
 }
 
 /// A value of `transform-origin`, before its axis is known.
-private enum OriginValue {
+enum OriginValue {
   case left, center, right, top, bottom
   case length(SVGLength)
 
@@ -345,7 +345,7 @@ private enum OriginValue {
   }
 }
 
-private func originValue(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> OriginValue? {
+func originValue(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> OriginValue? {
   let state = input.state
   if case .success(.ident(let name)) = input.next() {
     switch name.lowercased() {
@@ -358,7 +358,7 @@ private func originValue(_ input: inout _CSSParser.Parser, origin: DeclarationOr
     }
   }
   input.reset(state: state)
-  return length(&input, origin: origin).map(OriginValue.length)
+  return lengthPercentage(&input, origin: origin).map(OriginValue.length)
 }
 
 /// The value of `transform-box`: the box that `transform-origin` and percentages of transform functions are
