@@ -123,6 +123,12 @@ struct SMILAnimationTests {
     #expect(style.x == nil)
   }
 
+  @Test("the radius of a circle is a property that animate interpolates")
+  func circleRadius() throws {
+    let style = try style(#"<circle id="r" r="10"><animate attributeName="r" from="10" to="30" dur="2s"/></circle>"#, at: 1)
+    #expect(style.r == .number(20))
+  }
+
   @Test("geometry properties of rectangles and colors are interpolated")
   func geometryAndColors() throws {
     let style = try style(

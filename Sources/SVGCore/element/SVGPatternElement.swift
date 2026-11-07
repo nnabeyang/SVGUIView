@@ -71,17 +71,7 @@ final class SVGPatternElement: SVGDrawableElement {
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
-    guard let value = value?.trimmingCharacters(in: .whitespaces) else { return nil }
-    let nums = value.components(separatedBy: .whitespaces)
-    if nums.count == 4,
-      let x = Double(nums[0]),
-      let y = Double(nums[1]),
-      let width = Double(nums[2]),
-      let height = Double(nums[3])
-    {
-      return SVGElementRect(x: x, y: y, width: width, height: height)
-    }
-    return nil
+    SVGSVGElement.parseViewBox(value)
   }
 
   private static func parseLink(description: String?) -> String? {

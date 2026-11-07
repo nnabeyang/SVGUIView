@@ -67,6 +67,11 @@ enum PropertyID: String, CaseIterable, Sendable {
   case y
   case width
   case height
+  case cx
+  case cy
+  case r
+  case rx
+  case ry
   case d
   case animationName = "animation-name"
   case animationDuration = "animation-duration"
@@ -151,6 +156,11 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .y: visitor.visit(YProperty.self)
     case .width: visitor.visit(WidthProperty.self)
     case .height: visitor.visit(HeightProperty.self)
+    case .cx: visitor.visit(CXProperty.self)
+    case .cy: visitor.visit(CYProperty.self)
+    case .r: visitor.visit(RProperty.self)
+    case .rx: visitor.visit(RXProperty.self)
+    case .ry: visitor.visit(RYProperty.self)
     case .d: visitor.visit(DProperty.self)
     case .animationName: visitor.visit(AnimationNameProperty.self)
     case .animationDuration: visitor.visit(AnimationDurationProperty.self)
@@ -247,6 +257,11 @@ struct ComputedStyle: Sendable, Equatable {
   var y: SVGLength?
   var width: SVGLength?
   var height: SVGLength?
+  var cx: SVGLength? = CXProperty.initial
+  var cy: SVGLength? = CYProperty.initial
+  var r: SVGLength? = RProperty.initial
+  var rx: SVGLength? = RXProperty.initial
+  var ry: SVGLength? = RYProperty.initial
   var d: PathData
   var animationName: [AnimationName]
   var animationDuration: [Double]
@@ -336,10 +351,19 @@ struct ComputedStyle: Sendable, Equatable {
       for id in cascaded.properties { isSet.insert(id) }
       for (id, _) in computer.smil { isSet.insert(id) }
       for id in computer.transitions.keys { isSet.insert(id) }
+      // CSS animations change only the properties that their keyframes set, so that an element that animates its
+      // transform doesn't compute the other properties again.
+      for animation in computer.animations {
+        for id in animation.properties { isSet.insert(id) }
+      }
     }
-    let isAnimated = !computer.animations.isEmpty
+    let isInherited = PropertyID.isInheritedByIndex
     for (index, id) in PropertyID.ordered.enumerated() {
-      computer.isUnset = !computesEveryProperty && !isSet.contains(index) && !(isAnimated && id.isAnimatable)
+      let isUnset = !computesEveryProperty && !isSet.contains(index)
+      // A property that nothing sets and that isn't inherited keeps the initial value that the style starts with,
+      // so that properties that aren't inherited cost nothing for the elements that don't set them.
+      if isUnset, !isInherited[index] { continue }
+      computer.isUnset = isUnset
       id.visit(&computer)
     }
     // Motions apply in the order of the sandwich model, each over the ones under it.
@@ -520,6 +544,9 @@ struct ComputedStyle: Sendable, Equatable {
 extension PropertyID {
   /// The properties in the order that their computed values are computed in, which is the order of their cases.
   static let ordered = allCases
+
+  /// Whether each property of ``ordered`` is inherited, by its index.
+  static let isInheritedByIndex = ordered.map { $0.property.isInherited }
 
   /// The index of the property in ``ordered``.
   var index: Int {

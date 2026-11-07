@@ -16,12 +16,12 @@ final class SVGEllipseElement: ShapeGeometry {
   let rx: SVGLength?
   let ry: SVGLength?
 
-  init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
+  init(base: SVGBaseElement, text _: String, attributes _: [String: String]) {
     self.base = base
-    cx = SVGLength(attributes["cx"])
-    cy = SVGLength(attributes["cy"])
-    rx = SVGLength(attributes["rx"])
-    ry = SVGLength(attributes["ry"])
+    cx = base.style.cx
+    cy = base.style.cy
+    rx = base.style.rx
+    ry = base.style.ry
   }
 
   /// The center and the radii, or `nil` without an area.

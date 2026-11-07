@@ -35,4 +35,17 @@ struct AttributeScannerTests {
   func fontFamilies(text: String, families: [String]) {
     #expect(SVGUIFont(name: text, size: .medium, weight: .normal).families == families)
   }
+
+  @Test(
+    "viewBox reads four numbers separated by whitespace or a comma with optional whitespace",
+    arguments: ["0 0 620 340", "0,0,620,340", "0, 0, 620, 340", "0 0,620 340", " 0 0 620 340 "])
+  func viewBox(text: String) throws {
+    let rect = try #require(SVGSVGElement.parseViewBox(text))
+    #expect(rect.toCGRect() == CGRect(x: 0, y: 0, width: 620, height: 340))
+  }
+
+  @Test("viewBox isn't read from a list that isn't four numbers", arguments: ["0,,0,1,1", "0 0 1", ",0 0 1 1", "0 0 1 1,", "0 0 1 1 1"])
+  func invalidViewBox(text: String) {
+    #expect(SVGSVGElement.parseViewBox(text) == nil)
+  }
 }

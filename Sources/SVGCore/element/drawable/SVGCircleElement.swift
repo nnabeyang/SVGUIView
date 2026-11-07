@@ -15,11 +15,11 @@ final class SVGCircleElement: ShapeGeometry {
   let cy: SVGLength?
   let r: SVGLength?
 
-  init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
+  init(base: SVGBaseElement, text _: String, attributes _: [String: String]) {
     self.base = base
-    cx = .init(attributes["cx"])
-    cy = .init(attributes["cy"])
-    r = .init(attributes["r"])
+    cx = base.style.cx
+    cy = base.style.cy
+    r = base.style.r
   }
 
   func markerPath(in context: any GeometryContext) -> PathData? {
