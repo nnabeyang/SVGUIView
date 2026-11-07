@@ -93,7 +93,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     x2 = SVGLength(attributes["x2"])
     y2 = SVGLength(attributes["y2"])
 
-    parentId = Self.parseLink(description: attributes["href"])
+    parentId = fragmentID(of: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
     gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
@@ -133,15 +133,6 @@ final class SVGLinearGradientServer: SVGGradientServer {
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
     gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
     spreadMethod = lhs.spreadMethod ?? rhs.spreadMethod
-  }
-
-  private static func parseLink(description: String?) -> String? {
-    guard let description = description else { return nil }
-    let hashId = description.trimmingCharacters(in: .whitespaces)
-    if hashId.hasPrefix("#") {
-      return String(hashId.dropFirst())
-    }
-    return nil
   }
 
   private static func parseSpreadMethod(_ src: String) -> SpreadMethod? {
@@ -202,7 +193,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     fr = SVGLength(attributes["fr"])
     r = SVGLength(attributes["r"])
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
-    parentId = Self.parseLink(description: attributes["href"])
+    parentId = fragmentID(of: attributes["href"])
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
     gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
 
@@ -245,15 +236,6 @@ final class SVGRadialGradientServer: SVGGradientServer {
     parentId = rhs.parentId
     gradientUnits = lhs.gradientUnits ?? rhs.gradientUnits
     gradientTransform = lhs.gradientTransform ?? rhs.gradientTransform
-  }
-
-  private static func parseLink(description: String?) -> String? {
-    guard let description = description else { return nil }
-    let hashId = description.trimmingCharacters(in: .whitespaces)
-    if hashId.hasPrefix("#") {
-      return String(hashId.dropFirst())
-    }
-    return nil
   }
 
   private static func parseSpreadMethod(_ src: String) -> SpreadMethod? {
