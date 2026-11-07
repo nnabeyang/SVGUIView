@@ -18,12 +18,12 @@ final class SVGRectElement: ShapeGeometry {
   let width: SVGLength?
   let height: SVGLength?
 
-  init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
+  init(base: SVGBaseElement, text _: String, attributes _: [String: String]) {
     self.base = base
     x = base.style.x
     y = base.style.y
-    rx = .init(attributes["rx"])
-    ry = .init(attributes["ry"])
+    rx = base.style.rx
+    ry = base.style.ry
     width = base.style.width
     height = base.style.height
   }

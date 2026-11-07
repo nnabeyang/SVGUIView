@@ -299,6 +299,25 @@ struct StyleTests {
       ImageRendering.allCases.filter { !$0.interpolates } == [.optimizeSpeed, .crispEdges, .pixelated])
   }
 
+  @Test("geometry properties read lengths and auto, and style sheets can't make radii and sizes negative")
+  func geometryProperties() throws {
+    #expect(RProperty.parse("5", origin: .css) == .some(.number(5)))
+    #expect(RXProperty.parse("auto", origin: .css) == .some(nil))
+    #expect(RProperty.parse("-5", origin: .css) == nil)
+    #expect(WidthProperty.parse("-1px", origin: .css) == nil)
+    // An attribute keeps a negative radius, which the element treats as an error.
+    #expect(RProperty.parse("-5", origin: .attribute) == .some(.number(-5)))
+    // A position can be negative.
+    #expect(CXProperty.parse("-5", origin: .css) == .some(.number(-5)))
+    #expect(CXProperty.parse("red", origin: .css) == nil)
+    #expect(CXProperty.accepts(attributeOn: .circle) && CXProperty.accepts(attributeOn: .ellipse))
+    #expect(!CXProperty.accepts(attributeOn: .radialGradient) && !CXProperty.accepts(attributeOn: .rect))
+    #expect(RProperty.accepts(attributeOn: .circle) && !RProperty.accepts(attributeOn: .ellipse))
+    #expect(RXProperty.accepts(attributeOn: .ellipse) && RXProperty.accepts(attributeOn: .rect))
+    #expect(ComputedStyle.initial.cx == .number(0) && ComputedStyle.initial.r == .number(0))
+    #expect(ComputedStyle.initial.rx == nil)
+  }
+
   @Test("mix-blend-mode and isolation are keywords that aren't presentation attributes or inherited")
   func blending() throws {
     let modes: [(String, MixBlendMode?)] = [

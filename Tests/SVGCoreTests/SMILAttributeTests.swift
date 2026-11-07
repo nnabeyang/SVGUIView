@@ -34,7 +34,7 @@ struct SMILAttributeTests {
     (#"<circle id="e" r="10"><animate attributeName="r" from="0" to="x" dur="1s"/></circle>"#, 0.5, .number(10)),
   ]
 
-  @Test("SMIL animations change lengths that aren't properties", arguments: radii)
+  @Test("SMIL animations change the radius of a circle, which starts from 0 without an attribute", arguments: radii)
   func lengths(content: String, time: Double, radius: SVGLength?) throws {
     #expect(try element(content, at: time, as: SVGCircleElement.self).r == radius)
   }

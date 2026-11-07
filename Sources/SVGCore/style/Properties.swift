@@ -506,7 +506,7 @@ enum StrokeDasharrayProperty: StyleProperty {
 
   /// The sum of two lists of dashes, which aren't negative.
   static func added(_ value: [SVGLength], to underlying: [SVGLength], in _: StyleResolver) -> [SVGLength]? {
-    underlying.adding(value)?.map(\.nonNegative)
+    underlying.adding(value).map { $0.map(\.nonNegative) }
   }
 }
 
@@ -1148,45 +1148,113 @@ enum LightingColorProperty: StyleProperty {
   }
 }
 
-/// A geometry property of `<rect>`, whose computed value is `nil` for `auto`. Other elements read these attributes
-/// themselves, and style sheets don't change them.
-protocol RectGeometryProperty: StyleProperty where Specified == SVGLength, Computed == SVGLength? {}
+/// A geometry property of SVG 2, a length of the shape of an element, whose computed value is `nil` for `auto` or
+/// no value. The elements that take it as a presentation attribute read it from their style.
+protocol GeometryLengthProperty: StyleProperty where Specified == SVGLength?, Computed == SVGLength? {
+  /// The elements that take the property as a presentation attribute.
+  static var elements: Set<SVGElementName> { get }
+  /// Whether a style sheet can give the property a negative length, which isn't valid for a radius or a size.
+  static var allowsNegative: Bool { get }
+}
 
-extension RectGeometryProperty {
+extension GeometryLengthProperty {
   static var isInherited: Bool { false }
   static var initial: SVGLength? { nil }
+  static var allowsNegative: Bool { true }
 
   static func accepts(attributeOn name: SVGElementName) -> Bool {
-    name == .rect
+    elements.contains(name)
   }
 
-  static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGLength? {
-    SVGLength(text)
+  /// The length, or `nil` for `auto`. A negative length that the property doesn't allow isn't valid in a style
+  /// sheet, while a presentation attribute keeps it for the element to treat as an error.
+  static func parse(_ text: String, origin: DeclarationOrigin) -> SVGLength?? {
+    if keyword(text) == "auto" { return .some(nil) }
+    guard let length = SVGLength(text) else { return nil }
+    if origin == .css, !allowsNegative, length != length.nonNegative { return nil }
+    return length
   }
 
-  static func compute(_ length: SVGLength, in resolver: StyleResolver) -> SVGLength? {
-    resolvingFontRelative(length, in: resolver)
+  static func compute(_ length: SVGLength?, in resolver: StyleResolver) -> SVGLength? {
+    length.map { resolvingFontRelative($0, in: resolver) }
   }
 }
 
-enum XProperty: RectGeometryProperty {
+/// A geometry property whose length isn't negative: a radius or a size.
+protocol NonNegativeGeometryLengthProperty: GeometryLengthProperty {}
+
+extension NonNegativeGeometryLengthProperty {
+  static var allowsNegative: Bool { false }
+
+  /// The length between two lengths, which isn't negative.
+  static func interpolated(_ from: SVGLength?, _ to: SVGLength?, progress: Double, in _: StyleResolver) -> SVGLength? {
+    from.animated(to: to, progress: progress)?.nonNegative
+  }
+
+  /// The sum of two lengths, which isn't negative.
+  static func added(_ value: SVGLength?, to underlying: SVGLength?, in _: StyleResolver) -> SVGLength?? {
+    underlying.adding(value).map { $0.map(\.nonNegative) }
+  }
+}
+
+enum XProperty: GeometryLengthProperty {
   static let id = PropertyID.x
+  static let elements: Set<SVGElementName> = [.rect]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.x }
 }
 
-enum YProperty: RectGeometryProperty {
+enum YProperty: GeometryLengthProperty {
   static let id = PropertyID.y
+  static let elements: Set<SVGElementName> = [.rect]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.y }
 }
 
-enum WidthProperty: RectGeometryProperty {
+enum WidthProperty: NonNegativeGeometryLengthProperty {
   static let id = PropertyID.width
+  static let elements: Set<SVGElementName> = [.rect]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.width }
 }
 
-enum HeightProperty: RectGeometryProperty {
+enum HeightProperty: NonNegativeGeometryLengthProperty {
   static let id = PropertyID.height
+  static let elements: Set<SVGElementName> = [.rect]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.height }
+}
+
+enum CXProperty: GeometryLengthProperty {
+  static let id = PropertyID.cx
+  static let elements: Set<SVGElementName> = [.circle, .ellipse]
+  // The initial value of SVG 2, which a to-animation of SMIL starts from without an attribute.
+  static let initial: SVGLength? = .number(0)
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.cx }
+}
+
+enum CYProperty: GeometryLengthProperty {
+  static let id = PropertyID.cy
+  static let elements: Set<SVGElementName> = [.circle, .ellipse]
+  // The initial value of SVG 2, which a to-animation of SMIL starts from without an attribute.
+  static let initial: SVGLength? = .number(0)
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.cy }
+}
+
+enum RProperty: NonNegativeGeometryLengthProperty {
+  static let id = PropertyID.r
+  static let elements: Set<SVGElementName> = [.circle]
+  // The initial value of SVG 2, which a to-animation of SMIL starts from without an attribute.
+  static let initial: SVGLength? = .number(0)
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.r }
+}
+
+enum RXProperty: NonNegativeGeometryLengthProperty {
+  static let id = PropertyID.rx
+  static let elements: Set<SVGElementName> = [.ellipse, .rect]
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.rx }
+}
+
+enum RYProperty: NonNegativeGeometryLengthProperty {
+  static let id = PropertyID.ry
+  static let elements: Set<SVGElementName> = [.ellipse, .rect]
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.ry }
 }
 
 /// The path data of `<path>`, which is the only element that has it.

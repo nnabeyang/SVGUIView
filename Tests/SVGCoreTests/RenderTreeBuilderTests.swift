@@ -566,6 +566,39 @@ struct RenderTreeBuilderTests {
     }
   }
 
+  /// Shapes whose geometry properties a style sheet sets, and the bounds of their paths.
+  private static let styledShapes: [(String, CGRect)] = [
+    (#"<style>circle { cx: 10px; cy: 8px; r: 4px }</style><circle/>"#, CGRect(x: 6, y: 4, width: 8, height: 8)),
+    // The percentages of cx and cy are of the width and the height of the view box, and of r of its normalized
+    // diagonal, which is 20 for a square of 20.
+    (#"<style>circle { cx: 50%; cy: 25%; r: 10% }</style><circle/>"#, CGRect(x: 8, y: 3, width: 4, height: 4)),
+    // ry: auto takes rx.
+    (#"<style>ellipse { rx: 4px; ry: auto }</style><ellipse cx="10" cy="10"/>"#, CGRect(x: 6, y: 6, width: 8, height: 8)),
+    (#"<style>ellipse { rx: 4px; ry: 2px }</style><ellipse cx="10" cy="10" rx="1" ry="1"/>"#, CGRect(x: 6, y: 8, width: 8, height: 4)),
+    // A declaration in a style sheet that isn't valid leaves the attribute.
+    (#"<style>circle { r: -4px }</style><circle cx="10" cy="10" r="2"/>"#, CGRect(x: 8, y: 8, width: 4, height: 4)),
+    (#"<style>rect { rx: 2px }</style><rect width="10" height="10"/>"#, CGRect(x: 0, y: 0, width: 10, height: 10)),
+  ]
+
+  @Test("style sheets set the geometry properties of circles, ellipses and rectangles", arguments: styledShapes)
+  func styledGeometry(content: String, bounds: CGRect) async throws {
+    let tree = try await renderTree(content)
+    let path = try #require(try shape(try children(of: tree).first).geometry).path.cgPath
+    let box = path.boundingBoxOfPath
+    for (a, e) in [(box.minX, bounds.minX), (box.minY, bounds.minY), (box.maxX, bounds.maxX), (box.maxY, bounds.maxY)] {
+      #expect(abs(a - e) < 0.001, "\(box) isn't \(bounds)")
+    }
+  }
+
+  @Test("the radius of a rectangle that a style sheet sets rounds its corners")
+  func styledRectRadius() async throws {
+    let tree = try await renderTree(#"<style>rect { rx: 5px }</style><rect width="10" height="10"/>"#)
+    let path = try #require(try shape(try children(of: tree).first).geometry).path.cgPath
+    // The corner is cut, so the corner point isn't in the shape.
+    #expect(!path.contains(CGPoint(x: 0.2, y: 0.2)))
+    #expect(path.contains(CGPoint(x: 5, y: 5)))
+  }
+
   @Test("rotate turns each glyph about its origin, clockwise")
   func textRotation() async throws {
     let tree = try await renderTree(#"<text x="10" y="10" font-size="4" rotate="180">T</text>"#)

@@ -67,6 +67,11 @@ enum PropertyID: String, CaseIterable, Sendable {
   case y
   case width
   case height
+  case cx
+  case cy
+  case r
+  case rx
+  case ry
   case d
   case animationName = "animation-name"
   case animationDuration = "animation-duration"
@@ -151,6 +156,11 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .y: visitor.visit(YProperty.self)
     case .width: visitor.visit(WidthProperty.self)
     case .height: visitor.visit(HeightProperty.self)
+    case .cx: visitor.visit(CXProperty.self)
+    case .cy: visitor.visit(CYProperty.self)
+    case .r: visitor.visit(RProperty.self)
+    case .rx: visitor.visit(RXProperty.self)
+    case .ry: visitor.visit(RYProperty.self)
     case .d: visitor.visit(DProperty.self)
     case .animationName: visitor.visit(AnimationNameProperty.self)
     case .animationDuration: visitor.visit(AnimationDurationProperty.self)
@@ -247,6 +257,11 @@ struct ComputedStyle: Sendable, Equatable {
   var y: SVGLength?
   var width: SVGLength?
   var height: SVGLength?
+  var cx: SVGLength? = CXProperty.initial
+  var cy: SVGLength? = CYProperty.initial
+  var r: SVGLength? = RProperty.initial
+  var rx: SVGLength? = RXProperty.initial
+  var ry: SVGLength? = RYProperty.initial
   var d: PathData
   var animationName: [AnimationName]
   var animationDuration: [Double]
