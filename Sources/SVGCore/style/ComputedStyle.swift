@@ -336,10 +336,19 @@ struct ComputedStyle: Sendable, Equatable {
       for id in cascaded.properties { isSet.insert(id) }
       for (id, _) in computer.smil { isSet.insert(id) }
       for id in computer.transitions.keys { isSet.insert(id) }
+      // CSS animations change only the properties that their keyframes set, so that an element that animates its
+      // transform doesn't compute the other properties again.
+      for animation in computer.animations {
+        for id in animation.properties { isSet.insert(id) }
+      }
     }
-    let isAnimated = !computer.animations.isEmpty
+    let isInherited = PropertyID.isInheritedByIndex
     for (index, id) in PropertyID.ordered.enumerated() {
-      computer.isUnset = !computesEveryProperty && !isSet.contains(index) && !(isAnimated && id.isAnimatable)
+      let isUnset = !computesEveryProperty && !isSet.contains(index)
+      // A property that nothing sets and that isn't inherited keeps the initial value that the style starts with,
+      // so that properties that aren't inherited cost nothing for the elements that don't set them.
+      if isUnset, !isInherited[index] { continue }
+      computer.isUnset = isUnset
       id.visit(&computer)
     }
     // Motions apply in the order of the sandwich model, each over the ones under it.
@@ -520,6 +529,9 @@ struct ComputedStyle: Sendable, Equatable {
 extension PropertyID {
   /// The properties in the order that their computed values are computed in, which is the order of their cases.
   static let ordered = allCases
+
+  /// Whether each property of ``ordered`` is inherited, by its index.
+  static let isInheritedByIndex = ordered.map { $0.property.isInherited }
 
   /// The index of the property in ``ordered``.
   var index: Int {

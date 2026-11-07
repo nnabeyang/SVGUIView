@@ -11,6 +11,11 @@ struct ElementAnimation {
   /// The easing function of the intervals between keyframes that have none of their own.
   private let easing: EasingFunction
 
+  /// The properties that the keyframes of the animation set.
+  var properties: [PropertyID] {
+    keyframes.flatMap { $0.keyframe.declarations.properties }
+  }
+
   /// The animations that the computed values of CSS Animations give, in the order of `animation-name`, without
   /// the ones that have no keyframes or no effect at the time.
   ///
