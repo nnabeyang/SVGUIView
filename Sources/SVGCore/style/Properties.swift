@@ -910,8 +910,15 @@ enum ClipPathProperty: StyleProperty {
   static let initial = SVGClipPath.none
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.clipPath }
 
-  static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGClipPath? {
-    SVGClipPath(description: text.trimmingCharacters(in: .whitespacesAndNewlines))
+  /// SMIL animations change clip paths discretely, as they change other values that aren't numbers. CSS animations
+  /// interpolate basic shapes with the rules of CSS Shapes 1.
+  static let isInterpolable = false
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> SVGClipPath? {
+    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let clipPath = SVGClipPath(description: text) { return clipPath }
+    var input = _CSSParser.Parser(input: ParserInput(input: text))
+    return SVGClipPath.parseShape(&input, origin: origin)
   }
 }
 

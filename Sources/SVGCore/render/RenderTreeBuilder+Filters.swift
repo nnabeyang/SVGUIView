@@ -69,7 +69,7 @@ extension RenderTreeBuilder {
         mask = .mask(effect)
       }
     } else {
-      clip = await clipEffect(element.clipPath, frame: frame, context: elementContext, guard: references)
+      clip = await clipEffect(of: element, frame: frame, context: elementContext, guard: references)
       mask = await maskApplication(
         of: element, frame: frame, context: elementContext, guard: references, instance: instance)
     }

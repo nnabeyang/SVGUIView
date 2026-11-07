@@ -190,7 +190,7 @@ package struct RenderTreeBuilder {
       geometry = Geometry(path: RenderPath(path), frame: frame)
       // The filter of an element drawn as its source clips and masks its result instead.
       if mode != .filter(isRoot: true) {
-        clip = await clipEffect(element.clipPath, frame: frame, context: context, guard: references)
+        clip = await clipEffect(of: element, frame: frame, context: context, guard: references)
         mask = await maskApplication(
           of: element, frame: frame, context: context, guard: references, instance: instance)
       }
@@ -306,7 +306,7 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let frame = spans.reduce(CGRect.null) { $0.union($1.frame) }
     let isFilterRoot = mode == .filter(isRoot: true)
-    let clip = isFilterRoot ? nil : await clipEffect(text.clipPath, frame: frame, context: context, guard: references)
+    let clip = isFilterRoot ? nil : await clipEffect(of: text, frame: frame, context: context, guard: references)
     let mask =
       isFilterRoot
       ? nil
@@ -469,7 +469,7 @@ package struct RenderTreeBuilder {
     var frame: CGRect?
     if mode != .filter(isRoot: true), group.clipPath != nil || self.mask(of: group) != nil {
       let groupFrame = await self.frame(of: group, context: context, path: nil, guard: references)
-      clip = await clipEffect(group.clipPath, frame: groupFrame, context: context, guard: references)
+      clip = await clipEffect(of: group, frame: groupFrame, context: context, guard: references)
       mask = await maskEffect(
         self.mask(of: group), frame: groupFrame, context: context, guard: references,
         instance: instance + [group.base.elementID])
@@ -731,13 +731,26 @@ package struct RenderTreeBuilder {
       return context.transform(of: svg.style, box: rootBox(of: svg, context: context))
     }
     let transform = await transform(of: element.style, context: context) { box in
-      if box == .fillBox, let frame { return frame }
-      let path = await path(of: element, context: context, guard: references)
-      return await self.frame(
-        of: element, context: context, path: path, includesStroke: box == .strokeBox, guard: references)
+      await referenceBox(box, of: element, context: context, frame: frame, guard: references)
     }
     // The motion of `<animateMotion>` applies after the transform, in the coordinates of the parent.
     return transform.concatenating(element.style.motion)
+  }
+
+  /// The reference box of an element for transforms and basic shapes, in a context styled by the element.
+  ///
+  /// - Parameter frame: The bounds of the element, if they're known, which are its `fill-box`.
+  func referenceBox(
+    _ box: TransformBox, of element: any SVGDrawableElement, context: ResolveContext, frame: CGRect?,
+    guard references: ReferenceGuard
+  ) async -> CGRect {
+    // The box of `view-box` starts at the origin of user space, also for a `viewBox` that doesn't.
+    if box == .viewBox { return CGRect(origin: .zero, size: context.viewBoxSize) }
+    if box == .fillBox || box == .contentBox, let frame { return frame }
+    let path = await path(of: element, context: context, guard: references)
+    return await self.frame(
+      of: element, context: context, path: path, includesStroke: box == .strokeBox || box == .borderBox,
+      guard: references)
   }
 
   /// The transform of computed values about their transform origin.

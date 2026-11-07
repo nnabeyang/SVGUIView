@@ -5,10 +5,16 @@ enum SVGClipPathType: String {
   case url
 }
 
-enum SVGClipPath: Equatable {
+/// The value of `clip-path`: a `<clipPath>` element, a basic shape with its reference box, a reference box alone, or
+/// `none`.
+enum SVGClipPath: Equatable, Sendable {
   case url(url: String)
+  /// A basic shape in its reference box, or the reference box itself if the shape is `nil`. The shape is kept out of
+  /// line, so that the value stays as small as a `url()` in every computed style.
+  indirect case shape(BasicShape?, box: ClipBox)
   case none
 
+  /// A `url()` or `none`, or `nil` if it's neither.
   init?(description: String) {
     var data = description
     let clipPath = data.withUTF8 {

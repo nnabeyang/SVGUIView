@@ -10,9 +10,21 @@ extension RenderTreeBuilder {
   /// - Parameters:
   ///   - frame: The bounds of the clipped element.
   ///   - context: The context of the clipped element, styled by it.
+  ///   - reference: The reference box of a basic shape for `fill-box` and `stroke-box`, which is `frame` if it's
+  ///     `nil`.
   func clipEffect(
-    _ clipPath: SVGClipPath?, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard
+    _ clipPath: SVGClipPath?, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard,
+    reference: ((TransformBox) async -> CGRect)? = nil
   ) async -> ClipPathEffect? {
+    if case .shape(_, let box) = clipPath {
+      let rect: CGRect =
+        switch box {
+        case .viewBox: CGRect(origin: .zero, size: context.viewBoxSize)
+        case .fillBox: await reference?(.fillBox) ?? frame
+        case .strokeBox: await reference?(.strokeBox) ?? frame
+        }
+      return shapeEffect(clipPath, box: rect, context: context)
+    }
     var references = references
     guard case .url(let id) = clipPath,
       references.insert(clipPath: id),
@@ -40,7 +52,14 @@ extension RenderTreeBuilder {
       }
       guard !paths.isEmpty else { continue }
       let transform = await transform(of: content, context: context.styled(by: content), frame: nil, guard: references)
-      let clip = await clipEffect(content.clipPath, frame: frame, context: context, guard: references)
+      let clip: ClipPathEffect?
+      if case .shape = content.clipPath {
+        clip = await clipEffect(content.clipPath, frame: frame, context: context, guard: references) { box in
+          await self.referenceBox(box, of: content, context: context.styled(by: content), frame: nil, guard: references)
+        }
+      } else {
+        clip = await clipEffect(content.clipPath, frame: frame, context: context, guard: references)
+      }
       let fillRule: CGPathDrawingMode =
         await clipRule(of: content, context: context, guard: references) == .evenodd ? .eoFill : .fill
       for path in paths {
@@ -55,6 +74,37 @@ extension RenderTreeBuilder {
     return ClipPathEffect(
       frame: frame, transform: transform, units: element.clipPathUnits ?? .userSpaceOnUse,
       shapes: shapes, clipPath: await clipEffect(element.clipPath, frame: frame, context: context, guard: references))
+  }
+
+  /// The clip path of an element, whose basic shape takes the reference boxes of the element.
+  ///
+  /// - Parameters:
+  ///   - frame: The bounds of the element.
+  ///   - context: The context of the element, styled by it.
+  func clipEffect(
+    of element: any SVGDrawableElement, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard
+  ) async -> ClipPathEffect? {
+    switch element.clipPath {
+    case nil, .some(SVGClipPath.none):
+      return nil
+    case .some(.url):
+      return await clipEffect(element.clipPath, frame: frame, context: context, guard: references)
+    case .some(.shape):
+      // The reference boxes are found only for a basic shape, so that elements without one pay nothing for them.
+      return await clipEffect(element.clipPath, frame: frame, context: context, guard: references) { box in
+        await self.referenceBox(box, of: element, context: context, frame: frame, guard: references)
+      }
+    }
+  }
+
+  /// The clip path of a basic shape or a reference box, whose bounds are the bounds of the shape, which can go past
+  /// the bounds of the element for `stroke-box` and `view-box`. An empty shape clips everything.
+  private func shapeEffect(_ clipPath: SVGClipPath?, box: CGRect, context: ResolveContext) -> ClipPathEffect? {
+    guard let (path, fillRule) = clipPath?.shapePath(in: box, context: context) else { return nil }
+    let bounds = path.isEmpty ? CGRect.null : path.boundingBoxOfPath
+    let shape = ClipShape(
+      path: RenderPath(path), transform: .identity, clip: nil, fillRule: fillRule == .evenodd ? .eoFill : .fill)
+    return ClipPathEffect(frame: bounds, transform: .identity, units: .userSpaceOnUse, shapes: [shape], clipPath: nil)
   }
 
   /// The clip rule of a child of a `<clipPath>` element. A `<use>` element takes the clip rule of the element that

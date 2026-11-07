@@ -221,9 +221,9 @@ public struct Tokenizer {
       case UInt8(ascii: "\n"), UInt8(ascii: "\u{000C}"), UInt8(ascii: "\r"):
         consumeNewline()
       case UInt8(ascii: "/"):
-        if startsWith([UInt8(ascii: "/"), UInt8(ascii: "*")]) {
-          _ = consumeComment(tokenizer: &self)
-        }
+        // A slash that doesn't start a comment is a delimiter, which ends the whitespace.
+        guard startsWith([UInt8(ascii: "/"), UInt8(ascii: "*")]) else { break loop }
+        _ = consumeComment(tokenizer: &self)
       default:
         break loop
       }
@@ -239,9 +239,9 @@ public struct Tokenizer {
       case UInt8(ascii: "\n"), UInt8(ascii: "\u{000C}"), UInt8(ascii: "\r"):
         consumeNewline()
       case UInt8(ascii: "/"):
-        if startsWith([UInt8(ascii: "/"), UInt8(ascii: "*")]) {
-          _ = consumeComment(tokenizer: &self)
-        }
+        // A slash that doesn't start a comment is a delimiter, which ends the whitespace.
+        guard startsWith([UInt8(ascii: "/"), UInt8(ascii: "*")]) else { break loop }
+        _ = consumeComment(tokenizer: &self)
       case UInt8(ascii: "<"):
         if startsWith([UInt8(ascii: "<"), UInt8(ascii: "!"), UInt8(ascii: "-"), UInt8(ascii: "-")]) {
           advance(4)
