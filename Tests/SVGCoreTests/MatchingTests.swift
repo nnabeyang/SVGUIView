@@ -143,6 +143,27 @@ struct MatchingTests {
     #expect(matchesSelector(element: rect, css: "rect ~ rect"))
   }
 
+  @Test("the copy that a use element shows is a tree of its own, whose root isn't the root of the document")
+  func instanceTree() {
+    let g = documentElement(1, "g", ["class": "copy"], [documentElement(2, "circle"), documentElement(3, "rect")])
+    let root = ElementCursor(instanceRoot: g)
+    // The root of the copy has no parent and no siblings, but it isn't the root.
+    #expect(!matchesSelector(element: root, css: ":root"))
+    #expect(!matchesSelector(element: root, css: "svg g"))
+    #expect(matchesSelector(element: root, css: "g:first-child:last-child"))
+    #expect(matchesSelector(element: root, css: ".copy"))
+    // Ancestors and siblings in the copy are seen.
+    let rect = root.child(at: 1)
+    #expect(matchesSelector(element: rect, css: ".copy rect"))
+    #expect(matchesSelector(element: rect, css: "g > rect"))
+    #expect(matchesSelector(element: rect, css: "circle + rect"))
+    #expect(matchesSelector(element: rect, css: "rect:nth-child(2)"))
+    #expect(!matchesSelector(element: rect, css: ":root rect"))
+    #expect(!matchesSelector(element: rect, css: "svg rect"))
+    // The root of a document matches :root.
+    #expect(matchesSelector(element: ElementCursor(root: g), css: ":root"))
+  }
+
   @Test("an element that SVGUIView doesn't render is an ancestor for selectors")
   func unknownElementIsAncestor() {
     let root = documentElement(0, "svg", [:], [documentElement(1, "a", [:], [documentElement(2, "rect")])])

@@ -39,6 +39,8 @@ package struct SVGBaseContext: Sendable {
   package let isAnimated: Bool
   /// The elements whose computed values animations can change, or `nil` for a document without animations.
   let restyleScope: RestyleScope?
+  /// The cascaded values of the copies that `<use>` elements show.
+  let instanceStyles: InstanceStyles
   private(set) var pservers = [String: any SVGGradientServer]()
   private(set) var contentIdMap = [String: ObjectIdentifier]()
   private(set) var contents = [ObjectIdentifier: any SVGElement]()
@@ -54,12 +56,15 @@ package struct SVGBaseContext: Sendable {
   ///
   /// - Parameter restyleScope: The elements whose computed values animations can change, which the context of the
   ///   document at a time keeps from the context that it comes from, or `nil` to find them.
+  ///   - instanceStyles: The cascaded values of the copies that `<use>` elements show, which a context of the same
+  ///     document and attributes keeps, or `nil` to find them for this document.
   init(
     document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
-    restyleScope: RestyleScope? = nil
+    restyleScope: RestyleScope? = nil, instanceStyles: InstanceStyles? = nil
   ) {
     self.document = document
     self.stylesheet = stylesheet
+    self.instanceStyles = instanceStyles ?? InstanceStyles(document: document, stylesheet: stylesheet)
     self.root = root
     self.animations = animations
     isAnimated =
@@ -151,10 +156,14 @@ package struct SVGBaseContext: Sendable {
     animations.smilEffects = SMILEffect.effects(of: animations.smil, at: time)
     let attributes = SMILEffect.attributes(of: animations.smilEffects, in: document)
     let animated: SVGSVGElement?
+    let instanceStyles: InstanceStyles
     if attributes.isEmpty {
+      instanceStyles = self.instanceStyles
       guard let restyleScope else {
         let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
-        return SVGBaseContext(document: document, stylesheet: stylesheet, root: animated, animations: animations)
+        return SVGBaseContext(
+          document: document, stylesheet: stylesheet, root: animated, animations: animations,
+          instanceStyles: instanceStyles)
       }
       var replacements = [ObjectIdentifier: any SVGElement]()
       animated =
@@ -164,13 +173,17 @@ package struct SVGBaseContext: Sendable {
     } else {
       // Animations of attributes that aren't properties change the attributes before the cascade, so the elements
       // are made again from the document with the animated attributes.
+      let animatedDocument = document.replacingAttributes(attributes)
       animated =
-        document.replacingAttributes(attributes).root.flatMap {
+        animatedDocument.root.flatMap {
           ElementCursor(root: $0).makeElement(with: stylesheet, languages: document.languages, animations: animations)
         } as? SVGSVGElement
+      // The copies are matched with the animated attributes too.
+      instanceStyles = InstanceStyles(document: animatedDocument, stylesheet: stylesheet)
     }
     return SVGBaseContext(
-      document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope)
+      document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope,
+      instanceStyles: instanceStyles)
   }
 
   /// The context of the elements of this context with some of them made again, which keeps the elements that
@@ -188,6 +201,7 @@ package struct SVGBaseContext: Sendable {
     self.animations = animations
     isAnimated = context.isAnimated
     restyleScope = context.restyleScope
+    instanceStyles = context.instanceStyles
     func replaced<T>(_ element: T) -> T where T: SVGElement {
       replacements[element.index] as? T ?? element
     }
@@ -215,7 +229,8 @@ package struct SVGBaseContext: Sendable {
     guard SMILEffect.attributes(of: animations.smilEffects, in: document).isEmpty else { return at(time: time) }
     let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
     return SVGBaseContext(
-      document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope)
+      document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope,
+      instanceStyles: instanceStyles)
   }
 
   mutating func setClipPath(id: String, value: SVGClipPathElement) {

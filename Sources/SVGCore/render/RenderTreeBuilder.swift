@@ -676,9 +676,11 @@ package struct RenderTreeBuilder {
     else {
       return nil
     }
+    // The copy is styled in a tree of its own, where selectors don't see the ancestors of the element.
     let restyled = element.restyled(
       parent: use.style, root: base.root?.style ?? use.style, animations: base.isAnimated ? base.animations : nil,
-      userAgentDeclarations: element is SVGSVGElement ? CascadedValues.userAgentDeclarationsOfInstanceRoot : [])
+      userAgentDeclarations: element is SVGSVGElement ? CascadedValues.userAgentDeclarationsOfInstanceRoot : [],
+      instance: base.instanceStyles.cascades(ofCopyOf: element.base.elementID))
     if let svg = restyled as? SVGSVGElement {
       return await body(svg.sized(width: use.width, height: use.height), references)
     }

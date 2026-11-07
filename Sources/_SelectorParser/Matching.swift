@@ -346,7 +346,7 @@ public func matchesSimpleSelector<E: Element>(
     }
   case .root, .scope:
     // Without a scope element, `:scope` is the root element.
-    value = element.parent == nil
+    value = element.isRoot
   case .empty:
     value = element.isEmpty
   case .nth(let data):

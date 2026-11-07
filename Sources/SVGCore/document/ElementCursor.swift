@@ -15,20 +15,33 @@ struct ElementCursor {
   let element: DocumentElement
   /// The ancestors of the element, from the root.
   private let ancestors: [Step]
+  /// Whether the tree is the copy of an element that a `<use>` element shows, whose root has no parent but isn't the
+  /// root of the document.
+  private let isInstance: Bool
 
   /// A cursor at the root of a document.
   init(root: DocumentElement) {
-    self.init(element: root, ancestors: [])
+    self.init(element: root, ancestors: [], isInstance: false)
   }
 
-  private init(element: DocumentElement, ancestors: [Step]) {
+  /// A cursor at the copy of an element that a `<use>` element shows. SVG 2 puts the copy in a tree of its own, so
+  /// selectors see none of the ancestors and siblings of the element in the document, and `:root` matches none of
+  /// the copy.
+  init(instanceRoot element: DocumentElement) {
+    self.init(element: element, ancestors: [], isInstance: true)
+  }
+
+  private init(element: DocumentElement, ancestors: [Step], isInstance: Bool) {
     self.element = element
     self.ancestors = ancestors
+    self.isInstance = isInstance
   }
 
   /// The cursor at the child of the element at the given position.
   func child(at index: Int) -> ElementCursor {
-    ElementCursor(element: element.children[index], ancestors: ancestors + [Step(element: element, childIndex: index)])
+    ElementCursor(
+      element: element.children[index], ancestors: ancestors + [Step(element: element, childIndex: index)],
+      isInstance: isInstance)
   }
 
   /// The cursor at the sibling `offset` positions after the element, or `nil` if there is none.
@@ -38,7 +51,7 @@ struct ElementCursor {
     guard parent.element.children.indices.contains(index) else { return nil }
     return ElementCursor(
       element: parent.element.children[index],
-      ancestors: ancestors.dropLast() + [Step(element: parent.element, childIndex: index)])
+      ancestors: ancestors.dropLast() + [Step(element: parent.element, childIndex: index)], isInstance: isInstance)
   }
 }
 
@@ -47,7 +60,11 @@ extension ElementCursor: Element {
 
   var parent: ElementCursor? {
     guard let parent = ancestors.last else { return nil }
-    return ElementCursor(element: parent.element, ancestors: Array(ancestors.dropLast()))
+    return ElementCursor(element: parent.element, ancestors: Array(ancestors.dropLast()), isInstance: isInstance)
+  }
+
+  var isRoot: Bool {
+    ancestors.isEmpty && !isInstance
   }
 
   /// Whether the element is a span of text: a `<tspan>`, a `<textPath>` or an `<a>` whose ancestors up to a `<text>`

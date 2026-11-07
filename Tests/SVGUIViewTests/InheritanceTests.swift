@@ -59,6 +59,32 @@ struct InheritanceTests {
     #expect(try await pixel(svg: svg, x: 10, y: 10) == Self.lime)
   }
 
+  @Test(
+    "selectors match the content of a use element in a tree of its own, without the ancestors of the element",
+    arguments: [
+      // The copy doesn't match rules with the ancestors of the element in the document, nor :root.
+      #"""
+      <style>.container rect { fill: red } use rect { fill: red } rect:root { opacity: 0 } rect { stroke: none }</style>
+      <defs><g class="container"><rect id="r" width="20" height="20" style="fill-opacity: 1"/></g></defs>
+      <use href="#r" style="fill: lime; fill-opacity: 0"/>
+      """#,
+      // A copied group is an ancestor in the copy.
+      #"""
+      <style>.container rect { fill: lime }</style>
+      <defs><g id="g" class="container"><rect width="20" height="20" fill="red"/></g></defs>
+      <use href="#g"/>
+      """#,
+      // A use element in the copy shows a copy of its own.
+      #"""
+      <style>.outer rect { fill: red } rect { fill: lime }</style>
+      <defs><g class="outer"><rect id="r" width="20" height="20"/></g><g id="g"><use href="#r"/></g></defs>
+      <use href="#g"/>
+      """#,
+    ])
+  func useContentSelectors(content: String) async throws {
+    #expect(try await pixel(svg: document(content), x: 10, y: 10) == Self.lime)
+  }
+
   @Test("a use element moves its content by x and y before its transform")
   func useTransformOrder() async throws {
     let svg = document(
