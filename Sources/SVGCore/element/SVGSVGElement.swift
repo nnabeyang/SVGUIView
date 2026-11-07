@@ -79,17 +79,9 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
-    guard let value = value?.trimmingCharacters(in: .whitespaces) else { return nil }
-    let nums = value.components(separatedBy: .whitespaces)
-    if nums.count == 4,
-      let x = Double(nums[0]),
-      let y = Double(nums[1]),
-      let width = Double(nums[2]),
-      let height = Double(nums[3])
-    {
-      return SVGElementRect(x: x, y: y, width: width, height: height)
-    }
-    return nil
+    // The numbers are separated by whitespace or a comma with optional whitespace, as in `0, 0, 620, 340`.
+    guard let numbers = value.flatMap(numberList), numbers.count == 4 else { return nil }
+    return SVGElementRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
   }
 
   var viewBoxSize: CGSize { viewBox?.toCGRect().size ?? .zero }
