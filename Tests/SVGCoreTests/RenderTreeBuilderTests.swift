@@ -83,6 +83,52 @@ struct RenderTreeBuilderTests {
     #expect(nested.translation == CGAffineTransform(translationX: 5, y: 5))
   }
 
+  @Test("the size of the root element that a style sheet sets in viewport units is a part of the view")
+  func rootSizeInViewportUnits() async throws {
+    // The view is 20 by 20, so the root element is 2 by 4, and its view box of 20 by 20 is scaled to fit.
+    let tree = try await renderTree(#"<rect width="20" height="20"/>"#, attributes: #"style="width: 10vw; height: 20vh""#)
+    guard case .viewport(let root) = tree.root, let content = root.content else {
+      Issue.record("The root isn't a viewport")
+      return
+    }
+    #expect(content.viewBoxTransform.a == 0.1 && content.viewBoxTransform.d == 0.1)
+  }
+
+  @Test(
+    "a root element without a view box sized in viewport units or percentages shows a part of the view",
+    arguments: [#"style="width: 10vw; height: 10vh""#, #"width="10%" height="10%""#])
+  func rootSizeOfViewWithoutViewBox(attributes: String) async throws {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" "# + attributes + #"><rect width="100%" height="100%"/></svg>"#
+    let base = SVGParser.parse(data: Data(svg.utf8), languages: ["en-US"])
+    let builder = RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 200, height: 100), scale: 1)
+    let tree = try #require(
+      await builder.build(
+        fit: ContentFit(
+          preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .min, option: .meet), stretches: false,
+          scales: false)))
+    let rect = try #require(try shape(try children(of: tree).first).geometry).frame
+    #expect(rect == CGRect(x: 0, y: 0, width: 20, height: 10))
+  }
+
+  @Test("style sheets don't set the position and the size of nested svg elements, which are attributes")
+  func nestedViewportIgnoresStyles() async throws {
+    let tree = try await renderTree(
+      #"<style>svg svg { width: 50px; height: 50px; x: 3px }</style><svg x="1" width="5" height="6" style="y: 2px"/>"#)
+    guard case .viewport(let nested)? = try children(of: tree).last else {
+      Issue.record("The child isn't a viewport")
+      return
+    }
+    #expect(nested.translation == CGAffineTransform(translationX: 1, y: 0))
+    #expect(nested.content?.overflowClip == CGRect(x: 0, y: 0, width: 5, height: 6))
+  }
+
+  @Test("the intrinsic size of the root element is 0 in viewport units, which no view gives yet")
+  func intrinsicSizeInViewportUnits() throws {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" style="width: 10vw; height: 20px"/>"#
+    let root = try #require(SVGParser.parse(data: Data(svg.utf8)).root)
+    #expect(root.size == CGSize(width: 0, height: 20))
+  }
+
   /// The transform of a rotation by 90 degrees about a point.
   private static func rotation(about x: CGFloat, _ y: CGFloat) -> CGAffineTransform {
     CGAffineTransform(translationX: -x, y: -y).concatenating(CGAffineTransform(rotationAngle: .pi / 2))

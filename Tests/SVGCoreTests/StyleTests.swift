@@ -316,6 +316,12 @@ struct StyleTests {
     #expect(RXProperty.accepts(attributeOn: .ellipse) && RXProperty.accepts(attributeOn: .rect))
     #expect(ComputedStyle.initial.cx == .number(0) && ComputedStyle.initial.r == .number(0))
     #expect(ComputedStyle.initial.rx == nil)
+    // The position and the size are properties of svg elements too, and not of symbols and use elements.
+    for name in [SVGElementName.rect, .svg] {
+      #expect(WidthProperty.accepts(attributeOn: name) && HeightProperty.accepts(attributeOn: name))
+      #expect(XProperty.accepts(attributeOn: name) && YProperty.accepts(attributeOn: name))
+    }
+    #expect(!WidthProperty.accepts(attributeOn: .symbol) && !WidthProperty.accepts(attributeOn: .use))
   }
 
   @Test("mix-blend-mode and isolation are keywords that aren't presentation attributes or inherited")
