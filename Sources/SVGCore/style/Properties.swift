@@ -1206,25 +1206,25 @@ extension NonNegativeGeometryLengthProperty {
 
 enum XProperty: GeometryLengthProperty {
   static let id = PropertyID.x
-  static let elements: Set<SVGElementName> = [.rect]
+  static let elements: Set<SVGElementName> = [.rect, .svg]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.x }
 }
 
 enum YProperty: GeometryLengthProperty {
   static let id = PropertyID.y
-  static let elements: Set<SVGElementName> = [.rect]
+  static let elements: Set<SVGElementName> = [.rect, .svg]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.y }
 }
 
 enum WidthProperty: NonNegativeGeometryLengthProperty {
   static let id = PropertyID.width
-  static let elements: Set<SVGElementName> = [.rect]
+  static let elements: Set<SVGElementName> = [.rect, .svg]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.width }
 }
 
 enum HeightProperty: NonNegativeGeometryLengthProperty {
   static let id = PropertyID.height
-  static let elements: Set<SVGElementName> = [.rect]
+  static let elements: Set<SVGElementName> = [.rect, .svg]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.height }
 }
 

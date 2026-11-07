@@ -65,6 +65,8 @@ package struct SVGBaseContext: Sendable {
     self.document = document
     self.stylesheet = stylesheet
     self.instanceStyles = instanceStyles ?? InstanceStyles(document: document, stylesheet: stylesheet)
+    // The root keeps the identity of its element, so references and replacements find it.
+    let root = root?.outermost
     self.root = root
     self.animations = animations
     isAnimated =
@@ -197,7 +199,7 @@ package struct SVGBaseContext: Sendable {
   ) {
     document = context.document
     stylesheet = context.stylesheet
-    self.root = root
+    self.root = root?.outermost
     self.animations = animations
     isAnimated = context.isAnimated
     restyleScope = context.restyleScope

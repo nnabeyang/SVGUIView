@@ -52,8 +52,7 @@ package struct RenderTreeBuilder {
     guard let svg = base.root else { return RenderTree(rootTransforms: [], root: nil) }
     let viewBox = svg.getViewBox(size: viewPort.size)
     let context = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: viewBox)
-    let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
-    let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
+    let (width, height) = rootSize(of: svg, context: context)
     var transforms = [CGAffineTransform]()
     if fit.stretches {
       transforms.append(CGAffineTransform(scaleX: viewBox.width / width, y: viewBox.height / height))
@@ -610,8 +609,13 @@ package struct RenderTreeBuilder {
           translationX: (svg.x ?? .pixel(0)).value(context: context, mode: .width),
           y: (svg.y ?? .pixel(0)).value(context: context, mode: .height))
       }
-    let width = (svg.width ?? .percent(100)).value(context: context, mode: .width)
-    let height = (svg.height ?? .percent(100)).value(context: context, mode: .height)
+    let (width, height) =
+      isRoot
+      ? rootSize(of: svg, context: context)
+      : (
+        (svg.width ?? .percent(100)).value(context: context, mode: .width),
+        (svg.height ?? .percent(100)).value(context: context, mode: .height)
+      )
     guard height > 0, width > 0 else { return (translation, nil) }
     let viewPortSize = CGSize(width: width, height: height)
     let transform = svg.viewBox.map { svg.getTransform(viewBox: $0.toCGRect(), size: viewPortSize) } ?? .identity
@@ -774,9 +778,22 @@ package struct RenderTreeBuilder {
   /// transform applies outside the transform of its view box.
   private func rootBox(of svg: SVGSVGElement, context: ResolveContext) -> CGRect {
     if imageFit != nil { return viewPort }
-    return CGRect(
-      x: 0, y: 0, width: (svg.width ?? .percent(100)).value(context: context, mode: .width),
-      height: (svg.height ?? .percent(100)).value(context: context, mode: .height))
+    let (width, height) = rootSize(of: svg, context: context)
+    return CGRect(x: 0, y: 0, width: width, height: height)
+  }
+
+  /// The size of the root element in the view. Without a view box, it's the box that ``SVGSVGElement/getViewBox(size:)``
+  /// finds, whose percentages and viewport units are of the view, since its content is in that box: resolving them in
+  /// the content would make them a part of themselves.
+  private func rootSize(of svg: SVGSVGElement, context: ResolveContext) -> (width: CGFloat, height: CGFloat) {
+    if svg.viewBox == nil {
+      let box = svg.getViewBox(size: viewPort.size)
+      return (box.width, box.height)
+    }
+    return (
+      (svg.width ?? .percent(100)).value(context: context, mode: .width),
+      (svg.height ?? .percent(100)).value(context: context, mode: .height)
+    )
   }
 
   /// The bounds that units relative to an element use, in a context styled by the element.

@@ -12,7 +12,8 @@ private struct SVGLengthContextProxy: SVGLengthContext {
   let context: any SVGLengthContext
   let size: CGSize
   var viewBoxSize: CGSize { size }
-  var viewPort: CGRect { context.viewPort }
+  /// The viewport that the element is placed in, which viewport units such as `10vw` are relative to.
+  var viewPort: CGRect { CGRect(origin: .zero, size: size) }
   var font: SVGUIFont? { context.font }
   var rootFont: SVGUIFont? { context.rootFont }
   var writingMode: WritingMode? { context.writingMode }
@@ -44,6 +45,8 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     self.base = base
     self.children = children
     let attributes = base.attributes
+    // The position and the size of a nested `<svg>` element and of a `<symbol>` are attributes, which style sheets
+    // don't set. Those of the outermost `<svg>` element are properties (``outermost``).
     x = SVGLength(attributes["x"])
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
@@ -69,13 +72,35 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     overflow = other.overflow
   }
 
+  private init(other: SVGSVGElement, x: SVGLength?, y: SVGLength?, width: SVGLength?, height: SVGLength?) {
+    base = other.base
+    self.x = x
+    self.y = y
+    self.width = width
+    self.height = height
+    viewBox = other.viewBox
+    children = other.children
+    preserveAspectRatio = other.preserveAspectRatio
+    overflow = other.overflow
+  }
+
+  /// The element as the outermost `<svg>` element of a document, whose position and size are properties that style
+  /// sheets can set, as in `style="width: 10vw"`. SVG 2 doesn't apply these properties to nested `<svg>` elements
+  /// (w3c/svgwg#1059), as browsers don't.
+  var outermost: SVGSVGElement {
+    guard base.name == .svg else { return self }
+    return SVGSVGElement(other: self, x: style.x, y: style.y, width: style.width, height: style.height)
+  }
+
   /// The element with the width and height of the `<use>` element that shows it, where that element has them.
   func sized(width: SVGLength?, height: SVGLength?) -> SVGSVGElement {
     SVGSVGElement(other: self, width: width, height: height)
   }
 
+  /// No viewport, since the element resolves its own size as a context before it's placed in a view, for the
+  /// intrinsic size of the view. Viewport units, such as `10vw`, are 0 then, as percentages are without a view box.
   var viewPort: CGRect {
-    fatalError("not implemented")
+    .zero
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
