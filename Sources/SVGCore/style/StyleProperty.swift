@@ -31,6 +31,11 @@ protocol StyleProperty {
   static var id: PropertyID { get }
   static var isInherited: Bool { get }
   static var initial: Computed { get }
+  /// The key path of the computed value in the style.
+  ///
+  /// A property returns the key path literal from a getter instead of keeping it in a `let`, so that the code
+  /// specialized for the property reads and writes the value directly. A key path in a `let` goes through the
+  /// runtime functions of key paths, which copies the style.
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { get }
 
   /// Whether elements of the given name take the property as a presentation attribute.

@@ -72,7 +72,7 @@ enum FontFamilyProperty: StyleProperty {
   static let id = PropertyID.fontFamily
   static let isInherited = true
   static var initial: String { FontCacheCoreText.familyNamesData[.standard] }
-  static let computed = \ComputedStyle.fontFamily
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fontFamily }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> String? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -84,7 +84,7 @@ enum FontSizeProperty: StyleProperty {
   static let id = PropertyID.fontSize
   static let isInherited = true
   static let initial = SVGUIFont.Size.medium
-  static let computed = \ComputedStyle.fontSize
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fontSize }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGUIFont.Size? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -174,7 +174,7 @@ enum FontWeightProperty: StyleProperty {
   static let id = PropertyID.fontWeight
   static let isInherited = true
   static let initial = SVGUIFont.Weight.normal
-  static let computed = \ComputedStyle.fontWeight
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fontWeight }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGUIFont.Weight? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -191,7 +191,7 @@ enum FontStyleProperty: StyleProperty {
   static let id = PropertyID.fontStyle
   static let isInherited = true
   static let initial = FontStyle.normal
-  static let computed = \ComputedStyle.fontStyle
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fontStyle }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> FontStyle? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -218,7 +218,7 @@ enum WritingModeProperty: StyleProperty {
   static let id = PropertyID.writingMode
   static let isInherited = true
   static let initial = WritingMode.horizontalTB
-  static let computed = \ComputedStyle.writingMode
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.writingMode }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> WritingMode? {
     if let value: WritingMode = keyword(text, origin: origin) { return value }
@@ -238,7 +238,7 @@ enum TextOrientationProperty: StyleProperty {
   static let id = PropertyID.textOrientation
   static let isInherited = true
   static let initial = TextOrientation.mixed
-  static let computed = \ComputedStyle.textOrientation
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.textOrientation }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TextOrientation? {
     keyword(text, origin: origin)
@@ -251,7 +251,7 @@ enum GlyphOrientationVerticalProperty: StyleProperty {
   static let id = PropertyID.glyphOrientationVertical
   static let isInherited = true
   static let initial: TextOrientation? = nil
-  static let computed = \ComputedStyle.glyphOrientationVertical
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.glyphOrientationVertical }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TextOrientation?? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -268,7 +268,7 @@ enum ColorProperty: StyleProperty {
   static let id = PropertyID.color
   static let isInherited = true
   static var initial: SVGColor { .named(SVGColorName(name: "black")) }
-  static let computed = \ComputedStyle.color
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.color }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
@@ -284,7 +284,7 @@ enum FillProperty: StyleProperty {
   static let id = PropertyID.fill
   static let isInherited = true
   static var initial: Paint { .color(.named(SVGColorName(name: "black"))) }
-  static let computed = \ComputedStyle.fill
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fill }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Paint? {
     Paint(text)
@@ -312,7 +312,7 @@ enum FillOpacityProperty: StyleProperty {
   static let id = PropertyID.fillOpacity
   static let isInherited = true
   static let initial = 1.0
-  static let computed = \ComputedStyle.fillOpacity
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fillOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
@@ -331,7 +331,7 @@ enum FillRuleProperty: StyleProperty {
   static let id = PropertyID.fillRule
   static let isInherited = true
   static let initial = FillRule.nonzero
-  static let computed = \ComputedStyle.fillRule
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fillRule }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> FillRule? {
     keyword(text, origin: origin)
@@ -342,7 +342,7 @@ enum StrokeProperty: StyleProperty {
   static let id = PropertyID.stroke
   static let isInherited = true
   static let initial = Paint.none
-  static let computed = \ComputedStyle.stroke
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.stroke }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Paint? {
     Paint(text)
@@ -370,7 +370,7 @@ enum StrokeOpacityProperty: StyleProperty {
   static let id = PropertyID.strokeOpacity
   static let isInherited = true
   static let initial = 1.0
-  static let computed = \ComputedStyle.strokeOpacity
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
@@ -389,7 +389,7 @@ enum StrokeWidthProperty: StyleProperty {
   static let id = PropertyID.strokeWidth
   static let isInherited = true
   static let initial = SVGLength.number(1)
-  static let computed = \ComputedStyle.strokeWidth
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeWidth }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGLength? {
     SVGLength(text)
@@ -414,7 +414,7 @@ enum StrokeLinecapProperty: StyleProperty {
   static let id = PropertyID.strokeLinecap
   static let isInherited = true
   static let initial = CGLineCap.butt
-  static let computed = \ComputedStyle.strokeLinecap
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeLinecap }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> CGLineCap? {
     switch keyword(text, origin: origin) as LineCap? {
@@ -434,7 +434,7 @@ enum StrokeLinejoinProperty: StyleProperty {
   static let id = PropertyID.strokeLinejoin
   static let isInherited = true
   static let initial = CGLineJoin.miter
-  static let computed = \ComputedStyle.strokeLinejoin
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeLinejoin }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> CGLineJoin? {
     switch keyword(text, origin: origin) as LineJoin? {
@@ -454,7 +454,7 @@ enum StrokeMiterlimitProperty: StyleProperty {
   static let id = PropertyID.strokeMiterlimit
   static let isInherited = true
   static let initial = 4.0
-  static let computed = \ComputedStyle.strokeMiterlimit
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeMiterlimit }
 
   /// A number of at least 1, with nothing after it, since the limit isn't a length.
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
@@ -479,7 +479,7 @@ enum StrokeDasharrayProperty: StyleProperty {
   static let id = PropertyID.strokeDasharray
   static let isInherited = true
   static let initial: [SVGLength] = []
-  static let computed = \ComputedStyle.strokeDasharray
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeDasharray }
 
   /// The lengths of the dashes, separated by commas or white space, or no dashes for `none`. A length that isn't
   /// valid or is negative makes the whole list invalid.
@@ -514,7 +514,7 @@ enum StrokeDashoffsetProperty: StyleProperty {
   static let id = PropertyID.strokeDashoffset
   static let isInherited = true
   static let initial = SVGLength.number(0)
-  static let computed = \ComputedStyle.strokeDashoffset
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeDashoffset }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGLength? {
     SVGLength(text)
@@ -529,7 +529,7 @@ enum PaintOrderProperty: StyleProperty {
   static let id = PropertyID.paintOrder
   static let isInherited = true
   static let initial = PaintOrder.normal
-  static let computed = \ComputedStyle.paintOrder
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.paintOrder }
 
   /// `normal`, or the fill, the stroke and the markers that are painted first, each at most once.
   static func parse(_ text: String, origin: DeclarationOrigin) -> PaintOrder? {
@@ -558,7 +558,7 @@ enum ShapeRenderingProperty: StyleProperty {
   static let id = PropertyID.shapeRendering
   static let isInherited = true
   static let initial = ShapeRendering.auto
-  static let computed = \ComputedStyle.shapeRendering
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.shapeRendering }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> ShapeRendering? {
     keyword(text, origin: origin)
@@ -569,7 +569,7 @@ enum ImageRenderingProperty: StyleProperty {
   static let id = PropertyID.imageRendering
   static let isInherited = true
   static let initial = ImageRendering.auto
-  static let computed = \ComputedStyle.imageRendering
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.imageRendering }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> ImageRendering? {
     keyword(text, origin: origin)
@@ -581,7 +581,7 @@ enum MixBlendModeProperty: StyleProperty {
   static let id = PropertyID.mixBlendMode
   static let isInherited = false
   static let initial = MixBlendMode.normal
-  static let computed = \ComputedStyle.mixBlendMode
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.mixBlendMode }
 
   static func accepts(attributeOn _: SVGElementName) -> Bool {
     false
@@ -597,7 +597,7 @@ enum IsolationProperty: StyleProperty {
   static let id = PropertyID.isolation
   static let isInherited = false
   static let initial = Isolation.auto
-  static let computed = \ComputedStyle.isolation
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.isolation }
 
   static func accepts(attributeOn _: SVGElementName) -> Bool {
     false
@@ -612,7 +612,7 @@ enum ClipRuleProperty: StyleProperty {
   static let id = PropertyID.clipRule
   static let isInherited = true
   static let initial = FillRule.nonzero
-  static let computed = \ComputedStyle.clipRule
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.clipRule }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> FillRule? {
     keyword(text, origin: origin)
@@ -623,7 +623,7 @@ enum TextAnchorProperty: StyleProperty {
   static let id = PropertyID.textAnchor
   static let isInherited = true
   static let initial = TextAnchor.start
-  static let computed = \ComputedStyle.textAnchor
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.textAnchor }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TextAnchor? {
     keyword(text, origin: origin)
@@ -635,7 +635,7 @@ enum DirectionProperty: StyleProperty {
   static let id = PropertyID.direction
   static let isInherited = true
   static let initial = TextDirection.ltr
-  static let computed = \ComputedStyle.direction
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.direction }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TextDirection? {
     keyword(text, origin: origin)
@@ -647,7 +647,7 @@ enum UnicodeBidiProperty: StyleProperty {
   static let id = PropertyID.unicodeBidi
   static let isInherited = false
   static let initial = UnicodeBidi.normal
-  static let computed = \ComputedStyle.unicodeBidi
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.unicodeBidi }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> UnicodeBidi? {
     keyword(text, origin: origin)
@@ -658,7 +658,7 @@ enum WhiteSpaceProperty: StyleProperty {
   static let id = PropertyID.whiteSpace
   static let isInherited = true
   static let initial = CSSWhiteSpace.normal
-  static let computed = \ComputedStyle.whiteSpace
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.whiteSpace }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> CSSWhiteSpace? {
     keyword(text, origin: origin)
@@ -671,7 +671,7 @@ enum TextDecorationProperty: StyleProperty {
   static let id = PropertyID.textDecoration
   static let isInherited = true
   static let initial: TextDecorationLines = []
-  static let computed = \ComputedStyle.textDecoration
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.textDecoration }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TextDecorationLines? {
     TextDecorationLines(text, caseInsensitive: origin == .css)
@@ -694,7 +694,7 @@ enum LetterSpacingProperty: StyleProperty {
   static let id = PropertyID.letterSpacing
   static let isInherited = true
   static let initial = SVGLength.number(0)
-  static let computed = \ComputedStyle.letterSpacing
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.letterSpacing }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGLength? {
     spacing(text, origin: origin)
@@ -710,7 +710,7 @@ enum WordSpacingProperty: StyleProperty {
   static let id = PropertyID.wordSpacing
   static let isInherited = true
   static let initial = SVGLength.number(0)
-  static let computed = \ComputedStyle.wordSpacing
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.wordSpacing }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGLength? {
     spacing(text, origin: origin)
@@ -726,7 +726,7 @@ enum DominantBaselineProperty: StyleProperty {
   static let id = PropertyID.dominantBaseline
   static let isInherited = true
   static let initial = DominantBaseline.auto
-  static let computed = \ComputedStyle.dominantBaseline
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.dominantBaseline }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> DominantBaseline? {
     keyword(text, origin: origin)
@@ -745,7 +745,7 @@ enum AlignmentBaselineProperty: StyleProperty {
   static let id = PropertyID.alignmentBaseline
   static let isInherited = false
   static let initial = AlignmentBaseline.auto
-  static let computed = \ComputedStyle.alignmentBaseline
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.alignmentBaseline }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> AlignmentBaseline? {
     keyword(text, origin: origin)
@@ -756,7 +756,7 @@ enum BaselineShiftProperty: StyleProperty {
   static let id = PropertyID.baselineShift
   static let isInherited = false
   static let initial = BaselineShift.baseline
-  static let computed = \ComputedStyle.baselineShift
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.baselineShift }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> BaselineShift? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -777,7 +777,7 @@ enum VisibilityProperty: StyleProperty {
   static let id = PropertyID.visibility
   static let isInherited = true
   static let initial = CSSVisibility.visible
-  static let computed = \ComputedStyle.visibility
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.visibility }
   /// SMIL animations change keywords discretely, as SVG says. CSS animations interpolate with the rules of CSS.
   static let isInterpolable = false
 
@@ -792,7 +792,7 @@ enum ColorInterpolationProperty: StyleProperty {
   static let id = PropertyID.colorInterpolation
   static let isInherited = true
   static let initial: SVGColorInterpolation? = nil
-  static let computed = \ComputedStyle.colorInterpolation
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.colorInterpolation }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGColorInterpolation?? {
     (keyword(text, origin: origin) as SVGColorInterpolation?).map { .some($0) }
@@ -805,7 +805,7 @@ enum ColorInterpolationFiltersProperty: StyleProperty {
   static let id = PropertyID.colorInterpolationFilters
   static let isInherited = true
   static let initial: SVGColorInterpolation? = nil
-  static let computed = \ComputedStyle.colorInterpolationFilters
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.colorInterpolationFilters }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGColorInterpolation?? {
     (keyword(text, origin: origin) as SVGColorInterpolation?).map { .some($0) }
@@ -816,7 +816,7 @@ enum OpacityProperty: StyleProperty {
   static let id = PropertyID.opacity
   static let isInherited = false
   static let initial = 1.0
-  static let computed = \ComputedStyle.opacity
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.opacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
@@ -835,7 +835,7 @@ enum TransformProperty: StyleProperty {
   static let id = PropertyID.transform
   static let isInherited = false
   static let initial = TransformList.none
-  static let computed = \ComputedStyle.transform
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.transform }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TransformList? {
     var input = _CSSParser.Parser(input: ParserInput(input: text))
@@ -861,7 +861,7 @@ enum TransformOriginProperty: StyleProperty {
   static let id = PropertyID.transformOrigin
   static let isInherited = false
   static let initial = TransformOrigin.zero
-  static let computed = \ComputedStyle.transformOrigin
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.transformOrigin }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TransformOrigin? {
     var input = _CSSParser.Parser(input: ParserInput(input: text))
@@ -883,7 +883,7 @@ enum TransformBoxProperty: StyleProperty {
   static let id = PropertyID.transformBox
   static let isInherited = false
   static let initial = TransformBox.viewBox
-  static let computed = \ComputedStyle.transformBox
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.transformBox }
 
   static func accepts(attributeOn _: SVGElementName) -> Bool {
     false
@@ -908,7 +908,7 @@ enum ClipPathProperty: StyleProperty {
   static let id = PropertyID.clipPath
   static let isInherited = false
   static let initial = SVGClipPath.none
-  static let computed = \ComputedStyle.clipPath
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.clipPath }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGClipPath? {
     SVGClipPath(description: text.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -919,7 +919,7 @@ enum MaskProperty: StyleProperty {
   static let id = PropertyID.mask
   static let isInherited = false
   static let initial = SVGMask.none
-  static let computed = \ComputedStyle.mask
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.mask }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGMask? {
     SVGMask(description: text.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -930,7 +930,7 @@ enum FilterProperty: StyleProperty {
   static let id = PropertyID.filter
   static let isInherited = false
   static let initial = SVGFilter.none
-  static let computed = \ComputedStyle.filter
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.filter }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGFilter? {
     SVGFilter(description: text.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -951,17 +951,17 @@ extension MarkerProperty {
 
 enum MarkerStartProperty: MarkerProperty {
   static let id = PropertyID.markerStart
-  static let computed = \ComputedStyle.markerStart
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.markerStart }
 }
 
 enum MarkerMidProperty: MarkerProperty {
   static let id = PropertyID.markerMid
-  static let computed = \ComputedStyle.markerMid
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.markerMid }
 }
 
 enum MarkerEndProperty: MarkerProperty {
   static let id = PropertyID.markerEnd
-  static let computed = \ComputedStyle.markerEnd
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.markerEnd }
 }
 
 /// The shorthand `marker`, which sets the markers at every vertex. It's a property of CSS only, so the attribute
@@ -991,7 +991,7 @@ enum DisplayProperty: StyleProperty {
   static let id = PropertyID.display
   static let isInherited = false
   static let initial = CSSDisplay.inline
-  static let computed = \ComputedStyle.display
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.display }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> CSSDisplay? {
     keyword(text, origin: origin)
@@ -1013,7 +1013,7 @@ enum OverflowProperty: StyleProperty {
   static let id = PropertyID.overflow
   static let isInherited = false
   static let initial = SVGOverflow.visible
-  static let computed = \ComputedStyle.overflow
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.overflow }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGOverflow? {
     keyword(text, origin: origin)
@@ -1024,7 +1024,7 @@ enum StopColorProperty: StyleProperty {
   static let id = PropertyID.stopColor
   static let isInherited = false
   static var initial: ColorValue { .color(.named(SVGColorName(name: "black"))) }
-  static let computed = \ComputedStyle.stopColor
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.stopColor }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
@@ -1054,7 +1054,7 @@ enum StopOpacityProperty: StyleProperty {
   static let id = PropertyID.stopOpacity
   static let isInherited = false
   static let initial = 1.0
-  static let computed = \ComputedStyle.stopOpacity
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.stopOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
@@ -1073,7 +1073,7 @@ enum FloodColorProperty: StyleProperty {
   static let id = PropertyID.floodColor
   static let isInherited = false
   static var initial: ColorValue { .color(.named(SVGColorName(name: "black"))) }
-  static let computed = \ComputedStyle.floodColor
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.floodColor }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
@@ -1103,7 +1103,7 @@ enum FloodOpacityProperty: StyleProperty {
   static let id = PropertyID.floodOpacity
   static let isInherited = false
   static let initial = 1.0
-  static let computed = \ComputedStyle.floodOpacity
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.floodOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
     SVGOpacity(text).map { Double($0.value) }
@@ -1122,7 +1122,7 @@ enum LightingColorProperty: StyleProperty {
   static let id = PropertyID.lightingColor
   static let isInherited = false
   static var initial: ColorValue { .color(.named(SVGColorName(name: "white"))) }
-  static let computed = \ComputedStyle.lightingColor
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.lightingColor }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> ColorValue? {
     ColorValue(text)
@@ -1171,22 +1171,22 @@ extension RectGeometryProperty {
 
 enum XProperty: RectGeometryProperty {
   static let id = PropertyID.x
-  static let computed = \ComputedStyle.x
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.x }
 }
 
 enum YProperty: RectGeometryProperty {
   static let id = PropertyID.y
-  static let computed = \ComputedStyle.y
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.y }
 }
 
 enum WidthProperty: RectGeometryProperty {
   static let id = PropertyID.width
-  static let computed = \ComputedStyle.width
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.width }
 }
 
 enum HeightProperty: RectGeometryProperty {
   static let id = PropertyID.height
-  static let computed = \ComputedStyle.height
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.height }
 }
 
 /// The path data of `<path>`, which is the only element that has it.
@@ -1194,7 +1194,7 @@ enum DProperty: StyleProperty {
   static let id = PropertyID.d
   static let isInherited = false
   static let initial = PathData.none
-  static let computed = \ComputedStyle.d
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.d }
 
   static func accepts(attributeOn name: SVGElementName) -> Bool {
     name == .path
