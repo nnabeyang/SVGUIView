@@ -262,9 +262,7 @@ extension SMILAnimation {
 
   /// The ID that a local reference such as `#a` names.
   fileprivate static func fragment(_ text: String) -> String? {
-    let text = text.trimmingCharacters(in: .whitespaces)
-    guard text.hasPrefix("#"), text.count > 1 else { return nil }
-    return String(text.dropFirst())
+    fragmentID(of: text)
   }
 }
 

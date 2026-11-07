@@ -115,11 +115,14 @@ final class SVGBaseElement: Sendable {
   ///   - animations: The animations of the document at its time, or `nil` for no animations.
   ///   - userAgentDeclarations: Declarations of the user agent's style sheet for the element where it's shown, under
   ///     its cascaded values.
+  ///
+  /// - Parameter instance: The cascaded values of the copies that a `<use>` element shows, which replace the ones of
+  ///   the element in the document, or `nil` to keep them.
   func restyled(
     parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?,
-    userAgentDeclarations: [PropertyDeclaration] = []
+    userAgentDeclarations: [PropertyDeclaration] = [], instance: [ElementID: CascadedValues]? = nil
   ) -> SVGBaseElement {
-    let cascaded = cascaded.addingUserAgentDeclarations(userAgentDeclarations)
+    let cascaded = (instance?[elementID] ?? cascaded).addingUserAgentDeclarations(userAgentDeclarations)
     var style = ComputedStyle(
       cascaded: cascaded, parent: parent, root: root, animations: animations,
       smil: animations?.smilEffects[elementID] ?? [], element: elementID)
@@ -137,7 +140,7 @@ extension SVGElement {
 
   /// The element and its descendants with their computed values computed again for another parent, such as a
   /// `<use>` element that shows them, or with the animations of the document at its time. Their cascaded values
-  /// stay the ones of their places in the document.
+  /// stay the ones of their places in the document, unless the copies of a `<use>` element give their own.
   ///
   /// - Parameters:
   ///   - parent: The computed values of the parent, or `nil` for the root element.
@@ -145,15 +148,20 @@ extension SVGElement {
   ///   - animations: The animations of the document at its time, or `nil` for no animations.
   ///   - userAgentDeclarations: Declarations of the user agent's style sheet for the element, and not its
   ///     descendants, where it's shown, under its cascaded values.
+  ///   - instance: The cascaded values of the copies that a `<use>` element shows, by their elements, which replace
+  ///     the ones of their places in the document, or `nil` to keep those.
   func restyled(
     parent: ComputedStyle?, root: ComputedStyle?, animations: DocumentAnimations?,
-    userAgentDeclarations: [PropertyDeclaration] = []
+    userAgentDeclarations: [PropertyDeclaration] = [], instance: [ElementID: CascadedValues]? = nil
   ) -> any SVGElement {
     let base = base.restyled(
-      parent: parent, root: root, animations: animations, userAgentDeclarations: userAgentDeclarations)
+      parent: parent, root: root, animations: animations, userAgentDeclarations: userAgentDeclarations,
+      instance: instance)
     return Self(
       base: base,
-      contents: children.map { $0.restyled(parent: base.style, root: root ?? base.style, animations: animations) })
+      contents: children.map {
+        $0.restyled(parent: base.style, root: root ?? base.style, animations: animations, instance: instance)
+      })
   }
 }
 

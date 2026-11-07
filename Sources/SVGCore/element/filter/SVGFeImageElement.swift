@@ -44,7 +44,7 @@ final class SVGFeImageElement: SVGElement, SVGFilterPrimitiveElement {
 
     let href = attributes["href", default: ""].trimmingCharacters(in: .whitespaces)
     if href.hasPrefix("#") {
-      source = .element(String(href.dropFirst()))
+      source = fragmentID(of: href).map { .element($0) }
     } else if href.lowercased().hasPrefix("data:") {
       source = EmbeddedImage.data(ofHref: href).map { .data($0) }
     } else {

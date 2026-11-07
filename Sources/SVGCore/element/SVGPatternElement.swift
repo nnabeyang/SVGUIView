@@ -49,7 +49,7 @@ final class SVGPatternElement: SVGDrawableElement {
     patternContentUnits = SVGUnitType(rawValue: attributes["patternContentUnits", default: ""])
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
     viewBox = Self.parseViewBox(attributes["viewBox"])
-    parentId = Self.parseLink(description: attributes["href"])
+    parentId = fragmentID(of: attributes["href"])
   }
 
   /// The pattern `lhs` with the attributes and the children of the pattern `rhs` that it references where it has
@@ -72,15 +72,6 @@ final class SVGPatternElement: SVGDrawableElement {
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
     SVGSVGElement.parseViewBox(value)
-  }
-
-  private static func parseLink(description: String?) -> String? {
-    guard let description = description else { return nil }
-    let hashId = description.trimmingCharacters(in: .whitespaces)
-    if hashId.hasPrefix("#") {
-      return String(hashId.dropFirst())
-    }
-    return nil
   }
 
   func size(frame: CGRect, context: any SVGLengthContext) -> CGSize {

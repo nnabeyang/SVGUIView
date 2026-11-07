@@ -26,20 +26,11 @@ final class SVGUseElement: SVGDrawableElement {
     y = SVGLength(attributes["y"])
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
-    parentId = Self.parseLink(description: attributes["href"])
+    parentId = fragmentID(of: attributes["href"])
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
-  }
-
-  private static func parseLink(description: String?) -> String? {
-    guard let description = description else { return nil }
-    let hashId = description.trimmingCharacters(in: .whitespaces)
-    if hashId.hasPrefix("#") {
-      return String(hashId.dropFirst())
-    }
-    return nil
   }
 
   func contains(index: ObjectIdentifier) -> Bool {
