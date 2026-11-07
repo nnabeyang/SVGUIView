@@ -268,6 +268,16 @@ struct ParserTests {
     #expect(parser.next() == .failure(.init(kind: .endOfInput, location: .init(line: 0, column: 5))))
   }
 
+  @Test("skipping whitespace stops at a slash that doesn't start a comment", arguments: ["  / x", "/ x"])
+  func skipWhitespaceBeforeSlash(text: String) {
+    var parser = Parser(input: ParserInput(input: text))
+    parser.skipWhitespace()
+    #expect(parser.next() == .success(.delim("/")))
+    var cdc = Parser(input: ParserInput(input: text))
+    cdc.skipCdcAndCdo()
+    #expect(cdc.next() == .success(.delim("/")))
+  }
+
   @Test("parseEntirely reports first custom error")
   func entirelyReportsFirstError() {
     enum E: Error, Equatable, CustomStringConvertible {
