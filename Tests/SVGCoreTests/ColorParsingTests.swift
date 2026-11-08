@@ -211,7 +211,7 @@ struct ColorParsingTests {
     "invalid relative colors",
     arguments: [
       "rgb(from red r g)", "rgb(from red r g c)", "rgb(from red, r, g, b)", "rgb(from foo r g b)",
-      "color(from red foo r g b)", "color(from red xyz r g b)", "oklch(from red l c calc(h + 180))",
+      "color(from red foo r g b)", "color(from red xyz r g b)",
       "hsl(from red h s)", "rgb(from red r g b /)",
     ])
   func invalidRelativeColors(text: String) {

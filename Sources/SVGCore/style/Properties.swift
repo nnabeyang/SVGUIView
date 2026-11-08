@@ -13,7 +13,37 @@ private func scanning<T>(_ text: String, _ body: (inout SVGAttributeScanner) -> 
 }
 
 private func number(_ text: String) -> Double? {
-  scanning(text) { $0.scanNumber() }
+  scanning(text) { $0.scanNumber() } ?? mathFunctionNumber(text)
+}
+
+/// An opacity: a number, a percentage, or a math function of them, where 100% is 1.
+private func opacity(_ text: String) -> Double? {
+  SVGOpacity(text).map { Double($0.value) } ?? mathFunctionNumber(text, percentage: 1)
+}
+
+/// The items of a list separated by commas or white space, where a math function is one item with the separators in
+/// it.
+private func listItems(_ text: String) -> [String] {
+  var items = [String]()
+  var current = ""
+  var depth = 0
+  for character in text {
+    switch character {
+    case "(":
+      depth += 1
+    case ")":
+      depth -= 1
+    case "," where depth == 0, _ where depth == 0 && character.isWhitespace:
+      if !current.isEmpty { items.append(current) }
+      current = ""
+      continue
+    default:
+      break
+    }
+    current.append(character)
+  }
+  if !current.isEmpty { items.append(current) }
+  return items
 }
 
 /// A keyword of the given type. Keywords in CSS are case-insensitive, and presentation attributes take them as
@@ -42,6 +72,9 @@ private func resolvingFontRelative(_ length: SVGLength, in resolver: StyleResolv
   if case .sum = length {
     // The terms are as many as the terms of the sum, which fit in a sum.
     return .sum(of: length.terms.map { resolvingFontRelative($0, in: resolver) }) ?? length
+  }
+  if case .calc(let expression) = length {
+    return .calc(SVGLengthExpression(expression.node.mappingLengths { resolvingFontRelative($0, in: resolver) }))
   }
   switch length {
   case .ems, .rems, .exs, .chs, .ic, .lhs, .rlhs:
@@ -115,9 +148,14 @@ enum FontSizeProperty: StyleProperty {
         return scaled(resolver.root.fontSize, by: value, family: resolver.root.fontFamily)
       case .vw, .vh, .vi, .vb, .vmin, .vmax:
         return size
-      case .sum:
-        // Only an interpolation of computed sizes makes a sum, whose terms are in pixels and in viewport units.
-        return size
+      case .sum, .calc:
+        // A sum that an interpolation of computed sizes makes has terms in pixels and in viewport units, which stay
+        // as they are. A math function is resolved with the font of the parent, as `em` and percentages are of its
+        // size, unless it's in viewport units, which are known only when drawing.
+        guard !length.hasViewportUnits else { return size }
+        let context = FontLengthContext(font: resolver.parent.font, rootFont: resolver.root.font)
+        let parentSize = resolver.parent.font.sizeValue(context: context)
+        return .length(.pixel(Swift.max(0, length.value(total: parentSize, context: context))))
       case .exs, .chs, .ic, .lhs, .rlhs:
         // Measure the font of the parent, or of the root for `rlh`. A font in viewport units is measured at
         // 100 pixels, and the size stays in its unit.
@@ -315,7 +353,7 @@ enum FillOpacityProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.fillOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
-    SVGOpacity(text).map { Double($0.value) }
+    opacity(text)
   }
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
@@ -373,7 +411,7 @@ enum StrokeOpacityProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
-    SVGOpacity(text).map { Double($0.value) }
+    opacity(text)
   }
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
@@ -392,7 +430,7 @@ enum StrokeWidthProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeWidth }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGLength? {
-    SVGLength(text)
+    SVGLength(property: text, isNonNegative: true)
   }
 
   static func compute(_ width: SVGLength, in resolver: StyleResolver) -> SVGLength {
@@ -462,6 +500,8 @@ enum StrokeMiterlimitProperty: StyleProperty {
       guard let limit = scanner.scanNumber(), limit >= 1, scanner.reader.consumeWhitespace() == nil else { return nil }
       return limit
     }
+      // A math function is clamped to the range of the limit, as CSS Values 4 specifies.
+      ?? mathFunctionNumber(text).map { max($0, 1) }
   }
 
   /// The limit between two limits, which is at least 1.
@@ -485,7 +525,7 @@ enum StrokeDasharrayProperty: StyleProperty {
   /// valid or is negative makes the whole list invalid.
   static func parse(_ text: String, origin _: DeclarationOrigin) -> [SVGLength]? {
     if keyword(text) == "none" { return [] }
-    let dashes = text.split { $0 == "," || $0.isWhitespace }.map { SVGLength(String($0)) }
+    let dashes = listItems(text).map { SVGLength(property: $0, isNonNegative: true) }
     let lengths = dashes.compactMap(\.self)
     guard !lengths.isEmpty, lengths.count == dashes.count, lengths.allSatisfy({ $0 == $0.nonNegative }) else {
       return nil
@@ -517,7 +557,7 @@ enum StrokeDashoffsetProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.strokeDashoffset }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> SVGLength? {
-    SVGLength(text)
+    SVGLength(property: text)
   }
 
   static func compute(_ offset: SVGLength, in resolver: StyleResolver) -> SVGLength {
@@ -686,7 +726,7 @@ enum TextDecorationProperty: StyleProperty {
 private func spacing(_ text: String, origin: DeclarationOrigin) -> SVGLength? {
   let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
   if (origin == .css ? text.lowercased() : text) == "normal" { return .number(0) }
-  return SVGLength(text)
+  return SVGLength(property: text)
 }
 
 /// `letter-spacing`, the space after each character of text.
@@ -764,7 +804,7 @@ enum BaselineShiftProperty: StyleProperty {
     case "baseline": return .baseline
     case "sub": return .sub
     case "super": return .super
-    default: return SVGLength(text).map { .length($0) }
+    default: return SVGLength(property: text).map { .length($0) }
     }
   }
 
@@ -819,7 +859,7 @@ enum OpacityProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.opacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
-    SVGOpacity(text).map { Double($0.value) }
+    opacity(text)
   }
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
@@ -1064,7 +1104,7 @@ enum StopOpacityProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.stopOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
-    SVGOpacity(text).map { Double($0.value) }
+    opacity(text)
   }
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
@@ -1113,7 +1153,7 @@ enum FloodOpacityProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.floodOpacity }
 
   static func parse(_ text: String, origin _: DeclarationOrigin) -> Double? {
-    SVGOpacity(text).map { Double($0.value) }
+    opacity(text)
   }
 
   static func interpolated(_ from: Double, _ to: Double, progress: Double, in _: StyleResolver) -> Double {
@@ -1177,8 +1217,13 @@ extension GeometryLengthProperty {
   /// sheet, while a presentation attribute keeps it for the element to treat as an error.
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGLength?? {
     if keyword(text) == "auto" { return .some(nil) }
-    guard let length = SVGLength(text) else { return nil }
-    if origin == .css, !allowsNegative, length != length.nonNegative { return nil }
+    if let length = SVGLength(text) {
+      if origin == .css, !allowsNegative, length != length.nonNegative { return nil }
+      return length
+    }
+    // A math function is clamped to the range of the property where it's used, so it isn't invalid when it's
+    // negative.
+    guard let length = SVGLength(mathFunction: text, isNonNegative: !allowsNegative) else { return nil }
     return length
   }
 

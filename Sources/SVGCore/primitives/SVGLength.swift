@@ -59,6 +59,8 @@ enum SVGLength: Equatable, Sendable {
   /// The sum of lengths in different units, as `calc()` of CSS adds them. Only an interpolation or an addition of
   /// lengths in units that can't be added before they're resolved makes one, such as `10px` and `50%`.
   case sum(SVGLengthSum)
+  /// A math function that isn't a sum, such as `min(10px, 5%)`, which is resolved where it's used.
+  case calc(SVGLengthExpression)
 
   static let pixelsPerInch: CGFloat = 96.0
 
@@ -83,6 +85,7 @@ enum SVGLength: Equatable, Sendable {
     switch self {
     case .percent: true
     case .sum(let sum): sum.hasPercent
+    case .calc(let expression): expression.node.hasPercent
     default: false
     }
   }
@@ -169,6 +172,8 @@ enum SVGLength: Equatable, Sendable {
       case .sum:
         // A percentage of a sum is the sum of the percentages of its terms, which are as many as the terms.
         self = .sum(of: parent.terms.map { SVGLength(child: child, parent: $0) }) ?? child
+      case .calc(let expression):
+        self = .calc(SVGLengthExpression(.product([.number(percent / 100), expression.node])))
       }
     default:
       self = child
@@ -395,6 +400,8 @@ enum SVGLength: Equatable, Sendable {
       return value * Self.pixelsPerInch / (25.4 * 4.0)
     case .sum(let sum):
       return sum.terms.reduce(0) { $0 + $1.value(total: total, context: context) }
+    case .calc(let expression):
+      return expression.value(total: total, context: context)
     }
   }
 
@@ -455,6 +462,7 @@ extension SVGLength: CustomStringConvertible {
     case .vmax(let value): return "\(value)vmax"
     case .q(let value): return "\(value)Q"
     case .sum: return "calc(\(terms.map(\.description).joined(separator: " + ")))"
+    case .calc(let expression): return expression.description
     }
   }
 }
@@ -501,8 +509,8 @@ struct SVGLengthSum: Equatable, Sendable {
 }
 
 extension SVGLength {
-  /// The unit and the number of a length in one unit, or `nil` for a sum.
-  fileprivate var unitAndMagnitude: (SVGLengthType, CGFloat)? {
+  /// The unit and the number of a length in one unit, or `nil` for a sum or an expression.
+  var unitAndMagnitude: (SVGLengthType, CGFloat)? {
     switch self {
     case .number(let value): (.number, value)
     case .pixel(let value): (.pixels, value)
@@ -526,7 +534,7 @@ extension SVGLength {
     case .vmin(let value): (.vmin, value)
     case .vmax(let value): (.vmax, value)
     case .q(let value): (.q, value)
-    case .sum: nil
+    case .sum, .calc: nil
     }
   }
 }

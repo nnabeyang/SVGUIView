@@ -35,6 +35,11 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(root: "custom", in: "values"))
+    func values(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     @Test(arguments: SVGFile.all(root: "custom", in: "variables"))
     func variables(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)

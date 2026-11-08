@@ -278,7 +278,11 @@ extension SVGAttributeScanner {
     let names = function.channelNames.union(["alpha"])
     guard !isLegacy,
       (components + [alpha].compactMap { $0 }).allSatisfy({
-        if case .channel(let name) = $0 { names.contains(name) } else { true }
+        switch $0 {
+        case .channel(let name): names.contains(name)
+        case .calc(let expression, _): expression.node.channelNames.isSubset(of: names)
+        default: true
+        }
       })
     else { return nil }
     return ColorExpression.relative(
@@ -376,7 +380,7 @@ extension SVGAttributeScanner {
         switch channel {
         case .number(let value): .absolute(min(max(value, 0), 255))
         case .percentage(let value): .percent(min(max(value, 0), 100))
-        case .none, .channel: .absolute(0)
+        case .none, .channel, .calc: .absolute(0)
         }
       }
       guard let alpha else { return .rgb(SVGRGBColor(r: dimensions[0], g: dimensions[1], b: dimensions[2])) }
@@ -432,11 +436,23 @@ extension SVGAttributeScanner {
     case percentage(Double)
     case none
     case channel(String)
+    /// A math function with the names of the components of the origin of a relative color in it, which is a
+    /// percentage or a number, and is replaced by its value.
+    case calc(CalcExpression, isPercentage: Bool)
+
+    /// The component that a math function is: its value, if it doesn't use the components of an origin.
+    init(calc node: CalcNode, type: CalcType) {
+      guard node.hasChannels else {
+        self = type == .percentage ? .percentage(node.constant()) : .number(node.constant())
+        return
+      }
+      self = .calc(CalcExpression(node), isPercentage: type == .percentage)
+    }
 
     var value: Double {
       switch self {
       case .number(let value), .percentage(let value): value
-      case .none, .channel: 0
+      case .none, .channel, .calc: 0
       }
     }
 
@@ -445,16 +461,24 @@ extension SVGAttributeScanner {
       switch self {
       case .number(let value): value
       case .percentage(let value): value / 100 * range
-      case .none, .channel: 0
+      case .none, .channel, .calc: 0
       }
     }
 
     var isPercentage: Bool {
-      if case .percentage = self { true } else { false }
+      switch self {
+      case .percentage: true
+      case .calc(_, let isPercentage): isPercentage
+      default: false
+      }
     }
 
     var isNumber: Bool {
-      if case .number = self { true } else { false }
+      switch self {
+      case .number: true
+      case .calc(_, let isPercentage): !isPercentage
+      default: false
+      }
     }
 
     /// The value as an alpha from 0 to 1.
@@ -462,7 +486,7 @@ extension SVGAttributeScanner {
       switch self {
       case .number(let value): min(max(value, 0), 1)
       case .percentage(let value): min(max(value / 100, 0), 1)
-      case .none, .channel: 0
+      case .none, .channel, .calc: 0
       }
     }
   }
@@ -510,7 +534,11 @@ extension SVGAttributeScanner {
   private mutating func scanColorComponent(allowsChannels: Bool = false) -> ColorComponent? {
     // A name starts with a letter, unlike a number.
     if reader.consumeWhitespace()?.isNameStart == true {
-      return Self.component(named: consumeName(), allowsChannels: allowsChannels)
+      let name = consumeName()
+      if reader.peek() == UInt8(ascii: "(") {
+        return scanMathFunction(named: name, types: [.number, .percentage], allowsChannels: allowsChannels)
+      }
+      return Self.component(named: name, allowsChannels: allowsChannels)
     }
     guard let value = scanNumber() else { return nil }
     if reader.peek() == UInt8(ascii: "%") {
@@ -525,7 +553,11 @@ extension SVGAttributeScanner {
   private mutating func scanHue(allowsChannels: Bool = false) -> ColorComponent? {
     // A name starts with a letter, unlike a number.
     if reader.consumeWhitespace()?.isNameStart == true {
-      return Self.component(named: consumeName(), allowsChannels: allowsChannels)
+      let name = consumeName()
+      if reader.peek() == UInt8(ascii: "(") {
+        return scanMathFunction(named: name, types: [.number, .angle], allowsChannels: allowsChannels)
+      }
+      return Self.component(named: name, allowsChannels: allowsChannels)
     }
     guard let value = scanNumber() else { return nil }
     guard reader.peek().isNameStart else { return .number(value) }
@@ -553,6 +585,38 @@ extension SVGAttributeScanner {
       return .absolute((clampsToSRGB || isNearSRGB ? min(max(value, 0), 1) : value) * 255)
     }
     return .rgba(SVGRGBAColor(r: channel(red), g: channel(green), b: channel(blue), a: alpha))
+  }
+
+  /// The names of the components of the functions, which a math function in a relative color can use. The function
+  /// of the color checks that it has them.
+  private static let channelNames: Set<String> = ["r", "g", "b", "h", "s", "l", "w", "a", "c", "x", "y", "z", "alpha"]
+
+  /// A math function in a color function, after its name, of one of the given types, or `nil` if it's invalid. An
+  /// angle is in degrees.
+  private mutating func scanMathFunction(
+    named name: String, types: Set<CalcType>, allowsChannels: Bool
+  ) -> ColorComponent? {
+    guard CalcNode.functionNames.contains(name.lowercased()) else { return nil }
+    // The function runs to its matching parenthesis.
+    let start = reader.readIndex
+    var depth = 0
+    var size = 0
+    while true {
+      let byte = reader.peek(offset: size)
+      guard byte > 0 else { return nil }
+      size += 1
+      if byte == UInt8(ascii: "(") {
+        depth += 1
+      } else if byte == UInt8(ascii: ")") {
+        depth -= 1
+        if depth == 0 { break }
+      }
+    }
+    reader.moveReaderIndex(forwardBy: size)
+    let text = name + String(decoding: reader.bytes[start..<reader.readIndex], as: UTF8.self)
+    let parser = CalcParser(percentages: .alone, channels: allowsChannels ? Self.channelNames : [])
+    guard let node = parser.parse(text, types: types), let type = node.type(percentages: .alone) else { return nil }
+    return ColorComponent(calc: node, type: type)
   }
 
   /// `none`, or the name of a component of the origin of a relative color where it's allowed, or `nil`.
