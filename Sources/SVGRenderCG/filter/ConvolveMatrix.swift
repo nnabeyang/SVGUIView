@@ -10,8 +10,10 @@ extension CGPainter {
   ///
   /// A cell of the kernel is a pixel of the bitmap, the default of `kernelUnitLength`, which isn't supported. The
   /// kernel is rotated by 180 degrees over each pixel, as the specification gives, and the components are
-  /// premultiplied unless `preserveAlpha` keeps the alpha. As in resvg, the bias is added to the alpha, and the bias
-  /// times the new alpha to the colors. A primitive in error is transparent black.
+  /// premultiplied unless `preserveAlpha` keeps the alpha. The bias is added to each component, as Chrome, Firefox
+  /// and Safari add it, instead of the bias times the alpha that the formula of Filter Effects 1 gives. As in the
+  /// browsers, a pixel that the kernel finds no alpha around stays transparent, instead of getting the bias. A
+  /// primitive in error is transparent black.
   func convolveMatrix(
     _ matrix: ConvolveMatrixPrimitive?, input: SVGFilterInput?, colorSpace: SVGColorInterpolation, srcImage: CGImage,
     inImage: CGImage, subregion: CGRect, bitmapRect: CGRect, cgContext: CGContext, results: [String: CGImage]
@@ -55,6 +57,8 @@ extension CGPainter {
       let pixels = destination.data.advanced(by: row * destination.rowBytes).assumingMemoryBound(to: UInt8.self)
       for column in 0..<width {
         var sum = SIMD4<Float>.zero
+        // Whether a pixel under the kernel has alpha.
+        var hasAlpha = false
         for oy in 0..<rows {
           // The rows of the bitmap go down from the top, and y in the user space goes up from its bottom, so the rows
           // of the kernel go up the bitmap.
@@ -73,16 +77,24 @@ extension CGPainter {
             }
             let k = matrix.kernel[(rows - oy - 1) * columns + (columns - ox - 1)]
             let index = (y * width + x) * 4
+            hasAlpha = hasAlpha || components[index + 3] > 0
             sum +=
               k
               * SIMD4(components[index], components[index + 1], components[index + 2], components[index + 3])
           }
         }
         let index = (row * width + column) * 4
+        // Without alpha around the pixel, the bias doesn't make it visible.
+        guard matrix.preserveAlpha || hasAlpha else {
+          for c in 0..<4 {
+            pixels[column * 4 + c] = 0
+          }
+          continue
+        }
         let alpha = matrix.preserveAlpha ? components[index + 3] : sum[3] / matrix.divisor + matrix.bias
         let boundedAlpha = min(max(alpha, 0), 1)
         for c in 0..<3 {
-          let value = sum[c] / matrix.divisor + matrix.bias * alpha
+          let value = sum[c] / matrix.divisor + matrix.bias
           let color = matrix.preserveAlpha ? min(max(value, 0), 1) * boundedAlpha : min(max(value, 0), boundedAlpha)
           pixels[column * 4 + c] = UInt8((color * 255).rounded())
         }
