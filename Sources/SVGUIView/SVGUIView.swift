@@ -180,8 +180,10 @@ public class SVGUIView: UIView {
     backgroundColor = .clear
     startObservingClock()
     observeNotifications()
-    // A screen of another gamut shows colors outside sRGB in another way.
-    registerForTraitChanges([UITraitDisplayGamut.self]) { (view: SVGUIView, _) in view.setNeedsDisplay() }
+    // A screen of another gamut shows colors outside sRGB in another way, and one of another scale has other pixels.
+    registerForTraitChanges([UITraitDisplayGamut.self, UITraitDisplayScale.self]) { (view: SVGUIView, _) in
+      view.setNeedsDisplay()
+    }
     document.host = self
     setNeedsDisplay()
   }
@@ -365,7 +367,7 @@ public class SVGUIView: UIView {
     let rect = bounds
     renderedSize = rect.size
     let generation = nextRenderingGeneration()
-    let scale = UIScreen.main.scale
+    let scale = displayScale
     let wideGamut = displaysWideGamut
     let capturedBase = baseContext
     let time = displayedTime
@@ -666,8 +668,9 @@ public class SVGUIView: UIView {
   ///
   /// The image is rendered with the view's current `contentMode`, and the
   /// view's displayed contents do not change. Its width and height in pixels
-  /// are those of the rectangle times the scale, which is the main screen's
-  /// scale by default. The image itself has a scale of 1, so its size in
+  /// are those of the rectangle times the scale, which is the scale of the
+  /// view's screen by default, or of the main screen for a view that isn't on
+  /// one. The image itself has a scale of 1, so its size in
   /// points is its size in pixels.
   ///
   /// A view doesn't have to be on the screen to render: pass the rectangle to
@@ -692,7 +695,8 @@ public class SVGUIView: UIView {
   ///     frame.
   ///   - time: The time of the document's animations.
   ///   - scale: The number of pixels in a point of the image. Pass `nil` to use
-  ///     the main screen's scale.
+  ///     the scale of the view's screen, or of the main screen for a view that
+  ///     isn't on one.
   /// - Returns: The rendered image.
   /// - Throws: ``SVGRenderingError/missingRootElement`` if the document has no
   ///   root `svg` element, ``SVGRenderingError/zeroSizedRect`` if the rectangle
@@ -728,7 +732,8 @@ public class SVGUIView: UIView {
   ///     frame.
   ///   - time: The time of the document's animations.
   ///   - scale: The number of pixels in a point of the image. Pass `nil` to use
-  ///     the main screen's scale.
+  ///     the scale of the view's screen, or of the main screen for a view that
+  ///     isn't on one.
   /// - Returns: The rendered image, whose width and height in pixels are those
   ///   of the rectangle times the scale.
   /// - Throws: The errors that ``takeSnapshot(rect:at:scale:)`` throws.
@@ -746,7 +751,7 @@ public class SVGUIView: UIView {
     rect: CGRect?, at time: Duration, scale: CGFloat?, wideGamut: Bool? = nil
   ) async throws(SVGRenderingError) -> CGImage {
     let rect = rect ?? frame
-    let scale = scale ?? UIScreen.main.scale
+    let scale = scale ?? displayScale
     let wideGamut = wideGamut ?? displaysWideGamut
     applyDocumentChanges()
     let capturedBase = baseContext
@@ -756,6 +761,14 @@ public class SVGUIView: UIView {
       rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, time: time,
       fit: fit, timeoutDuration: timeoutDuration
     ).get()
+  }
+
+  /// The number of pixels in a point of the screen of the view, or of the traits of the app for a view that isn't on
+  /// a screen, or of the main screen if neither has one.
+  private var displayScale: CGFloat {
+    if traitCollection.displayScale > 0 { return traitCollection.displayScale }
+    if UITraitCollection.current.displayScale > 0 { return UITraitCollection.current.displayScale }
+    return UIScreen.main.scale
   }
 
   /// Whether the screen of the view shows colors outside sRGB, or the main screen, for a view that isn't on one.

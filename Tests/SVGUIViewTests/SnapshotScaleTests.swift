@@ -40,12 +40,38 @@ struct SnapshotScaleTests {
     #expect(cgImage.height == Int(50 * scale))
   }
 
-  @Test("without a scale, a snapshot is rendered at the main screen's scale")
+  @Test("without a scale, a view that isn't on a screen renders a snapshot at the scale of the main screen")
   func defaultScale() async throws {
     let view = makeView(frame: rect)
     let image = try #require(try await view.takeSnapshot().cgImage)
     #expect(image.width == Int(100 * UIScreen.main.scale))
     #expect(try await view.takeCGImageSnapshot().height == Int(50 * UIScreen.main.scale))
+  }
+
+  @Test("without a scale, a snapshot is rendered at the display scale of the view's traits", arguments: [1, 2] as [CGFloat])
+  func traitScale(scale: CGFloat) async throws {
+    let view = makeView(frame: rect)
+    view.traitOverrides.displayScale = scale
+    view.updateTraitsIfNeeded()
+    #expect(try await view.takeCGImageSnapshot().width == Int(100 * scale))
+  }
+
+  @Test("a view renders at the display scale of its traits", arguments: [1, 2] as [CGFloat])
+  func renderingScale(scale: CGFloat) async throws {
+    // A still document, which the view renders into one image.
+    let view = SVGUIView(
+      frame: rect,
+      data: Data(#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="50" height="50"/></svg>"#.utf8))
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    view.traitOverrides.displayScale = scale
+    view.updateTraitsIfNeeded()
+    view.display(view.layer)
+    try await waitUntil("The view doesn't show an image at the scale") {
+      guard let contents = view.layer.contents, CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else {
+        return false
+      }
+      return (contents as! CGImage).width == Int(100 * scale)
+    }
   }
 
   @Test("a view without a frame renders into a rectangle that it's given, and throws without one")

@@ -93,8 +93,9 @@ themselves, and `<animateColor>` is ignored.
 let image = try await svgView.takeSnapshot(at: .seconds(1.5))
 ```
 
-A snapshot is rendered at the main screen's scale by default, and at another
-scale for an image of a given size in pixels.
+A snapshot is rendered at the scale of the view's screen by default, or of the
+main screen for a view that isn't on one, and at another scale for an image of
+a given size in pixels.
 ``SVGUIView/SVGUIView/takeCGImageSnapshot(rect:at:scale:)`` renders the same
 image as a `CGImage`, such as for the frames of a video. A view renders without
 being on the screen, into the rectangle that it's given.
