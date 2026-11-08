@@ -163,6 +163,13 @@ browser. See <doc:ChangingDocuments>.
 svgView.document.element(id: "play")?.classList.add("active")
 ```
 
+### Following the specifications
+
+SVGUIView renders documents as SVG 2 and the CSS specifications describe them,
+and decides what they leave open by the text of the specifications, the tests,
+and the behavior of browsers. See <doc:FollowingSpecifications> for the order
+of those rules and for the features that SVGUIView doesn't support.
+
 ## Topics
 
 ### Displaying SVG
@@ -180,6 +187,10 @@ svgView.document.element(id: "play")?.classList.add("active")
 
 - ``SVGUIViewConfiguration``
 - ``SVGRenderingError``
+
+### Rendering
+
+- <doc:FollowingSpecifications>
 
 ### Design
 
