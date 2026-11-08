@@ -40,9 +40,13 @@ func cascade(element: ElementCursor, stylesheet: Stylesheet) -> CascadedValues {
     collectDeclarations(matches: stylesheet.matchElement(element: element), inlineStyle: inlineStyle))
   // Important declarations come after the normal ones, so a property with an important declaration has an
   // important one that wins.
-  let important = Set(declarations.filter { $0.importance == .important }.map(\.id))
+  let important = Set(declarations.filter { $0.importance == .important }.compactMap(\.declaration.id))
   return CascadedValues(
     CascadedValues.userAgentDeclarations(of: element.element.name, isRoot: element.isRoot)
       + CascadedValues.presentationAttributes(of: element.element.name, attributes: attributes)
-      + declarations.map(\.declaration), important: important)
+      + declarations.map { declaration in
+        var property = declaration.declaration
+        if property.id == nil { property.isImportant = declaration.importance == .important }
+        return property
+      }, important: important)
 }

@@ -196,7 +196,7 @@ struct CSSDeclaration: Comparable {
   let specificity: Specificity
   var sourceOrder: Int
 
-  var id: PropertyID { declaration.id }
+  var name: PropertyDeclaration.Name { declaration.name }
 
   static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.importance == rhs.importance && lhs.specificity == rhs.specificity && lhs.sourceOrder == rhs.sourceOrder
@@ -373,24 +373,25 @@ struct CSSDeclarationParser: DeclarationParser {
   }
 
   mutating func parseValue(name: String, input: inout _CSSParser.Parser, declarationStart _: inout ParserState) -> Result<[CSSDeclaration], CSSParseError> {
-    let name = name.lowercased()
+    // The names of custom properties are case-sensitive.
+    let name = name.hasPrefix("--") ? name : name.lowercased()
     let result = input.parseUntilBefore(delimiters: .bang) { input -> Result<[PropertyDeclaration], CSSParseError> in
-      let declarations: [PropertyDeclaration]? =
-        if let id = PropertyID(rawValue: name) {
-          Self.declaration(id.property, input: &input).map { [$0] }
-        } else if name == AnimationShorthand.name {
-          AnimationShorthand.declarations(css: &input)
-        } else if name == TransitionShorthand.name {
-          TransitionShorthand.declarations(css: &input)
-        } else if name == MarkerShorthand.name {
-          MarkerShorthand.declarations(css: &input)
-        } else {
-          nil
-        }
-      guard let declarations else {
-        return .failure(input.newCustomError(error: .invalid))
+      if name.hasPrefix("--") {
+        return Self.customDeclaration(name, input: &input).map { .success([$0]) }
+          ?? .failure(input.newCustomError(error: .invalid))
       }
-      return .success(declarations)
+      // The value is parsed first as a value without `var()`, which most values are, and the tokenizer notes any
+      // `var()` that it reads.
+      let start = input.state
+      input.lookForVarOrEnvFunctions()
+      let declarations = Self.propertyDeclarations(name, input: &input)
+      // A value that isn't valid can have `var()` after the tokens that the parser read.
+      if input.seenVarOrEnvFunctions() || declarations == nil {
+        input.reset(state: start)
+        return Self.unparsedDeclarations(name, input: &input).map { .success($0) }
+          ?? .failure(input.newCustomError(error: .invalid))
+      }
+      return .success(declarations ?? [])
     }
     switch result {
     case .success(let declarations):
@@ -410,8 +411,103 @@ struct CSSDeclarationParser: DeclarationParser {
     }
   }
 
+  /// The declarations of a property or of the longhands of a shorthand, by its name in lowercase, or `nil` if the
+  /// name is unknown or the value is invalid.
+  static func propertyDeclarations(_ name: String, input: inout _CSSParser.Parser) -> [PropertyDeclaration]? {
+    if let id = PropertyID(rawValue: name) {
+      Self.declaration(id.property, input: &input).map { [$0] }
+    } else if name == AnimationShorthand.name {
+      AnimationShorthand.declarations(css: &input)
+    } else if name == TransitionShorthand.name {
+      TransitionShorthand.declarations(css: &input)
+    } else if name == MarkerShorthand.name {
+      MarkerShorthand.declarations(css: &input)
+    } else {
+      nil
+    }
+  }
+
   private static func declaration<P: StyleProperty>(_: P.Type, input: inout _CSSParser.Parser) -> PropertyDeclaration? {
     P.declared(css: &input).map { PropertyDeclaration(P.self, $0) }
+  }
+
+  /// The declaration of a custom property, whose value is its text without the whitespace around it, or `nil` if
+  /// the value isn't valid, such as one with unbalanced brackets. CSS Variables 1 keeps the value as tokens until it's
+  /// substituted, and the keywords that every property takes keep their meanings.
+  static func customDeclaration(_ name: String, input: inout _CSSParser.Parser) -> PropertyDeclaration? {
+    let start = input.state
+    while true {
+      switch input.next() {
+      case .success(.badString), .success(.badUrl), .success(.closeParenthesis), .success(.closeSquareBracket),
+        .success(.closeCurlyBracket):
+        return nil
+      case .success:
+        continue
+      case .failure:
+        break
+      }
+      break
+    }
+    let text = input.slice(from: start.sourcePosition).trimmingCharacters(in: .whitespacesAndNewlines)
+    let value: Declared<String> =
+      switch keyword(removingComments(from: text)) {
+      case "inherit": .inherit
+      case "initial": .initial
+      case "unset", "revert", "revert-layer": .unset
+      default: .value(text)
+      }
+    return PropertyDeclaration(custom: name, value)
+  }
+
+  /// The declarations of a property or a shorthand whose value has `var()`, which keep the text of the value to parse
+  /// once the custom properties are substituted, or `nil` if the value has no `var()` or the property is unknown.
+  static func unparsedDeclarations(_ name: String, input: inout _CSSParser.Parser) -> [PropertyDeclaration]? {
+    let start = input.state
+    input.lookForVarOrEnvFunctions()
+    var isBalanced = true
+    while true {
+      switch input.next() {
+      case .success(.badString), .success(.badUrl), .success(.closeParenthesis), .success(.closeSquareBracket),
+        .success(.closeCurlyBracket):
+        isBalanced = false
+        continue
+      case .success:
+        continue
+      case .failure:
+        break
+      }
+      break
+    }
+    let hasVariables = input.seenVarOrEnvFunctions()
+    let text = input.slice(from: start.sourcePosition).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard hasVariables, isBalanced, containsVariable(text) else {
+      input.reset(state: start)
+      return nil
+    }
+    let longhands: [any StyleProperty.Type]
+    let shorthand: String?
+    if let id = PropertyID(rawValue: name) {
+      longhands = [id.property]
+      shorthand = nil
+    } else if let shorthandLonghands = Self.longhands(ofShorthand: name) {
+      longhands = shorthandLonghands
+      shorthand = name
+    } else {
+      input.reset(state: start)
+      return nil
+    }
+    let value = UnparsedValue(text: text, shorthand: shorthand)
+    return longhands.map { PropertyDeclaration($0.id, unparsed: value) }
+  }
+
+  /// The longhands of a shorthand, or `nil` if the name isn't a shorthand.
+  static func longhands(ofShorthand name: String) -> [any StyleProperty.Type]? {
+    switch name {
+    case AnimationShorthand.name: AnimationShorthand.longhands
+    case TransitionShorthand.name: TransitionShorthand.longhands
+    case MarkerShorthand.name: MarkerShorthand.longhands
+    default: nil
+    }
   }
 
   typealias Element = Result<[CSSDeclaration], RuleBodyError<StyleParseErrorKind>>

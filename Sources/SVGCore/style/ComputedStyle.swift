@@ -277,7 +277,40 @@ struct ComputedStyle: Sendable, Equatable {
   var transitionDelay: [Double]
   var transitionBehavior: [TransitionBehavior]
   /// The transform that SMIL `<animateMotion>` elements add after `transform`, which isn't a property.
-  var motion = CGAffineTransform.identity
+  var motion: CGAffineTransform {
+    get { rareValues?.motion ?? .identity }
+    set { setRareValues(motion: newValue, customProperties: customProperties) }
+  }
+  /// The values of the custom properties by their names, with their `var()` substituted, which every element
+  /// inherits. A custom property without a value has the guaranteed-invalid value of CSS Variables 1.
+  var customProperties: [String: String] {
+    get { rareValues?.customProperties ?? [:] }
+    set { setRareValues(motion: motion, customProperties: newValue) }
+  }
+  /// The values that few elements have, apart from the others, or `nil` if the element has none of them. A style is
+  /// copied often, and each byte that it holds makes the copies longer, so these values are kept out of it.
+  private var rareValues: RareValues?
+
+  /// Values that few elements have, which don't change once they're made.
+  private final class RareValues: Sendable, Equatable {
+    let motion: CGAffineTransform
+    let customProperties: [String: String]
+
+    init(motion: CGAffineTransform, customProperties: [String: String]) {
+      self.motion = motion
+      self.customProperties = customProperties
+    }
+
+    static func == (lhs: RareValues, rhs: RareValues) -> Bool {
+      lhs === rhs || (lhs.motion == rhs.motion && lhs.customProperties == rhs.customProperties)
+    }
+  }
+
+  private mutating func setRareValues(motion: CGAffineTransform, customProperties: [String: String]) {
+    rareValues =
+      motion == .identity && customProperties.isEmpty
+      ? nil : RareValues(motion: motion, customProperties: customProperties)
+  }
 
   /// The initial value of every property, which is the style of the parent of the root element.
   static let initial = ComputedStyle(
@@ -336,6 +369,14 @@ struct ComputedStyle: Sendable, Equatable {
       cascaded: cascaded, resolver: StyleResolver(style: .initial, parent: parent ?? .initial, root: root ?? .initial),
       smil: smil.compactMap { effect in effect.property.map { (property: $0, effect: effect) } },
       transitions: element.flatMap { animations?.transitions[$0] } ?? [:], time: animations?.time ?? 0)
+    // The custom properties come before every other property, whose values they're substituted in. The style starts
+    // with none, which most documents have.
+    if cascaded.hasVariables {
+      computer.resolver.style.customProperties = VariableSubstitution.computedCustomProperties(
+        declared: cascaded.customProperties, parent: parent?.customProperties ?? [:])
+    } else if let customProperties = parent?.rareValues?.customProperties, !customProperties.isEmpty {
+      computer.resolver.style.customProperties = customProperties
+    }
     if let animations, !animations.keyframes.isEmpty {
       // The properties of CSS Animations come last in the order, and are computed first to find the animations.
       for id in PropertyID.allCases where id.isAnimation {
@@ -399,7 +440,11 @@ struct ComputedStyle: Sendable, Equatable {
         }
         return
       }
-      var value = resolver.computed(cascaded[P.self], of: P.self)
+      // Most elements have no `var()`, whose values need no substitution.
+      let declared =
+        cascaded.hasVariables
+        ? cascaded.declared(P.self, customProperties: resolver.style.customProperties) : cascaded[P.self]
+      var value = resolver.computed(declared, of: P.self)
       // Animations override the cascaded values except for important declarations. SMIL animations come first, and
       // CSS animations override them. A later animation overrides an earlier one, with the value under it as the
       // value that it starts from.
