@@ -214,8 +214,11 @@ extension SVGAttributeScanner {
 
   /// A color, or `nil` for a value that isn't one or that `currentcolor` is part of.
   mutating func scanColor() -> SVGColor? {
-    guard case .color(let color)? = scanColorExpression() else { return nil }
-    return color
+    switch scanColorExpression() {
+    case .color(let color)?: return color
+    case .missing(let color)?: return color.color
+    default: return nil
+    }
   }
 
   /// A color, or an expression that `currentcolor` is part of, such as `currentcolor` itself or a `color-mix()` of
@@ -261,7 +264,15 @@ extension SVGAttributeScanner {
         hueAt: function.hueIndex, allowsChannels: origin != nil)
     else { return nil }
     guard let origin else {
-      return Self.color(of: function, components: components, alpha: alpha, isLegacy: isLegacy).map { .color($0) }
+      guard let color = Self.color(of: function, components: components, alpha: alpha, isLegacy: isLegacy) else {
+        return nil
+      }
+      // `none` is a missing component, which interpolation takes from the other color.
+      let isMissing = components.map { $0 == .none }
+      let isAlphaMissing = alpha == ColorComponent.none
+      guard isMissing.contains(true) || isAlphaMissing else { return .color(color) }
+      return .missing(
+        MissingColor(function: function, isMissing: isMissing, isAlphaMissing: isAlphaMissing, color: color))
     }
     // A relative color has only the modern syntax, and the names of the components of its function.
     let names = function.channelNames.union(["alpha"])
