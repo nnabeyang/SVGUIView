@@ -93,13 +93,33 @@ struct SMILStartedAnimationTests {
   private static let setPathLength = #"<set attributeName="pathLength" to="2" begin="2s" dur="1s" fill="freeze"/>"#
 
   @Test(
-    "an animation that a SMIL animation applies by changing an attribute that an attribute selector matches starts",
-    arguments: [("rect[pathLength]", ""), (#"rect:not([pathLength="1"])"#, #"pathLength="1""#)])
-  func attributeSelectors(selector: String, attributes: String) throws {
-    let base = document(Self.setPathLength, selector: selector, attributes: attributes)
-    #expect(try opacity(base, at: 1) == 1)
-    #expect(abs(try opacity(base, at: 2.5) - 0.5 / 3) < 1e-9)
-    #expect(base.animationEnd() == 5)
+    "selectors other than class selectors see the attributes as written, not the values that SMIL animations give",
+    arguments: [
+      ("rect[pathLength]", "", Self.setPathLength),
+      (#"rect[pathLength="2"]"#, #"pathLength="1""#, Self.setPathLength),
+      (#"rect[class~="spin"]"#, "", Self.set),
+      (":lang(en)", #"lang="fr""#, #"<set attributeName="lang" to="en" begin="2s" dur="1s" fill="freeze"/>"#),
+    ])
+  func writtenAttributes(selector: String, attributes: String, animation: String) throws {
+    let base = document(animation, selector: selector, attributes: attributes)
+    #expect(try opacity(base, at: 2.5) == 1)
+    #expect(base.animations.smilStarted == SMILStartedAnimations())
+  }
+
+  @Test("an animation of a selector that matches the attribute as written runs from the start under SMIL animations")
+  func writtenAttributeMatches() throws {
+    let base = document(Self.setPathLength, selector: #"rect:not([pathLength="2"])"#, attributes: #"pathLength="1""#)
+    #expect(abs(try opacity(base, at: 1) - 1.0 / 3) < 1e-9)
+    #expect(abs(try opacity(base, at: 2.5) - 2.5 / 3) < 1e-9)
+    #expect(base.animationEnd() == 3)
+  }
+
+  @Test("SMIL animations don't change the declarations of the style attribute")
+  func styleAttribute() throws {
+    let base = document(
+      #"<set attributeName="style" to="opacity: 0.5" begin="0s" fill="freeze"/>"#, selector: ".none",
+      attributes: #"style="opacity: 0.25""#)
+    #expect(try opacity(base, at: 1) == 0.25)
   }
 
   @Test("an attribute that no selector matches doesn't make the elements again to find the animations that start")

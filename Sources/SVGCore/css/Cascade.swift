@@ -35,7 +35,8 @@ func collectDeclarations(matches: [RuleMatch], inlineStyle declarations: [CSSDec
 /// declarations overriding the others.
 func cascade(element: ElementCursor, stylesheet: Stylesheet) -> CascadedValues {
   let attributes = element.element.attributes
-  let inlineStyle = attributes["style"].map { SVGUIInlineStyle(description: $0).declarations } ?? []
+  // SMIL animations don't change the declarations of `style`, as browsers don't animate it.
+  let inlineStyle = element.element.writtenAttributes["style"].map { SVGUIInlineStyle(description: $0).declarations } ?? []
   let declarations = sortedByPrecedence(
     collectDeclarations(matches: stylesheet.matchElement(element: element), inlineStyle: inlineStyle))
   // Important declarations come after the normal ones, so a property with an important declaration has an
