@@ -273,7 +273,7 @@ struct TextLayout {
       let font: CTFont
       let glyph: CGGlyph
       let position: CGPoint
-      let advance: CGFloat
+      var advance: CGFloat
       let character: Int
       let isRightToLeft: Bool
       /// Where the glyph starts along the line, and its advance along it, in the coordinates of the line.
@@ -283,15 +283,37 @@ struct TextLayout {
     }
     var lineGlyphs = [LineGlyph]()
     var metrics = [Int: (ascent: CGFloat, descent: CGFloat)]()
+    // How far each combining mark that an element splits off is moved, and how far the glyphs after the marks move,
+    // in the coordinates of the line.
+    var markShifts = [Int: CGFloat]()
+    var added: CGFloat = 0
     for run in Self.glyphRuns(of: line.line) {
       for index in run.glyphs.indices {
         let character = line.characters[run.stringIndices[index]]
-        let advance = run.advances[index].width
+        var advance = run.advances[index].width
+        var start = run.positions[index].x + added
+        // A combining mark that an element splits from the character before it has no base. Core Text still
+        // attaches it to the glyph before it, by giving it the rest of the advance of that glyph. It's placed at the
+        // end of that glyph instead, moved so that its outline, which goes back over a base, starts there, and the
+        // glyphs after it are moved as far, as Chrome and Firefox draw it.
+        if !run.isRightToLeft, Self.isSplitMark(character, in: characters), !lineGlyphs.isEmpty,
+          !lineGlyphs[lineGlyphs.count - 1].isRightToLeft
+        {
+          var glyph = run.glyphs[index]
+          let bounds = CTFontGetBoundingRectsForGlyphs(run.font, .horizontal, &glyph, nil, 1)
+          let last = lineGlyphs.count - 1
+          lineGlyphs[last].inlineAdvance = start + advance - lineGlyphs[last].inlineStart
+          lineGlyphs[last].advance = lineGlyphs[last].inlineAdvance
+          start = lineGlyphs[last].inlineStart + lineGlyphs[last].inlineAdvance
+          let shift = bounds.isNull ? 0 : max(-bounds.minX, 0)
+          markShifts[lineGlyphs.count] = shift
+          advance = shift
+          added += shift
+        }
         lineGlyphs.append(
           LineGlyph(
             font: run.font, glyph: run.glyphs[index], position: run.positions[index], advance: advance,
-            character: character, isRightToLeft: run.isRightToLeft, inlineStart: run.positions[index].x,
-            inlineAdvance: advance))
+            character: character, isRightToLeft: run.isRightToLeft, inlineStart: start, inlineAdvance: advance))
         let owner = characters[character].owner
         let current = metrics[owner] ?? (0, 0)
         metrics[owner] = (max(current.ascent, run.ascent), max(current.descent, run.descent))
@@ -341,6 +363,8 @@ struct TextLayout {
       defer { previous = position ?? previous }
       return position ?? previous
     }
+    // The marks that elements split off are moved after their characters are placed.
+    for (index, shift) in markShifts { lineGlyphs[index].inlineStart += shift }
     struct Chunk {
       let start: Int
       let anchor: TextAnchor
@@ -725,6 +749,13 @@ struct TextLayout {
     }
     let distance = middle.truncatingRemainder(dividingBy: measure.length)
     return distance < 0 ? distance + measure.length : distance
+  }
+
+  /// Whether a character is a combining mark that starts an element after a character of another element, which
+  /// splits a grapheme between the elements.
+  static func isSplitMark(_ index: Int, in characters: [TextCharacter]) -> Bool {
+    index > 0 && characters[index - 1].owner != characters[index].owner
+      && characters[index].character.unicodeScalars.first?.properties.isGraphemeExtend == true
   }
 
   /// A rotation in degrees of glyphs about their origins, in the coordinates of their line.

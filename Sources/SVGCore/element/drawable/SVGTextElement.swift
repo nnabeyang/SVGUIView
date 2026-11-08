@@ -411,7 +411,11 @@ final class SVGTextElement: ShapeGeometry {
     CFAttributedStringBeginEditing(text)
     for (index, character) in characters.enumerated() {
       guard let font = fonts[character.owner] else { continue }
-      let string = String(character.character)
+      // A combining mark that starts an element, which splits a grapheme between elements, is a glyph of its own, as
+      // Chrome and Firefox draw it, instead of joining the glyph of the character before it in the other element. A
+      // zero width space before the mark keeps Core Text from composing them, and belongs to the mark.
+      let splits = TextLayout.isSplitMark(index, in: characters)
+      let string = (splits ? "\u{200B}" : "") + String(character.character)
       let location = characterOfIndex.count
       let length = string.utf16.count
       CFAttributedStringReplaceString(text, CFRange(location: location, length: 0), string as CFString)
@@ -442,6 +446,10 @@ final class SVGTextElement: ShapeGeometry {
       // Characters added to the string take the attributes of the character before them, which are replaced.
       CFAttributedStringSetAttributes(
         text, CFRange(location: location, length: length), attributes as CFDictionary, true)
+      if splits {
+        // The space adds no spacing of its own.
+        CFAttributedStringRemoveAttribute(text, CFRange(location: location, length: 1), kCTKernAttributeName)
+      }
     }
     var direction = owners[0].style.direction == .rtl ? CTWritingDirection.rightToLeft : .leftToRight
     let paragraph = withUnsafeBytes(of: &direction) { bytes in

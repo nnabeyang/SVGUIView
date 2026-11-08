@@ -21,6 +21,7 @@ struct TextBrowserTests {
 
   private func isRed(_ pixel: [UInt8]) -> Bool { Int(pixel[0]) > Int(pixel[1]) + 64 }
   private func isGreen(_ pixel: [UInt8]) -> Bool { Int(pixel[1]) > Int(pixel[0]) + 64 }
+  private func isBlack(_ pixel: [UInt8]) -> Bool { pixel[0] < 64 && pixel[1] < 64 && pixel[2] < 64 }
 
   @Test(
     "in vertical text, the underline is on the right of the line and the overline on its left",
@@ -58,4 +59,13 @@ struct TextBrowserTests {
     #expect(green.allSatisfy { $0 >= middle - 1 })
   }
 
+  @Test("a combining mark that a tspan splits off is drawn in the tspan after the character before it")
+  func splitMark() async throws {
+    let rendering = try await render(#"<text x="1" y="16" font-size="12">и<tspan fill="lime">&#x306;</tspan></text>"#)
+    let base = columns(of: rendering, where: isBlack)
+    let mark = columns(of: rendering, where: isGreen)
+    let (left, right) = try (#require(base.min()), #require(base.max()))
+    // The mark starts where the advance of the character ends, which is after most of its outline.
+    #expect(try #require(mark.min()) > (left + right) / 2)
+  }
 }
