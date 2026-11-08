@@ -17,11 +17,14 @@ struct Keyframe: Sendable {
   /// The easing function from the keyframe to the next one, from its `animation-timing-function`, or `nil` to use
   /// the animation's.
   let easing: EasingFunction?
+  /// Whether the keyframe sets custom properties, which is found once, since animations look for them at every time.
+  let setsCustomProperties: Bool
 
   init(offsets: [Double], declarations: [CSSDeclaration]) {
     self.offsets = offsets
     let declarations = declarations.filter { $0.importance == .normal }.map(\.declaration)
-    self.declarations = CascadedValues(declarations.filter { $0.id.isAnimatable })
+    self.declarations = CascadedValues(declarations.filter { $0.id?.isAnimatable ?? true })
+    setsCustomProperties = !self.declarations.customProperties.isEmpty
     let easings = CascadedValues(declarations).declared(AnimationTimingFunctionProperty.self)
     easing = easings?.count == 1 ? easings?.first : nil
   }
