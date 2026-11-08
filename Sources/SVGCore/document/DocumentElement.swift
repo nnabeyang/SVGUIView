@@ -22,8 +22,16 @@ final class DocumentElement: Sendable {
   let name: SVGElementName
   /// The local name as written, which type selectors match.
   let localName: String
-  /// The attributes, with the `href` of the XLink namespace as `href` and other prefixed attributes left out.
+  /// The attributes, with the `href` of the XLink namespace as `href` and other prefixed attributes left out, and
+  /// with the values that SMIL animations give them.
   let attributes: [String: String]
+  /// The attributes without the values that SMIL animations give them, as the document has them. SMIL animations
+  /// change the animated values, not the attributes, so selectors other than class selectors and the `style`
+  /// attribute see these, as browsers do.
+  var writtenAttributes: [String: String] { storedWrittenAttributes ?? attributes }
+  /// The attributes as written for an element whose attributes SMIL animations change, which is `nil` for the others,
+  /// whose attributes are as written.
+  private let storedWrittenAttributes: [String: String]?
   /// The character data of `<text>`, `<tspan>` and `<style>` before each child and after the last one, one more
   /// than the children, which are empty for other elements.
   let texts: [String]
@@ -32,15 +40,18 @@ final class DocumentElement: Sendable {
   /// The character data of the element itself, without its children's.
   var text: String { texts.joined() }
 
+  /// - Parameter writtenAttributes: The attributes without the values of SMIL animations, which are `attributes`
+  ///   where it's `nil`.
   init(
-    id: ElementID, name: SVGElementName, localName: String, attributes: [String: String], texts: [String],
-    children: [DocumentElement]
+    id: ElementID, name: SVGElementName, localName: String, attributes: [String: String],
+    writtenAttributes: [String: String]? = nil, texts: [String], children: [DocumentElement]
   ) {
     precondition(texts.count == children.count + 1)
     self.id = id
     self.name = name
     self.localName = localName
     self.attributes = attributes
+    storedWrittenAttributes = writtenAttributes
     self.texts = texts
     self.children = children
   }
@@ -62,7 +73,8 @@ final class DocumentElement: Sendable {
     var children = children
     children[index] = children[index].replacingDescendant(at: path.dropFirst(), with: replacement)
     return DocumentElement(
-      id: id, name: name, localName: localName, attributes: attributes, texts: texts, children: children)
+      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      texts: texts, children: children)
   }
 }
 
@@ -98,11 +110,12 @@ package struct DocumentTree: Sendable {
     self.languages = languages
   }
 
-  /// The document with the given attributes of its elements replaced.
+  /// The document with the given attributes of its elements replaced by the values that SMIL animations give them,
+  /// which keeps the attributes as written for the selectors.
   ///
   /// - Parameter replacements: The attributes to set by the elements that they're set on.
   func replacingAttributes(_ replacements: [ElementID: [String: String]]) -> DocumentTree {
-    changingAttributes(replacements.mapValues { $0.mapValues { Optional($0) } })
+    changingAttributes(replacements.mapValues { $0.mapValues { Optional($0) } }, isAnimated: true)
   }
 
   /// The document with attributes of its elements set or removed. The elements that change, and their ancestors,
@@ -110,7 +123,9 @@ package struct DocumentTree: Sendable {
   ///
   /// - Parameter changes: The values to set by the elements and the names of the attributes, with `nil` to remove an
   ///   attribute.
-  package func changingAttributes(_ changes: [ElementID: [String: String?]]) -> DocumentTree {
+  /// - Parameter isAnimated: Whether the values are the ones that SMIL animations give, which change the attributes
+  ///   but not the attributes as written.
+  package func changingAttributes(_ changes: [ElementID: [String: String?]], isAnimated: Bool = false) -> DocumentTree {
     guard var root, !changes.isEmpty else { return self }
     for (id, values) in changes {
       guard let path = paths[id] else { continue }
@@ -122,7 +137,8 @@ package struct DocumentTree: Sendable {
       root = root.replacingDescendant(
         at: path[...],
         with: DocumentElement(
-          id: id, name: element.name, localName: element.localName, attributes: attributes, texts: element.texts,
+          id: id, name: element.name, localName: element.localName, attributes: attributes,
+          writtenAttributes: isAnimated ? element.writtenAttributes : nil, texts: element.texts,
           children: element.children))
     }
     return DocumentTree(root: root, paths: paths, languages: languages)

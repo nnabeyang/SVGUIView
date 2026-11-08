@@ -95,17 +95,18 @@ extension ElementCursor: Element {
   }
 
   func hasId(id: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
-    element.attributes["id"]?.trimmingCharacters(in: .whitespaces) == id.rawValue
+    element.writtenAttributes["id"]?.trimmingCharacters(in: .whitespaces) == id.rawValue
   }
 
   func hasClass(name: GenericAtomIdent<IdentStaticSet>, caseSensitivity _: _SelectorParser.CaseSensitivity) -> Bool {
-    // The class attribute is a list of names separated by ASCII whitespace.
+    // The class attribute is a list of names separated by ASCII whitespace. Class selectors match the animated
+    // value of the attribute, as `className` gives it, unlike the other selectors.
     guard let classes = element.attributes["class"] else { return false }
     return classes.split(whereSeparator: { " \t\n\r\u{0C}".contains($0) }).contains { $0 == name.rawValue }
   }
 
   func attributeMatches(localName: Impl.LocalName, operation: AttrSelectorOperation<Impl.AttrValue>) -> Bool {
-    guard let attribute = element.attributes[localName.rawValue] else { return false }
+    guard let attribute = element.writtenAttributes[localName.rawValue] else { return false }
     switch operation {
     case .exists:
       return true
@@ -133,7 +134,7 @@ extension ElementCursor: Element {
       return language == range || language.hasPrefix(range + "-")
     case .link, .anyLink:
       // Every link is unvisited, as there is no history. `xlink:href` is `href` once it's parsed.
-      return element.name == .a && element.attributes["href"] != nil
+      return element.name == .a && element.writtenAttributes["href"] != nil
     default:
       return false
     }
@@ -144,7 +145,7 @@ extension ElementCursor: Element {
   private var language: String? {
     var cursor: ElementCursor? = self
     while let current = cursor {
-      if let language = current.element.attributes["xml:lang"] ?? current.element.attributes["lang"] {
+      if let language = current.element.writtenAttributes["xml:lang"] ?? current.element.writtenAttributes["lang"] {
         return language
       }
       cursor = current.parent

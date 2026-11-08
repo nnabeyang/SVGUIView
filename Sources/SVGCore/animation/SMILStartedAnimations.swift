@@ -1,7 +1,6 @@
 import Foundation
 
-/// The CSS animations that SMIL animations apply, by changing `class`, `style` or other attributes that the selectors
-/// or the declarations of the style sheets match.
+/// The CSS animations that SMIL animations apply, by changing `class`, which class selectors match.
 ///
 /// A CSS animation starts when an element starts running it, so one that a SMIL animation applies starts at the time
 /// that the SMIL animation changes the attribute, and starts again when it's applied again after it stopped.
@@ -30,7 +29,7 @@ struct SMILStartedAnimations: Sendable, Equatable {
   init(document: DocumentTree, stylesheet: Stylesheet, animations: DocumentAnimations, passes: Int) {
     let changing = animations.smil.indices.filter {
       Self.changesAttribute(animations.smil[$0])
-        && Self.changesStyle(animations.smil[$0].attributeName, stylesheet: stylesheet)
+        && Self.changesStyle(animations.smil[$0].attributeName)
     }
     guard !changing.isEmpty, !animations.keyframes.isEmpty, let root = document.root else { return }
     let schedule = SMILSchedule(animations: animations.smil, until: .infinity, passes: passes)
@@ -99,15 +98,11 @@ struct SMILStartedAnimations: Sendable, Equatable {
     ).changesAttribute
   }
 
-  /// The attributes that always change which rules match an element, or what they declare: the classes and the ID
-  /// that selectors match, the language that `:lang()` matches, and the declarations of `style`.
-  private static let styledAttributes: Set<String> = ["class", "id", "lang", "xml:lang", "style"]
-
-  /// Whether changing an attribute that isn't a property can change the style of the elements, which only these
-  /// attributes and the ones that the attribute selectors match do, so that the elements are made again only for them.
-  private static func changesStyle(_ name: String?, stylesheet: Stylesheet) -> Bool {
-    guard let name else { return false }
-    return styledAttributes.contains(name) || stylesheet.selectorAttributes.contains(name)
+  /// Whether changing an attribute that isn't a property can change the style of the elements, which only `class`
+  /// does: the other selectors and the `style` attribute see the attributes as written, not the values that SMIL
+  /// animations give them, as browsers do. The elements are made again only for it.
+  private static func changesStyle(_ name: String?) -> Bool {
+    name == "class"
   }
 
   /// The times in an interval of a SMIL animation at which the value that it gives can change: the begin and the end
