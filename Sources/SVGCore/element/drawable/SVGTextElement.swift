@@ -153,12 +153,9 @@ final class SVGTextElement: ShapeGeometry {
     guard let (layout, content) = layout(context: context) else { return nil }
     let owners = owners(of: content)
     let glyphs = Set(layout.glyphs.map(\.owner)).union(layout.glyphs.isEmpty ? [0] : [])
-    // The glyphs that `rotate` turns, of the elements painted with a gradient or a pattern, are painted in their
-    // turned coordinates, as resvg and WebKit paint them, with the pieces of the lines of `text-decoration` under them.
-    let turned: Set<Int> =
-      layout.glyphs.contains { $0.rotation != nil }
-      ? Set(owners.indices.filter { owners[$0].style.fill.isServer || owners[$0].style.stroke.isServer }) : []
-    let lines = decorationLines(of: layout, content: content, context: context, turned: turned)
+    // The glyphs that `rotate` turns are painted in the user space as the other glyphs, also with a gradient or a
+    // pattern, as Chrome and Firefox paint them.
+    let lines = decorationLines(of: layout, content: content, context: context)
     // The spans that each owner is in, from the outermost one, and the owner itself if it's a span.
     func spansAround(_ owner: Int) -> [any SVGDrawableElement] {
       var chain = [any SVGDrawableElement]()
@@ -173,25 +170,20 @@ final class SVGTextElement: ShapeGeometry {
     for owner in owners.indices where glyphs.contains(owner) || lines.under[owner] != nil {
       let path = CGMutablePath()
       if glyphs.contains(owner) {
-        path.addPath(layout.path(of: [owner], leavingOutTurnedOf: turned))
+        path.addPath(layout.path(of: [owner]))
       }
       if let under = lines.under[owner] {
         path.addPath(under)
       }
       var span = TextSpan(element: owners[owner], path: path, frame: layout.frame(of: [owner]), spans: spansAround(owner))
-      if turned.contains(owner) {
-        span.turned = layout.turnedGlyphPaths(of: owner) + (lines.turnedUnder[owner] ?? [])
-      }
       if mayHaveColorGlyphs {
         span.colorGlyphs = layout.colorGlyphs(of: owner)
       }
       spans.append(span)
     }
-    for owner in owners.indices where lines.through[owner] != nil || lines.turnedThrough[owner] != nil {
-      var span = TextSpan(
-        element: owners[owner], path: lines.through[owner] ?? CGMutablePath(), frame: .null, spans: spansAround(owner))
-      span.turned = lines.turnedThrough[owner] ?? []
-      spans.append(span)
+    for owner in owners.indices {
+      guard let through = lines.through[owner] else { continue }
+      spans.append(TextSpan(element: owners[owner], path: through, frame: .null, spans: spansAround(owner)))
     }
     return spans
   }
@@ -204,21 +196,13 @@ final class SVGTextElement: ShapeGeometry {
   ///
   /// The glyphs of an element next to each other on a horizontal baseline have one line, and each other glyph, such as
   /// one on a path or a rotated one, has a piece of the line of its own.
-  ///
-  /// - Parameter turned: The elements whose pieces of lines under the glyphs that `rotate` turns are apart, in
-  ///   `turnedUnder` and `turnedThrough` with the turns of their glyphs.
   private func decorationLines(
-    of layout: TextLayout, content: TextContent, context: any GeometryContext, turned: Set<Int> = []
-  ) -> (
-    under: [Int: CGMutablePath], through: [Int: CGMutablePath],
-    turnedUnder: [Int: [(path: CGPath, rotation: CGAffineTransform)]],
-    turnedThrough: [Int: [(path: CGPath, rotation: CGAffineTransform)]]
-  ) {
+    of layout: TextLayout, content: TextContent, context: any GeometryContext
+  ) -> (under: [Int: CGMutablePath], through: [Int: CGMutablePath]) {
     var under = [Int: CGMutablePath]()
     var through = [Int: CGMutablePath]()
-    var turnedUnder = [Int: [(path: CGPath, rotation: CGAffineTransform)]]()
-    var turnedThrough = [Int: [(path: CGPath, rotation: CGAffineTransform)]]()
     let owners = owners(of: content)
+    let isVertical = style.writingMode != .horizontalTB
     // The glyphs that have one line, with their first glyph and their advance in the coordinates of the line.
     var segments = [(glyph: PlacedGlyph, advance: CGFloat)]()
     for glyph in layout.glyphs {
@@ -243,26 +227,23 @@ final class SVGTextElement: ShapeGeometry {
         var thickness = CTFontGetUnderlineThickness(font)
         let center: CGFloat
         switch line {
+        case .underline where isVertical:
+          // In vertical text, the line turned clockwise has its top on the right. The underline goes along the right
+          // side of the em box around the central baseline, and the overline along its left side, as Chrome and
+          // Firefox draw them, and the line through the text is on the central baseline.
+          center = Self.position(of: .central, in: font) + CTFontGetSize(font) / 2 + thickness / 2
+        case .overline where isVertical:
+          center = Self.position(of: .central, in: font) - CTFontGetSize(font) / 2 - thickness / 2
         case .underline:
           center = CTFontGetUnderlinePosition(font)
         case .overline:
           center = CTFontGetAscent(font)
         default:
           let strikeout = Self.strikeout(of: font)
-          center = strikeout?.position ?? CTFontGetXHeight(font) / 2
+          center = isVertical ? Self.position(of: .central, in: font) : strikeout?.position ?? CTFontGetXHeight(font) / 2
           thickness = strikeout?.thickness ?? thickness
         }
         let rect = CGRect(x: 0, y: center - thickness / 2, width: advance, height: thickness)
-        if let rotation = glyph.rotation, turned.contains(decorator) {
-          let piece = CGMutablePath()
-          glyph.add(rect, to: piece)
-          if line == .lineThrough {
-            turnedThrough[decorator, default: []].append((piece, rotation))
-          } else {
-            turnedUnder[decorator, default: []].append((piece, rotation))
-          }
-          continue
-        }
         let paths = line == .lineThrough ? through : under
         let path = paths[decorator] ?? CGMutablePath()
         glyph.add(rect, to: path)
@@ -273,7 +254,7 @@ final class SVGTextElement: ShapeGeometry {
         }
       }
     }
-    return (under, through, turnedUnder, turnedThrough)
+    return (under, through)
   }
 
   /// The position of the line through text above the baseline, and its thickness, from the OS/2 table of a font,
@@ -430,7 +411,11 @@ final class SVGTextElement: ShapeGeometry {
     CFAttributedStringBeginEditing(text)
     for (index, character) in characters.enumerated() {
       guard let font = fonts[character.owner] else { continue }
-      let string = String(character.character)
+      // A combining mark that starts an element, which splits a grapheme between elements, is a glyph of its own, as
+      // Chrome and Firefox draw it, instead of joining the glyph of the character before it in the other element. A
+      // zero width space before the mark keeps Core Text from composing them, and belongs to the mark.
+      let splits = TextLayout.isSplitMark(index, in: characters)
+      let string = (splits ? "\u{200B}" : "") + String(character.character)
       let location = characterOfIndex.count
       let length = string.utf16.count
       CFAttributedStringReplaceString(text, CFRange(location: location, length: 0), string as CFString)
@@ -461,6 +446,10 @@ final class SVGTextElement: ShapeGeometry {
       // Characters added to the string take the attributes of the character before them, which are replaced.
       CFAttributedStringSetAttributes(
         text, CFRange(location: location, length: length), attributes as CFDictionary, true)
+      if splits {
+        // The space adds no spacing of its own.
+        CFAttributedStringRemoveAttribute(text, CFRange(location: location, length: 1), kCTKernAttributeName)
+      }
     }
     var direction = owners[0].style.direction == .rtl ? CTWritingDirection.rightToLeft : .leftToRight
     let paragraph = withUnsafeBytes(of: &direction) { bytes in
@@ -588,9 +577,6 @@ struct TextSpan {
   /// The `<tspan>` and `<textPath>` elements that the shape is in, from the outermost one, with its element if it's
   /// one of them, whose opacity, clip path, mask and filter apply to it.
   var spans: [any SVGDrawableElement] = []
-  /// The outlines of the glyphs that `rotate` turns, and the pieces of the lines under them, which are painted apart in
-  /// their turned coordinates, in the user space with their turns.
-  var turned: [(path: CGPath, rotation: CGAffineTransform)] = []
   /// The glyphs that the fonts draw in their colors, such as emoji, which are drawn after the other glyphs.
   var colorGlyphs: [ColorGlyph] = []
 }

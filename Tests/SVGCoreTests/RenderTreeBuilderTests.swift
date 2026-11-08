@@ -1204,31 +1204,28 @@ struct RenderTreeBuilderTests {
     }
   }
 
-  @Test("the glyphs that rotate turns, painted with a pattern, are shapes turned with them, and colors aren't")
+  @Test("the glyphs that rotate turns, painted with a pattern, are one shape in the user space as with colors")
   func turnedGlyphPaint() async throws {
     let pattern =
       #"<pattern id="p" patternUnits="userSpaceOnUse" width="2" height="2"><rect width="1" height="1"/></pattern>"#
-    let tree = try await renderTree(
-      pattern + #"<g font-size="8"><text x="2" y="15" rotate="30" fill="url(#p)">ab</text></g>"#)
-    let turned = shapes(of: try children(of: tree))
-    #expect(turned.count == 2)
-    let plain = shapes(of: try children(of: try await renderTree(#"<g font-size="8"><text x="2" y="15">ab</text></g>"#)))
+    let painted = shapes(
+      of: try children(
+        of: try await renderTree(
+          pattern + #"<g font-size="8"><text x="2" y="15" rotate="30" fill="url(#p)">ab</text></g>"#)))
     let colored = shapes(
       of: try children(of: try await renderTree(#"<g font-size="8"><text x="2" y="15" rotate="30">ab</text></g>"#)))
+    #expect(painted.count == 1)
     #expect(colored.count == 1)
-    // The shapes with their transforms are the glyphs that rotate turns, and the transform turns 30 degrees.
-    let bounds = try turned.map { shape in
-      let path = try #require(shape.geometry).path.cgPath
-      var transform = shape.transform
-      return (path.copy(using: &transform) ?? path).boundingBoxOfPath
-    }.reduce(CGRect.null) { $0.union($1) }
+    let shape = try #require(painted.first)
+    #expect(shape.transform == .identity)
+    let bounds = try #require(shape.geometry).path.cgPath.boundingBoxOfPath
     let expected = try #require(colored.first?.geometry).path.cgPath.boundingBoxOfPath
-    for (a, e) in [(bounds.minX, expected.minX), (bounds.minY, expected.minY), (bounds.maxX, expected.maxX)] {
+    for (a, e) in [
+      (bounds.minX, expected.minX), (bounds.minY, expected.minY), (bounds.maxX, expected.maxX),
+      (bounds.maxY, expected.maxY),
+    ] {
       #expect(abs(a - e) < 0.01, "\(bounds) isn't \(expected)")
     }
-    let first = try #require(turned.first).transform
-    #expect(abs(atan2(first.b, first.a) - .pi / 6) < 1e-6)
-    #expect(!plain.isEmpty)
   }
 
   @Test("the language of text chooses the glyphs of Han characters, and an element inherits it")

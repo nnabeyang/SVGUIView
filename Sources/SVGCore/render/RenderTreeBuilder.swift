@@ -170,12 +170,11 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: element)
     let references = beginsLevel(mode) ? references.beginning(.all) : references
-    // Text is laid out apart from its outline only when it has spans, or glyphs that `rotate` turns with a paint server.
+    // Text is laid out apart from its outline only when it has spans, or glyphs that the fonts draw in their colors.
     if let text = element as? SVGTextElement,
-      !text.children.isEmpty || text.mayHaveColorGlyphs
-        || (!text.positions.rotate.isEmpty && (text.style.fill.isServer || text.style.stroke.isServer)),
+      !text.children.isEmpty || text.mayHaveColorGlyphs,
       let spans = text.spans(in: context),
-      spans.contains(where: { $0.element !== text || !$0.turned.isEmpty || !$0.colorGlyphs.isEmpty })
+      spans.contains(where: { $0.element !== text || !$0.colorGlyphs.isEmpty })
     {
       return await textNode(
         of: text, spans: spans, context: context, mode: mode, guard: references, instance: instance)
@@ -321,19 +320,11 @@ package struct RenderTreeBuilder {
       let element = span.element
       let context = context.styled(by: element)
       var contents: [ShapeContent?] = [nil]
-      // The paints are found with all the glyphs of the span, the turned ones too.
-      var paintPath = span.path
-      if !span.turned.isEmpty {
-        let path = CGMutablePath()
-        path.addPath(span.path)
-        for part in span.turned { path.addPath(part.path) }
-        paintPath = path
-      }
       if element.style.visibility == .visible {
         let fill = await fillPaint(
-          of: element, path: paintPath, context: context, mode: mode, guard: references, instance: instance)
+          of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance)
         let stroke = await stroke(
-          of: element, path: paintPath, context: context, mode: mode, guard: references, instance: instance)
+          of: element, path: span.path, context: context, mode: mode, guard: references, instance: instance)
         // A stroke that's painted first is a shape of its own, before the fill.
         contents =
           element.style.paintOrder.strokesFirst
@@ -343,9 +334,7 @@ package struct RenderTreeBuilder {
           ] : [.vector(fill: fill, stroke: stroke, fillRule: element.pathFillRule)]
       }
       let id = renderID(of: element, instance: instance)
-      // The span keeps no shape of its own when all its glyphs are turned, which would paint its paint server outside
-      // the glyphs.
-      for (part, content) in contents.enumerated() where span.turned.isEmpty || !span.path.isEmpty {
+      for (part, content) in contents.enumerated() {
         children.append(
           (
             .shape(
@@ -370,21 +359,6 @@ package struct RenderTreeBuilder {
                 content: draws ? .colorGlyphs(span.colorGlyphs, opacity: element.style.fillOpacity) : nil)),
             span.spans
           ))
-      }
-      // Each glyph that `rotate` turns is a shape whose transform is its turn, so that its paint turns with it.
-      for (number, turned) in span.turned.enumerated() {
-        let inverse = turned.rotation.inverted()
-        let path = turned.path.copy(using: [inverse]) ?? turned.path
-        for (part, content) in contents.enumerated() {
-          children.append(
-            (
-              .shape(
-                ShapeNode(
-                  id: partID(id, part: (1 << 16) + number * contents.count + part), transform: turned.rotation,
-                  geometry: Geometry(path: RenderPath(path), frame: frame.applying(inverse)), clip: nil,
-                  mask: .none, opacity: 1, content: content)), span.spans
-            ))
-        }
       }
     }
     // The shapes of each span with an opacity, a clip path, a mask, a filter or a blend mode, which SVG 2 applies to
