@@ -2987,15 +2987,29 @@ struct RenderTreeBuilderTests {
         lightSource: .spot(
           position: SIMD3(1, 2, 3), pointsAt: SIMD3(4, 5, 6), specularExponent: 1, limitingConeAngle: 30))
     ),
+    // The exponent of a spot light is from 1 to 128, and a limiting cone angle of 0 is no cone, as Chrome and Safari
+    // draw them.
     (
       #"<feDiffuseLighting><feSpotLight specularExponent="0.5" limitingConeAngle="-20"/></feDiffuseLighting>"#,
       LightingPrimitive(
         reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
-        lightSource: .spot(position: .zero, pointsAt: .zero, specularExponent: 0.5, limitingConeAngle: -20))
+        lightSource: .spot(position: .zero, pointsAt: .zero, specularExponent: 1, limitingConeAngle: -20))
     ),
-    // A missing light source and negative constants are in error.
+    (
+      #"<feDiffuseLighting><feSpotLight specularExponent="200" limitingConeAngle="0"/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: 1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .spot(position: .zero, pointsAt: .zero, specularExponent: 128, limitingConeAngle: nil))
+    ),
+    // A negative diffuse constant lights nothing, which is black, while a missing light source and a negative
+    // specular constant are in error, which is transparent.
+    (
+      #"<feDiffuseLighting diffuseConstant="-1"><feDistantLight/></feDiffuseLighting>"#,
+      LightingPrimitive(
+        reflection: .diffuse(constant: -1), surfaceScale: 1, color: SIMD3(1, 1, 1),
+        lightSource: .distant(azimuth: 0, elevation: 0))
+    ),
     (#"<feDiffuseLighting/>"#, nil),
-    (#"<feDiffuseLighting diffuseConstant="-1"><feDistantLight/></feDiffuseLighting>"#, nil),
     (#"<feSpecularLighting specularConstant="-1"><feDistantLight/></feSpecularLighting>"#, nil),
   ]
 

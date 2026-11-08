@@ -68,7 +68,8 @@ extension CGPainter {
         var factor: Float
         switch lighting.reflection {
         case .diffuse(let constant):
-          factor = constant * (normal * direction).sum()
+          // A surface facing away from the light gets none of it, so that a negative constant lights nothing.
+          factor = constant * max((normal * direction).sum(), 0)
         case .specular(let constant, let exponent):
           let cosine = halfwayLength > 0 ? (normal * halfway).sum() / halfwayLength : 0
           factor = constant * pow(max(cosine, 0), exponent)

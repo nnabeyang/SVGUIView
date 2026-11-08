@@ -84,11 +84,11 @@ final class SVGFeSpotLightElement: SVGLightSourceElement {
   let pointsAtX: SVGLength
   let pointsAtY: SVGLength
   let pointsAtZ: SVGLength
-  /// The exponent of the focus of the light, which is 1 where the attribute is missing, isn't a number or isn't
-  /// positive, as in resvg.
+  /// The exponent of the focus of the light, from 1 to 128, as Chrome and Safari clamp it, which is 1 where the
+  /// attribute is missing, isn't a number or isn't positive, as in resvg.
   let specularExponent: Double
   /// The angle between the axis of the light and its cone, in degrees, or `nil` for no cone where the attribute is
-  /// missing or isn't a number.
+  /// missing, isn't a number or is 0, which Chrome and Safari draw without a cone.
   let limitingConeAngle: Double?
 
   init(base: SVGBaseElement, contents _: [any SVGElement]) {
@@ -103,7 +103,7 @@ final class SVGFeSpotLightElement: SVGLightSourceElement {
     func number(_ name: String) -> Double? {
       attributes[name].flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }.flatMap { $0.isFinite ? $0 : nil }
     }
-    specularExponent = number("specularExponent").flatMap { $0 > 0 ? $0 : nil } ?? 1
-    limitingConeAngle = number("limitingConeAngle")
+    specularExponent = min(max(number("specularExponent").flatMap { $0 > 0 ? $0 : nil } ?? 1, 1), 128)
+    limitingConeAngle = number("limitingConeAngle").flatMap { $0 != 0 ? $0 : nil }
   }
 }

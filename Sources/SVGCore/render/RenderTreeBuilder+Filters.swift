@@ -394,14 +394,15 @@ extension RenderTreeBuilder {
     case let convolve as SVGFeConvolveMatrixElement:
       return .convolveMatrix(input: convolve.input, Self.convolveMatrix(of: convolve))
     case let diffuse as SVGFeDiffuseLightingElement:
-      let reflection: LightingPrimitive.Reflection? =
-        diffuse.diffuseConstant >= 0 ? .diffuse(constant: Float(diffuse.diffuseConstant)) : nil
+      // A negative constant lights nothing, so the result is opaque black, as resvg and browsers draw it.
+      let reflection: LightingPrimitive.Reflection? = .diffuse(constant: Float(diffuse.diffuseConstant))
       return .lighting(
         input: diffuse.input,
         Self.lighting(
           reflection, surfaceScale: diffuse.surfaceScale, color: diffuse.lightingColor,
           lightSource: diffuse.lightSource, filter: filter, frame: frame, context: context))
     case let specular as SVGFeSpecularLightingElement:
+      // A negative constant is an error, which is transparent black, as Firefox and Safari draw it.
       let reflection: LightingPrimitive.Reflection? =
         specular.specularConstant >= 0
         ? .specular(constant: Float(specular.specularConstant), exponent: Float(specular.specularExponent)) : nil
