@@ -117,9 +117,6 @@ struct PlacedGlyph {
   /// Whether the glyph is on a line of the text with its baseline horizontal, so that the lines of `text-decoration`
   /// of the glyphs next to it go on as one line.
   var isStraight = false
-  /// How `rotate` turns the glyph about the position of its character, in the user space, or `nil` if it doesn't
-  /// turn the glyph so.
-  var rotation: CGAffineTransform? = nil
 
   /// Adds a path in the coordinates of the line, with the origin at the origin of the glyph, to a path in the user
   /// space.
@@ -470,9 +467,6 @@ struct TextLayout {
         let along = CGAffineTransform(translationX: crosses[glyph.character], y: chunks[chunk].path == nil ? x : 0)
         let frame = (glyph.isUpright ? rotation.concatenating(stretching) : local).concatenating(line).concatenating(
           along)
-        // The turn in the user space is the turn in the coordinates of the glyph, moved by what places the glyph.
-        let placing = stretching.concatenating(line).concatenating(along)
-        let turn = pivot.flatMap { _ in stretch == 0 ? nil : placing.inverted().concatenating(rotation).concatenating(placing) }
         var outline: CGAffineTransform?
         if glyph.isUpright {
           var verticalGlyph = glyph.glyph
@@ -501,7 +495,6 @@ struct TextLayout {
           placed = PlacedGlyph(
             transform: frame, advance: glyph.inlineAdvance + addedSpace, outline: outline,
             isStraight: character.rotate == nil)
-          placed.rotation = turn
         }
       } else if let pathIndex = chunks[chunk].path {
         let path = paths[pathIndex]
@@ -517,9 +510,6 @@ struct TextLayout {
           transform: local.concatenating(CGAffineTransform(scaleX: 1.0 / textScale, y: -1.0 / textScale))
             .concatenating(CGAffineTransform(translationX: x, y: ys[glyph.character])),
           advance: glyph.advance + addedSpace, isStraight: character.rotate == nil)
-        let placing = stretching.concatenating(scale).concatenating(
-          CGAffineTransform(translationX: x, y: ys[glyph.character]))
-        placed.rotation = pivot.flatMap { _ in stretch == 0 ? nil : placing.inverted().concatenating(rotation).concatenating(placing) }
       }
       placed.owner = character.owner
       placed.font = glyph.font
@@ -733,28 +723,13 @@ struct TextLayout {
   }
 
   /// The outlines of the glyphs of the elements.
-  ///
-  /// - Parameter turned: The elements whose glyphs that `rotate` turns are left out, which are painted apart.
-  func path(of owners: Set<Int>? = nil, leavingOutTurnedOf turned: Set<Int> = []) -> CGPath {
+  func path(of owners: Set<Int>? = nil) -> CGPath {
     let path = CGMutablePath()
     for glyph in glyphs where owners?.contains(glyph.owner) ?? true {
-      if glyph.rotation != nil, turned.contains(glyph.owner) { continue }
       guard let font = glyph.font, let letter = CTFontCreatePathForGlyph(font, glyph.glyph, nil) else { continue }
       glyph.add(letter, to: path)
     }
     return path
-  }
-
-  /// The outline of each glyph of the element that `rotate` turns, in the user space, with its turn.
-  func turnedGlyphPaths(of owner: Int) -> [(path: CGPath, rotation: CGAffineTransform)] {
-    glyphs.compactMap { glyph in
-      guard glyph.owner == owner, let rotation = glyph.rotation, let font = glyph.font,
-        let letter = CTFontCreatePathForGlyph(font, glyph.glyph, nil)
-      else { return nil }
-      let path = CGMutablePath()
-      glyph.add(letter, to: path)
-      return (path, rotation)
-    }
   }
 
   /// The glyphs of the element that the fonts draw in their colors, such as emoji, which have no outlines.
