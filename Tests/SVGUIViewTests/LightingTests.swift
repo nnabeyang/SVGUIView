@@ -66,6 +66,32 @@ struct LightingTests {
     #expect(rendering.pixel(13 * s, 10 * s) == [0, 0, 0, 255])
   }
 
+  @Test("a negative diffuse constant lights nothing, also the slopes that face away from the light, so it's black")
+  func negativeDiffuseConstant() async throws {
+    let rendering = try await render(
+      square(
+        #"<feDiffuseLighting diffuseConstant="-1" surfaceScale="10" lighting-color="lime"><feDistantLight azimuth="45" elevation="45"/></feDiffuseLighting>"#
+      ))
+    let s = rendering.scale
+    for (x, y) in [(10, 10), (6, 10), (14, 10), (10, 6), (10, 14), (2, 2)] {
+      #expect(rendering.pixel(x * s, y * s) == [0, 0, 0, 255], "at \(x), \(y)")
+    }
+  }
+
+  @Test("a spot light with a limiting cone angle of 0 has no cone, as Chrome and Safari draw it")
+  func spotZeroCone() async throws {
+    func spot(_ attributes: String) -> String {
+      flat(
+        #"<feDiffuseLighting lighting-color="lime"><feSpotLight x="10" y="10" z="10" pointsAtX="10" pointsAtY="10" "#
+          + attributes + #"/></feDiffuseLighting>"#)
+    }
+    let zero = try await render(spot(#"limitingConeAngle="0""#))
+    let none = try await render(spot(""))
+    let s = zero.scale
+    #expect(zero.pixel(13 * s, 10 * s) == none.pixel(13 * s, 10 * s))
+    #expect(zero.pixel(13 * s, 10 * s)[1] > 100)
+  }
+
   @Test("a spot light points at its pointsAt")
   func spotPointsAt() async throws {
     let rendering = try await render(
@@ -77,10 +103,9 @@ struct LightingTests {
   }
 
   @Test(
-    "a missing light source and negative constants are transparent black",
+    "a missing light source and a negative specular constant are transparent black, as Firefox and Safari draw them",
     arguments: [
       #"<feDiffuseLighting/>"#,
-      #"<feDiffuseLighting diffuseConstant="-1"><feDistantLight elevation="90"/></feDiffuseLighting>"#,
       #"<feSpecularLighting specularConstant="-1"><feDistantLight elevation="90"/></feSpecularLighting>"#,
     ])
   func errors(_ primitive: String) async throws {

@@ -67,10 +67,18 @@ struct ConvolveMatrixTests {
     #expect(premultiplied.pixel(middle, middle) == red)
   }
 
-  @Test("the bias is added to the alpha, and the bias times the alpha to the colors")
+  @Test(
+    "the bias is added to each component, while pixels without alpha around them stay transparent, as browsers draw them"
+  )
   func bias() async throws {
     let rendering = try await render(square(#"<feConvolveMatrix kernelMatrix="0 0 0 0 1 0 0 0 0" bias="1"/>"#))
-    #expect(rendering.pixel(2 * rendering.scale, 2 * rendering.scale) == [255, 255, 255, 255])
+    #expect(rendering.pixel(2 * rendering.scale, 2 * rendering.scale) == transparent)
+    // The opaque red gets the bias in each component, which makes it white.
+    #expect(rendering.pixel(10 * rendering.scale, 10 * rendering.scale) == [255, 255, 255, 255])
+    let negative = try await render(square(#"<feConvolveMatrix kernelMatrix="0 0 0 0 1 0 0 0 0" bias="-0.5"/>"#))
+    #expect(negative.pixel(2 * negative.scale, 2 * negative.scale) == transparent)
+    let pixel = negative.pixel(10 * negative.scale, 10 * negative.scale)
+    #expect(abs(Int(pixel[3]) - 128) <= 1 && abs(Int(pixel[0]) - 128) <= 1 && pixel[1] == 0 && pixel[2] == 0)
   }
 
   @Test("a kernel that doesn't have as many numbers as the order passes the input through")
