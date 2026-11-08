@@ -35,6 +35,11 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    @Test(arguments: SVGFile.all(root: "custom", in: "variables"))
+    func variables(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file)
+    }
+
     /// The times that documents with animations are rendered at, which the arguments of a test read from outside
     /// the main actor.
     nonisolated private static let times: [Duration] = [
