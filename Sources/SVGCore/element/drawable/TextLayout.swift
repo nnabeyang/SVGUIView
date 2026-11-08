@@ -465,8 +465,19 @@ struct TextLayout {
         let line = scale.concatenating(CGAffineTransform(translationX: 0, y: baseline))
           .concatenating(CGAffineTransform(rotationAngle: .pi / 2))
         let along = CGAffineTransform(translationX: crosses[glyph.character], y: chunks[chunk].path == nil ? x : 0)
-        let frame = (glyph.isUpright ? rotation.concatenating(stretching) : local).concatenating(line).concatenating(
-          along)
+        // `rotate` turns a glyph about the current text position, which is on the line that the baselines move the
+        // glyph from, as Chrome and Firefox turn it, instead of about the origin of the glyph.
+        let onLine = CGAffineTransform(translationX: 0, y: baseline * textScale)
+        let turn = onLine.inverted().concatenating(rotation).concatenating(onLine)
+        let turned =
+          if glyph.isUpright {
+            turn.concatenating(stretching)
+          } else if let pivot {
+            CGAffineTransform(translationX: pivot, y: glyph.position.y).concatenating(turn).concatenating(stretching)
+          } else {
+            turn.concatenating(stretching).concatenating(CGAffineTransform(translationX: 0, y: glyph.position.y))
+          }
+        let frame = turned.concatenating(line).concatenating(along)
         var outline: CGAffineTransform?
         if glyph.isUpright {
           var verticalGlyph = glyph.glyph
@@ -474,11 +485,11 @@ struct TextLayout {
           CTFontGetVerticalTranslationsForGlyphs(glyph.font, &verticalGlyph, &translation, 1)
           let central = centralBaselines.indices.contains(character.owner) ? centralBaselines[character.owner] : 0
           let origin = CGPoint(x: central - baseline, y: 0).applying(along)
-          // The outline is stretched down the line from its vertical origin.
-          outline = rotation.concatenating(scale).concatenating(
-            CGAffineTransform(translationX: translation.width / textScale, y: -translation.height / textScale)
-          ).concatenating(CGAffineTransform(scaleX: 1, y: stretch)).concatenating(
-            CGAffineTransform(translationX: origin.x, y: origin.y))
+          // The outline is stretched down the line from its vertical origin, and turned about its vertical origin,
+          // which is the current text position.
+          outline = CGAffineTransform(translationX: translation.width, y: translation.height).concatenating(rotation)
+            .concatenating(scale).concatenating(CGAffineTransform(scaleX: 1, y: stretch)).concatenating(
+              CGAffineTransform(translationX: origin.x, y: origin.y))
         }
         if let pathIndex = chunks[chunk].path {
           // On a path, the line goes along the path, which turns it back.
