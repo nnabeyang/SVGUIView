@@ -403,6 +403,19 @@ struct ColorParsingTests {
     #expect(abs(try hue("color-mix(in oklch, lch(50 30 none), oklch(60% 0.1 120))") - 120) < 0.5)
   }
 
+  @Test("CSS animations and SMIL animations take a missing component from the other color")
+  func missingInterpolation() throws {
+    let css = parse(
+      "<style>@keyframes k { from { fill: rgb(none 0 0) } to { fill: red } } "
+        + "rect { animation: k 1s linear }</style>" + #"<rect id="a" width="10" height="10"/>"#)
+    let fill = css.at(time: 0.5).root?.elements.first { $0.base.id == "a" }?.style.fill
+    #expect(isClose(rgba(of: fill), [255, 0, 0, 1]))
+    let smil = parse(
+      #"<rect id="a" width="10" height="10"><animate attributeName="fill" from="rgb(none 0 0)" to="red" dur="1s"/></rect>"#)
+    let smilFill = smil.at(time: 0.5).root?.elements.first { $0.base.id == "a" }?.style.fill
+    #expect(isClose(rgba(of: smilFill), [255, 0, 0, 1]))
+  }
+
   @Test("CSS animations interpolate hsl() colors as other colors")
   func interpolation() {
     let base = parse(

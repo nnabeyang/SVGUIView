@@ -92,3 +92,20 @@ extension CSSVisibility: Animatable {
     nil
   }
 }
+
+/// The values that an animation interpolates between, made ready for each other, such as colors whose missing
+/// components take the values of the other.
+struct InterpolatedPair<Value: Animatable> {
+  let from: Value
+  let to: Value
+
+  /// Whether the values are interpolated, instead of changing discretely.
+  var interpolates: Bool {
+    from.interpolated(to: to, progress: 0.5) != nil
+  }
+
+  /// The value at the progress from one value to the other.
+  func animated(progress: Double) -> Value {
+    from.animated(to: to, progress: progress)
+  }
+}
