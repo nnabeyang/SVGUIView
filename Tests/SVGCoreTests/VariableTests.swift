@@ -101,4 +101,18 @@ struct VariableTests {
     #expect(use.style.customProperties["--w"] == "3px")
   }
 
+  @Test("a keyframe sets a custom property at the middle of its interval, and var() in keyframes is substituted")
+  func animations() throws {
+    let css = """
+      <style>
+        @keyframes k { from { --w: 1px } to { --w: 9px } }
+        @keyframes o { from { opacity: var(--o) } to { opacity: 1 } }
+      </style>
+      """
+    let animated = #"<rect id="r" style="animation: k 2s linear; stroke-width: var(--w)"/>"#
+    #expect(try computedStyle(css + animated, at: 0.9).strokeWidth == .pixel(1))
+    #expect(try computedStyle(css + animated, at: 1.1).strokeWidth == .pixel(9))
+    let opacity = #"<rect id="r" style="--o: 0; animation: o 2s linear"/>"#
+    #expect(try abs(computedStyle(css + opacity, at: 1).opacity - 0.5) < 1e-9)
+  }
 }

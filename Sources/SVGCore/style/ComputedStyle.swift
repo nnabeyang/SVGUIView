@@ -384,6 +384,19 @@ struct ComputedStyle: Sendable, Equatable {
       }
       computer.animations = ElementAnimation.animations(
         of: computer.resolver.style, element: element, in: animations)
+      // Keyframes set custom properties too, which the other properties substitute.
+      var animated = [String: String?]()
+      for animation in computer.animations where animation.setsCustomProperties {
+        for name in animation.customPropertyNames.sorted() where !cascaded.isImportant(customProperty: name) {
+          let underlying = animated[name] ?? computer.resolver.style.customProperties[name]
+          animated[name] = .some(
+            animation.customValue(name, over: underlying, parent: parent?.customProperties[name]))
+        }
+      }
+      if !animated.isEmpty {
+        computer.resolver.style.customProperties = VariableSubstitution.computedCustomProperties(
+          declared: cascaded.customProperties, parent: parent?.customProperties ?? [:], animated: animated)
+      }
     }
     // Most properties of most elements have no declaration and no animation, and take the values of the parent or
     // the initial values, which the style starts with.

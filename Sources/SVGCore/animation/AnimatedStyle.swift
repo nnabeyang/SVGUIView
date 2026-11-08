@@ -16,6 +16,54 @@ struct ElementAnimation {
     keyframes.flatMap { $0.keyframe.declarations.properties }
   }
 
+  /// Whether the keyframes of the animation set custom properties.
+  var setsCustomProperties: Bool {
+    keyframes.contains { $0.keyframe.setsCustomProperties }
+  }
+
+  /// The custom properties that the keyframes of the animation set.
+  var customPropertyNames: Set<String> {
+    Set(keyframes.flatMap { $0.keyframe.declarations.customProperties.map(\.name) })
+  }
+
+  /// The value of the custom property at the time, which animates discretely, from one keyframe to the next at the
+  /// middle of the interval, as CSS Variables 1 animates a custom property that isn't registered. The value is the
+  /// text of the keyframe, whose `var()` is substituted later, or `nil` for the guaranteed-invalid value.
+  ///
+  /// - Parameters:
+  ///   - underlying: The value under the animation, which is the value of its keyframes at 0% and 100% where none
+  ///     sets the property.
+  ///   - parent: The value of the parent element, which `inherit` and `unset` take.
+  func customValue(_ name: String, over underlying: String?, parent: String?) -> String? {
+    var points = [(offset: Double, value: String?, easing: EasingFunction?)]()
+    for (offset, keyframe) in keyframes {
+      guard let declared = keyframe.declarations.customProperties.last(where: { $0.name == name })?.value else {
+        continue
+      }
+      if points.last?.offset == offset { points.removeLast() }
+      let value: String? =
+        switch declared {
+        case .value(let text): text
+        case .initial: nil
+        case .inherit, .unset: parent
+        }
+      points.append((offset, value, keyframe.easing))
+    }
+    guard !points.isEmpty else { return underlying }
+    if points[0].offset > 0 { points.insert((0, underlying, nil), at: 0) }
+    if points[points.count - 1].offset < 1 { points.append((1, underlying, nil)) }
+    var index = 0
+    while index + 2 < points.count, points[index + 1].offset <= progress {
+      index += 1
+    }
+    let from = points[index]
+    let to = points[index + 1]
+    let length = to.offset - from.offset
+    let intervalProgress = length == 0 ? 1 : (progress - from.offset) / length
+    let eased = (from.easing ?? easing)(intervalProgress, before: isBefore)
+    return eased < 0.5 ? from.value : to.value
+  }
+
   /// The animations that the computed values of CSS Animations give, in the order of `animation-name`, without
   /// the ones that have no keyframes or no effect at the time.
   ///
@@ -68,7 +116,11 @@ struct ElementAnimation {
   func value<P: StyleProperty>(of _: P.Type, over underlying: P.Computed, in resolver: StyleResolver) -> P.Computed? {
     var declared = [(offset: Double, value: Declared<P.Specified>, easing: EasingFunction?)]()
     for (offset, keyframe) in keyframes {
-      guard let value = keyframe.declarations[P.self] else { continue }
+      let keyframeValue =
+        keyframe.declarations.hasVariables
+        ? keyframe.declarations.declared(P.self, customProperties: resolver.style.customProperties)
+        : keyframe.declarations[P.self]
+      guard let value = keyframeValue else { continue }
       // Of keyframes with the same offset, the later one sets the property.
       if declared.last?.offset == offset { declared.removeLast() }
       declared.append((offset, value, keyframe.easing))
