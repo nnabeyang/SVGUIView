@@ -225,7 +225,7 @@ extension SVGUIFont {
       case "larger":
         self = .larger
       default:
-        guard let value = SVGLength(rawValue) else {
+        guard let value = SVGLength(property: rawValue, isNonNegative: true) else {
           return nil
         }
         self = .length(value)

@@ -46,11 +46,12 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     self.children = children
     let attributes = base.attributes
     // The position and the size of a nested `<svg>` element and of a `<symbol>` are attributes, which style sheets
-    // don't set. Those of the outermost `<svg>` element are properties (``outermost``).
-    x = SVGLength(attributes["x"])
-    y = SVGLength(attributes["y"])
-    width = SVGLength(attributes["width"])
-    height = SVGLength(attributes["height"])
+    // don't set. Those of the outermost `<svg>` element are properties (``outermost``). They take math functions, as
+    // SVG 2 makes them geometry properties, whose presentation attributes are read as CSS.
+    x = attributes["x"].flatMap { SVGLength(property: $0) }
+    y = attributes["y"].flatMap { SVGLength(property: $0) }
+    width = attributes["width"].flatMap { SVGLength(property: $0, isNonNegative: true) }
+    height = attributes["height"].flatMap { SVGLength(property: $0, isNonNegative: true) }
     viewBox = Self.parseViewBox(attributes["viewBox"])
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
     overflow = base.style.overflow

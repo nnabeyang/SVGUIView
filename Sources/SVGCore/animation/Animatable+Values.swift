@@ -25,6 +25,9 @@ extension SVGLength: Animatable {
   /// The length that combines the numbers of two lengths, in their unit, or in pixels if their units are
   /// different absolute units, or else unit by unit, as a sum.
   private func combined(with other: SVGLength, _ combine: (CGFloat, CGFloat) -> CGFloat) -> SVGLength? {
+    // A math function that isn't a sum, such as `min()`, changes discretely.
+    if case .calc = self { return nil }
+    if case .calc = other { return nil }
     if hasSameUnit(as: other) {
       return with(magnitude: combine(magnitude, other.magnitude))
     }
@@ -55,7 +58,10 @@ extension SVGLength: Animatable {
   }
 
   private func hasSameUnit(as other: SVGLength) -> Bool {
-    if case .sum = self { return false }
+    switch self {
+    case .sum, .calc: return false
+    default: break
+    }
     return with(magnitude: 0) == other.with(magnitude: 0)
   }
 
@@ -96,8 +102,9 @@ extension SVGLength: Animatable {
       .picas(let value), .chs(let value), .ic(let value), .lhs(let value), .rlhs(let value), .vw(let value),
       .vh(let value), .vi(let value), .vb(let value), .vmin(let value), .vmax(let value), .q(let value):
       value
-    // A sum has a number in each of its units, and isn't negative as a whole until it's resolved.
-    case .sum: 0
+    // A sum has a number in each of its units, and isn't negative as a whole until it's resolved, as a math
+    // function isn't.
+    case .sum, .calc: 0
     }
   }
 
@@ -126,7 +133,7 @@ extension SVGLength: Animatable {
     case .vmin: .vmin(value)
     case .vmax: .vmax(value)
     case .q: .q(value)
-    case .sum: self
+    case .sum, .calc: self
     }
   }
 }

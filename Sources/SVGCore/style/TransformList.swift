@@ -157,20 +157,20 @@ private func arguments(
   case "translateY":
     return lengthPercentage(&input, origin: origin).map { [.translate(.number(0), $0)] }
   case "scale":
-    guard let x = scale(&input) else { return nil }
+    guard let x = scale(&input, origin: origin) else { return nil }
     if input.isExhausted() { return [.scale(x, x)] }
-    guard separator(&input, origin: origin), let y = scale(&input) else { return nil }
+    guard separator(&input, origin: origin), let y = scale(&input, origin: origin) else { return nil }
     return [.scale(x, y)]
   case "scaleX":
-    return scale(&input).map { [.scale($0, 1)] }
+    return scale(&input, origin: origin).map { [.scale($0, 1)] }
   case "scaleY":
-    return scale(&input).map { [.scale(1, $0)] }
+    return scale(&input, origin: origin).map { [.scale(1, $0)] }
   case "rotate":
     guard let angle = angle(&input, origin: origin) else { return nil }
     if input.isExhausted() { return [.rotate(angle)] }
     guard origin == .attribute,
-      separator(&input, origin: origin), let x = number(&input),
-      separator(&input, origin: origin), let y = number(&input)
+      separator(&input, origin: origin), let x = number(&input, origin: origin),
+      separator(&input, origin: origin), let y = number(&input, origin: origin)
     else { return nil }
     return [.translate(.number(x), .number(y)), .rotate(angle), .translate(.number(-x), .number(-y))]
   case "skew":
@@ -185,7 +185,7 @@ private func arguments(
   case "matrix":
     var values = [Double]()
     for index in 0..<6 {
-      guard index == 0 || separator(&input, origin: origin), let value = number(&input) else { return nil }
+      guard index == 0 || separator(&input, origin: origin), let value = number(&input, origin: origin) else { return nil }
       values.append(value)
     }
     return [.matrix(CGAffineTransform(a: values[0], b: values[1], c: values[2], d: values[3], tx: values[4], ty: values[5]))]
@@ -200,14 +200,16 @@ private func separator(_ input: inout _CSSParser.Parser, origin: DeclarationOrig
   return origin == .attribute
 }
 
-/// A numeric token, with its value read from the text of the token, since the token keeps it only as a `Float32`.
+/// A numeric token, with its value read from the text of the token, since the token keeps it only as a `Float32`, or a
+/// math function, which CSS takes and the attributes don't, as browsers read them.
 private enum Numeric {
   case number(Double)
   case percentage(Double)
   case dimension(Double, unit: String)
+  case calc(CalcNode)
 }
 
-private func numeric(_ input: inout _CSSParser.Parser) -> Numeric? {
+private func numeric(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> Numeric? {
   input.skipWhitespace()
   let start = input.position
   guard case .success(let token) = input.next() else { return nil }
@@ -219,40 +221,50 @@ private func numeric(_ input: inout _CSSParser.Parser) -> Numeric? {
     return .percentage(Double(text.dropLast()) ?? Double(percentage.unitValue) * 100)
   case .dimention(let dimension):
     return .dimension(Double(text.dropLast(dimension.unit.count)) ?? Double(dimension.value), unit: dimension.unit)
+  case .function(let name) where origin == .css:
+    return CalcParser(percentages: .length).function(named: name, &input).map { .calc($0) }
   default:
     return nil
   }
 }
 
-private func number(_ input: inout _CSSParser.Parser) -> Double? {
-  guard case .number(let value) = numeric(&input) else { return nil }
-  return value
+private func number(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> Double? {
+  switch numeric(&input, origin: origin) {
+  case .number(let value): value
+  case .calc(let node) where node.type(percentages: .none) == .number: node.constant()
+  default: nil
+  }
 }
 
 /// A number or a percentage, which `scale()` takes.
-private func scale(_ input: inout _CSSParser.Parser) -> Double? {
-  switch numeric(&input) {
+private func scale(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> Double? {
+  switch numeric(&input, origin: origin) {
   case .number(let value): value
   case .percentage(let value): value / 100
+  case .calc(let node) where [.number, .percentage].contains(node.type(percentages: .alone)): node.constant(percentage: 1)
   default: nil
   }
 }
 
 /// A length or a percentage. A number is a length in user units in an attribute, and only zero is in CSS.
 func lengthPercentage(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> SVGLength? {
-  switch numeric(&input) {
+  switch numeric(&input, origin: origin) {
   case .number(let value) where origin == .attribute || value == 0: .number(value)
   case .percentage(let value): .percent(value)
   case .dimension(let value, let unit): SVGLength(value: value, cssUnit: unit)
+  case .calc(let node) where [.length, .lengthPercentage, .percentage].contains(node.type(percentages: .length)):
+    SVGLength(calc: node)
   default: nil
   }
 }
 
 /// An angle in degrees. A number is an angle in degrees in an attribute, and only zero is in CSS.
 private func angle(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> Double? {
-  switch numeric(&input) {
+  switch numeric(&input, origin: origin) {
   case .number(let value) where origin == .attribute || value == 0:
     return value
+  case .calc(let node) where node.type(percentages: .none) == .angle:
+    return node.constant()
   case .dimension(let value, let unit):
     switch unit.lowercased() {
     case "deg": return value
