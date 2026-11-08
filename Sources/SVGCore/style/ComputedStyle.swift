@@ -589,6 +589,33 @@ struct ComputedStyle: Sendable, Equatable {
     }
   }
 
+  /// Two paints with `currentColor` resolved, for interpolating between them, where a missing component of a color
+  /// takes the value of the other, as CSS Color 4 interpolates colors.
+  func resolvedForInterpolation(_ from: Paint, _ to: Paint) -> InterpolatedPair<Paint> {
+    let resolvedFrom = resolved(from)
+    let resolvedTo = resolved(to)
+    func filled(_ paint: Paint, _ resolved: Paint, other: Paint) -> Paint {
+      guard case .expression(let expression) = paint, case .color(let otherColor) = other,
+        let missing = expression.missingColor(currentColor: color)
+      else { return resolved }
+      return .color(missing.filled(from: otherColor))
+    }
+    return InterpolatedPair(from: filled(from, resolvedFrom, other: resolvedTo), to: filled(to, resolvedTo, other: resolvedFrom))
+  }
+
+  /// Two colors with `currentColor` resolved, for interpolating between them, where a missing component of a color
+  /// takes the value of the other, as CSS Color 4 interpolates colors.
+  func resolvedForInterpolation(_ from: ColorValue, _ to: ColorValue) -> InterpolatedPair<SVGColor> {
+    let resolvedFrom = resolved(from)
+    let resolvedTo = resolved(to)
+    func filled(_ value: ColorValue, _ resolved: SVGColor, other: SVGColor) -> SVGColor {
+      guard case .expression(let expression) = value, let missing = expression.missingColor(currentColor: color)
+      else { return resolved }
+      return missing.filled(from: other)
+    }
+    return InterpolatedPair(from: filled(from, resolvedFrom, other: resolvedTo), to: filled(to, resolvedTo, other: resolvedFrom))
+  }
+
   /// The color with `currentColor` resolved.
   func resolved(_ value: ColorValue) -> SVGColor {
     switch value {

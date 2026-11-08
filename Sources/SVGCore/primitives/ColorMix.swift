@@ -110,37 +110,37 @@ extension ColorConversion {
   /// `nil` for percentages that don't make a mix.
   ///
   /// The components are interpolated with the alpha premultiplied, except for the hue, which goes around the circle
-  /// of hues in the direction of the method. A color without a hue takes the hue of the other.
+  /// of hues in the direction of the method. A component that's missing in one color, which is `nil`, such as the
+  /// hue of a gray or a component that's `none`, takes the value of the other, and is 0 if both miss it, as CSS
+  /// Color 4 specifies. So is the alpha.
   ///
   /// - Parameters:
+  ///   - color1: The components of the first color in the space, and its alpha.
   ///   - percentage1: The percentage of the first color, or `nil` if it's omitted.
+  ///   - color2: The components of the second color in the space, and its alpha.
   ///   - percentage2: The percentage of the second color, or `nil` if it's omitted.
   static func mix(
-    _ color1: (rgb: Vector, alpha: Double), _ percentage1: Double?, _ color2: (rgb: Vector, alpha: Double),
-    _ percentage2: Double?, in space: ColorMixSpace, hue method: HueInterpolationMethod
+    _ color1: (components: [Double?], alpha: Double?), _ percentage1: Double?,
+    _ color2: (components: [Double?], alpha: Double?), _ percentage2: Double?, in space: ColorMixSpace,
+    hue method: HueInterpolationMethod
   ) -> (rgb: Vector, alpha: Double)? {
     guard let (w1, w2, alphaMultiplier) = mixWeights(percentage1, percentage2) else { return nil }
 
-    var c1 = space.components(ofSRGB: color1.rgb)
-    var c2 = space.components(ofSRGB: color2.rgb)
-    let alpha = color1.alpha * w1 + color2.alpha * w2
+    let c1 = color1.components
+    let c2 = color2.components
+    let alpha1 = color1.alpha ?? color2.alpha ?? 0
+    let alpha2 = color2.alpha ?? color1.alpha ?? 0
+    let alpha = alpha1 * w1 + alpha2 * w2
     var mixed = [Double](repeating: 0, count: 3)
     for index in 0..<3 {
+      let v1 = c1[index] ?? c2[index] ?? 0
+      let v2 = c2[index] ?? c1[index] ?? 0
       if index == space.hueIndex {
-        // A color without a hue takes the hue of the other, and two without hues have the hue 0.
-        let h1 = c1[index] ?? c2[index] ?? 0
-        let h2 = c2[index] ?? c1[index] ?? 0
-        c1[index] = h1
-        c2[index] = h2
-        let (from, to) = hues(h1, h2, method)
+        let (from, to) = hues(v1, v2, method)
         let hue = (from * w1 + to * w2).truncatingRemainder(dividingBy: 360)
         mixed[index] = hue < 0 ? hue + 360 : hue
       } else {
-        let v1 = c1[index] ?? 0
-        let v2 = c2[index] ?? 0
-        mixed[index] =
-          alpha == 0
-          ? v1 * w1 + v2 * w2 : (v1 * color1.alpha * w1 + v2 * color2.alpha * w2) / alpha
+        mixed[index] = alpha == 0 ? v1 * w1 + v2 * w2 : (v1 * alpha1 * w1 + v2 * alpha2 * w2) / alpha
       }
     }
     return (space.sRGB(ofComponents: mixed), alpha * alphaMultiplier)

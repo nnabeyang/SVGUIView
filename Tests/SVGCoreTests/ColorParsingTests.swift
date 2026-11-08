@@ -3,9 +3,16 @@ import Testing
 
 @testable import SVGCore
 
-/// The red, green and blue from 0 to 255 and the alpha from 0 to 1 of a paint, or `nil` if it isn't a color.
+/// The red, green and blue from 0 to 255 and the alpha from 0 to 1 of a paint, or `nil` if it isn't a color. A
+/// color with missing components has them as 0, as where it isn't interpolated.
 private func rgba(of paint: Paint?) -> [Double]? {
-  guard case .color(let color) = paint, let components = color.components else { return nil }
+  let color: SVGColor
+  switch paint {
+  case .color(let value)?: color = value
+  case .expression(let expression)?: color = expression.resolved(currentColor: .named(SVGColorName(name: "black")))
+  default: return nil
+  }
+  guard let components = color.components else { return nil }
   return [components.red * 255, components.green * 255, components.blue * 255, components.alpha]
 }
 
@@ -361,6 +368,52 @@ struct ColorParsingTests {
       return
     }
     #expect(isClose([components.red * 255, components.green * 255, components.blue * 255].map { $0.rounded() }, [255, 255, 255]))
+  }
+
+  /// Mixes of colors with missing components, which take the components of the other color, and their red, green
+  /// and blue from 0 to 255, rounded, and their alpha.
+  private static let missingMixValues: [(String, [Double])] = [
+    ("color-mix(in srgb, rgb(none 0 0), red)", [255, 0, 0, 1]),
+    ("color-mix(in srgb, red, rgb(none 0 0))", [255, 0, 0, 1]),
+    // Both colors miss the red, which is 0.
+    ("color-mix(in srgb, rgb(none 0 0), rgb(none 255 0))", [0, 128, 0, 1]),
+    // A missing alpha takes the alpha of the other color.
+    ("color-mix(in srgb, rgb(0 0 255 / none), rgb(255 0 0 / 0.5))", [128, 0, 128, 0.5]),
+    // The x of XYZ is analogous to the red of sRGB, and is carried forward to it.
+    ("color-mix(in srgb, color(xyz none 0 0), red)", [255, 0, 0, 1]),
+    // The hue of HSL isn't analogous to any component of sRGB, and is 0, which is red.
+    ("color-mix(in srgb, hsl(none 100% 50%), blue)", [128, 0, 128, 1]),
+    // A relative color with `none` misses that component too.
+    ("color-mix(in srgb, rgb(from blue none g b), red)", [255, 0, 128, 1]),
+  ]
+
+  @Test("color-mix() takes a missing component from the other color", arguments: missingMixValues)
+  func missingMix(text: String, expected: [Double]) {
+    let rgba = rgba(of: Paint(text)).map { [$0[0].rounded(), $0[1].rounded(), $0[2].rounded(), $0[3]] }
+    #expect(isClose(rgba, expected), "\(text): \(String(describing: rgba))")
+  }
+
+  @Test("a missing hue is carried forward to the hue of another polar space, and takes the hue of the other color")
+  func missingHue() throws {
+    func hue(_ text: String) throws -> Double {
+      let rgba = try #require(rgba(of: Paint(text)))
+      return try #require(ColorMixSpace.oklch.components(ofSRGB: (rgba[0] / 255, rgba[1] / 255, rgba[2] / 255))[2])
+    }
+    #expect(abs(try hue("color-mix(in oklch, oklch(50% 0.1 none), oklch(50% 0.1 120))") - 120) < 0.5)
+    #expect(abs(try hue("color-mix(in oklch, lch(50 30 none), oklch(60% 0.1 120))") - 120) < 0.5)
+  }
+
+  @Test("CSS animations and SMIL animations take a missing component from the other color")
+  func missingInterpolation() throws {
+    let css = parse(
+      "<style>@keyframes k { from { fill: rgb(none 0 0) } to { fill: red } } "
+        + "rect { animation: k 1s linear }</style>" + #"<rect id="a" width="10" height="10"/>"#)
+    let fill = css.at(time: 0.5).root?.elements.first { $0.base.id == "a" }?.style.fill
+    #expect(isClose(rgba(of: fill), [255, 0, 0, 1]))
+    let smil = parse(
+      #"<rect id="a" width="10" height="10"><animate attributeName="fill" from="rgb(none 0 0)" to="red" dur="1s"/></rect>"#)
+    let smilFill = smil.at(time: 0.5).root?.elements.first { $0.base.id == "a" }?.style.fill
+    #expect(isClose(rgba(of: smilFill), [255, 0, 0, 1]))
   }
 
   @Test("CSS animations interpolate hsl() colors as other colors")

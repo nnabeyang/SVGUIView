@@ -11,11 +11,14 @@ indirect enum ColorExpression: Sendable, Equatable {
   case mix(ColorMixSpace, HueInterpolationMethod, ColorExpression, Double?, ColorExpression, Double?)
   /// A relative color, such as `rgb(from currentcolor r g 0)`.
   case relative(RelativeColor)
+  /// A color with missing components, which are `none` in its function, and which interpolation takes from the other
+  /// color, as CSS Color 4 specifies. Elsewhere they're 0.
+  case missing(MissingColor)
 
   /// Whether `currentcolor` is part of the expression.
   var containsCurrentColor: Bool {
     switch self {
-    case .color: false
+    case .color, .missing: false
     case .currentColor: true
     case .mix(_, _, let color1, _, let color2, _): color1.containsCurrentColor || color2.containsCurrentColor
     case .relative(let relative): relative.origin.containsCurrentColor
@@ -29,17 +32,15 @@ indirect enum ColorExpression: Sendable, Equatable {
       return color
     case .currentColor:
       return currentColor
+    case .missing(let color):
+      return color.color
     case .mix(let space, let method, let color1, let percentage1, let color2, let percentage2):
       let black = SVGColor.named(SVGColorName(name: "black"))
-      func components(_ color: SVGColor) -> (rgb: ColorConversion.Vector, alpha: Double) {
-        let c = color.components ?? black.components!
-        return ((c.red, c.green, c.blue), c.alpha)
-      }
       // The percentages are checked when the expression is read, so the mix is a color.
       guard
         let mixed = ColorConversion.mix(
-          components(color1.resolved(currentColor: currentColor)), percentage1,
-          components(color2.resolved(currentColor: currentColor)), percentage2, in: space, hue: method)
+          color1.components(in: space, currentColor: currentColor), percentage1,
+          color2.components(in: space, currentColor: currentColor), percentage2, in: space, hue: method)
       else { return black }
       return SVGAttributeScanner.color(red: mixed.rgb.0, green: mixed.rgb.1, blue: mixed.rgb.2, alpha: mixed.alpha)
     case .relative(let relative):
@@ -48,9 +49,31 @@ indirect enum ColorExpression: Sendable, Equatable {
     }
   }
 
-  /// The expression, or the color that it is when `currentcolor` isn't part of it.
+  /// The color with its missing components, or `nil` for a color without any.
+  func missingColor(currentColor: SVGColor) -> MissingColor? {
+    switch self {
+    case .missing(let color): color
+    case .relative(let relative): relative.missingColor(origin: relative.origin.resolved(currentColor: currentColor))
+    default: nil
+    }
+  }
+
+  /// The components of the color in a space that `color-mix()` interpolates in, with `nil` for the components that
+  /// are missing, and for the hue of a color without one, and its alpha, `nil` if it's missing.
+  func components(in space: ColorMixSpace, currentColor: SVGColor) -> (components: [Double?], alpha: Double?) {
+    if let missing = missingColor(currentColor: currentColor) { return missing.components(in: space) }
+    let black = SVGColor.named(SVGColorName(name: "black"))
+    let c = resolved(currentColor: currentColor).components ?? black.components!
+    return (space.components(ofSRGB: (c.red, c.green, c.blue)), c.alpha)
+  }
+
+  /// The expression, or the color that it is when `currentcolor` isn't part of it. A color with missing components
+  /// keeps them.
   var simplified: ColorExpression {
-    containsCurrentColor ? self : .color(resolved(currentColor: .named(SVGColorName(name: "black"))))
+    if containsCurrentColor { return self }
+    let black = SVGColor.named(SVGColorName(name: "black"))
+    if let missing = missingColor(currentColor: black) { return .missing(missing) }
+    return .color(resolved(currentColor: black))
   }
 }
 
@@ -140,6 +163,15 @@ struct RelativeColor: Sendable, Equatable {
   /// The alpha, which is the alpha of the origin where it's omitted.
   let alpha: SVGAttributeScanner.ColorComponent?
 
+  /// The color with the components of an origin and the components that are `none` missing, or `nil` for a color
+  /// without missing components or with components that the function doesn't take.
+  func missingColor(origin: SVGColor) -> MissingColor? {
+    let isMissing = components.map { $0 == .none }
+    let isAlphaMissing = alpha == SVGAttributeScanner.ColorComponent.none
+    guard isMissing.contains(true) || isAlphaMissing, let color = color(origin: origin) else { return nil }
+    return MissingColor(function: function, isMissing: isMissing, isAlphaMissing: isAlphaMissing, color: color)
+  }
+
   /// The color with the components of an origin, or `nil` for components that the function doesn't take.
   func color(origin: SVGColor) -> SVGColor? {
     guard let c = origin.components else { return nil }
@@ -152,5 +184,85 @@ struct RelativeColor: Sendable, Equatable {
     return SVGAttributeScanner.color(
       of: function, components: components.map(value), alpha: value(alpha ?? .channel("alpha")), isLegacy: false,
       isRelative: true)
+  }
+}
+
+/// A color whose function has missing components, which are `none`, with the color that it is where they're 0.
+struct MissingColor: Sendable, Equatable {
+  let function: ColorFunction
+  /// Whether each of the three components of the function is missing.
+  let isMissing: [Bool]
+  let isAlphaMissing: Bool
+  /// The color with the missing components as 0.
+  let color: SVGColor
+
+  /// The components of the color in a space that `color-mix()` interpolates in, with `nil` for the components that
+  /// are missing, which are the components of the space analogous to the missing ones of the function, as CSS Color
+  /// 4 carries them forward, and for the hue of a color without one, and its alpha, `nil` if it's missing.
+  func components(in space: ColorMixSpace) -> (components: [Double?], alpha: Double?) {
+    let black = SVGColor.named(SVGColorName(name: "black"))
+    let c = color.components ?? black.components!
+    var components = space.components(ofSRGB: (c.red, c.green, c.blue))
+    let missingKinds = Set(zip(function.componentKinds, isMissing).compactMap { $1 ? $0 : nil })
+    for (index, kind) in space.componentKinds.enumerated() where kind.map(missingKinds.contains) == true {
+      components[index] = nil
+    }
+    return (components, isAlphaMissing ? nil : c.alpha)
+  }
+
+  /// The color with its missing components as the ones of another color in sRGB, which colors are interpolated in,
+  /// for the missing components of the function that are analogous to the components of sRGB.
+  func filled(from other: SVGColor) -> SVGColor {
+    let (components, alpha) = components(in: .sRGB)
+    guard let o = other.components else { return color }
+    let rgb = [o.red, o.green, o.blue]
+    let filled = components.enumerated().map { $1 ?? rgb[$0] }
+    return SVGAttributeScanner.color(red: filled[0], green: filled[1], blue: filled[2], alpha: alpha ?? o.alpha)
+  }
+}
+
+/// A kind of components of color functions and spaces, which CSS Color 4 calls analogous, and carries a missing
+/// component forward in when it converts a color to another space.
+enum ColorComponentKind: Sendable {
+  /// The reds, `r` and `x`.
+  case red
+  /// The greens, `g` and `y`.
+  case green
+  /// The blues, `b` and `z`.
+  case blue
+  case lightness
+  /// The chroma and the saturation.
+  case colorfulness
+  case hue
+  /// The opposing `a` of Lab and Oklab.
+  case opponentA
+  /// The opposing `b` of Lab and Oklab.
+  case opponentB
+}
+
+extension ColorFunction {
+  /// The kinds of the components of the function, or `nil` for a component of no kind, such as the whiteness of
+  /// `hwb()`.
+  var componentKinds: [ColorComponentKind?] {
+    switch self {
+    case .rgb, .color: [.red, .green, .blue]
+    case .hsl: [.hue, .colorfulness, .lightness]
+    case .hwb: [.hue, nil, nil]
+    case .lab, .oklab: [.lightness, .opponentA, .opponentB]
+    case .lch, .oklch: [.lightness, .colorfulness, .hue]
+    }
+  }
+}
+
+extension ColorMixSpace {
+  /// The kinds of the components of the space, or `nil` for a component of no kind, such as the whiteness of HWB.
+  var componentKinds: [ColorComponentKind?] {
+    switch self {
+    case .hsl: [.hue, .colorfulness, .lightness]
+    case .hwb: [.hue, nil, nil]
+    case .lab, .oklab: [.lightness, .opponentA, .opponentB]
+    case .lch, .oklch: [.lightness, .colorfulness, .hue]
+    default: [.red, .green, .blue]
+    }
   }
 }
