@@ -22,6 +22,24 @@ struct TextBrowserTests {
   private func isRed(_ pixel: [UInt8]) -> Bool { Int(pixel[0]) > Int(pixel[1]) + 64 }
   private func isGreen(_ pixel: [UInt8]) -> Bool { Int(pixel[1]) > Int(pixel[0]) + 64 }
 
+  @Test(
+    "in vertical text, the underline is on the right of the line and the overline on its left",
+    arguments: [("underline", true), ("overline", false)])
+  func verticalLines(line: String, isRight: Bool) async throws {
+    // Spaces that have no outlines, so that only the line is drawn.
+    let rendering = try await render(
+      #"<text x="10" y="2" font-size="8" writing-mode="tb" xml:space="preserve" text-decoration="\#(line)">"#
+        + "\u{A0}\u{A0}</text>")
+    let drawn = columns(of: rendering) { _ in true }
+    try #require(!drawn.isEmpty)
+    let middle = 10 * rendering.scale
+    if isRight {
+      #expect(drawn.allSatisfy { $0 > middle })
+    } else {
+      #expect(drawn.allSatisfy { $0 < middle })
+    }
+  }
+
   @Test("a gradient of glyphs that rotate turns isn't turned with them")
   func turnedGlyphPaint() async throws {
     // Red left of x = 10 and green right of it, in the user space.

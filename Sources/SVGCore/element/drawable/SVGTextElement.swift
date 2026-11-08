@@ -202,6 +202,7 @@ final class SVGTextElement: ShapeGeometry {
     var under = [Int: CGMutablePath]()
     var through = [Int: CGMutablePath]()
     let owners = owners(of: content)
+    let isVertical = style.writingMode != .horizontalTB
     // The glyphs that have one line, with their first glyph and their advance in the coordinates of the line.
     var segments = [(glyph: PlacedGlyph, advance: CGFloat)]()
     for glyph in layout.glyphs {
@@ -226,13 +227,20 @@ final class SVGTextElement: ShapeGeometry {
         var thickness = CTFontGetUnderlineThickness(font)
         let center: CGFloat
         switch line {
+        case .underline where isVertical:
+          // In vertical text, the line turned clockwise has its top on the right. The underline goes along the right
+          // side of the em box around the central baseline, and the overline along its left side, as Chrome and
+          // Firefox draw them, and the line through the text is on the central baseline.
+          center = Self.position(of: .central, in: font) + CTFontGetSize(font) / 2 + thickness / 2
+        case .overline where isVertical:
+          center = Self.position(of: .central, in: font) - CTFontGetSize(font) / 2 - thickness / 2
         case .underline:
           center = CTFontGetUnderlinePosition(font)
         case .overline:
           center = CTFontGetAscent(font)
         default:
           let strikeout = Self.strikeout(of: font)
-          center = strikeout?.position ?? CTFontGetXHeight(font) / 2
+          center = isVertical ? Self.position(of: .central, in: font) : strikeout?.position ?? CTFontGetXHeight(font) / 2
           thickness = strikeout?.thickness ?? thickness
         }
         let rect = CGRect(x: 0, y: center - thickness / 2, width: advance, height: thickness)
