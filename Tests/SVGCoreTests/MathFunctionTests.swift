@@ -17,6 +17,18 @@ private func style(of id: String, in content: String) throws -> ComputedStyle {
   return try #require(elements.first { $0.base.id == id }).style
 }
 
+/// The red, green and blue from 0 to 255 and the alpha from 0 to 1 of a color, rounded, or `nil` if it isn't one.
+private func rgba(of text: String) -> [Double]? {
+  let color: SVGColor
+  switch Paint(text) {
+  case .color(let value)?: color = value
+  case .expression(let expression)?: color = expression.resolved(currentColor: .named(SVGColorName(name: "black")))
+  default: return nil
+  }
+  guard let c = color.components else { return nil }
+  return [(c.red * 255).rounded(), (c.green * 255).rounded(), (c.blue * 255).rounded(), c.alpha]
+}
+
 /// The transform list of a value of `transform`.
 private func transform(_ text: String, origin: DeclarationOrigin) -> TransformList? {
   var input = _CSSParser.Parser(input: ParserInput(input: text))
@@ -161,6 +173,35 @@ struct MathFunctionTests {
     #expect(transform("scale(calc(50% + 50%), calc(2 / 4))", origin: .css) == TransformList(functions: [.scale(1, 0.5)]))
     #expect(transform("translate(calc(100px + 100px) 0)", origin: .attribute) == nil)
     #expect(transform("rotate(calc(10px))", origin: .css) == nil)
+  }
+
+  /// Colors with math functions, and their red, green and blue from 0 to 255 and their alpha.
+  private static let colors: [(String, [Double])] = [
+    ("rgb(calc(0) calc(256 / 2) 0)", [0, 128, 0, 1]),
+    ("rgb(calc(50% + 50%) 0 0 / calc(1 / 2))", [255, 0, 0, 0.5]),
+    ("rgb(calc(255), 0, 0)", [255, 0, 0, 1]),
+    ("hsl(calc(60deg + 0.5turn) 100% 50%)", [0, 0, 255, 1]),
+    ("hsl(calc(120) 100% 25%)", [0, 128, 0, 1]),
+    ("hsl(from red calc(h + 120) s calc(l / 2))", [0, 128, 0, 1]),
+    ("rgb(from red calc(r / 2) g calc(b + 255))", [128, 0, 255, 1]),
+    ("rgb(from red r g b / calc(alpha / 2))", [255, 0, 0, 0.5]),
+  ]
+
+  @Test("components of colors take math functions, with the components of the origin of a relative color", arguments: colors)
+  func colorComponents(text: String, expected: [Double]) {
+    let rgba = rgba(of: text)
+    let isClose = rgba.map { zip($0, expected).allSatisfy { abs($0 - $1) < 1.01 } } ?? false
+    #expect(isClose, "\(text): \(String(describing: rgba))")
+  }
+
+  @Test(
+    "math functions that aren't valid components of colors",
+    arguments: [
+      "rgb(calc(10px) 0 0)", "rgb(calc(50% + 10) 0 0)", "hsl(calc(10%) 100% 50%)", "rgb(calc(r) 0 0)",
+      "rgb(from red calc(h) g b)", "rgb(calc(1 + ) 0 0)", "rgb(foo(1) 0 0)",
+    ])
+  func invalidColorComponents(text: String) {
+    #expect(rgba(of: text) == nil)
   }
 
   @Test("a math function of lengths in units that can't be added changes discretely in an animation")

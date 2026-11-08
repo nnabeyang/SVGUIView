@@ -178,8 +178,15 @@ struct RelativeColor: Sendable, Equatable {
     var channels = function.channels(ofSRGB: (c.red, c.green, c.blue))
     channels["alpha"] = c.alpha
     func value(_ component: SVGAttributeScanner.ColorComponent) -> SVGAttributeScanner.ColorComponent {
-      guard case .channel(let name) = component else { return component }
-      return .number(channels[name] ?? 0)
+      switch component {
+      case .channel(let name):
+        return .number(channels[name] ?? 0)
+      case .calc(let expression, let isPercentage):
+        let value = expression.node.value(length: { _ in 0 }, percentage: { $0 }, channel: { channels[$0] ?? 0 })
+        return isPercentage ? .percentage(value) : .number(value)
+      default:
+        return component
+      }
     }
     return SVGAttributeScanner.color(
       of: function, components: components.map(value), alpha: value(alpha ?? .channel("alpha")), isLegacy: false,
