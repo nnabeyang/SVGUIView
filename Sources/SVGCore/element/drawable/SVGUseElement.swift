@@ -22,10 +22,12 @@ final class SVGUseElement: SVGDrawableElement {
     self.base = base
     self.children = children
     let attributes = base.attributes
-    x = SVGLength(attributes["x"])
-    y = SVGLength(attributes["y"])
-    width = SVGLength(attributes["width"])
-    height = SVGLength(attributes["height"])
+    // `x` and `y` are geometry properties, which style sheets set, and whose presentation attributes are read as CSS.
+    // `width` and `height` are attributes, which take math functions as the lengths of SVG 2 do.
+    x = base.style.x
+    y = base.style.y
+    width = attributes["width"].flatMap { SVGLength(property: $0, isNonNegative: true) }
+    height = attributes["height"].flatMap { SVGLength(property: $0, isNonNegative: true) }
     parentId = fragmentID(of: attributes["href"])
   }
 

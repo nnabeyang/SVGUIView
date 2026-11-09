@@ -567,12 +567,24 @@ struct StyleTests {
     #expect(value == data)
   }
 
-  @Test("presentation attributes of geometry are taken only by rect")
+  @Test("presentation attributes of geometry are taken by the elements whose geometry properties they are")
   func geometryAttributes() {
-    let rect = CascadedValues(CascadedValues.presentationAttributes(of: .rect, attributes: ["x": "10", "fill": "red"]))
-    let circle = CascadedValues(
-      CascadedValues.presentationAttributes(of: .circle, attributes: ["x": "10", "fill": "red"]))
-    #expect(rect[XProperty.self] != nil)
+    func cascaded(_ name: SVGElementName) -> CascadedValues {
+      CascadedValues(
+        CascadedValues.presentationAttributes(
+          of: name, attributes: ["x": "10", "y": "10", "width": "10", "height": "10", "fill": "red"]))
+    }
+    for name in [SVGElementName.rect, .image] {
+      #expect(cascaded(name)[XProperty.self] != nil)
+      #expect(cascaded(name)[WidthProperty.self] != nil)
+    }
+    // The width and the height of a use element are attributes, and not properties.
+    let use = cascaded(.use)
+    #expect(use[XProperty.self] != nil)
+    #expect(use[YProperty.self] != nil)
+    #expect(use[WidthProperty.self] == nil)
+    #expect(use[HeightProperty.self] == nil)
+    let circle = cascaded(.circle)
     #expect(circle[XProperty.self] == nil)
     #expect(circle[FillProperty.self] != nil)
   }

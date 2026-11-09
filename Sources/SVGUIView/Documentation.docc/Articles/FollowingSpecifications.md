@@ -110,8 +110,9 @@ browsers don't:
 - `glyph-orientation-vertical="0"` sets the characters of vertical text
   upright.
 - Selectors match the copies that `<use>` elements make within their own tree.
-- The position and the size of a nested `<svg>` element take math functions,
-  such as `width="calc(30% + 10px)"`.
+- The position and the size of a nested `<svg>` element, and the `width` and
+  `height` of a `<use>` element, take math functions, such as
+  `width="calc(30% + 10px)"`.
 - Selectors don't see the values that SMIL animations give attributes, except
   that class selectors see the class that an animation of `class` gives. A
   SMIL animation of the `style` attribute changes nothing.
@@ -127,8 +128,6 @@ These features are planned, but not supported yet:
 - `<use>` references, style sheets and fonts in other files. Only the images
   of `<image>` and `<feImage>` elements are read from other files.
 - Images and references on the network, as an option.
-- The geometry properties of `<use>` and `<image>` in style sheets, such as
-  `x` and `width`.
 - Math functions other than `calc()`, `min()`, `max()` and `clamp()`, such as
   `round()` and `sin()`.
 - The `rect()`, `xywh()`, `path()` and `shape()` shapes of `clip-path`.

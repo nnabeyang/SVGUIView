@@ -624,9 +624,13 @@ struct RenderTreeBuilderTests {
     // A declaration in a style sheet that isn't valid leaves the attribute.
     (#"<style>circle { r: -4px }</style><circle cx="10" cy="10" r="2"/>"#, CGRect(x: 8, y: 8, width: 4, height: 4)),
     (#"<style>rect { rx: 2px }</style><rect width="10" height="10"/>"#, CGRect(x: 0, y: 0, width: 10, height: 10)),
+    // The position and the size of an image are geometry properties, whose presentation attributes are read as CSS.
+    (#"<style>image { x: 2px; width: 6px; height: 4px }</style><image/>"#, CGRect(x: 2, y: 0, width: 6, height: 4)),
+    (#"<image x="calc(1px + 1px)" y="3" width="5" height="calc(2px * 2)"/>"#, CGRect(x: 2, y: 3, width: 5, height: 4)),
   ]
 
-  @Test("style sheets set the geometry properties of circles, ellipses and rectangles", arguments: styledShapes)
+  @Test(
+    "style sheets set the geometry properties of circles, ellipses, rectangles and images", arguments: styledShapes)
   func styledGeometry(content: String, bounds: CGRect) async throws {
     let tree = try await renderTree(content)
     let path = try #require(try shape(try children(of: tree).first).geometry).path.cgPath
@@ -634,6 +638,23 @@ struct RenderTreeBuilderTests {
     for (a, e) in [(box.minX, bounds.minX), (box.minY, bounds.minY), (box.maxX, bounds.maxX), (box.maxY, bounds.maxY)] {
       #expect(abs(a - e) < 0.001, "\(box) isn't \(bounds)")
     }
+  }
+
+  @Test("the x and y of a use element are geometry properties, and its width and height are attributes")
+  func useGeometry() async throws {
+    let tree = try await renderTree(
+      #"<defs><symbol id="s" viewBox="0 0 10 10"><rect width="10" height="10"/></symbol></defs>"#
+        + #"<style>use { x: 3px }</style>"#
+        + ##"<use href="#s" y="calc(2px + 2px)" width="calc(2px + 3px)" height="5" style="width: 20px; height: 20px"/>"##)
+    let node = try use(try #require(try children(of: tree).last))
+    let instance = try #require(node.instance)
+    #expect(instance.translation == CGAffineTransform(translationX: 3, y: 4))
+    // The symbol's view box of 10 fits the width and the height of 5 of the attributes, and not the properties.
+    guard case .viewport(let viewport)? = instance.content else {
+      Issue.record("The symbol isn't a viewport")
+      return
+    }
+    #expect(viewport.content?.viewBoxTransform == CGAffineTransform(scaleX: 0.5, y: 0.5))
   }
 
   @Test("the radius of a rectangle that a style sheet sets rounds its corners")

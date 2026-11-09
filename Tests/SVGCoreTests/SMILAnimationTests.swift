@@ -129,6 +129,17 @@ struct SMILAnimationTests {
     #expect(style.r == .number(20))
   }
 
+  @Test("the x of a use element and the width of an image are properties that animate interpolates")
+  func useAndImageGeometry() throws {
+    let use = try style(
+      ##"<rect id="a" width="1" height="1"/><use id="r" href="#a"><animate attributeName="x" from="0" to="10" dur="2s"/></use>"##,
+      at: 1)
+    #expect(use.x == .number(5))
+    let image = try style(
+      #"<image id="r" height="4"><animate attributeName="width" from="10" to="30" dur="2s"/></image>"#, at: 1)
+    #expect(image.width == .number(20))
+  }
+
   @Test("geometry properties of rectangles and colors are interpolated")
   func geometryAndColors() throws {
     let style = try style(
