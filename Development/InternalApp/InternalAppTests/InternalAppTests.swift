@@ -16,7 +16,8 @@ struct SVGFile: Sendable, CustomTestStringConvertible {
 
   var testDescription: String { name }
 
-  /// The SVG files under `<root>/<components>` of the test suite, sorted by path.
+  /// The SVG files under `<root>/<components>` of the test suite, sorted by path, without the files in `images`
+  /// folders, which are the images that the tests refer to.
   ///
   /// - Parameter root: `w3c` for the tests from other projects, or `custom` for the ones written for SVGUIView.
   static func all(root: String = "w3c", in components: String...) -> [SVGFile] {
@@ -27,7 +28,8 @@ struct SVGFile: Sendable, CustomTestStringConvertible {
     else { return [] }
     return enumerator.compactMap { $0 as? URL }
       .filter { url in
-        url.pathExtension == "svg" && (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        url.pathExtension == "svg" && !url.pathComponents.contains("images")
+          && (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
       }
       .sorted { $0.path < $1.path }
       .map(SVGFile.init(url:))

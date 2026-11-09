@@ -1,5 +1,6 @@
 import Foundation
 import SVGSnapshotReferences
+import SVGTestSuite
 import SVGUIView
 import SnapshotTesting
 import Testing
@@ -32,7 +33,8 @@ func assertSVGSnapshot(
   view.contentMode = .scaleAspectFit
   // The tests check what a rendering draws, not how fast. On CI, many renderings run in parallel and can be
   // slow, so the timeout is longer than the default and only catches a rendering that never ends.
-  view.configuration = SVGUIViewConfiguration(timeoutDuration: .seconds(60))
+  view.configuration = SVGUIViewConfiguration(
+    timeoutDuration: .seconds(60), externalResources: .folder(TestSuite.bundle.bundleURL))
   view.frame = UIScreen.main.bounds
   view.layoutIfNeeded()
   let image: UIImage
