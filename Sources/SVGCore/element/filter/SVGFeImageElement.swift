@@ -16,6 +16,8 @@ final class SVGFeImageElement: SVGElement, SVGFilterPrimitiveElement {
     case element(String)
     /// The data of a data URL.
     case data(Data)
+    /// A file that an `href` references, which a rendering reads if its loader allows it.
+    case external(String)
   }
 
   let base: SVGBaseElement
@@ -26,8 +28,8 @@ final class SVGFeImageElement: SVGElement, SVGFilterPrimitiveElement {
 
   let result: String?
 
-  /// What the primitive draws, or `nil` where `href` is missing or isn't a reference to an element or a data URL in
-  /// base64. Other URLs, such as the files beside the document, aren't read.
+  /// What the primitive draws, or `nil` where `href` is missing, or is a reference to an element that isn't an ID or
+  /// a data URL that isn't base64.
   let source: Source?
   /// How an image is placed in the subregion.
   let preserveAspectRatio: PreserveAspectRatio
@@ -42,13 +44,15 @@ final class SVGFeImageElement: SVGElement, SVGFilterPrimitiveElement {
 
     result = attributes["result"]
 
-    let href = attributes["href", default: ""].trimmingCharacters(in: .whitespaces)
-    if href.hasPrefix("#") {
+    let href = attributes["href", default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+    if href.isEmpty {
+      source = nil
+    } else if href.hasPrefix("#") {
       source = fragmentID(of: href).map { .element($0) }
     } else if href.lowercased().hasPrefix("data:") {
       source = EmbeddedImage.data(ofHref: href).map { .data($0) }
     } else {
-      source = nil
+      source = .external(href)
     }
     preserveAspectRatio =
       PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""]) ?? PreserveAspectRatio()
