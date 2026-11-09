@@ -152,9 +152,20 @@ struct ExternalResourceLoaderTests {
     #expect(counter.count.withLock { $0 } == 2)
   }
 
-  @Test("only a data URL is read as base64", arguments: [("data:;base64,YQ==", "a"), (" DATA:,YQ==", "a"), ("YQ==", nil)])
+  @Test(
+    "a data URL is base64 where its media type says so, and percent-encoded text otherwise, without its fragment",
+    arguments: [
+      ("data:;base64,YQ==", "a"), (" DATA:image/png;BASE64,YQ==", "a"), ("data:;base64,YQ==#view", "a"),
+      ("data:,YQ==", "YQ=="), ("data:image/svg+xml,%3Csvg%20viewBox='0,0,1,1'/%3E#v", "<svg viewBox='0,0,1,1'/>"),
+      ("YQ==", nil), ("data:YQ==", nil),
+    ])
   func dataURL(href: String, expected: String?) {
     #expect(EmbeddedImage.data(ofHref: href).map { String(decoding: $0, as: UTF8.self) } == expected)
+  }
+
+  @Test("the fragment of an href", arguments: [("a.svg#v", "v"), ("data:,x#v%20w", "v w"), ("a.svg", nil), ("a.svg#", nil)])
+  func fragment(href: String, expected: String?) {
+    #expect(EmbeddedImage.fragment(ofHref: href) == expected)
   }
 
   @Test("an image element keeps a reference to a file, and reads a data URL")
@@ -165,7 +176,7 @@ struct ExternalResourceLoaderTests {
       return try #require(base["i"] as? SVGImageElement).source
     }
     #expect(try source("images/a.png") == .external("images/a.png"))
-    #expect(try source("data:,YQ==") == .data(Data("a".utf8)))
+    #expect(try source("data:;base64,YQ==") == .data(Data("a".utf8)))
     #expect(try source("#a") == nil)
     #expect(try source("") == nil)
   }

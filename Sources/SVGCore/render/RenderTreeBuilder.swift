@@ -20,15 +20,20 @@ package struct RenderTreeBuilder {
   let cyclicMasks: Set<ElementID>
   /// Reads the files that the document references.
   let resources: ExternalResourceLoader
+  /// The images that the `<image>` elements show, read once for the tree.
+  let images = LoadedImageCollector()
   /// How the root element is placed in the rectangle of the `<image>` element that shows the document as an SVG
   /// image, or `nil` if the document isn't an image.
   private let imageFit: PreserveAspectRatio?
+  /// The view box that the `<view>` element that the URL of an SVG image names gives its root element instead of its
+  /// own, or `nil`.
+  private let imageViewBox: CGRect?
   /// How many SVG images the document is in, which limits the images in images.
-  private let imageDepth: Int
+  let imageDepth: Int
 
   /// The deepest SVG image in SVG images that is drawn. Each image is a document of its own, so the limit keeps
   /// images that show themselves again and again from making too many.
-  private static let maxImageDepth = 3
+  static let maxImageDepth = 3
 
   /// - Parameters:
   ///   - previous: The nodes of the render tree of the document at another time, for the same rectangle, scale and
@@ -40,12 +45,12 @@ package struct RenderTreeBuilder {
   ) {
     self.init(
       base: base, viewPort: viewPort, scale: scale, reusing: previous, resources: resources, imageFit: nil,
-      imageDepth: 0)
+      imageViewBox: nil, imageDepth: 0)
   }
 
   private init(
     base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache,
-    resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageDepth: Int
+    resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageViewBox: CGRect?, imageDepth: Int
   ) {
     self.base = base
     self.viewPort = viewPort
@@ -53,6 +58,7 @@ package struct RenderTreeBuilder {
     self.previous = previous
     self.resources = resources
     self.imageFit = imageFit
+    self.imageViewBox = imageViewBox
     self.imageDepth = imageDepth
     cyclicMasks = Self.findCyclicMasks(in: base)
   }
@@ -574,7 +580,7 @@ package struct RenderTreeBuilder {
     of svg: SVGSVGElement, context: ResolveContext, isRoot: Bool
   ) -> (translation: CGAffineTransform, layout: ViewportLayout?) {
     if isRoot, let imageFit {
-      let viewBox = imageViewBox(of: svg)
+      let viewBox = viewBoxOfImage(svg)
       guard viewBox.width > 0, viewBox.height > 0, viewPort.width > 0, viewPort.height > 0 else {
         return (.identity, nil)
       }
@@ -694,6 +700,8 @@ package struct RenderTreeBuilder {
     of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard
   ) async -> CGPath? {
     switch element {
+    case let image as SVGImageElement:
+      return await imageRect(of: image, context: context).map { CGPath(rect: $0, transform: nil) }
     case let shape as any ShapeGeometry:
       return shape.path(in: context)
     case let use as SVGUseElement:
@@ -934,21 +942,14 @@ package struct RenderTreeBuilder {
   /// The data is a data URL, or a file that the loader reads. It's decoded as a bitmap, or else parsed as an SVG
   /// image: a document of its own, without animations, at time zero, which can't reference anything outside it.
   private func imagePaint(of element: SVGImageElement, in rect: CGRect) async -> ImagePaint? {
-    let data: Data
-    switch element.source {
-    case .data(let embedded): data = embedded
-    case .external(let href):
-      guard let file = await resources.data(forHref: href) else { return nil }
-      data = file
-    case nil: return nil
-    }
+    guard let image = await loadedImage(of: element) else { return nil }
     let clips =
       switch element.style.overflow {
       case .visible, .auto: false
       default: true
       }
     return await imagePaint(
-      data: data, preserveAspectRatio: element.preserveAspectRatio, clips: clips,
+      image: image, preserveAspectRatio: element.preserveAspectRatio, clips: clips,
       interpolates: element.style.imageRendering.interpolates, in: rect)
   }
 
@@ -961,25 +962,34 @@ package struct RenderTreeBuilder {
   func imagePaint(
     data: Data, preserveAspectRatio: PreserveAspectRatio, clips: Bool, interpolates: Bool, in rect: CGRect
   ) async -> ImagePaint? {
+    guard let image = loadImage(data: data, fragment: nil) else { return nil }
+    return await imagePaint(
+      image: image, preserveAspectRatio: preserveAspectRatio, clips: clips, interpolates: interpolates, in: rect)
+  }
+
+  /// An image, a bitmap or an SVG image, placed in a rectangle by its `preserveAspectRatio`, or `nil` if an SVG image
+  /// has no view box with an area.
+  private func imagePaint(
+    image: LoadedImage, preserveAspectRatio: PreserveAspectRatio, clips: Bool, interpolates: Bool, in rect: CGRect
+  ) async -> ImagePaint? {
     let content: ImageContent
     let viewBox: CGRect
-    if let image = EmbeddedImage.decodedImage(of: data), image.width > 0, image.height > 0 {
-      content = .bitmap(image)
-      viewBox = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-    } else {
-      guard imageDepth < Self.maxImageDepth, let data = EmbeddedImage.svgData(of: data) else { return nil }
-      let document = SVGParser.parse(data: data, languages: base.document.languages)
+    switch image.content {
+    case .bitmap(let bitmap):
+      content = .bitmap(bitmap)
+      viewBox = CGRect(x: 0, y: 0, width: bitmap.width, height: bitmap.height)
+    case .document(let document):
       guard let svg = document.root else { return nil }
       let builder = RenderTreeBuilder(
         base: document, viewPort: rect, scale: scale, reusing: .init(), resources: .none,
-        imageFit: preserveAspectRatio, imageDepth: imageDepth + 1)
+        imageFit: preserveAspectRatio, imageViewBox: image.viewBox, imageDepth: imageDepth + 1)
       let context = ResolveContext(
         base: document, viewPort: rect, scale: scale, viewBox: CGRect(origin: .zero, size: rect.size))
       guard
         let node = await builder.node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
       else { return nil }
       content = .document(node)
-      viewBox = builder.imageViewBox(of: svg)
+      viewBox = builder.viewBoxOfImage(svg)
       guard viewBox.width > 0, viewBox.height > 0 else { return nil }
     }
     let placed = viewBox.applying(preserveAspectRatio.getTransform(viewBox: viewBox, size: rect.size))
@@ -988,10 +998,11 @@ package struct RenderTreeBuilder {
     return ImagePaint(content: content, rect: placed, clip: clip, interpolates: interpolates)
   }
 
-  /// The view box of the root element of an SVG image, or the box of its width and height if it has none. The
-  /// percentages of the width and the height are of the rectangle of the `<image>` element.
-  private func imageViewBox(of svg: SVGSVGElement) -> CGRect {
-    svg.getViewBox(size: viewPort.size)
+  /// The view box of the root element of an SVG image: the one of the `<view>` that the URL of the image names, its
+  /// own, or the box of its width and height if it has none. The percentages of the width and the height are of the
+  /// rectangle of the `<image>` element.
+  private func viewBoxOfImage(_ svg: SVGSVGElement) -> CGRect {
+    imageViewBox ?? svg.getViewBox(size: viewPort.size)
   }
 
   /// The stroke of an element, or `nil` if it paints none.

@@ -4,13 +4,31 @@ import ImageIO
 
 /// The data of an image that an `href` holds, of `<image>` and `<feImage>`.
 enum EmbeddedImage {
-  /// The data of a data URL, base64 after its comma, or `nil` if the `href` isn't a data URL or isn't base64.
+  /// The data of a data URL, or `nil` if the `href` isn't a data URL.
+  ///
+  /// The data after the first comma is base64 if the media type ends with `;base64`, and percent-encoded text
+  /// otherwise, as the Fetch standard reads data URLs. A fragment after `#` isn't part of the data.
   static func data(ofHref href: String) -> Data? {
     let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard href.lowercased().hasPrefix("data:") else { return nil }
-    return href.split(separator: ",").last.flatMap {
-      Data(base64Encoded: String($0), options: .ignoreUnknownCharacters)
+    guard href.lowercased().hasPrefix("data:"), let comma = href.firstIndex(of: ",") else { return nil }
+    let mediaType = href[href.index(href.startIndex, offsetBy: 5)..<comma]
+    var body = href[href.index(after: comma)...]
+    if let hash = body.firstIndex(of: "#") {
+      body = body[..<hash]
     }
+    let text = String(body).removingPercentEncoding ?? String(body)
+    if mediaType.trimmingCharacters(in: .whitespaces).lowercased().hasSuffix(";base64") {
+      return Data(base64Encoded: text, options: .ignoreUnknownCharacters)
+    }
+    return Data(text.utf8)
+  }
+
+  /// The fragment of a URL after `#`, which names an element of an SVG image, or `nil` if it has none.
+  static func fragment(ofHref href: String) -> String? {
+    let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let hash = href.firstIndex(of: "#") else { return nil }
+    let fragment = String(href[href.index(after: hash)...])
+    return fragment.isEmpty ? nil : fragment.removingPercentEncoding ?? fragment
   }
 
   /// The image of the data, or `nil` if the data isn't an image.

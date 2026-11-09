@@ -104,6 +104,20 @@ struct ExternalImageTests {
     #expect(try await center(of: view) == Self.greenPixel)
   }
 
+  @Test("an image without a width and a height takes the size of the pixels of its file")
+  func intrinsicSize() async throws {
+    let folder = try DocumentFolder()
+    let data = Data(document(#"<image href="images/green.png" x="2" y="3"/>"#).utf8)
+    let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: data, baseURL: folder.documentURL)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    let image = try #require(try await view.takeSnapshot(scale: 1).cgImage)
+    let rendering = Rendering(components: try pixels(of: image), width: image.width, scale: 1)
+    // The PNG is a green pixel.
+    #expect(rendering.pixel(x: 2, y: 3) == Self.greenPixel)
+    #expect(rendering.pixel(x: 3, y: 3) == Self.clearPixel)
+    #expect(rendering.pixel(x: 2, y: 4) == Self.clearPixel)
+  }
+
   @Test("a feImage shows the image of a file in the folder of the document")
   func feImage() async throws {
     let folder = try DocumentFolder()
