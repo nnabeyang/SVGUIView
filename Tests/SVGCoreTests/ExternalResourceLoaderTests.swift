@@ -169,4 +169,26 @@ struct ExternalResourceLoaderTests {
     #expect(try source("#a") == nil)
     #expect(try source("") == nil)
   }
+
+  @Test("an xlink:href is a reference only where its prefix is bound to the XLink namespace")
+  func xlinkNamespace() throws {
+    let svg = """
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <g xmlns:xlink="http://example.net/bar">
+          <image id="other" xlink:href="a.png"/>
+          <g xmlns:xlink="http://www.w3.org/1999/xlink"><image id="inner" xlink:href="b.png"/></g>
+          <image id="after" xlink:href="c.png"/>
+        </g>
+        <image id="outer" xlink:href="d.png"/>
+      </svg>
+      """
+    let base = SVGParser.parse(data: Data(svg.utf8))
+    func source(_ id: String) throws -> SVGImageElement.Source? {
+      try #require(base[id] as? SVGImageElement).source
+    }
+    #expect(try source("other") == nil)
+    #expect(try source("inner") == .external("b.png"))
+    #expect(try source("after") == nil)
+    #expect(try source("outer") == .external("d.png"))
+  }
 }
