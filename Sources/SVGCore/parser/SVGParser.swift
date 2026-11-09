@@ -105,7 +105,8 @@ package final class SVGParser: NSObject {
   private var stack = [OpenElement]()
   private var root: DocumentElement?
   private var elementCount = 0
-  private var nameSpaces = [String: (ns: SVGXmlNameSpace, count: Int)]()
+  /// The namespaces that each prefix is bound to, innermost last, or `nil` for a namespace other than SVG and XLink.
+  private var nameSpaces = [String: [SVGXmlNameSpace?]]()
 
   private static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "parser")
 
@@ -144,7 +145,7 @@ extension SVGParser: XMLParserDelegate {
       }
       let prefix = a[0]
       let attributeName = a[1]
-      if case .xlink = nameSpaces[prefix]?.ns, attributeName == "href" {
+      if case .xlink = nameSpaces[prefix]?.last, attributeName == "href" {
         attributes[attributeName] = element.value
       } else if prefix == "xml", attributeName == "space" || attributeName == "lang" {
         // The `xml` prefix is bound without a declaration, so the parser doesn't report it.
@@ -164,19 +165,15 @@ extension SVGParser: XMLParserDelegate {
     elementCount += 1
   }
 
+  // A prefix bound to another namespace inside the scope of a binding, such as `xlink` bound to another URI, hides
+  // the outer binding until the inner one ends.
   package func parser(_: XMLParser, didStartMappingPrefix prefix: String, toURI namespaceURI: String) {
-    guard let nameSpace = SVGXmlNameSpace(rawValue: namespaceURI) else { return }
-    if let value = nameSpaces[prefix] {
-      nameSpaces[prefix] = (ns: nameSpace, value.count + 1)
-    } else {
-      nameSpaces[prefix] = (ns: nameSpace, 1)
-    }
+    nameSpaces[prefix, default: []].append(SVGXmlNameSpace(rawValue: namespaceURI))
   }
 
   package func parser(_: XMLParser, didEndMappingPrefix prefix: String) {
-    if let value = nameSpaces[prefix], value.count > 1 {
-      nameSpaces[prefix] = (ns: value.ns, count: value.count - 1)
-    } else {
+    nameSpaces[prefix]?.removeLast()
+    if nameSpaces[prefix]?.isEmpty == true {
       nameSpaces.removeValue(forKey: prefix)
     }
   }

@@ -124,9 +124,8 @@ where they stopped. To keep them in step with the clock, seek to the time with
 
 These features are planned, but not supported yet:
 
-- `<feImage>` images, `<use>` references, style sheets and fonts in other
-  files, and the other files that an SVG image refers to. Only the images of
-  `<image>` elements are read from other files.
+- `<use>` references, style sheets and fonts in other files. Only the images
+  of `<image>` and `<feImage>` elements are read from other files.
 - Images and references on the network, as an option.
 - The geometry properties of `<use>` and `<image>` in style sheets, such as
   `x` and `width`.

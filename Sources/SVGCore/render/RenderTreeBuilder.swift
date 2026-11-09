@@ -19,7 +19,7 @@ package struct RenderTreeBuilder {
   /// The elements in masks whose masks close cycles of masks, which they're drawn without.
   let cyclicMasks: Set<ElementID>
   /// Reads the files that the document references.
-  private let resources: ExternalResourceLoader
+  let resources: ExternalResourceLoader
   /// How the root element is placed in the rectangle of the `<image>` element that shows the document as an SVG
   /// image, or `nil` if the document isn't an image.
   private let imageFit: PreserveAspectRatio?

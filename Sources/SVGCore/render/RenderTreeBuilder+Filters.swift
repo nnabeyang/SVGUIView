@@ -241,8 +241,8 @@ extension RenderTreeBuilder {
     return .other(name)
   }
 
-  /// What a `feImage` draws, or `nil` for nothing: an image of a data URL placed in the subregion by its
-  /// `preserveAspectRatio`, or an element of the document, drawn in the user space of the element with the filter
+  /// What a `feImage` draws, or `nil` for nothing: an image of a data URL or of a file that the loader reads, placed
+  /// in the subregion by its `preserveAspectRatio`, or an element of the document, drawn in the user space of the element with the filter
   /// moved to the origin of the subregion, as the `<use>` element that the specification likens it to, Chrome and
   /// resvg draw it.
   private func imagePrimitive(
@@ -253,6 +253,12 @@ extension RenderTreeBuilder {
     case nil:
       return nil
     case .data(let data):
+      return await imagePaint(
+        data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false,
+        interpolates: image.base.style.imageRendering.interpolates, in: subregion
+      ).map { .picture($0) }
+    case .external(let href):
+      guard let data = await resources.data(forHref: href) else { return nil }
       return await imagePaint(
         data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false,
         interpolates: image.base.style.imageRendering.interpolates, in: subregion

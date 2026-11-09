@@ -58,7 +58,9 @@ couldn't be allocated, the view keeps the image that it shows.
 ### Reading other files
 
 A document can show the image files that it refers to by relative URLs, such
-as `<image href="images/photo.png">`. The URLs are relative to the view's
+as `<image href="images/photo.png">` and the `<feImage>` of a filter. An image
+file is a bitmap or an SVG image, which, as in a browser, reads no other files
+itself. The URLs are relative to the view's
 ``SVGUIView/SVGUIView/baseURL``: the URL that
 ``SVGUIView/SVGUIView/init(contentsOf:)`` reads the document from, or the one
 given with the data:

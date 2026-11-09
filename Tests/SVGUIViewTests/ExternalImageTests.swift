@@ -104,6 +104,15 @@ struct ExternalImageTests {
     #expect(try await center(of: view) == Self.greenPixel)
   }
 
+  @Test("a feImage shows the image of a file in the folder of the document")
+  func feImage() async throws {
+    let folder = try DocumentFolder()
+    let filter = #"<filter id="f" x="0" y="0" width="1" height="1"><feImage href="images/green.png" preserveAspectRatio="none"/></filter>"#
+    let data = Data(document(filter + #"<rect width="20" height="20" filter="url(#f)"/>"#).utf8)
+    #expect(try await center(of: SVGUIView(data: data, baseURL: folder.documentURL)) == Self.greenPixel)
+    #expect(try await center(of: SVGUIView(data: data)) == Self.clearPixel)
+  }
+
   @Test("data with a base URL shows the images, and data without one doesn't")
   func dataWithBaseURL() async throws {
     let folder = try DocumentFolder()
