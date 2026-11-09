@@ -4,11 +4,11 @@ import ImageIO
 
 final class SVGImageElement: ShapeGeometry {
   static var type: SVGElementName {
-    .circle
+    .image
   }
 
   var type: SVGElementName {
-    .circle
+    .image
   }
 
   /// Where the data of an image is.
@@ -22,9 +22,13 @@ final class SVGImageElement: ShapeGeometry {
   let base: SVGBaseElement
   /// Where the data of the image is, or `nil` where `href` is missing or is a data URL that isn't base64.
   let source: Source?
+  /// The fragment of the `href`, which names a `<view>` of an SVG image that sets its view box, or `nil`.
+  let fragment: String?
   let x: SVGLength?
   let y: SVGLength?
+  /// The width, or `nil` where it's missing or `auto`, which the size of the image decides.
   let width: SVGLength?
+  /// The height, or `nil` where it's missing or `auto`, which the size of the image decides.
   let height: SVGLength?
   /// How the image is placed in the rectangle of `x`, `y`, `width` and `height`.
   let preserveAspectRatio: PreserveAspectRatio
@@ -39,6 +43,7 @@ final class SVGImageElement: ShapeGeometry {
     } else {
       source = .external(href)
     }
+    fragment = source == nil ? nil : EmbeddedImage.fragment(ofHref: href)
     x = SVGLength(attributes["x"]) ?? .pixel(0)
     y = SVGLength(attributes["y"]) ?? .pixel(0)
     width = SVGLength(attributes["width"])
@@ -47,9 +52,11 @@ final class SVGImageElement: ShapeGeometry {
       PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""]) ?? PreserveAspectRatio()
   }
 
+  /// The rectangle of the element where its `width` and `height` are given. A `width` or a `height` of `auto` takes
+  /// the size of the image, which ``RenderTreeBuilder/imageRect(of:context:)`` reads, and is 0 here.
   func path(in context: any GeometryContext) -> CGPath? {
     let x = x?.value(context: context, mode: .width) ?? 0
-    let y = y?.value(context: context, mode: .width) ?? 0
+    let y = y?.value(context: context, mode: .height) ?? 0
     let width = width?.value(context: context, mode: .width) ?? 0
     let height = height?.value(context: context, mode: .height) ?? 0
 

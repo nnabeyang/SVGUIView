@@ -163,6 +163,11 @@ struct ExternalResourceLoaderTests {
     #expect(EmbeddedImage.data(ofHref: href).map { String(decoding: $0, as: UTF8.self) } == expected)
   }
 
+  @Test("the fragment of an href", arguments: [("a.svg#v", "v"), ("data:,x#v%20w", "v w"), ("a.svg", nil), ("a.svg#", nil)])
+  func fragment(href: String, expected: String?) {
+    #expect(EmbeddedImage.fragment(ofHref: href) == expected)
+  }
+
   @Test("an image element keeps a reference to a file, and reads a data URL")
   func imageSource() throws {
     func source(_ href: String) throws -> SVGImageElement.Source? {

@@ -23,6 +23,14 @@ enum EmbeddedImage {
     return Data(text.utf8)
   }
 
+  /// The fragment of a URL after `#`, which names an element of an SVG image, or `nil` if it has none.
+  static func fragment(ofHref href: String) -> String? {
+    let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let hash = href.firstIndex(of: "#") else { return nil }
+    let fragment = String(href[href.index(after: hash)...])
+    return fragment.isEmpty ? nil : fragment.removingPercentEncoding ?? fragment
+  }
+
   /// The image of the data, or `nil` if the data isn't an image.
   static func decodedImage(of data: Data) -> CGImage? {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil)
