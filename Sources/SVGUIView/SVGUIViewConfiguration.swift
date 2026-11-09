@@ -35,6 +35,13 @@ public struct SVGUIViewConfiguration: Sendable {
   /// zero while Reduce Motion is on. Set this to `true` only for animations
   /// that are essential to the content.
   public let playsWithReduceMotion: Bool
+  /// The files outside the document that the view reads, such as the image
+  /// files of `<image>` elements.
+  ///
+  /// The default is ``ExternalResources/documentFolder``, which reads the
+  /// files in the folder of the document. Reading them takes part of the
+  /// time of a rendering, which ``timeoutDuration`` limits.
+  public let externalResources: ExternalResources
 
   /// Creates a configuration.
   ///
@@ -46,13 +53,16 @@ public struct SVGUIViewConfiguration: Sendable {
   ///     The default is ``AnimationMode/play``.
   ///   - playsWithReduceMotion: Whether the view plays animations while
   ///     Reduce Motion is on. The default is `false`.
+  ///   - externalResources: The files outside the document that the view
+  ///     reads. The default is ``ExternalResources/documentFolder``.
   public init(
     taskPriority: TaskPriority = .medium, timeoutDuration: Duration = .seconds(10), animation: AnimationMode = .play,
-    playsWithReduceMotion: Bool = false
+    playsWithReduceMotion: Bool = false, externalResources: ExternalResources = .documentFolder
   ) {
     self.taskPriority = taskPriority
     self.timeoutDuration = timeoutDuration
     self.animation = animation
     self.playsWithReduceMotion = playsWithReduceMotion
+    self.externalResources = externalResources
   }
 }

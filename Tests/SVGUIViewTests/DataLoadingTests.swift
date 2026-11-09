@@ -35,16 +35,16 @@ struct DataLoadingTests {
   @Test("setData(_:) parses the data off the main thread")
   func parsesOffMainThread() async {
     let parsedOnMain = Mutex<[Bool]>([])
-    SVGUIView.parseObserver = { parsedOnMain.withLock { $0.append(Thread.isMainThread) } }
-    defer { SVGUIView.parseObserver = nil }
     let view = makeView()
-    await view.setData(Self.document(width: 30, height: 40))
+    await SVGUIView.$parseObserver.withValue({ parsedOnMain.withLock { $0.append(Thread.isMainThread) } }) {
+      await view.setData(Self.document(width: 30, height: 40))
+    }
     #expect(parsedOnMain.withLock { $0 } == [false])
   }
 
-  /// Holds the parsing of `setData(_:)` until a test lets it go on, and tells the test when the parsing starts, so
-  /// that the test gives other data while the parsing is in progress. The parsing waits without blocking a thread,
-  /// also with one thread in the cooperative pool.
+  /// Holds the parsing of `setData(_:)` in the tasks that it starts until a test lets it go on, and tells the test
+  /// when the parsing starts, so that the test gives other data while the parsing is in progress. The parsing waits
+  /// without blocking a thread, also with one thread in the cooperative pool.
   private final class ParseGate: Sendable {
     private let started: AsyncStream<Void>.Continuation
     let starts: AsyncStream<Void>
@@ -52,17 +52,22 @@ struct DataLoadingTests {
 
     init() {
       (starts, started) = AsyncStream.makeStream()
-      SVGUIView.parseObserver = { [self] in
+    }
+
+    /// Starts a task whose parsing waits until the gate opens.
+    func task(_ operation: @escaping @Sendable () async -> Void) -> Task<Void, Never> {
+      SVGUIView.$parseObserver.withValue({ [self] in
         await withCheckedContinuation { continuation in
           waiting.withLock { $0.append(continuation) }
           started.yield()
         }
+      }) {
+        Task { await operation() }
       }
     }
 
     /// Lets the parsings that wait go on.
     func open() {
-      SVGUIView.parseObserver = nil
       for continuation in waiting.withLock({ list in
         defer { list = [] }
         return list
@@ -79,9 +84,9 @@ struct DataLoadingTests {
     let second = Self.document(width: 40, height: 40)
     var gate = ParseGate()
     var starts = gate.starts.makeAsyncIterator()
-    let firstLoad = Task { await view.setData(first) }
+    let firstLoad = gate.task { await view.setData(first) }
     await starts.next()
-    let secondLoad = Task { await view.setData(second) }
+    let secondLoad = gate.task { await view.setData(second) }
     await starts.next()
     gate.open()
     await firstLoad.value
@@ -92,7 +97,7 @@ struct DataLoadingTests {
     let latest = Self.document(width: 50, height: 50)
     gate = ParseGate()
     starts = gate.starts.makeAsyncIterator()
-    let load = Task { await view.setData(Self.document(width: 60, height: 60)) }
+    let load = gate.task { await view.setData(Self.document(width: 60, height: 60)) }
     await starts.next()
     view.data = latest
     gate.open()

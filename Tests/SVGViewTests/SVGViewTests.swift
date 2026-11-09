@@ -51,18 +51,18 @@ struct SVGViewTests {
     let coordinator = SVGView.Coordinator()
     let uiView = SVGUIView()
     let other = Data(#"<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"/>"#.utf8)
-    coordinator.load(.data(other), into: uiView)
+    coordinator.load(.data(other, baseURL: nil), into: uiView)
     let first = try #require(coordinator.task)
-    coordinator.load(.data(Self.document), into: uiView)
+    coordinator.load(.data(Self.document, baseURL: nil), into: uiView)
     let second = try #require(coordinator.task)
     await first.value
     await second.value
     #expect(uiView.data == Self.document)
-    coordinator.load(.data(Self.document), into: uiView)
+    coordinator.load(.data(Self.document, baseURL: nil), into: uiView)
     #expect(coordinator.task == second)
   }
 
-  @Test("a file is read off the main actor, and isn't read again for the same URL")
+  @Test("a file is read off the main actor with its URL as the base URL, and isn't read again for the same URL")
   func readsFile() async throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).svg")
     try Self.document.write(to: url)
@@ -73,9 +73,24 @@ struct SVGViewTests {
     let task = try #require(coordinator.task)
     await task.value
     #expect(uiView.data == Self.document)
+    #expect(uiView.baseURL == url)
     try Data().write(to: url)
     coordinator.load(.file(url), into: uiView)
     #expect(coordinator.task == task)
     #expect(uiView.data == Self.document)
+  }
+
+  @Test("data is shown with the base URL that it's given")
+  func dataWithBaseURL() async throws {
+    let coordinator = SVGView.Coordinator()
+    let uiView = SVGUIView()
+    let url = URL(filePath: "/documents/image.svg")
+    coordinator.load(.data(Self.document, baseURL: url), into: uiView)
+    await coordinator.task?.value
+    #expect(uiView.baseURL == url)
+    coordinator.load(.data(Self.document, baseURL: nil), into: uiView)
+    await coordinator.task?.value
+    #expect(uiView.data == Self.document)
+    #expect(uiView.baseURL == nil)
   }
 }

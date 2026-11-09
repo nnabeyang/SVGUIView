@@ -13,7 +13,8 @@ public import SwiftUI
 public struct SVGView: UIViewRepresentable {
   /// The SVG data that the view displays, or the file that it's read from.
   enum Content: Equatable {
-    case data(Data)
+    /// SVG data, with the URL that its relative URLs are relative to.
+    case data(Data, baseURL: URL?)
     case file(URL)
   }
 
@@ -24,16 +25,21 @@ public struct SVGView: UIViewRepresentable {
   ///
   /// - Parameters:
   ///   - data: The SVG data to display.
+  ///   - baseURL: The URL that the document's relative URLs are relative to,
+  ///     which is usually the URL of the file that the data was read from, or
+  ///     `nil` if the document reads no other files.
   ///   - contentMode: How the image fits into the view's bounds.
-  public init(data: Data, contentMode: SwiftUI.ContentMode = .fit) {
-    content = .data(data)
+  public init(data: Data, baseURL: URL? = nil, contentMode: SwiftUI.ContentMode = .fit) {
+    content = .data(data, baseURL: baseURL)
     self.contentMode = contentMode
   }
 
   /// Creates a view that displays the SVG file at the given URL.
   ///
   /// The view reads the file off the main actor when it's shown, and reads it
-  /// again only when the URL changes, also if the file changes.
+  /// again only when the URL changes, also if the file changes. The document
+  /// reads the files that it refers to relative to the URL, such as the images
+  /// beside it, as the configuration's `externalResources` allows.
   ///
   /// - Parameters:
   ///   - url: The URL of an SVG file. If it cannot be read, the view is empty.
@@ -77,13 +83,13 @@ public struct SVGView: UIViewRepresentable {
       self.content = content
       task?.cancel()
       task = Task { [weak uiView] in
-        let data =
+        let (data, baseURL) =
           switch content {
-          case .data(let data): data
-          case .file(let url): await Self.read(url)
+          case .data(let data, let baseURL): (data, baseURL)
+          case .file(let url): (await Self.read(url), url)
           }
         guard !Task.isCancelled else { return }
-        await uiView?.setData(data)
+        await uiView?.setData(data, baseURL: baseURL)
       }
     }
 

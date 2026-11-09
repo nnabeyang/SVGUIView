@@ -75,8 +75,8 @@ without them:
 - The `FillPaint` and `StrokePaint` inputs of filter primitives.
 - SVG Tiny 1.2.
 - HTML inside `<foreignObject>`.
-- Images and references in other files. Only `data:` URLs and references
-  within the document are loaded.
+- The network. Only `data:` URLs, references within the document, and the
+  image files that ``ExternalResources`` allows are loaded.
 
 ### Where rendering differs from browsers
 
@@ -124,7 +124,10 @@ where they stopped. To keep them in step with the clock, seek to the time with
 
 These features are planned, but not supported yet:
 
-- Images and references in other files, as an option.
+- `<feImage>` images, `<use>` references, style sheets and fonts in other
+  files, and the other files that an SVG image refers to. Only the images of
+  `<image>` elements are read from other files.
+- Images and references on the network, as an option.
 - The geometry properties of `<use>` and `<image>` in style sheets, such as
   `x` and `width`.
 - Math functions other than `calc()`, `min()`, `max()` and `clamp()`, such as
