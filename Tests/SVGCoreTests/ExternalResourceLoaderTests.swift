@@ -156,4 +156,17 @@ struct ExternalResourceLoaderTests {
   func dataURL(href: String, expected: String?) {
     #expect(EmbeddedImage.data(ofHref: href).map { String(decoding: $0, as: UTF8.self) } == expected)
   }
+
+  @Test("an image element keeps a reference to a file, and reads a data URL")
+  func imageSource() throws {
+    func source(_ href: String) throws -> SVGImageElement.Source? {
+      let svg = #"<svg xmlns="http://www.w3.org/2000/svg"><image id="i" href="\#(href)"/></svg>"#
+      let base = SVGParser.parse(data: Data(svg.utf8))
+      return try #require(base["i"] as? SVGImageElement).source
+    }
+    #expect(try source("images/a.png") == .external("images/a.png"))
+    #expect(try source("data:,YQ==") == .data(Data("a".utf8)))
+    #expect(try source("#a") == nil)
+    #expect(try source("") == nil)
+  }
 }

@@ -18,6 +18,8 @@ package struct RenderTreeBuilder {
   private let reused = RenderNodeCollector()
   /// The elements in masks whose masks close cycles of masks, which they're drawn without.
   let cyclicMasks: Set<ElementID>
+  /// Reads the files that the document references.
+  private let resources: ExternalResourceLoader
   /// How the root element is placed in the rectangle of the `<image>` element that shows the document as an SVG
   /// image, or `nil` if the document isn't an image.
   private let imageFit: PreserveAspectRatio?
@@ -28,20 +30,28 @@ package struct RenderTreeBuilder {
   /// images that show themselves again and again from making too many.
   private static let maxImageDepth = 3
 
-  /// - Parameter previous: The nodes of the render tree of the document at another time, for the same rectangle,
-  ///   scale and fit, which the nodes of elements that make the same nodes at every time reuse.
-  package init(base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache = .init()) {
-    self.init(base: base, viewPort: viewPort, scale: scale, reusing: previous, imageFit: nil, imageDepth: 0)
+  /// - Parameters:
+  ///   - previous: The nodes of the render tree of the document at another time, for the same rectangle, scale and
+  ///     fit, which the nodes of elements that make the same nodes at every time reuse.
+  ///   - resources: Reads the files that the document references. By default, none is read.
+  package init(
+    base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache = .init(),
+    resources: ExternalResourceLoader = .none
+  ) {
+    self.init(
+      base: base, viewPort: viewPort, scale: scale, reusing: previous, resources: resources, imageFit: nil,
+      imageDepth: 0)
   }
 
   private init(
     base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache,
-    imageFit: PreserveAspectRatio?, imageDepth: Int
+    resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageDepth: Int
   ) {
     self.base = base
     self.viewPort = viewPort
     self.scale = scale
     self.previous = previous
+    self.resources = resources
     self.imageFit = imageFit
     self.imageDepth = imageDepth
     cyclicMasks = Self.findCyclicMasks(in: base)
@@ -921,10 +931,17 @@ package struct RenderTreeBuilder {
   /// The image of an `<image>` element placed in its rectangle by its `preserveAspectRatio`, or `nil` if its data
   /// isn't an image, or is an SVG image deeper in SVG images than the ones that are drawn.
   ///
-  /// The data is decoded as a bitmap, or else parsed as an SVG image: a document of its own, without animations, at
-  /// time zero, which can't reference anything outside it.
+  /// The data is a data URL, or a file that the loader reads. It's decoded as a bitmap, or else parsed as an SVG
+  /// image: a document of its own, without animations, at time zero, which can't reference anything outside it.
   private func imagePaint(of element: SVGImageElement, in rect: CGRect) async -> ImagePaint? {
-    guard let data = element.data else { return nil }
+    let data: Data
+    switch element.source {
+    case .data(let embedded): data = embedded
+    case .external(let href):
+      guard let file = await resources.data(forHref: href) else { return nil }
+      data = file
+    case nil: return nil
+    }
     let clips =
       switch element.style.overflow {
       case .visible, .auto: false
@@ -954,8 +971,8 @@ package struct RenderTreeBuilder {
       let document = SVGParser.parse(data: data, languages: base.document.languages)
       guard let svg = document.root else { return nil }
       let builder = RenderTreeBuilder(
-        base: document, viewPort: rect, scale: scale, reusing: .init(), imageFit: preserveAspectRatio,
-        imageDepth: imageDepth + 1)
+        base: document, viewPort: rect, scale: scale, reusing: .init(), resources: .none,
+        imageFit: preserveAspectRatio, imageDepth: imageDepth + 1)
       let context = ResolveContext(
         base: document, viewPort: rect, scale: scale, viewBox: CGRect(origin: .zero, size: rect.size))
       guard
