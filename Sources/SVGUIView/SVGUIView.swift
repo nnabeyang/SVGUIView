@@ -82,6 +82,9 @@ public class SVGUIView: UIView {
           isPlaying = false
         }
       }
+      if configuration.externalResources != oldValue.externalResources {
+        setNeedsDisplay()
+      }
       updatePlayback()
     }
   }
@@ -162,16 +165,20 @@ public class SVGUIView: UIView {
   /// Creates a view that displays the SVG file at the given URL.
   ///
   /// The view's frame is sized to the SVG document's `width` and `height`.
+  /// The URL becomes the view's ``baseURL``, so that the document reads the
+  /// files that it refers to, such as the images beside it, as the
+  /// configuration's ``SVGUIViewConfiguration/externalResources`` allows.
   ///
   /// - Parameter url: The URL of an SVG file. The file is read synchronously.
   /// - Returns: `nil` if the file cannot be read.
   public convenience init?(contentsOf url: URL) {
     guard let data = try? Data(contentsOf: url) else { return nil }
-    self.init(data: data)
+    self.init(data: data, baseURL: url)
   }
 
-  init(frame: CGRect, baseContext: SVGBaseContext, data: Data = Data()) {
+  init(frame: CGRect, baseContext: SVGBaseContext, data: Data = Data(), baseURL: URL? = nil) {
     storedData = data
+    self.baseURL = baseURL
     loaded = LoadedDocument(context: baseContext)
     document = SVGDocument(tree: baseContext.document)
     super.init(frame: frame)
@@ -193,10 +200,13 @@ public class SVGUIView: UIView {
   /// - Parameters:
   ///   - frame: The frame rectangle for the view.
   ///   - data: The SVG data to display. Pass `nil` to create an empty view.
-  public convenience init(frame: CGRect, data: Data? = nil) {
+  ///   - baseURL: The URL that the document's relative URLs are relative to,
+  ///     which is usually the URL of the file that the data was read from, or
+  ///     `nil` if the document reads no other files.
+  public convenience init(frame: CGRect, data: Data? = nil, baseURL: URL? = nil) {
     let data = data ?? Data()
     let baseContext = Self.parse(data)
-    self.init(frame: frame, baseContext: baseContext, data: data)
+    self.init(frame: frame, baseContext: baseContext, data: data, baseURL: baseURL)
   }
 
   /// Creates a view that displays the given SVG data.
@@ -205,9 +215,23 @@ public class SVGUIView: UIView {
   ///
   /// - Parameter data: The SVG data to display.
   public convenience init(data: Data = Data()) {
+    self.init(data: data, baseURL: nil)
+  }
+
+  /// Creates a view that displays the given SVG data, which refers to other
+  /// files relative to a URL.
+  ///
+  /// The view's frame is sized to the SVG document's `width` and `height`.
+  ///
+  /// - Parameters:
+  ///   - data: The SVG data to display.
+  ///   - baseURL: The URL that the document's relative URLs are relative to,
+  ///     which is usually the URL of the file that the data was read from, or
+  ///     `nil` if the document reads no other files.
+  public convenience init(data: Data, baseURL: URL?) {
     let baseContext = Self.parse(data)
     let size = baseContext.root?.size ?? .zero
-    self.init(frame: .init(origin: .zero, size: size), baseContext: baseContext, data: data)
+    self.init(frame: .init(origin: .zero, size: size), baseContext: baseContext, data: data, baseURL: baseURL)
   }
 
   /// Parses SVG data, with the fonts of text styles that only UIKit provides.
@@ -226,10 +250,25 @@ public class SVGUIView: UIView {
 
   /// Called off the main actor where ``setData(_:)`` parses its data, which tests check, and hold to give other data
   /// meanwhile.
-  nonisolated(unsafe) static var parseObserver: (@Sendable () async -> Void)?
+  @TaskLocal nonisolated static var parseObserver: (@Sendable () async -> Void)?
 
   /// The SVG data that the view displays.
   private var storedData: Data
+
+  /// The URL that the relative URLs of the document are relative to, or
+  /// `nil` if the document reads no other files.
+  ///
+  /// It's the URL that ``init(contentsOf:)`` reads the document from, or the
+  /// one given with the data to ``init(data:baseURL:)`` or
+  /// ``setData(_:baseURL:)``. Setting ``data`` sets it to `nil`. The
+  /// configuration's ``SVGUIViewConfiguration/externalResources`` decides which
+  /// of the files that the document refers to the view reads.
+  public private(set) var baseURL: URL?
+  /// The data of the files that the document has read, which the renderings of the document share.
+  private var resourceCache = ExternalResourceCache()
+  /// Reads the files for the renderings that start in a task instead of the file system, which tests use to hold
+  /// reading.
+  @TaskLocal nonisolated static var resourceFetch: ExternalResourceLoader.Fetch?
 
   /// The SVG data that the view displays.
   ///
@@ -239,16 +278,17 @@ public class SVGUIView: UIView {
   /// data. The new data also replaces ``document`` at once. Setting the data
   /// that the view already displays does nothing.
   ///
-  /// To parse a larger document without blocking the main actor, use
-  /// ``setData(_:)``.
+  /// The data has no ``baseURL``, so the document reads no other files. To
+  /// give the data with a base URL, use ``setData(_:baseURL:)``. To parse a
+  /// larger document without blocking the main actor, use ``setData(_:)``.
   public var data: Data {
     get { storedData }
     set {
       // A newer data replaces the data that `setData(_:)` is parsing.
       loadGeneration += 1
       // SVGView sets its data on every update of the SwiftUI view.
-      guard newValue != storedData else { return }
-      show(newValue, loaded: LoadedDocument(context: Self.parse(newValue)))
+      guard newValue != storedData || baseURL != nil else { return }
+      show(newValue, baseURL: nil, loaded: LoadedDocument(context: Self.parse(newValue)))
     }
   }
 
@@ -272,18 +312,37 @@ public class SVGUIView: UIView {
   ///
   /// - Parameter data: The SVG data to display.
   public func setData(_ data: Data) async {
+    await setData(data, baseURL: nil)
+  }
+
+  /// Parses SVG data off the main actor and shows it, with the URL that its
+  /// relative URLs are relative to.
+  ///
+  /// It parses and shows the data as ``setData(_:)`` does, and sets
+  /// ``baseURL`` when it shows it. Giving the data and the base URL that the
+  /// view already displays does nothing.
+  ///
+  /// - Parameters:
+  ///   - data: The SVG data to display.
+  ///   - baseURL: The URL that the document's relative URLs are relative to,
+  ///     which is usually the URL of the file that the data was read from, or
+  ///     `nil` if the document reads no other files.
+  public func setData(_ data: Data, baseURL: URL?) async {
     loadGeneration += 1
     let generation = loadGeneration
-    guard data != storedData else { return }
+    guard data != storedData || baseURL != self.baseURL else { return }
     _ = Self.installTextStyleFonts
     let loaded = await Self.load(data)
     guard generation == loadGeneration, !Task.isCancelled else { return }
-    show(data, loaded: loaded)
+    show(data, baseURL: baseURL, loaded: loaded)
   }
 
   /// Shows new data with its document at time zero.
-  private func show(_ data: Data, loaded: LoadedDocument) {
+  private func show(_ data: Data, baseURL: URL?, loaded: LoadedDocument) {
     storedData = data
+    self.baseURL = baseURL
+    // The files that another document refers to by the same URLs can be other files.
+    resourceCache = ExternalResourceCache()
     self.loaded = loaded
     document = SVGDocument(tree: loaded.context.document)
     currentTime = .zero
@@ -374,6 +433,7 @@ public class SVGUIView: UIView {
     renderedTime = time
     let fit = ContentFit(contentMode)
     let timeoutDuration = configuration.timeoutDuration
+    let resources = resourceLoader
     // The animations play in layers. A still frame is rendered into one image, as `takeSnapshot(rect:at:scale:)` renders it,
     // so that the view shows what a snapshot of the frame shows.
     let promoted = rendersLayers ? promoted : nil
@@ -396,7 +456,7 @@ public class SVGUIView: UIView {
           rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, promoted: promoted, painting: painting,
           usesGPU: usesGPU,
           previous: previous, previousNodes: previousNodes, previousStyled: previousStyled, time: time, fit: fit,
-          timeoutDuration: timeoutDuration)
+          resources: resources, timeoutDuration: timeoutDuration)
         let result: Result<RenderedContainer, SVGRenderingError>
         switch rendered {
         case .success(.unchanged):
@@ -432,7 +492,7 @@ public class SVGUIView: UIView {
       } else {
         let result = await SVGUIView.makeImage(
           rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, time: time,
-          fit: fit, timeoutDuration: timeoutDuration
+          fit: fit, resources: resources, timeoutDuration: timeoutDuration
         )
         switch result {
         case .success: Self.signposter.endInterval("Render", signpost, "painted")
@@ -759,8 +819,18 @@ public class SVGUIView: UIView {
     let timeoutDuration = configuration.timeoutDuration
     return try await SVGUIView.makeImage(
       rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, time: time,
-      fit: fit, timeoutDuration: timeoutDuration
+      fit: fit, resources: resourceLoader, timeoutDuration: timeoutDuration
     ).get()
+  }
+
+  /// Reads the files that the document refers to for a rendering, as the configuration allows.
+  private var resourceLoader: ExternalResourceLoader {
+    guard let baseURL else { return .none }
+    let folder = configuration.externalResources.folder(forDocumentAt: baseURL)
+    if let fetch = Self.resourceFetch {
+      return ExternalResourceLoader(baseURL: baseURL, folder: folder, cache: resourceCache, fetch: fetch)
+    }
+    return ExternalResourceLoader(baseURL: baseURL, folder: folder, cache: resourceCache)
   }
 
   /// The number of pixels in a point of the screen of the view, or of the traits of the app for a view that isn't on
@@ -789,6 +859,7 @@ public class SVGUIView: UIView {
     base: SVGBaseContext,
     time: Duration,
     fit: ContentFit,
+    resources: ExternalResourceLoader,
     timeoutDuration: Duration
   ) async -> Result<CGImage, SVGRenderingError> {
     guard base.root != nil else { return .failure(.missingRootElement) }
@@ -800,7 +871,8 @@ public class SVGUIView: UIView {
 
     let rendered = await withRenderingTimeout(timeoutDuration) { () async -> Result<CGImage, SVGRenderingError>? in
       // The computed values at the time are computed in the task, so that the timeout stops them too.
-      let builder = RenderTreeBuilder(base: base.at(time: time.seconds), viewPort: rect, scale: scale)
+      let builder = RenderTreeBuilder(
+        base: base.at(time: time.seconds), viewPort: rect, scale: scale, resources: resources)
       guard let tree = await builder.build(fit: fit) else { return nil }
       // The tree tells which colors the bitmap shows.
       let space = CGColorSpace.rendering(wideGamut: wideGamut && tree.usesWideGamut)
@@ -843,6 +915,7 @@ public class SVGUIView: UIView {
     previousStyled: SVGBaseContext?,
     time: Duration,
     fit: ContentFit,
+    resources: ExternalResourceLoader,
     timeoutDuration: Duration
   ) async -> Result<LayerFrame, SVGRenderingError> {
     guard base.root != nil else { return .failure(.missingRootElement) }
@@ -855,7 +928,9 @@ public class SVGUIView: UIView {
       // A frame whose animated values are the same as the frame that the view shows looks the same.
       if let previousStyled, base.hasSameAnimatedValues(as: previousStyled) { return LayerFrame.unchanged }
       let buildInterval = signposter.beginInterval("Build")
-      let tree = await RenderTreeBuilder(base: base, viewPort: rect, scale: scale, reusing: previousNodes).build(fit: fit)
+      let tree = await RenderTreeBuilder(
+        base: base, viewPort: rect, scale: scale, reusing: previousNodes, resources: resources
+      ).build(fit: fit)
       signposter.endInterval("Build", buildInterval)
       guard let tree else { return nil }
       let plan = signposter.withIntervalSignpost("Plan") {

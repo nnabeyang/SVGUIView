@@ -11,8 +11,17 @@ final class SVGImageElement: ShapeGeometry {
     .circle
   }
 
+  /// Where the data of an image is.
+  enum Source: Equatable {
+    /// The data of a data URL.
+    case data(Data)
+    /// A file that an `href` references, which a rendering reads if its loader allows it.
+    case external(String)
+  }
+
   let base: SVGBaseElement
-  let data: Data?
+  /// Where the data of the image is, or `nil` where `href` is missing or is a data URL that isn't base64.
+  let source: Source?
   let x: SVGLength?
   let y: SVGLength?
   let width: SVGLength?
@@ -22,7 +31,14 @@ final class SVGImageElement: ShapeGeometry {
 
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
-    data = EmbeddedImage.data(ofHref: attributes["href", default: ""])
+    let href = attributes["href", default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+    if href.isEmpty || href.hasPrefix("#") {
+      source = nil
+    } else if href.lowercased().hasPrefix("data:") {
+      source = EmbeddedImage.data(ofHref: href).map { .data($0) }
+    } else {
+      source = .external(href)
+    }
     x = SVGLength(attributes["x"]) ?? .pixel(0)
     y = SVGLength(attributes["y"]) ?? .pixel(0)
     width = SVGLength(attributes["width"])
@@ -42,15 +58,5 @@ final class SVGImageElement: ShapeGeometry {
     }
     let path = CGPath(rect: .init(x: x, y: y, width: width, height: height), transform: nil)
     return path
-  }
-
-  /// The image of the data, or `nil` if the data isn't an image.
-  func decodedImage() -> CGImage? {
-    data.flatMap(EmbeddedImage.decodedImage(of:))
-  }
-
-  /// The data of the SVG image that the data is, gzipped or not, or `nil` if it doesn't start like an XML document.
-  func svgData() -> Data? {
-    data.flatMap(EmbeddedImage.svgData(of:))
   }
 }

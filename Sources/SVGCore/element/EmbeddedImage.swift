@@ -4,9 +4,13 @@ import ImageIO
 
 /// The data of an image that an `href` holds, of `<image>` and `<feImage>`.
 enum EmbeddedImage {
-  /// The data of a data URL, base64 after its comma, or `nil` if it isn't base64.
+  /// The data of a data URL, base64 after its comma, or `nil` if the `href` isn't a data URL or isn't base64.
   static func data(ofHref href: String) -> Data? {
-    href.split(separator: ",").last.flatMap { Data(base64Encoded: String($0), options: .ignoreUnknownCharacters) }
+    let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard href.lowercased().hasPrefix("data:") else { return nil }
+    return href.split(separator: ",").last.flatMap {
+      Data(base64Encoded: String($0), options: .ignoreUnknownCharacters)
+    }
   }
 
   /// The image of the data, or `nil` if the data isn't an image.

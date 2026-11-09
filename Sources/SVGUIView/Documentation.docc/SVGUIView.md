@@ -55,6 +55,34 @@ svgView.configuration = SVGUIViewConfiguration(
 When a rendering takes longer than the timeout, or the memory for its image
 couldn't be allocated, the view keeps the image that it shows.
 
+### Reading other files
+
+A document can show the image files that it refers to by relative URLs, such
+as `<image href="images/photo.png">`. The URLs are relative to the view's
+``SVGUIView/SVGUIView/baseURL``: the URL that
+``SVGUIView/SVGUIView/init(contentsOf:)`` reads the document from, or the one
+given with the data:
+
+```swift
+let view = SVGUIView(data: data, baseURL: url)
+await view.setData(otherData, baseURL: otherURL)
+```
+
+Data that's set as ``SVGUIView/SVGUIView/data`` has no base URL, and reads no
+other files. By default, a view reads only the files in the folder of the
+document and in the folders inside it, so a URL such as `../image.png` isn't
+read, and a symbolic link doesn't lead outside the folder either. The
+configuration's ``SVGUIViewConfiguration/externalResources`` reads the files
+in another folder, or none:
+
+```swift
+svgView.configuration = SVGUIViewConfiguration(externalResources: .none)
+```
+
+A view doesn't read the network. Reading the files takes part of the time of a
+rendering, which the configuration's timeout limits. It reads each file once
+for a document, until it's given other data.
+
 ### Taking a snapshot
 
 ``SVGUIView/SVGUIView/takeSnapshot(rect:at:scale:)`` renders the current document into a
@@ -186,6 +214,7 @@ of those rules and for the features that SVGUIView doesn't support.
 ### Configuring rendering
 
 - ``SVGUIViewConfiguration``
+- ``ExternalResources``
 - ``SVGRenderingError``
 
 ### Rendering

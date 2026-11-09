@@ -7,7 +7,9 @@ Display an SVG image in SwiftUI.
 ``SVGView/SVGView`` wraps `SVGUIView` so that you can place an SVG image in a
 SwiftUI view hierarchy. The view reads its file and parses its data off the main
 actor, so that a larger document doesn't block the main actor, and shows the
-image when it's parsed. It reads the file again only when the URL changes.
+image when it's parsed. It reads the file again only when the URL changes. The
+document shows the image files that it refers to relative to the URL, such as
+the images beside it, as the configuration's `externalResources` allows.
 
 ```swift
 struct ContentView: View {
