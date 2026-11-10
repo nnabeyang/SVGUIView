@@ -23,15 +23,18 @@ struct Stylesheet: Sendable {
   let sources: StyleSheetSources?
   /// Whether the rules have the rules of the style sheets in other files that the loader of a rendering read.
   let hasExternalRules: Bool
+  /// The fonts that the `@font-face` rules read, or `nil` if they haven't been read or there are none.
+  let fonts: DocumentFonts?
 
   init(
     rules: [CSSRule], keyframes: [String: KeyframesRule] = [:], sources: StyleSheetSources? = nil,
-    hasExternalRules: Bool = false
+    hasExternalRules: Bool = false, fonts: DocumentFonts? = nil
   ) {
     self.rules = rules
     self.keyframes = keyframes
     self.sources = sources
     self.hasExternalRules = hasExternalRules
+    self.fonts = fonts
     var finder = SiblingCombinatorFinder()
     hasSiblingCombinators = rules.contains { rule in rule.selectors.slice.contains { !$0.visit(&finder) } }
   }

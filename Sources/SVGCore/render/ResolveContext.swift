@@ -8,6 +8,13 @@ protocol SVGLengthContext {
   var rootFont: SVGUIFont? { get }
   var viewPort: CGRect { get }
   var writingMode: WritingMode? { get }
+  /// The fonts that the `@font-face` rules of the document read, which `font-family` finds first, or `nil` if there
+  /// are none, or the context doesn't know the document.
+  var documentFonts: DocumentFonts? { get }
+}
+
+extension SVGLengthContext {
+  var documentFonts: DocumentFonts? { nil }
 }
 
 /// What the geometry of an element depends on: lengths, and the box that percentages are relative to.
@@ -48,6 +55,10 @@ struct ResolveContext: GeometryContext {
 
   var rootFont: SVGUIFont? {
     (rootBase ?? base).root?.style.font
+  }
+
+  var documentFonts: DocumentFonts? {
+    base.stylesheet.fonts
   }
 
   var writingMode: WritingMode? {

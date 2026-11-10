@@ -18,6 +18,7 @@ private struct SVGLengthContextProxy: SVGLengthContext {
   var rootFont: SVGUIFont? { context.rootFont }
   var writingMode: WritingMode? { context.writingMode }
   var textScale: Double { 1.0 }
+  var documentFonts: DocumentFonts? { context.documentFonts }
 }
 
 package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {

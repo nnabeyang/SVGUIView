@@ -61,7 +61,9 @@ struct SVGUIFont {
     textScale: Double, context: any SVGLengthContext
   ) -> FontCascade {
     let weight = weight ?? .normal
-    let fontSelector = CSSFontSelector()
+    // The fonts of the document are found before the fonts of the system, which the cache of fonts keeps for every
+    // document.
+    let fontSelector = context.documentFonts.map(DocumentFontSelector.init(fonts:)) ?? CSSFontSelector()
     let size = size ?? .medium
     let computedSize = size.value(context: context, shouldUseFixedDefaultSize: fontDescription.useFixedDefaultSize) * textScale
 
