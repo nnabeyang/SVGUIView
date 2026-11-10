@@ -1,3 +1,4 @@
+import CoreText
 import Foundation
 import Testing
 import UIKit
@@ -132,5 +133,43 @@ struct ExternalStyleSheetViewTests {
     task.cancel()
     let result = await task.result
     #expect(throws: SVGRenderingError.cancelled) { try result.get() }
+  }
+
+  /// The pixels of the snapshot of a document at a URL, in a view of 60 by 20.
+  private func snapshotPixels(of url: URL, configuration: SVGUIViewConfiguration = .init()) async throws -> [UInt8] {
+    let view = try #require(SVGUIView(contentsOf: url))
+    view.frame = CGRect(x: 0, y: 0, width: 60, height: 20)
+    view.configuration = SVGUIViewConfiguration(
+      timeoutDuration: patience, externalResources: configuration.externalResources)
+    return try pixels(of: try #require(try await view.takeSnapshot(scale: 1).cgImage))
+  }
+
+  @Test("an @font-face rule reads a font file beside the document, which font-family finds")
+  func webFont() async throws {
+    // A font file of the system, copied beside the document.
+    let system = CTFontCreateWithName("CourierNewPSMT" as CFString, 10, nil)
+    let fontURL = try #require(CTFontCopyAttribute(system, kCTFontURLAttribute) as? URL)
+    let text = #"<text x="2" y="15" font-size="14">Wy</text>"#
+    func svg(_ content: String) -> String {
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 20">"# + content + "</svg>"
+    }
+    let folder = try StyleFolder([
+      "web.svg": svg(
+        #"<style>@font-face { font-family: Web; src: url(fonts/web.ttf) format("truetype") } text { font-family: Web }</style>"#
+          + text),
+      "system.svg": svg(#"<style>text { font-family: "Courier New" }</style>"# + text),
+      "fallback.svg": svg(#"<style>text { font-family: Web }</style>"# + text),
+    ])
+    try FileManager.default.createDirectory(
+      at: folder.url.appending(path: "fonts"), withIntermediateDirectories: true)
+    try Data(contentsOf: fontURL).write(to: folder.url.appending(path: "fonts/web.ttf"))
+    let web = try await snapshotPixels(of: folder.url.appending(path: "web.svg"))
+    #expect(web == (try await snapshotPixels(of: folder.url.appending(path: "system.svg"))))
+    // A document without the rule doesn't find the font of another document, and a view that reads no files doesn't
+    // read it.
+    #expect(web != (try await snapshotPixels(of: folder.url.appending(path: "fallback.svg"))))
+    let unread = try await snapshotPixels(
+      of: folder.url.appending(path: "web.svg"), configuration: SVGUIViewConfiguration(externalResources: .none))
+    #expect(web != unread)
   }
 }

@@ -1,3 +1,4 @@
+@preconcurrency import CoreText
 import Foundation
 import _CSSParser
 
@@ -30,6 +31,7 @@ struct StyleSheetSources: Sendable {
     var imports = [ExternalStyleSheet]()
     var rules = [CSSRule]()
     var keyframes = [KeyframesRule]()
+    var fontFaces = [FontFaceRule]()
 
     /// The style sheet of CSS text.
     init(css text: String) {
@@ -39,6 +41,7 @@ struct StyleSheetSources: Sendable {
         case .style(let rule): rules.append(rule)
         case .keyframes(let rule): keyframes.append(rule)
         case .import(let sheet): imports.append(sheet)
+        case .fontFace(let rule): fontFaces.append(rule)
         case .ignored: break
         }
       }
@@ -48,16 +51,17 @@ struct StyleSheetSources: Sendable {
   var processingInstructions = [ExternalStyleSheet]()
   var sheets = [Sheet]()
 
-  /// Whether a style sheet is in another file.
+  /// Whether a style sheet is in another file, or a style sheet has `@font-face` rules, whose fonts a rendering
+  /// reads.
   var hasExternalStyleSheets: Bool {
-    !processingInstructions.isEmpty || sheets.contains { !$0.imports.isEmpty }
+    !processingInstructions.isEmpty || sheets.contains { !$0.imports.isEmpty || !$0.fontFaces.isEmpty }
   }
 
   /// The style sheet of the `<style>` elements alone, without the style sheets in other files.
   var stylesheet: Stylesheet {
     var builder = Builder()
-    for sheet in sheets { builder.append(sheet) }
-    return builder.stylesheet(sources: hasExternalStyleSheets ? self : nil, hasExternalRules: false)
+    for sheet in sheets { builder.append(sheet, loader: .none) }
+    return builder.stylesheet(sources: hasExternalStyleSheets ? self : nil, hasExternalRules: false, fonts: nil)
   }
 
   /// The deepest chain of style sheets that `@import` rules read.
@@ -76,17 +80,21 @@ struct StyleSheetSources: Sendable {
       for imported in sheet.imports {
         await builder.append(imported, loader: loader, chain: chain)
       }
-      builder.append(sheet)
+      builder.append(sheet, loader: loader)
     }
-    return builder.stylesheet(sources: self, hasExternalRules: true)
+    let fonts = await builder.fonts()
+    return builder.stylesheet(sources: self, hasExternalRules: true, fonts: fonts)
   }
 
   /// Puts the rules of style sheets in their order, numbered again across the style sheets.
   private struct Builder {
     var rules = [CSSRule]()
     var keyframes = [String: KeyframesRule]()
+    /// The `@font-face` rules in their order, with the loaders that read the files of their style sheets.
+    var fontFaces = [(rule: FontFaceRule, loader: ExternalResourceLoader)]()
 
-    mutating func append(_ sheet: Sheet) {
+    mutating func append(_ sheet: Sheet, loader: ExternalResourceLoader) {
+      fontFaces += sheet.fontFaces.map { ($0, loader) }
       for var rule in sheet.rules {
         rule.sourceOrder = rules.count
         rules.append(rule)
@@ -109,11 +117,38 @@ struct StyleSheetSources: Sendable {
       for imported in sheet.imports {
         await append(imported, loader: rebased, chain: chain + [file])
       }
-      append(sheet)
+      append(sheet, loader: rebased)
     }
 
-    func stylesheet(sources: StyleSheetSources?, hasExternalRules: Bool) -> Stylesheet {
-      Stylesheet(rules: rules, keyframes: keyframes, sources: sources, hasExternalRules: hasExternalRules)
+    /// The fonts that the `@font-face` rules read: each rule reads the first of its sources that Core Text reads, a
+    /// file that its loader reads, a data URL or a font of the system. A rule that reads none is left out.
+    func fonts() async -> DocumentFonts? {
+      var faces = [DocumentFonts.Face]()
+      for (rule, loader) in fontFaces {
+        for source in rule.sources {
+          let descriptor: CTFontDescriptor?
+          switch source {
+          case .url(let url, _) where url.lowercased().hasPrefix("data:"):
+            descriptor = EmbeddedImage.data(ofHref: url).flatMap(DocumentFonts.descriptor(of:))
+          case .url(let url, _):
+            descriptor = await loader.data(forHref: url).flatMap(DocumentFonts.descriptor(of:))
+          case .local(let name):
+            descriptor = DocumentFonts.descriptor(ofLocal: name)
+          }
+          if let descriptor {
+            faces.append(
+              DocumentFonts.Face(
+                family: rule.family.lowercased(), weight: rule.weight, style: rule.style, descriptor: descriptor))
+            break
+          }
+        }
+      }
+      return faces.isEmpty ? nil : DocumentFonts(faces: faces)
+    }
+
+    func stylesheet(sources: StyleSheetSources?, hasExternalRules: Bool, fonts: DocumentFonts?) -> Stylesheet {
+      Stylesheet(
+        rules: rules, keyframes: keyframes, sources: sources, hasExternalRules: hasExternalRules, fonts: fonts)
     }
   }
 }

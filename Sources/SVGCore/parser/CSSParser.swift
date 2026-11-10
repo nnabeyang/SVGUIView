@@ -235,6 +235,8 @@ enum StylesheetRule {
   case keyframes(KeyframesRule)
   /// An `@import` rule before the other rules, which reads a style sheet in another file.
   case `import`(ExternalStyleSheet)
+  /// An `@font-face` rule, which reads a font.
+  case fontFace(FontFaceRule)
   /// An at-rule that the style sheet ignores, such as `@keyframes` without a block.
   case ignored
 }
@@ -252,7 +254,7 @@ struct CSSParser {
       switch rule {
       case .style(let rule): rules.append(rule)
       case .keyframes(let rule): keyframes[rule.name] = rule
-      case .import, .ignored: break
+      case .import, .fontFace, .ignored: break
       }
     }
     return Stylesheet(rules: rules, keyframes: keyframes)
@@ -279,6 +281,9 @@ struct CSSParser {
         importsAllowed = false
       case .success(.import(let sheet)):
         if importsAllowed { rules.append(.import(sheet)) }
+      case .success(.fontFace(let rule)):
+        rules.append(.fontFace(rule))
+        importsAllowed = false
       case .success(.ignored), .failure:
         break
       }
@@ -296,6 +301,10 @@ extension CSSParser: AtRuleParser {
     case "keyframes", "-webkit-keyframes":
       guard let name = keyframesName(&input) else { return .failure(input.newCustomError(error: .invalid)) }
       return .success(.keyframes(name))
+    case "font-face":
+      // The prelude has nothing.
+      guard input.isExhausted() else { return .failure(input.newCustomError(error: .invalid)) }
+      return .success(.fontFace)
     case "import":
       // The URL, and the media queries after it, which the rest of the prelude is.
       guard case .success(let url) = input.expectUrlOrString() else {
@@ -317,6 +326,12 @@ extension CSSParser: AtRuleParser {
   mutating func parseBlock(
     prelude: Prelude, start _: ParserState, input: inout _CSSParser.Parser
   ) -> Result<StylesheetRule, CSSParseError> {
+    if case .fontFace = prelude {
+      guard let rule = FontFaceRule(descriptors: FontFaceDescriptorParser.descriptors(in: &input)) else {
+        return .failure(input.newCustomError(error: .invalid))
+      }
+      return .success(.fontFace(rule))
+    }
     guard case .keyframes(let name) = prelude else { return .failure(input.newCustomError(error: .invalid)) }
     var bodyParser: RuleBodyParser<KeyframeListParser, Keyframe, StyleParseErrorKind> = RuleBodyParser(
       input: input, parser: KeyframeListParser())
@@ -353,6 +368,8 @@ extension CSSParser: QualifiedRuleParser {
     case keyframes(String)
     /// The style sheet that an `@import` rule reads.
     case `import`(ExternalStyleSheet)
+    /// An `@font-face` rule, whose descriptors are in its block.
+    case fontFace
   }
   typealias QualifiedRule = DeclOrRule
 
