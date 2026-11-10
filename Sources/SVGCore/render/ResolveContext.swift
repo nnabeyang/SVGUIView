@@ -21,7 +21,11 @@ protocol GeometryContext: SVGLengthContext {
 /// What resolving lengths and building geometry reads while a render tree is built: the rendered rectangle and
 /// scale, the viewBox, and the computed values that lengths relative to fonts use.
 struct ResolveContext: GeometryContext {
-  let base: SVGBaseContext
+  /// The document whose elements references find, such as the path of a `<textPath>`.
+  private(set) var base: SVGBaseContext
+  /// The document whose root's font `rem` is relative to, where it isn't ``base``: the document of a `<use>` element
+  /// that shows an element of another document, whose copy is in the tree of the `<use>` element.
+  private var rootBase: SVGBaseContext?
   let viewPort: CGRect
   /// The scale of the image being rendered.
   let scale: CGFloat
@@ -43,7 +47,7 @@ struct ResolveContext: GeometryContext {
   }
 
   var rootFont: SVGUIFont? {
-    base.root?.style.font
+    (rootBase ?? base).root?.style.font
   }
 
   var writingMode: WritingMode? {
@@ -54,6 +58,15 @@ struct ResolveContext: GeometryContext {
   func styled(by element: some SVGElement) -> ResolveContext {
     var context = self
     context.style = element.style
+    return context
+  }
+
+  /// The context for the content of another document that a `<use>` element shows, whose references find the
+  /// elements of that document, and whose `rem` stays relative to the root of the document of the `<use>` element.
+  func with(base: SVGBaseContext) -> ResolveContext {
+    var context = self
+    context.rootBase = rootBase ?? self.base
+    context.base = base
     return context
   }
 

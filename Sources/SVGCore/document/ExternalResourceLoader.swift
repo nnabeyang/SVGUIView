@@ -75,6 +75,27 @@ package struct ExternalResourceLoader: Sendable {
     return data
   }
 
+  /// The URL of the document with its symbolic links resolved, as ``fileURL(ofHref:)`` gives the files, or `nil` if
+  /// it has none.
+  package var resolvedBaseURL: URL? {
+    baseURL.map(Self.resolved)
+  }
+
+  /// The loader of a document in a file that this loader read, such as one that a `<use>` element shows: its
+  /// relative URLs are relative to the file, and it reads the files of the same folder, into the same cache.
+  ///
+  /// - Parameter url: The URL of the file, as ``fileURL(ofHref:)`` gives it.
+  package func rebased(to url: URL) -> ExternalResourceLoader {
+    ExternalResourceLoader(baseURL: url, resolvedFolder: folder, cache: cache, fetch: fetch)
+  }
+
+  private init(baseURL: URL, resolvedFolder: URL?, cache: ExternalResourceCache, fetch: @escaping Fetch) {
+    self.baseURL = baseURL
+    folder = resolvedFolder
+    self.cache = cache
+    self.fetch = fetch
+  }
+
   /// A file URL with `.` and `..` removed and its symbolic links resolved.
   private static func resolved(_ url: URL) -> URL {
     url.standardizedFileURL.resolvingSymlinksInPath()
