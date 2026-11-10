@@ -339,12 +339,15 @@ final class SVGTextElement: ShapeGeometry {
   }
 
   /// The element that draws a line of `text-decoration` on the characters of an element: the closest element of
-  /// the text, from the element to the text, that declares the line, or the text itself.
+  /// the text, from the element to the text, that declares the line, or the text itself. A declaration with `var()`
+  /// declares the lines that it has with the custom properties of its element substituted.
   private func decorator(of line: TextDecorationLines, for owner: Int, content: TextContent) -> Int {
     var element: Int? = owner
     let owners = owners(of: content)
     while let current = element {
-      if owners[current].base.cascaded.declared(TextDecorationProperty.self)?.contains(line) == true {
+      let base = owners[current].base
+      let declared = base.cascaded.declared(TextDecorationProperty.self, customProperties: base.style.customProperties)
+      if case .value(let lines)? = declared, lines.contains(line) {
         return current
       }
       element = content.parents[current]
