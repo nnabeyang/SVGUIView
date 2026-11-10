@@ -600,8 +600,8 @@ package struct RenderTreeBuilder {
   /// the `svg` element. The view places the viewport of the root element, so its `x` and `y` don't apply.
   ///
   /// The root element of an SVG image fills the rectangle of the `<image>` element, which is the viewport of the
-  /// builder: the `preserveAspectRatio` of the `<image>` element places its view box there, or the box of its width
-  /// and height if it has no view box, instead of its own `preserveAspectRatio`.
+  /// builder: the `preserveAspectRatio` that ``imageFit(of:root:)`` chose places its view box there, or the box of
+  /// its width and height if it has no view box.
   func viewport(
     of svg: SVGSVGElement, context: ResolveContext, isRoot: Bool
   ) -> (translation: CGAffineTransform, layout: ViewportLayout?) {
@@ -1026,19 +1026,40 @@ package struct RenderTreeBuilder {
       image: image, preserveAspectRatio: preserveAspectRatio, clips: clips, interpolates: interpolates, in: rect)
   }
 
+  /// The `preserveAspectRatio` that places an SVG image in the rectangle of an element that shows it.
+  ///
+  /// It's the one of the root element of the image, if the root element has the attribute, unless the one of the
+  /// element that shows the image is `none`, which stretches the image. A root element without the attribute is
+  /// placed by the one of the element that shows the image.
+  ///
+  /// - Note: This differs from SVG 2, which says that the attribute of the root element "must be ignored", so
+  ///   that the one of the element that shows the image always places the image. Chrome and Safari place the image
+  ///   by the attribute of its root element, and a reftest of the web platform tests,
+  ///   `svg/embedded/image-fractional-width-vertical-fidelity.svg`, expects that, so SVGUIView follows them where the
+  ///   root element has the attribute. Firefox follows the specification. Where the root element doesn't have the
+  ///   attribute, Chrome and Safari place the image by the default of the root element, `xMidYMid meet`: there
+  ///   SVGUIView follows the specification, as `coords-viewattr-04-f` of the SVG 1.1 test suite expects.
+  private static func imageFit(of preserveAspectRatio: PreserveAspectRatio, root: SVGSVGElement) -> PreserveAspectRatio {
+    if case .none = preserveAspectRatio { return preserveAspectRatio }
+    return root.preserveAspectRatio ?? preserveAspectRatio
+  }
+
   /// An image, a bitmap or an SVG image, placed in a rectangle by its `preserveAspectRatio`, or `nil` if an SVG image
-  /// has no view box with an area.
+  /// has no view box with an area. An SVG image is placed by the `preserveAspectRatio` that
+  /// ``imageFit(of:root:)`` chooses.
   private func imagePaint(
     image: LoadedImage, preserveAspectRatio: PreserveAspectRatio, clips: Bool, interpolates: Bool, in rect: CGRect
   ) async -> ImagePaint? {
     let content: ImageContent
     let viewBox: CGRect
+    var preserveAspectRatio = preserveAspectRatio
     switch image.content {
     case .bitmap(let bitmap):
       content = .bitmap(bitmap)
       viewBox = CGRect(x: 0, y: 0, width: bitmap.width, height: bitmap.height)
     case .document(let document):
       guard let svg = document.root else { return nil }
+      preserveAspectRatio = Self.imageFit(of: preserveAspectRatio, root: svg)
       let builder = RenderTreeBuilder(
         base: document, viewPort: rect, scale: scale, reusing: .init(), resources: .none,
         imageFit: preserveAspectRatio, imageViewBox: image.viewBox, imageDepth: imageDepth + 1)

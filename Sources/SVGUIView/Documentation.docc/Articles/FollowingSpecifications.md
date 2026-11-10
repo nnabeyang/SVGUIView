@@ -125,6 +125,17 @@ browsers don't:
   that class selectors see the class that an animation of `class` gives. A
   SMIL animation of the `style` attribute changes nothing.
 
+SVGUIView follows browsers in one place where the text of the specifications
+differs:
+
+- An SVG image whose root element has a `preserveAspectRatio` attribute is
+  placed in the rectangle of its `<image>` element by that attribute, unless
+  the `preserveAspectRatio` of the `<image>` element is `none`. SVG 2 says that
+  the attribute of the root element must be ignored. Chrome and Safari place
+  the image by it, and a reference test of web-platform-tests expects that. A
+  root element without the attribute is placed by the `preserveAspectRatio` of
+  the `<image>` element, as SVG 2 says.
+
 A view pauses its animations while it isn't on the screen, and resumes them
 where they stopped. To keep them in step with the clock, seek to the time with
 ``SVGUIView/SVGUIView/seek(to:)`` when the view appears.

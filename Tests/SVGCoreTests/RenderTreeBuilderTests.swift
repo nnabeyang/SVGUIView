@@ -309,6 +309,39 @@ struct RenderTreeBuilderTests {
     #expect(shapes(of: content.children).count == 1)
   }
 
+  /// The `preserveAspectRatio` of the root element of an SVG image of 2 by 1 and of an `<image>` element of 10 by 10
+  /// at 5, 5, and where the image is drawn.
+  private static let svgImageRootPlacements: [(String, String, CGRect)] = [
+    // The attribute of the root element places the image, whatever the one of the image element aligns.
+    ("xMinYMin", "", CGRect(x: 5, y: 5, width: 10, height: 5)),
+    ("xMinYMin", #"preserveAspectRatio="xMaxYMax""#, CGRect(x: 5, y: 5, width: 10, height: 5)),
+    ("xMaxYMax slice", "", CGRect(x: -5, y: 5, width: 20, height: 10)),
+    ("none", "", CGRect(x: 5, y: 5, width: 10, height: 10)),
+    // `none` of the image element stretches the image.
+    ("xMinYMin", #"preserveAspectRatio="none""#, CGRect(x: 5, y: 5, width: 10, height: 10)),
+    // An attribute that isn't valid is like no attribute: the image element places the image.
+    ("invalid", #"preserveAspectRatio="xMaxYMax""#, CGRect(x: 5, y: 10, width: 10, height: 5)),
+  ]
+
+  @Test(
+    "an SVG image is placed by the preserveAspectRatio of its root element, unless the image element has none",
+    arguments: svgImageRootPlacements)
+  func svgImageRootPlacement(root: String, attributes: String, rect: CGRect) async throws {
+    let svg =
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 2 1" preserveAspectRatio="\#(root)">"#
+      + #"<rect x="1" y="1" width="2" height="1"/></svg>"#
+    let url = "data:image/svg+xml;base64," + Data(svg.utf8).base64EncodedString()
+    let image = try imagePaint(of: try await renderTree(svgImage(url, attributes)))
+    #expect(image.rect == rect)
+    guard case .document(.viewport(let root)) = image.content, let content = root.content else {
+      Issue.record("The image isn't a document")
+      return
+    }
+    // The root of the image places the corner of its view box at the corner of the rectangle where it's drawn.
+    let corner = CGPoint(x: 1, y: 1).applying(content.viewBoxTransform).applying(root.translation)
+    #expect(abs(corner.x - rect.minX) < 1e-9 && abs(corner.y - rect.minY) < 1e-9, "\(corner)")
+  }
+
   /// SVG images of the same document of 2 by 1: gzipped, and without a media type.
   private static let svgImageURLs = [
     "data:image/svg+xml;base64,H4sICAAAAAAC/2ltYWdlLnN2ZwAVy8ENgzAMBdBVrD8ANumtinPoKiVNIqVQBQszPvT+XtyPQue3r7uimv2ezO4"
