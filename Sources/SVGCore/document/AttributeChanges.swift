@@ -84,6 +84,34 @@ extension SVGBaseContext {
       document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
   }
 
+  /// The context with another style sheet: the computed values of the elements cascaded with it, and its
+  /// animations. The SMIL animations keep the times that the document API begins and ends them at, the CSS
+  /// animations play on, and the transitions run on.
+  ///
+  /// - Parameter time: The time of the document in seconds, which the CSS animations that the style sheet starts
+  ///   start at.
+  func replacingStylesheet(_ stylesheet: Stylesheet, at time: Double) -> SVGBaseContext {
+    let root = document.root.flatMap {
+      ElementCursor(root: $0).makeElement(with: stylesheet, languages: document.languages) as? SVGSVGElement
+    }
+    let added = Dictionary(
+      self.animations.smil.map { ($0.elementID, ($0.addedBegins, $0.addedEnds)) }, uniquingKeysWith: { first, _ in first })
+    var animations = DocumentAnimations(
+      keyframes: stylesheet.keyframes,
+      smil: SMILAnimation.animations(of: document).map { animation in
+        var animation = animation
+        if let (begins, ends) = added[animation.elementID] {
+          animation.addedBegins = begins
+          animation.addedEnds = ends
+        }
+        return animation
+      }, time: 0)
+    animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
+    animations.playback = playback(of: root, at: time)
+    animations.transitions = self.animations.transitions
+    return SVGBaseContext(document: document, stylesheet: stylesheet, root: root, animations: animations)
+  }
+
   /// The elements of a tree that are in a set, and their descendants.
   private static func elements(of root: (any SVGElement)?, in set: Set<ElementID>) -> Set<ElementID> {
     var elements = Set<ElementID>()

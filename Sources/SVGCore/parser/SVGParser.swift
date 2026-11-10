@@ -100,8 +100,8 @@ package final class SVGParser: NSObject {
     var keepsText: Bool { name == .text || name == .tspan || name == .textPath || name == .a || name == .style }
   }
 
-  private var rules: [CSSRule] = []
-  private var keyframes: [String: KeyframesRule] = [:]
+  /// The style sheets of the document, in the order that they cascade in.
+  private var styleSources = StyleSheetSources()
   private var stack = [OpenElement]()
   private var root: DocumentElement?
   private var elementCount = 0
@@ -122,8 +122,7 @@ package final class SVGParser: NSObject {
     parser.delegate = self
     parser.parse()
     return SVGBaseContext(
-      document: DocumentTree(root: root, languages: languages),
-      stylesheet: Stylesheet(rules: rules, keyframes: keyframes))
+      document: DocumentTree(root: root, languages: languages), stylesheet: styleSources.stylesheet)
   }
 
   private func parse(data: Data, languages: [String]) -> SVGBaseContext {
@@ -165,6 +164,40 @@ extension SVGParser: XMLParserDelegate {
     elementCount += 1
   }
 
+  /// An `xml-stylesheet` processing instruction before the root element reads a style sheet in another file, as
+  /// Associating Style Sheets with XML Documents describes: one of CSS, or without a type, that isn't an alternate
+  /// style sheet.
+  package func parser(_: XMLParser, foundProcessingInstructionWithTarget target: String, data: String?) {
+    guard target == "xml-stylesheet", stack.isEmpty, root == nil, let data else { return }
+    let attributes = Self.pseudoAttributes(data)
+    guard let href = attributes["href"], !href.isEmpty,
+      ["text/css", nil].contains(attributes["type"]?.trimmingCharacters(in: .whitespaces).lowercased()),
+      attributes["alternate"] != "yes"
+    else { return }
+    let media = attributes["media"]?.trimmingCharacters(in: .whitespaces)
+    styleSources.processingInstructions.append(
+      ExternalStyleSheet(href: href, media: media?.isEmpty == false ? media : nil))
+  }
+
+  /// The pseudo-attributes of a processing instruction, such as `href="a.css"`, with their values unescaped.
+  static func pseudoAttributes(_ data: String) -> [String: String] {
+    var attributes = [String: String]()
+    var rest = Substring(data)
+    while let equals = rest.firstIndex(of: "=") {
+      let name = rest[..<equals].trimmingCharacters(in: .whitespacesAndNewlines)
+      var value = rest[rest.index(after: equals)...].drop(while: \.isWhitespace)
+      guard let quote = value.first, quote == "\"" || quote == "'" else { break }
+      value = value.dropFirst()
+      guard let end = value.firstIndex(of: quote) else { break }
+      attributes[name] = String(value[..<end])
+        .replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&apos;", with: "'")
+        .replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
+        .replacingOccurrences(of: "&amp;", with: "&")
+      rest = value[value.index(after: end)...]
+    }
+    return attributes
+  }
+
   // A prefix bound to another namespace inside the scope of a binding, such as `xlink` bound to another URI, hides
   // the outer binding until the inner one ends.
   package func parser(_: XMLParser, didStartMappingPrefix prefix: String, toURI namespaceURI: String) {
@@ -186,22 +219,8 @@ extension SVGParser: XMLParserDelegate {
     if open.name == .style,
       ["", "text/css"].contains(open.attributes["type", default: ""].trimmingCharacters(in: .whitespaces).lowercased())
     {
-      let parseInput = ParserInput(input: open.texts.joined())
-      let input = Parser(input: parseInput)
-      var parser = CSSParser(input: input)
-      // Number the rules in document order across `<style>` elements, so that a later rule wins a tie.
-      let offset = rules.count
-      for rule in parser.parseRules() {
-        switch rule {
-        case .style(var rule):
-          rule.sourceOrder += offset
-          rules.append(rule)
-        case .keyframes(let rule):
-          keyframes[rule.name] = rule
-        case .ignored:
-          break
-        }
-      }
+      // The rules are numbered in document order across `<style>` elements, so that a later rule wins a tie.
+      styleSources.sheets.append(StyleSheetSources.Sheet(css: open.texts.joined()))
     }
     let element = DocumentElement(
       id: open.id, name: open.name, localName: open.localName, attributes: filter(attributes: open.attributes),

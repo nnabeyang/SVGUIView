@@ -101,6 +101,9 @@ rendered in a way that differs from browsers:
   outer one.
 - A CSS animation from a rule that matches only the copy of an element that a
   `<use>` element makes doesn't run.
+- A style sheet in another file whose media queries have conditions, such as
+  `@import url(a.css) screen and (min-width: 600px)`, doesn't apply. One
+  without media queries, or for `all` or `screen`, applies.
 - A document in another file that a `<use>` element shows is shown without
   its animations, at time zero, as an SVG image is.
 
@@ -130,9 +133,9 @@ where they stopped. To keep them in step with the clock, seek to the time with
 
 These features are planned, but not supported yet:
 
-- Style sheets and fonts in other files. Only the images of `<image>` and
-  `<feImage>` elements and the documents of `<use>` elements are read from
-  other files.
+- Fonts in other files. The images of `<image>` and `<feImage>` elements,
+  the documents of `<use>` elements, and the style sheets of `@import` rules
+  and `xml-stylesheet` processing instructions are read from other files.
 - Images and references on the network, as an option.
 - Math functions other than `calc()`, `min()`, `max()` and `clamp()`, such as
   `round()` and `sin()`.

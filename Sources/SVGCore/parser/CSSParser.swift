@@ -233,6 +233,8 @@ enum Importance: Equatable {
 enum StylesheetRule {
   case style(CSSRule)
   case keyframes(KeyframesRule)
+  /// An `@import` rule before the other rules, which reads a style sheet in another file.
+  case `import`(ExternalStyleSheet)
   /// An at-rule that the style sheet ignores, such as `@keyframes` without a block.
   case ignored
 }
@@ -250,27 +252,33 @@ struct CSSParser {
       switch rule {
       case .style(let rule): rules.append(rule)
       case .keyframes(let rule): keyframes[rule.name] = rule
-      case .ignored: break
+      case .import, .ignored: break
       }
     }
     return Stylesheet(rules: rules, keyframes: keyframes)
   }
 
   /// The rules in the order of the style sheet, with the style rules numbered in that order. Invalid rules and
-  /// at-rules that the style sheet doesn't support are left out.
+  /// at-rules that the style sheet doesn't support are left out, and so are `@import` rules after other rules, as
+  /// CSS Cascade 4 says.
   mutating func parseRules() -> [StylesheetRule] {
     let bodyParser: RuleBodyParser<CSSParser, StylesheetRule, StyleParseErrorKind> = RuleBodyParser(
       input: input, parser: self)
     var rules = [StylesheetRule]()
     var sourceOrder = 0
+    var importsAllowed = true
     for element in bodyParser {
       switch element {
       case .success(.style(var rule)):
         rule.sourceOrder = sourceOrder
         sourceOrder += 1
         rules.append(.style(rule))
+        importsAllowed = false
       case .success(.keyframes(let rule)):
         rules.append(.keyframes(rule))
+        importsAllowed = false
+      case .success(.import(let sheet)):
+        if importsAllowed { rules.append(.import(sheet)) }
       case .success(.ignored), .failure:
         break
       }
@@ -288,13 +296,22 @@ extension CSSParser: AtRuleParser {
     case "keyframes", "-webkit-keyframes":
       guard let name = keyframesName(&input) else { return .failure(input.newCustomError(error: .invalid)) }
       return .success(.keyframes(name))
+    case "import":
+      // The URL, and the media queries after it, which the rest of the prelude is.
+      guard case .success(let url) = input.expectUrlOrString() else {
+        return .failure(input.newCustomError(error: .invalid))
+      }
+      let start = input.position
+      while case .success = input.next() {}
+      let media = input.slice(from: start).trimmingCharacters(in: .whitespacesAndNewlines)
+      return .success(.import(ExternalStyleSheet(href: url, media: media.isEmpty ? nil : media)))
     default:
       return .failure(input.newError(kind: .atRuleInvalid(name)))
     }
   }
 
-  mutating func ruleWithoutBlock(prelude _: Prelude, start _: ParserState) -> StylesheetRule {
-    .ignored
+  mutating func ruleWithoutBlock(prelude: Prelude, start _: ParserState) -> StylesheetRule {
+    if case .import(let sheet) = prelude { .import(sheet) } else { .ignored }
   }
 
   mutating func parseBlock(
@@ -334,6 +351,8 @@ extension CSSParser: QualifiedRuleParser {
     case selectors(SelectorList<SVGSelectorImpl>)
     /// The name of a `@keyframes` rule.
     case keyframes(String)
+    /// The style sheet that an `@import` rule reads.
+    case `import`(ExternalStyleSheet)
   }
   typealias QualifiedRule = DeclOrRule
 
