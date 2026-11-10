@@ -34,13 +34,18 @@ extension RenderTreeBuilder {
         }
       for (id, isStart) in placed {
         guard !Task.isCancelled else { return nodes }
-        guard let id, let marker = base.markers[id] else { continue }
+        guard let id else { continue }
+        // A marker that the copy of an element of another document inherits from the `<use>` element that shows
+        // it is a marker of the document of the `<use>` element.
+        let owner = owner(ofReference: id)
+        guard let marker = owner.builder.base.markers[owner.id] else { continue }
         var markerReferences = references
         guard markerReferences.insert(marker: id) else { continue }
         // The instance chain tells the copies of the content apart with the shape and the number of the copy.
         let copy = ElementID(rawValue: -1 - nodes.count)
-        if let node = await markerNode(
-          marker, at: vertex, isStart: isStart, strokeWidth: strokeWidth, context: context,
+        if let node = await owner.builder.markerNode(
+          marker, at: vertex, isStart: isStart, strokeWidth: strokeWidth,
+          context: owner.id == id ? context : context.with(base: owner.builder.base),
           guard: markerReferences, instance: instance + [element.base.elementID, copy])
         {
           nodes.append(node)

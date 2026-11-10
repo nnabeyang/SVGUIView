@@ -22,6 +22,15 @@ package struct RenderTreeBuilder {
   let resources: ExternalResourceLoader
   /// The images that the `<image>` elements show, read once for the tree.
   let images = LoadedImageCollector()
+  /// The documents in other files that the `<use>` elements show, read once for the tree and the builders of those
+  /// documents.
+  let documents: ExternalDocumentCollector
+  /// The builder of the document of the `<use>` element that shows an element of this document, where this is the
+  /// builder of another file, or `nil`.
+  let outer: OuterBuilder?
+  /// The files of the documents that show this document through `<use>` elements, and of this document last, which
+  /// stop a document from showing itself again.
+  let documentChain: [URL]
   /// How the root element is placed in the rectangle of the `<image>` element that shows the document as an SVG
   /// image, or `nil` if the document isn't an image.
   private let imageFit: PreserveAspectRatio?
@@ -48,9 +57,23 @@ package struct RenderTreeBuilder {
       imageViewBox: nil, imageDepth: 0)
   }
 
+  /// The builder of a document in another file that a `<use>` element of the document of a builder shows.
+  ///
+  /// - Parameters:
+  ///   - outer: The builder of the document of the `<use>` element.
+  ///   - resources: Reads the files that the document references, relative to its file.
+  ///   - chain: The files of the documents that show the document, and of the document last.
+  init(external base: SVGBaseContext, of outer: RenderTreeBuilder, resources: ExternalResourceLoader, chain: [URL]) {
+    self.init(
+      base: base, viewPort: outer.viewPort, scale: outer.scale, reusing: .init(), resources: resources, imageFit: nil,
+      imageViewBox: nil, imageDepth: outer.imageDepth, documents: outer.documents, outer: OuterBuilder(outer),
+      documentChain: chain)
+  }
+
   private init(
     base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache,
-    resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageViewBox: CGRect?, imageDepth: Int
+    resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageViewBox: CGRect?, imageDepth: Int,
+    documents: ExternalDocumentCollector = .init(), outer: OuterBuilder? = nil, documentChain: [URL]? = nil
   ) {
     self.base = base
     self.viewPort = viewPort
@@ -60,6 +83,9 @@ package struct RenderTreeBuilder {
     self.imageFit = imageFit
     self.imageViewBox = imageViewBox
     self.imageDepth = imageDepth
+    self.documents = documents
+    self.outer = outer
+    self.documentChain = documentChain ?? resources.resolvedBaseURL.map { [$0] } ?? []
     cyclicMasks = Self.findCyclicMasks(in: base)
   }
 
@@ -637,12 +663,12 @@ package struct RenderTreeBuilder {
     }
     let transform =
       isFilterRoot ? .identity : await transform(of: use, context: context, frame: frame, guard: references)
-    let content = await withReferencedElement(of: use, context: context, guard: references) { element, references in
+    let content = await withReferencedElement(of: use, context: context, guard: references) { referenced in
       UseInstance(
         translation: translation(of: use, context: context), opacity: opacity(of: use, mode: mode),
-        content: await node(
-          of: element, context: context, mode: .normal, guard: references,
-          instance: instance + [use.base.elementID]))
+        content: await referenced.builder.node(
+          of: referenced.element, context: referenced.context, mode: .normal, guard: referenced.references,
+          instance: instance + [use.base.elementID] + referenced.instance))
     }
     return .use(
       UseNode(
@@ -655,36 +681,56 @@ package struct RenderTreeBuilder {
   /// Calls `body` with the element that the `<use>` element shows, with its computed values computed again with
   /// the `<use>` element as its parent, and the guard with the elements added, or returns `nil` if there is none or
   /// showing it would make a cycle.
+  ///
+  /// An element of another document is built by the builder of that document, in a context whose references find
+  /// its elements. Its copy is styled by the style sheets of that document, and inherits from the `<use>` element,
+  /// whose paints and markers stay references of the document of the `<use>` element. The other document is shown
+  /// without animations, at time zero, as an SVG image is.
   func withReferencedElement<T>(
     of use: SVGUseElement, context: ResolveContext, guard references: ReferenceGuard,
-    _ body: (any SVGDrawableElement, ReferenceGuard) async -> T
+    _ body: (ReferencedElement) async -> T
   ) async -> T? {
     // A `<use>` element follows its reference also where no level of `<use>` elements has begun, such as in the
     // bounds of a group or in a clip path of a group, and the level stops a cycle from there.
     var references = references.uses == nil ? references.beginning(.uses) : references
     _ = references.insert(use: use.index)
-    guard let parentId = use.parentId,
-      let element = base[parentId],
-      references.insert(use: element.index),
-      !element.contains(index: use.index)
-    else {
+    let builder: RenderTreeBuilder
+    let element: any SVGDrawableElement
+    if let parentId = use.parentId, let found = base[parentId] {
+      builder = self
+      element = found
+    } else if let href = use.externalHref, let external = await externalBuilder(for: href.url),
+      let found = external.base[href.id]
+    {
+      builder = external
+      element = found
+    } else {
       return nil
     }
+    guard references.insert(use: element.index), !element.contains(index: use.index) else { return nil }
+    let isExternal = builder.base.root !== base.root
     // The copy is styled in a tree of its own, where selectors don't see the ancestors of the element.
     let restyled = element.restyled(
-      parent: use.style, root: base.root?.style ?? use.style, animations: base.isAnimated ? base.animations : nil,
+      parent: isExternal ? OuterReference.marking(use.style) : use.style, root: base.root?.style ?? use.style,
+      animations: !isExternal && base.isAnimated ? base.animations : nil,
       userAgentDeclarations: element is SVGSVGElement ? CascadedValues.userAgentDeclarationsOfInstanceRoot : [],
-      instance: base.instanceStyles.cascades(ofCopyOf: element.base.elementID))
+      instance: builder.base.instanceStyles.cascades(ofCopyOf: element.base.elementID))
+    let shown: any SVGDrawableElement
     if let svg = restyled as? SVGSVGElement {
-      return await body(svg.sized(width: use.width, height: use.height), references)
+      shown = svg.sized(width: use.width, height: use.height)
+    } else if let symbol = restyled as? SVGSymbolElement {
+      // A symbol shows its children in a viewport, as an `<svg>` element with its attributes does.
+      shown = SVGSVGElement(base: symbol.base, contents: symbol.children).sized(width: use.width, height: use.height)
+    } else if let restyled = restyled as? (any SVGDrawableElement) {
+      shown = restyled
+    } else {
+      return nil
     }
-    // A symbol shows its children in a viewport, as an `<svg>` element with its attributes does.
-    if let symbol = restyled as? SVGSymbolElement {
-      let svg = SVGSVGElement(base: symbol.base, contents: symbol.children)
-      return await body(svg.sized(width: use.width, height: use.height), references)
-    }
-    guard let restyled = restyled as? (any SVGDrawableElement) else { return nil }
-    return await body(restyled, references)
+    return await body(
+      ReferencedElement(
+        element: shown, references: references, builder: builder,
+        context: isExternal ? context.with(base: builder.base) : context,
+        instance: isExternal ? [builder.externalDocumentMarker] : []))
   }
 
   private func translation(of use: SVGUseElement, context: ResolveContext) -> CGAffineTransform {
@@ -706,9 +752,12 @@ package struct RenderTreeBuilder {
       return shape.path(in: context)
     case let use as SVGUseElement:
       // An element with display none isn't rendered, also where a use element references it.
-      let path = await withReferencedElement(of: use, context: context, guard: references) { element, references in
-        element.display == CSSDisplay.none
-          ? nil : await self.path(of: element, context: context.styled(by: element), guard: references)
+      let path = await withReferencedElement(of: use, context: context, guard: references) { referenced in
+        referenced.element.display == CSSDisplay.none
+          ? nil
+          : await referenced.builder.path(
+            of: referenced.element, context: referenced.context.styled(by: referenced.element),
+            guard: referenced.references)
       }
       var translation = translation(of: use, context: context)
       return path.flatMap { $0 }.flatMap { $0.copy(using: &translation) }
@@ -819,11 +868,13 @@ package struct RenderTreeBuilder {
       else { return .zero }
       return frame.applying(layout.viewBoxTransform.concatenating(translation))
     case let use as SVGUseElement:
-      let frame = await withReferencedElement(of: use, context: context, guard: references) { element, references in
-        let context = context.styled(by: element)
-        return await self.frame(
-          of: element, context: context, path: await self.path(of: element, context: context, guard: references),
-          includesStroke: includesStroke, guard: references)
+      let frame = await withReferencedElement(of: use, context: context, guard: references) { referenced in
+        let builder = referenced.builder
+        let context = referenced.context.styled(by: referenced.element)
+        return await builder.frame(
+          of: referenced.element, context: context,
+          path: await builder.path(of: referenced.element, context: context, guard: referenced.references),
+          includesStroke: includesStroke, guard: referenced.references)
       }
       return (frame ?? .zero).applying(translation(of: use, context: context))
     default:
@@ -887,6 +938,14 @@ package struct RenderTreeBuilder {
       let isEmpty = bounds.width == 0 || bounds.height == 0
       let fallbackPaint: FillPaint? =
         if case .color(let color)? = fallback { color.toCGColor(opacity: opacity).map { .color($0) } } else { nil }
+      // A paint that the copy of an element of another document inherits from the `<use>` element that shows it
+      // names a paint server of the document of the `<use>` element.
+      let owner = owner(ofReference: id)
+      if owner.id != id {
+        return await owner.builder.paint(
+          .url(owner.id, fallback: fallback), opacity: opacity, of: element, path: path,
+          context: context.with(base: owner.builder.base), mode: mode, guard: references, instance: instance)
+      }
       if let server = base.pservers[id] {
         // Display doesn't apply to paint servers, which are never rendered themselves.
         let gradient = gradientPaint(of: server, context: context, opacity: opacity)

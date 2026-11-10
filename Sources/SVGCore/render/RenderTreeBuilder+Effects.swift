@@ -113,8 +113,10 @@ extension RenderTreeBuilder {
     of element: any SVGDrawableElement, context: ResolveContext, guard references: ReferenceGuard
   ) async -> FillRule {
     guard let use = element as? SVGUseElement else { return element.style.clipRule }
-    let rule = await withReferencedElement(of: use, context: context, guard: references) { element, references in
-      await clipRule(of: element, context: context.styled(by: element), guard: references)
+    let rule = await withReferencedElement(of: use, context: context, guard: references) { referenced in
+      await referenced.builder.clipRule(
+        of: referenced.element, context: referenced.context.styled(by: referenced.element),
+        guard: referenced.references)
     }
     return rule ?? use.style.clipRule
   }

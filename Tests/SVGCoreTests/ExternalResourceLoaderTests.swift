@@ -202,4 +202,31 @@ struct ExternalResourceLoaderTests {
     #expect(try source("after") == nil)
     #expect(try source("outer") == .external("d.png"))
   }
+
+  @Test(
+    "a use element keeps the URL and the ID of an element of another document, and not of a data URL",
+    arguments: [
+      ("other.svg#a", "other.svg", "a"), (" images/b.svg#%61b ", "images/b.svg", "ab"), ("#a", nil, nil),
+      ("other.svg", nil, nil), ("other.svg#", nil, nil), ("data:image/svg+xml,%3Csvg/%3E#a", nil, nil),
+    ] as [(String, String?, String?)])
+  func useHref(href: String, url: String?, id: String?) {
+    let external = SVGUseElement.externalHref(href)
+    #expect(external?.url == url)
+    #expect(external?.id == id)
+  }
+
+  @Test("a loader rebased to a file reads relative URLs from the file, in the same folder")
+  func rebased() async throws {
+    let folder = try Folder()
+    try folder.write("a", at: "docs/images/a.png")
+    try folder.write("b", at: "docs/b.png")
+    let loader = ExternalResourceLoader(
+      baseURL: folder.url.appending(path: "docs/image.svg"), folder: folder.url.appending(path: "docs"),
+      cache: ExternalResourceCache())
+    let file = try #require(loader.fileURL(ofHref: "images/other.svg"))
+    let rebased = loader.rebased(to: file)
+    #expect(await rebased.data(forHref: "a.png").map { String(decoding: $0, as: UTF8.self) } == "a")
+    #expect(await rebased.data(forHref: "../b.png").map { String(decoding: $0, as: UTF8.self) } == "b")
+    #expect(await rebased.data(forHref: "../../outside.png") == nil)
+  }
 }

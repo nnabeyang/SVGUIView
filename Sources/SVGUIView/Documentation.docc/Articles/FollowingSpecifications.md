@@ -101,6 +101,8 @@ rendered in a way that differs from browsers:
   outer one.
 - A CSS animation from a rule that matches only the copy of an element that a
   `<use>` element makes doesn't run.
+- A document in another file that a `<use>` element shows is shown without
+  its animations, at time zero, as an SVG image is.
 
 SVGUIView follows the text of the specifications in a few places where some
 browsers don't:
@@ -110,6 +112,9 @@ browsers don't:
 - `glyph-orientation-vertical="0"` sets the characters of vertical text
   upright.
 - Selectors match the copies that `<use>` elements make within their own tree.
+- The copy of an element of another file that a `<use>` element shows is
+  styled by the style sheets of that file, and not of the document of the
+  `<use>` element.
 - The position and the size of a nested `<svg>` element, and the `width` and
   `height` of a `<use>` element, take math functions, such as
   `width="calc(30% + 10px)"`.
@@ -125,8 +130,9 @@ where they stopped. To keep them in step with the clock, seek to the time with
 
 These features are planned, but not supported yet:
 
-- `<use>` references, style sheets and fonts in other files. Only the images
-  of `<image>` and `<feImage>` elements are read from other files.
+- Style sheets and fonts in other files. Only the images of `<image>` and
+  `<feImage>` elements and the documents of `<use>` elements are read from
+  other files.
 - Images and references on the network, as an option.
 - Math functions other than `calc()`, `min()`, `max()` and `clamp()`, such as
   `round()` and `sin()`.
