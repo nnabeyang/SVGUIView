@@ -80,9 +80,13 @@ extension RenderTreeBuilder {
     if let read = documents.documents[file] {
       document = read
     } else {
-      let parsed = await resources.data(forHref: url).flatMap { data -> SVGBaseContext? in
+      var parsed = await resources.data(forHref: url).flatMap { data -> SVGBaseContext? in
         let document = SVGParser.parse(data: data, languages: base.document.languages)
         return document.root == nil ? nil : document
+      }
+      // The style sheets of the document in other files are read relative to its file.
+      if let document = parsed, document.needsExternalStyleSheets {
+        parsed = await document.resolvingExternalStyleSheets(loader: resources.rebased(to: file))
       }
       guard !Task.isCancelled else { return nil }
       documents.documents[file] = .some(parsed)

@@ -18,10 +18,20 @@ struct Stylesheet: Sendable {
   /// Whether a selector has a sibling combinator, `+` or `~`, so that an element's attributes can change what the
   /// rules give its later siblings and their descendants.
   let hasSiblingCombinators: Bool
+  /// The style sheets that the rules come from, where some of them are in other files, or `nil` if the rules are all
+  /// in the document.
+  let sources: StyleSheetSources?
+  /// Whether the rules have the rules of the style sheets in other files that the loader of a rendering read.
+  let hasExternalRules: Bool
 
-  init(rules: [CSSRule], keyframes: [String: KeyframesRule] = [:]) {
+  init(
+    rules: [CSSRule], keyframes: [String: KeyframesRule] = [:], sources: StyleSheetSources? = nil,
+    hasExternalRules: Bool = false
+  ) {
     self.rules = rules
     self.keyframes = keyframes
+    self.sources = sources
+    self.hasExternalRules = hasExternalRules
     var finder = SiblingCombinatorFinder()
     hasSiblingCombinators = rules.contains { rule in rule.selectors.slice.contains { !$0.visit(&finder) } }
   }
