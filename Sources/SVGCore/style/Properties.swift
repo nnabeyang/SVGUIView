@@ -1249,27 +1249,33 @@ extension NonNegativeGeometryLengthProperty {
   }
 }
 
+/// `x`, a geometry property of SVG 2 for `<rect>`, `<image>`, `<use>` and the outermost `<svg>`.
 enum XProperty: GeometryLengthProperty {
   static let id = PropertyID.x
-  static let elements: Set<SVGElementName> = [.rect, .svg]
+  static let elements: Set<SVGElementName> = [.rect, .svg, .image, .use]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.x }
 }
 
+/// `y`, a geometry property of SVG 2 for `<rect>`, `<image>`, `<use>` and the outermost `<svg>`.
 enum YProperty: GeometryLengthProperty {
   static let id = PropertyID.y
-  static let elements: Set<SVGElementName> = [.rect, .svg]
+  static let elements: Set<SVGElementName> = [.rect, .svg, .image, .use]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.y }
 }
 
+/// `width`, a geometry property of SVG 2 for `<rect>`, `<image>` and the outermost `<svg>`. The `width` of `<use>`
+/// is an attribute, which the property doesn't set, as SVG 2 and the tests of WPT say.
 enum WidthProperty: NonNegativeGeometryLengthProperty {
   static let id = PropertyID.width
-  static let elements: Set<SVGElementName> = [.rect, .svg]
+  static let elements: Set<SVGElementName> = [.rect, .svg, .image]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.width }
 }
 
+/// `height`, a geometry property of SVG 2 for `<rect>`, `<image>` and the outermost `<svg>`. The `height` of `<use>`
+/// is an attribute, which the property doesn't set, as SVG 2 and the tests of WPT say.
 enum HeightProperty: NonNegativeGeometryLengthProperty {
   static let id = PropertyID.height
-  static let elements: Set<SVGElementName> = [.rect, .svg]
+  static let elements: Set<SVGElementName> = [.rect, .svg, .image]
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.height }
 }
 

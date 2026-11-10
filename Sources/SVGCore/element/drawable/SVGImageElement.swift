@@ -44,10 +44,12 @@ final class SVGImageElement: ShapeGeometry {
       source = .external(href)
     }
     fragment = source == nil ? nil : EmbeddedImage.fragment(ofHref: href)
-    x = SVGLength(attributes["x"]) ?? .pixel(0)
-    y = SVGLength(attributes["y"]) ?? .pixel(0)
-    width = SVGLength(attributes["width"])
-    height = SVGLength(attributes["height"])
+    // The position and the size are geometry properties, which style sheets set, and whose presentation attributes
+    // are read as CSS.
+    x = base.style.x
+    y = base.style.y
+    width = base.style.width
+    height = base.style.height
     preserveAspectRatio =
       PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""]) ?? PreserveAspectRatio()
   }
