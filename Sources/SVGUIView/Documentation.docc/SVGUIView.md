@@ -61,8 +61,9 @@ A document can show the image files that it refers to by relative URLs, such
 as `<image href="images/photo.png">` and the `<feImage>` of a filter, and the
 elements of other SVG files that `<use>` elements show, such as
 `<use href="icons.svg#star"/>`. It also reads the style sheets that its
-`@import` rules and `xml-stylesheet` processing instructions refer to, before
-its first rendering. An image file is a bitmap or an SVG image,
+`@import` rules and `xml-stylesheet` processing instructions refer to, and the
+fonts of its `@font-face` rules, such as WOFF files, before its first
+rendering. The fonts are used only by the document. An image file is a bitmap or an SVG image,
 which, as in a browser, reads no other files itself. The URLs are relative to the view's
 ``SVGUIView/SVGUIView/baseURL``: the URL that
 ``SVGUIView/SVGUIView/init(contentsOf:)`` reads the document from, or the one
