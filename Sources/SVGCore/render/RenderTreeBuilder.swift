@@ -761,10 +761,8 @@ package struct RenderTreeBuilder {
       let box = svg.getViewBox(size: viewPort.size)
       return (box.width, box.height)
     }
-    return (
-      (svg.width ?? .percent(100)).value(context: context, mode: .width),
-      (svg.height ?? .percent(100)).value(context: context, mode: .height)
-    )
+    let size = svg.outermostSize { length, mode in length.value(context: context, mode: mode) }
+    return (size.width, size.height)
   }
 
   /// The bounds that units relative to an element use, in a context styled by the element.
