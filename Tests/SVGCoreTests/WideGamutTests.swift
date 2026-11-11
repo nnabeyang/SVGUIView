@@ -11,7 +11,7 @@ private func tree(_ content: String) async throws -> RenderTree {
   let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"# + content + "</svg>"
   let base = SVGParser.parse(data: Data(svg.utf8))
   let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   return try #require(
     await RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 100, height: 100), scale: 1).build(fit: fit))
 }

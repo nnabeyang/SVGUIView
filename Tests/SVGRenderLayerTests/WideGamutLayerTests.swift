@@ -16,7 +16,7 @@ private func images(fill: String, wideGamut: Bool) async throws -> [CGImage] {
   let base = SVGParser.parse(data: Data(document.utf8))
   let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
   let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   let tree = try #require(await RenderTreeBuilder(base: base.at(time: 0.5), viewPort: rect, scale: 1).build(fit: fit))
   let planner = LayerPlanner(
     promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: 1)

@@ -1022,38 +1022,35 @@ extension ContentFit {
   init(_ contentMode: UIView.ContentMode) {
     switch contentMode {
     case .scaleToFill:
-      self.init(preserveAspectRatio: .none, stretches: true, scales: true)
+      self.init(preserveAspectRatio: .none)
     case .scaleAspectFit:
-      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
     case .scaleAspectFill:
-      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .slice), stretches: false, scales: true)
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .slice))
     case .redraw:
-      self.init(preserveAspectRatio: .none, stretches: false, scales: false)
+      // The document is stretched to the bounds, as with `scaleToFill`.
+      self.init(preserveAspectRatio: .none)
     case .center:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .mid, yAlign: .mid))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid))
     case .top:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .mid, yAlign: .min))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .min))
     case .bottom:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .mid, yAlign: .max))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .max))
     case .left:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .min, yAlign: .mid))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .mid))
     case .right:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .max, yAlign: .mid))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .max, yAlign: .mid))
     case .topLeft:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .min, yAlign: .min))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .min))
     case .topRight:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .max, yAlign: .min))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .max, yAlign: .min))
     case .bottomLeft:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .min, yAlign: .max))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .max))
     case .bottomRight:
-      self.init(alignedTo: PreserveAspectRatio(xAlign: .max, yAlign: .max))
+      self.init(preserveAspectRatio: PreserveAspectRatio(xAlign: .max, yAlign: .max))
     @unknown default:
-      self.init(preserveAspectRatio: .none, stretches: false, scales: false)
+      self.init(preserveAspectRatio: .none)
     }
-  }
-
-  private init(alignedTo preserveAspectRatio: PreserveAspectRatio) {
-    self.init(preserveAspectRatio: preserveAspectRatio, stretches: false, scales: false)
   }
 }
 

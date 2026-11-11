@@ -105,8 +105,7 @@ struct SMILMotionTests {
     let tree = try #require(
       await builder.build(
         fit: ContentFit(
-          preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false,
-          scales: true)))
+          preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))))
     guard case .viewport(let viewport) = tree.root, case .shape(let shape) = viewport.content?.children.last else {
       Issue.record("The rectangle isn't a shape of the root")
       return
