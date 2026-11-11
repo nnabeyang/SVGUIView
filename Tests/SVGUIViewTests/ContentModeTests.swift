@@ -77,6 +77,58 @@ struct ContentModeTests {
     Placement("topLeft", .topLeft, document: (20, 40), view: (20, 40), x: 0...19, y: 10...29),
   ]
 
+  /// A document whose view box of 20 by 10 is filled, with the attributes of its size.
+  private static func svg(size attributes: String) -> Data {
+    Data(
+      """
+      <svg xmlns="http://www.w3.org/2000/svg" \(attributes) viewBox="0 0 20 10">
+        <rect width="20" height="10" fill="blue"/>
+      </svg>
+      """.utf8)
+  }
+
+  @Test(
+    "a document with only a width or a height takes the other one from the ratio of its view box",
+    arguments: [
+      (#"width="60""#, CGSize(width: 60, height: 30), 0...29),
+      (#"height="30""#, CGSize(width: 60, height: 30), 0...29),
+      // With both, the view box is placed in the middle of the box.
+      (#"width="60" height="60""#, CGSize(width: 60, height: 60), 15...44),
+    ] as [(String, CGSize, ClosedRange<Int>)])
+  func oneSize(attributes: String, size: CGSize, y: ClosedRange<Int>) async throws {
+    let view = SVGUIView(data: Self.svg(size: attributes))
+    #expect(view.intrinsicContentSize == size)
+    #expect(view.frame.size == size)
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+    view.contentMode = .topLeft
+    let image = try await view.takeCGImageSnapshot(rect: CGRect(origin: .zero, size: size), scale: 1)
+    let ranges = try #require(try paintedRanges(of: image))
+    #expect(ranges.x == 0...59)
+    #expect(ranges.y == y)
+  }
+
+  @Test("a document with only a width takes the height from the ratio of its view box in every content mode")
+  func oneSizeInContentModes() async throws {
+    let data = Self.svg(size: #"width="60""#)
+    let frame = CGRect(x: 0, y: 0, width: 120, height: 120)
+    // The box of 60 by 30 is placed in the view, and the view box fills it.
+    let expected: [(UIView.ContentMode, ClosedRange<Int>, ClosedRange<Int>)] = [
+      (.scaleToFill, 0...119, 0...119),
+      (.scaleAspectFit, 0...119, 30...89),
+      (.center, 30...89, 45...74),
+      (.topLeft, 0...59, 0...29),
+    ]
+    for (mode, x, y) in expected {
+      let view = SVGUIView(frame: frame, data: data)
+      view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
+      view.contentMode = mode
+      let image = try await view.takeCGImageSnapshot(rect: frame, scale: 1)
+      let ranges = try #require(try paintedRanges(of: image))
+      #expect(ranges.x == x, "\(mode.rawValue)")
+      #expect(ranges.y == y, "\(mode.rawValue)")
+    }
+  }
+
   /// The ranges of x and y of the pixels of the image that are opaque, or `nil` if none is.
   private func paintedRanges(of image: CGImage) throws -> (x: ClosedRange<Int>, y: ClosedRange<Int>)? {
     let width = image.width

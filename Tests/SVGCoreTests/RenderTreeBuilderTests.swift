@@ -1405,6 +1405,28 @@ struct RenderTreeBuilderTests {
     #expect(try bounds(of: shapes[0]).maxY > bounds(of: shapes[1]).maxY + 0.2)
   }
 
+  @Test(
+    "a line declared with var() is drawn with the paints of the element that declares it",
+    arguments: [
+      #"<tspan fill="blue" style="--d: line-through; text-decoration: var(--d)">b</tspan>"#,
+      #"<tspan fill="blue" text-decoration="var(--d)">b</tspan>"#,
+    ])
+  func lineThroughWithVariable(span: String) async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4" style="--d: line-through">a"# + span + "c</text>")
+    let shapes = shapes(of: try children(of: tree))
+    try #require(shapes.count == 3)
+    #expect(shapes[2].id == shapes[1].id)
+    #expect(fillColor(of: shapes[2])?.components == [0, 0, 1, 1])
+  }
+
+  @Test("a line declared with var() whose value isn't valid after the substitution isn't drawn")
+  func invalidLineWithVariable() async throws {
+    let tree = try await renderTree(
+      #"<text x="2" y="10" font-size="4">a<tspan fill="blue" style="--d: red; text-decoration: var(--d)">b</tspan>c</text>"#)
+    #expect(shapes(of: try children(of: tree)).count == 2)
+  }
+
   @Test("a line through text is drawn after all the glyphs, with the paints of the element that declares it")
   func lineThrough() async throws {
     let tree = try await renderTree(
