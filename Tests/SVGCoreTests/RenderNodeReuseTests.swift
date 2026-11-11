@@ -19,7 +19,7 @@ private func unstable(in base: SVGBaseContext) -> Set<String> {
 /// The render tree of a document at a time, rendered into 100 by 100.
 private func tree(of base: SVGBaseContext, reusing previous: RenderNodeCache = .init()) async throws -> RenderTree {
   let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   return try #require(
     await RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 100, height: 100), scale: 1, reusing: previous)
       .build(fit: fit))

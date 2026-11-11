@@ -21,7 +21,7 @@ private func blurredAlpha(rect: String = #"x="30" y="30" width="40" height="40""
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
   let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   let tree = try #require(await RenderTreeBuilder(base: base, viewPort: rect, scale: 1).build(fit: fit))
   var pixels = [UInt8](repeating: 0, count: 100 * 100 * 4)
   let context = try #require(

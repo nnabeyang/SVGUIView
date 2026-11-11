@@ -21,8 +21,7 @@ struct RenderTreeBuilderTests {
     return try #require(
       await builder.build(
         fit: ContentFit(
-          preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false,
-          scales: true)))
+          preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))))
   }
 
   /// The children of the root `<svg>` element.
@@ -104,8 +103,7 @@ struct RenderTreeBuilderTests {
     let tree = try #require(
       await builder.build(
         fit: ContentFit(
-          preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .min, option: .meet), stretches: false,
-          scales: false)))
+          preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .min, option: .meet))))
     let rect = try #require(try shape(try children(of: tree).first).geometry).frame
     #expect(rect == CGRect(x: 0, y: 0, width: 20, height: 10))
   }

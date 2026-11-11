@@ -53,14 +53,11 @@ package struct RenderTreeBuilder {
     let viewBox = svg.getViewBox(size: viewPort.size)
     let context = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: viewBox)
     let (width, height) = rootSize(of: svg, context: context)
+    // The view places the box of the width and the height of the root element, which places its view box in that
+    // box itself. A box without an area shows nothing.
     var transforms = [CGAffineTransform]()
-    if fit.stretches {
-      transforms.append(CGAffineTransform(scaleX: viewBox.width / width, y: viewBox.height / height))
-    }
-    transforms.append(fit.transform(viewBox: viewBox, size: viewPort.size))
-    if fit.scales {
-      let scale = viewBox.width / width
-      transforms.append(CGAffineTransform(scaleX: scale, y: scale))
+    if width > 0, height > 0 {
+      transforms.append(fit.transform(size: CGSize(width: width, height: height), in: viewPort.size))
     }
     let root = await node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
     guard !Task.isCancelled else { return nil }
