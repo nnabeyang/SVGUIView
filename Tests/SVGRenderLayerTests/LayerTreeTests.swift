@@ -38,7 +38,7 @@ private func renderings(
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(origin: .zero, size: size)
   let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   let planner = LayerPlanner(
     promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: scale)
   let host = CALayer()
@@ -231,7 +231,7 @@ struct LayerTreeTests {
     let base = SVGParser.parse(data: Data(svg.utf8))
     let rect = CGRect(origin: .zero, size: size)
     let fit = ContentFit(
-      preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+      preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
     let planner = LayerPlanner(
       promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: scale)
     let host = CALayer()

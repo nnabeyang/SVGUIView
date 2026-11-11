@@ -145,11 +145,28 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   }
 
   package var size: CGSize {
-    let width = width ?? .percent(100)
-    let height = height ?? .percent(100)
-    return CGSize(
-      width: width.value(context: self, mode: .width),
-      height: height.value(context: self, mode: .height))
+    outermostSize { length, mode in length.value(context: self, mode: mode) }
+  }
+
+  /// The width and the height of the element as the outermost `svg` element, with the lengths resolved by a closure.
+  ///
+  /// A missing width or height is 100%, except where the other one is there and isn't a percentage, and the element
+  /// has a view box with an area: it then takes the ratio of the view box, as CSS sizes a replaced element that has
+  /// one size and an aspect ratio, and as browsers size an SVG image whose root has only a width or a height.
+  func outermostSize(resolve: (SVGLength, SVGLengthMode) -> CGFloat) -> CGSize {
+    let box = viewBox?.toCGRect()
+    let ratio: CGFloat? = box.flatMap { $0.width > 0 && $0.height > 0 ? $0.width / $0.height : nil }
+    switch (width, height, ratio) {
+    case (let width?, nil, let ratio?) where !width.hasPercent:
+      let value = resolve(width, .width)
+      return CGSize(width: value, height: value / ratio)
+    case (nil, let height?, let ratio?) where !height.hasPercent:
+      let value = resolve(height, .height)
+      return CGSize(width: value * ratio, height: value)
+    default:
+      return CGSize(
+        width: resolve(width ?? .percent(100), .width), height: resolve(height ?? .percent(100), .height))
+    }
   }
 
 }
