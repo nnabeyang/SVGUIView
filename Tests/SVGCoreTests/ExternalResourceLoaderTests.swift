@@ -37,6 +37,14 @@ private final class FetchCounter: Sendable {
       return try Data(contentsOf: url)
     }
   }
+
+  /// Reads files, and gives the text of a URL of the network as its data.
+  var networkFetch: ExternalResourceLoader.Fetch {
+    { url in
+      self.count.withLock { $0 += 1 }
+      return url.isFileURL ? try Data(contentsOf: url) : Data(url.absoluteString.utf8)
+    }
+  }
 }
 
 @Suite("Reading the files that a document refers to")
@@ -223,10 +231,80 @@ struct ExternalResourceLoaderTests {
     let loader = ExternalResourceLoader(
       baseURL: folder.url.appending(path: "docs/image.svg"), folder: folder.url.appending(path: "docs"),
       cache: ExternalResourceCache())
-    let file = try #require(loader.fileURL(ofHref: "images/other.svg"))
+    let file = try #require(loader.resourceURL(ofHref: "images/other.svg"))
     let rebased = loader.rebased(to: file)
     #expect(await rebased.data(forHref: "a.png").map { String(decoding: $0, as: UTF8.self) } == "a")
     #expect(await rebased.data(forHref: "../b.png").map { String(decoding: $0, as: UTF8.self) } == "b")
     #expect(await rebased.data(forHref: "../../outside.png") == nil)
+  }
+
+  /// A loader of a document in the folder `docs` that reads the folder, and the network if it's allowed.
+  private func loader(
+    in folder: Folder, baseURL: URL?? = nil, allowsNetwork: Bool, fetch: FetchCounter = FetchCounter()
+  ) -> ExternalResourceLoader {
+    ExternalResourceLoader(
+      baseURL: baseURL ?? folder.url.appending(path: "docs/image.svg"), folder: folder.url.appending(path: "docs"),
+      allowsNetwork: allowsNetwork, cache: ExternalResourceCache(), fetch: fetch.networkFetch)
+  }
+
+  @Test("an https URL is read only by a loader that reads the network")
+  func network() async throws {
+    let folder = try Folder()
+    let counter = FetchCounter()
+    let files = loader(in: folder, allowsNetwork: false, fetch: counter)
+    #expect(files.resourceURL(ofHref: "https://example.test/a.png") == nil)
+    #expect(await files.data(forHref: "https://example.test/a.png") == nil)
+    #expect(counter.count.withLock { $0 } == 0)
+    let network = loader(in: folder, allowsNetwork: true, fetch: counter)
+    #expect(
+      network.resourceURL(ofHref: " https://example.test/a.png?size=2#layer ")?.absoluteString
+        == "https://example.test/a.png?size=2")
+    #expect(await network.data(forHref: "https://example.test/a.png") == Data("https://example.test/a.png".utf8))
+    // The data is read once.
+    #expect(await network.data(forHref: "https://example.test/a.png#layer") != nil)
+    #expect(counter.count.withLock { $0 } == 1)
+  }
+
+  @Test(
+    "URLs of other schemes aren't read from the network",
+    arguments: ["http://example.test/a.png", "ftp://example.test/a.png", "https:///a.png", "//example.test/a.png"])
+  func otherSchemes(href: String) throws {
+    #expect(loader(in: try Folder(), allowsNetwork: true).resourceURL(ofHref: href) == nil)
+  }
+
+  @Test("a document of the network reads its relative URLs from the network, and no files")
+  func networkDocument() async throws {
+    let folder = try Folder()
+    try folder.write("a", at: "docs/a.png")
+    let base = URL(string: "https://example.test/docs/image.svg")
+    let network = loader(in: folder, baseURL: base, allowsNetwork: true)
+    #expect(network.resourceURL(ofHref: "images/a.png")?.absoluteString == "https://example.test/docs/images/a.png")
+    #expect(network.resourceURL(ofHref: "//other.test/a.png")?.absoluteString == "https://other.test/a.png")
+    #expect(network.resourceURL(ofHref: folder.url.appending(path: "docs/a.png").absoluteString) == nil)
+    #expect(network.resolvedBaseURL == base)
+    // Without the network, it reads nothing.
+    #expect(loader(in: folder, baseURL: base, allowsNetwork: false).resourceURL(ofHref: "images/a.png") == nil)
+  }
+
+  @Test("a document without a base URL reads the network by absolute URLs only")
+  func networkWithoutBaseURL() throws {
+    let network = loader(in: try Folder(), baseURL: .some(nil), allowsNetwork: true)
+    #expect(network.resourceURL(ofHref: "https://example.test/a.png") != nil)
+    #expect(network.resourceURL(ofHref: "a.png") == nil)
+    #expect(network.resourceURL(ofHref: "file:///a.png") == nil)
+  }
+
+  @Test("a loader rebased to a resource of the network reads the network relative to it, and no files")
+  func rebasedToNetwork() async throws {
+    let folder = try Folder()
+    try folder.write("a", at: "docs/a.png")
+    let loader = loader(in: folder, allowsNetwork: true)
+    let resource = try #require(loader.resourceURL(ofHref: "https://example.test/icons/set.svg"))
+    let rebased = loader.rebased(to: resource)
+    #expect(rebased.resourceURL(ofHref: "star.png")?.absoluteString == "https://example.test/icons/star.png")
+    #expect(rebased.resourceURL(ofHref: folder.url.appending(path: "docs/a.png").absoluteString) == nil)
+    // A file that the document of a file refers to reads the files of the folder still.
+    let file = try #require(loader.resourceURL(ofHref: "other.svg"))
+    #expect(await loader.rebased(to: file).data(forHref: "a.png") == Data("a".utf8))
   }
 }
