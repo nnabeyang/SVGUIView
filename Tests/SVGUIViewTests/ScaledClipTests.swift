@@ -5,7 +5,8 @@ import UIKit
 
 @testable import SVGUIView
 
-/// Tests that clip paths and masks in an enlarged user space have edges as sharp as they are without the enlargement.
+/// Tests that clip paths and masks in an enlarged user space have edges as sharp as they are without the enlargement,
+/// and that they clip a much reduced user space.
 @MainActor
 @Suite("Scaled clip paths and masks")
 struct ScaledClipTests {
@@ -38,6 +39,25 @@ struct ScaledClipTests {
     let content =
       #"<clipPath id="c"><rect width="5" height="10"/></clipPath>"#
       + #"<svg width="20" height="20" viewBox="0 0 10 10" clip-path="url(#c)"><rect width="10" height="10" fill="blue"/></svg>"#
+    #expect(try await pixel(content, x: 9, y: 10) == [0, 0, 255, 255])
+    #expect(try await pixel(content, x: 10, y: 10) == [0, 0, 0, 0])
+  }
+
+  @Test(
+    "a clip path and a mask in a user space reduced 100000 times clip at their edges",
+    arguments: [
+      (#"<clipPath id="e"><rect width="1000000" height="2000000"/></clipPath>"#, "clip-path"),
+      (
+        #"<mask id="e" maskUnits="userSpaceOnUse" x="0" y="0" width="2000000" height="2000000">"#
+          + #"<rect width="1000000" height="2000000" fill="white"/></mask>"#, "mask"
+      ),
+    ])
+  func reduced(effect: String, attribute: String) async throws {
+    // The bitmap of the user space at the scale of the painter would be too large to be made. The edge is at 1000000
+    // in the user space of the group, which is 10 in the document.
+    let content =
+      effect + #"<g transform="scale(0.00001)"><rect width="2000000" height="2000000" fill="blue" "# + attribute
+      + #"="url(#e)"/></g>"#
     #expect(try await pixel(content, x: 9, y: 10) == [0, 0, 255, 255])
     #expect(try await pixel(content, x: 10, y: 10) == [0, 0, 0, 0])
   }

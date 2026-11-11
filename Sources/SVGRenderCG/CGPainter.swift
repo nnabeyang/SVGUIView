@@ -425,19 +425,28 @@ package struct CGPainter {
     target.clip(to: extent, mask: image)
   }
 
+  /// How many times as fine as the pixels of the context that it clips the bitmap of a clip path or a mask can be,
+  /// where its user space is reduced, such as by a viewBox larger than the view.
+  static let maximumBitmapOversampling: CGFloat = 4
+
   /// The rectangle and the scale of the bitmap of a clip path or a mask of `extent` that clips `target`, or a null
   /// rectangle if no part of `extent` can show.
   ///
   /// The bitmap is as fine as the pixels of `target`, where its user space is enlarged, such as by a viewBox or a
-  /// transform, so that its edges are as sharp as they are without the enlargement, and never coarser than the scale
-  /// of the painter. An enlarged bitmap covers only the part of `extent` that can show in `target`, on the grid of the
-  /// pixels of the whole one, so that it has no more pixels than `target` shows.
+  /// transform, so that its edges are as sharp as they are without the enlargement. Elsewhere it has the scale of the
+  /// painter, but no more than `maximumBitmapOversampling` times as fine as the pixels of `target`, so that a much
+  /// reduced user space doesn't make a bitmap much larger than what it clips. An enlarged bitmap covers only the part
+  /// of `extent` that can show in `target`, on the grid of the pixels of the whole one, so that it has no more pixels
+  /// than `target` shows.
   private func bitmapExtent(of extent: CGRect, in target: CGContext) -> (extent: CGRect, scale: CGFloat) {
     let ctm = target.ctm
     let targetScale = max(hypot(ctm.a, ctm.b), hypot(ctm.c, ctm.d))
     // A scale that differs from the painter's by rounding, such as of the fit of the document, keeps the bitmap of
     // the painter's scale.
-    guard targetScale.isFinite, targetScale > scale * 1.001 else { return (extent, scale) }
+    guard targetScale.isFinite, targetScale > scale * 1.001 else {
+      guard targetScale.isFinite, targetScale > 0 else { return (extent, scale) }
+      return (extent, min(scale, targetScale * Self.maximumBitmapOversampling))
+    }
     let visible = extent.intersection(target.boundingBoxOfClipPath)
     guard !visible.isNull, !visible.isEmpty else { return (.null, targetScale) }
     func edge(_ value: CGFloat, from origin: CGFloat, _ rule: FloatingPointRoundingRule) -> CGFloat {
