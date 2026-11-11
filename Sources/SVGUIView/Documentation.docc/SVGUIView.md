@@ -85,9 +85,27 @@ in another folder, or none:
 svgView.configuration = SVGUIViewConfiguration(externalResources: .none)
 ```
 
-A view doesn't read the network. Reading the files takes part of the time of a
-rendering, which the configuration's timeout limits. It reads each file once
-for a document, until it's given other data.
+A view doesn't read the network, unless the configuration allows it. With
+``ExternalResources/allowingNetwork()``, a document also reads the resources
+that it refers to by `https` URLs, such as
+`<image href="https://example.com/photo.png">`:
+
+```swift
+svgView.configuration = SVGUIViewConfiguration(
+  externalResources: .documentFolder.allowingNetwork()
+)
+```
+
+Allow the network only for documents that you trust. Showing a document then
+sends requests to the servers that it names, which tells them that the
+document is shown. The view reads `https` URLs only, sends no cookies and no
+credentials of the app, and doesn't read a resource larger than 64 MB. A
+document whose base URL is an `https` URL reads its relative URLs from the
+network, and no files.
+
+Reading the files and the network takes part of the time of a rendering, which
+the configuration's timeout limits. The view reads each file and each resource
+once for a document, until it's given other data.
 
 ### Taking a snapshot
 

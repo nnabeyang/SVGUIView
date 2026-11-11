@@ -39,8 +39,9 @@ public struct SVGUIViewConfiguration: Sendable {
   /// files of `<image>` elements.
   ///
   /// The default is ``ExternalResources/documentFolder``, which reads the
-  /// files in the folder of the document. Reading them takes part of the
-  /// time of a rendering, which ``timeoutDuration`` limits.
+  /// files in the folder of the document, and not the network, which
+  /// ``ExternalResources/allowingNetwork()`` allows. Reading them takes part
+  /// of the time of a rendering, which ``timeoutDuration`` limits.
   public let externalResources: ExternalResources
 
   /// Creates a configuration.

@@ -4,9 +4,10 @@ import Foundation
 /// files of `<image>` elements.
 ///
 /// A document refers to other files by URLs relative to its own URL, which
-/// is the view's ``SVGUIView/baseURL``. A view reads only files: it doesn't
-/// read the network. A document that the view has no base URL for, such as
-/// one that's set as ``SVGUIView/data``, reads no files.
+/// is the view's ``SVGUIView/baseURL``. By default, a view reads only files:
+/// it doesn't read the network, unless the setting allows it with
+/// ``allowingNetwork()``. A document that the view has no base URL for, such
+/// as one that's set as ``SVGUIView/data``, reads no files.
 ///
 /// A file is read only if it's in the folder that the setting allows, after
 /// `..` and symbolic links in its path are resolved, so that a document can't
@@ -28,6 +29,13 @@ public struct ExternalResources: Sendable, Equatable {
   }
 
   let files: Files
+  /// Whether the resources at `https` URLs are read.
+  let network: Bool
+
+  init(files: Files, network: Bool = false) {
+    self.files = files
+    self.network = network
+  }
 
   /// The files in the folder of the document, and in the folders inside it.
   ///
@@ -48,6 +56,35 @@ public struct ExternalResources: Sendable, Equatable {
   /// - Parameter url: The file URL of the folder.
   public static func folder(_ url: URL) -> ExternalResources {
     ExternalResources(files: .folder(url))
+  }
+
+  /// The same files, and the resources of the network that a document
+  /// refers to by `https` URLs.
+  ///
+  /// A view doesn't read the network unless its setting allows it. Allow it
+  /// only for documents that you trust: showing a document then sends
+  /// requests to the servers that the document names, which tells them that
+  /// the document is shown, and from which address.
+  ///
+  /// ```swift
+  /// svgView.configuration = SVGUIViewConfiguration(
+  ///   externalResources: .documentFolder.allowingNetwork()
+  /// )
+  /// ```
+  ///
+  /// The view reads `https` URLs only: it doesn't read `http` URLs, and
+  /// doesn't follow a redirection to one. The requests carry no cookies and
+  /// no credentials of the app, and their responses aren't cached on the
+  /// disk. A resource larger than 64 MB isn't read. Reading takes part of
+  /// the time of a rendering, which
+  /// ``SVGUIViewConfiguration/timeoutDuration`` limits.
+  ///
+  /// A document with an `https` URL as its ``SVGUIView/baseURL`` reads the
+  /// resources that its relative URLs refer to from the network, and no
+  /// files. A document without a base URL reads the resources of its
+  /// absolute `https` URLs.
+  public func allowingNetwork() -> ExternalResources {
+    ExternalResources(files: files, network: true)
   }
 
   /// The folder whose files are read for a document, or `nil` if no file is read.

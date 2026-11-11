@@ -109,7 +109,7 @@ struct StyleSheetSources: Sendable {
     /// that doesn't apply to a screen, that the loader doesn't read, or that the chain already reads, is left out.
     mutating func append(_ external: ExternalStyleSheet, loader: ExternalResourceLoader, chain: [URL]) async {
       guard external.appliesToScreen, chain.count <= StyleSheetSources.maxDepth,
-        let file = loader.fileURL(ofHref: external.href), !chain.contains(file),
+        let file = loader.resourceURL(ofHref: external.href), !chain.contains(file),
         let data = await loader.data(forHref: external.href)
       else { return }
       let sheet = Sheet(css: String(decoding: data, as: UTF8.self))

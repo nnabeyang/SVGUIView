@@ -73,7 +73,7 @@ extension RenderTreeBuilder {
   /// the file, it isn't an SVG document, the document is already in the chain of documents that shows it, or the
   /// chain is as deep as is drawn.
   func externalBuilder(for url: String) async -> RenderTreeBuilder? {
-    guard let file = resources.fileURL(ofHref: url), !documentChain.contains(file),
+    guard let file = resources.resourceURL(ofHref: url), !documentChain.contains(file),
       documentChain.count < Self.maxDocumentDepth
     else { return nil }
     let document: SVGBaseContext?

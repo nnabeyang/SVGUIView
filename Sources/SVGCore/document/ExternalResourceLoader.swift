@@ -2,19 +2,22 @@ import Foundation
 import Synchronization
 
 /// Reads the files that a document references by URLs relative to the document, within a folder that it's allowed
-/// to read.
+/// to read, and, if it's allowed to, the resources that the document references by `https` URLs.
 ///
-/// A loader reads only files: a URL that isn't a file URL, a reference to an element of the document, a data URL and
-/// a file outside the folder aren't read. The folder and the file are compared after their symbolic links are
-/// resolved, so that neither `..` nor a link leads outside the folder.
+/// A reference to an element of the document, a data URL, a file outside the folder and a URL of another scheme,
+/// such as `http`, aren't read. The folder and a file are compared after their symbolic links are resolved, so that
+/// neither `..` nor a link leads outside the folder. A file is read only for a document in a file, so that a
+/// document of the network doesn't read the files of the device.
 package struct ExternalResourceLoader: Sendable {
-  /// Reads the data at a file URL.
+  /// Reads the data at a file URL or an `https` URL.
   package typealias Fetch = @Sendable (URL) async throws -> Data
 
   /// The URL that relative URLs are resolved against, which is the URL of the document.
   let baseURL: URL?
   /// The folder whose files are read, with its symbolic links resolved, or `nil` if no file is read.
   private let folder: URL?
+  /// Whether the resources at `https` URLs are read.
+  private let allowsNetwork: Bool
   /// The data of the files that have been read.
   private let cache: ExternalResourceCache
   private let fetch: Fetch
@@ -22,43 +25,60 @@ package struct ExternalResourceLoader: Sendable {
   /// A loader that reads nothing.
   package static let none = ExternalResourceLoader(baseURL: nil, folder: nil, cache: ExternalResourceCache())
 
+  /// Reads a file from the disk, and a resource at an `https` URL from the network.
+  package static let defaultFetch: Fetch = { url in
+    url.isFileURL ? try Data(contentsOf: url, options: .mappedIfSafe) : try await NetworkFetch.shared.data(at: url)
+  }
+
   /// - Parameters:
   ///   - baseURL: The URL that relative URLs are resolved against, or `nil` if the document has none, in which case
-  ///     nothing is read.
+  ///     no file is read.
   ///   - folder: The folder whose files are read, or `nil` if no file is read.
+  ///   - allowsNetwork: Whether the resources at `https` URLs are read.
   ///   - cache: The data of the files that have been read for the document.
-  ///   - fetch: Reads the data at a file URL in the folder.
+  ///   - fetch: Reads the data at a file URL in the folder, or at an `https` URL.
   package init(
-    baseURL: URL?, folder: URL?, cache: ExternalResourceCache,
-    fetch: @escaping Fetch = { try Data(contentsOf: $0, options: .mappedIfSafe) }
+    baseURL: URL?, folder: URL?, allowsNetwork: Bool = false, cache: ExternalResourceCache,
+    fetch: @escaping Fetch = ExternalResourceLoader.defaultFetch
   ) {
     self.baseURL = baseURL
-    self.folder = baseURL == nil ? nil : folder.map(Self.resolved)
+    self.folder = baseURL?.isFileURL == true ? folder.map(Self.resolved) : nil
+    self.allowsNetwork = allowsNetwork
     self.cache = cache
     self.fetch = fetch
   }
 
-  /// The URL of the file that an `href` references, resolved against the base URL, if the loader reads it.
+  /// The URL of the file or of the resource of the network that an `href` references, resolved against the base
+  /// URL, if the loader reads it.
   ///
-  /// - Returns: The file URL with its symbolic links resolved, or `nil` if the `href` doesn't reference a file, or
-  ///   references one outside the folder.
-  package func fileURL(ofHref href: String) -> URL? {
-    guard let baseURL, let folder else { return nil }
+  /// - Returns: The file URL with its symbolic links resolved, or the `https` URL, without its fragment, or `nil` if
+  ///   the `href` references neither, a file outside the folder, or the network when the loader doesn't read it.
+  package func resourceURL(ofHref href: String) -> URL? {
     let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !href.isEmpty, !href.hasPrefix("#"), !href.lowercased().hasPrefix("data:"),
-      let absolute = URL(string: href, relativeTo: baseURL)?.absoluteURL, absolute.scheme?.lowercased() == "file",
+      let absolute = (baseURL.map { URL(string: href, relativeTo: $0) } ?? URL(string: href))?.absoluteURL,
       var components = URLComponents(url: absolute, resolvingAgainstBaseURL: false)
     else { return nil }
-    components.query = nil
     components.fragment = nil
-    guard let url = components.url else { return nil }
-    let file = Self.resolved(url)
-    let folderComponents = folder.pathComponents
-    let fileComponents = file.pathComponents
-    guard fileComponents.count > folderComponents.count, fileComponents.starts(with: folderComponents) else {
+    switch absolute.scheme?.lowercased() {
+    case "https":
+      guard allowsNetwork, components.host?.isEmpty == false else { return nil }
+      return components.url
+    case "file":
+      // A file is read only relative to a document in a file, in the folder.
+      guard let folder else { return nil }
+      components.query = nil
+      guard let url = components.url else { return nil }
+      let file = Self.resolved(url)
+      let folderComponents = folder.pathComponents
+      let fileComponents = file.pathComponents
+      guard fileComponents.count > folderComponents.count, fileComponents.starts(with: folderComponents) else {
+        return nil
+      }
+      return file
+    default:
       return nil
     }
-    return file
   }
 
   /// The data of the file that an `href` references, or `nil` if the loader doesn't read it, the file can't be read,
@@ -67,7 +87,7 @@ package struct ExternalResourceLoader: Sendable {
   /// A file is read once for the cache, and a file that couldn't be read isn't read again, unless reading it was
   /// cancelled.
   package func data(forHref href: String) async -> Data? {
-    guard let url = fileURL(ofHref: href) else { return nil }
+    guard let url = resourceURL(ofHref: href) else { return nil }
     if let cached = cache[url] { return cached }
     let data = try? await fetch(url)
     guard !Task.isCancelled else { return nil }
@@ -75,23 +95,29 @@ package struct ExternalResourceLoader: Sendable {
     return data
   }
 
-  /// The URL of the document with its symbolic links resolved, as ``fileURL(ofHref:)`` gives the files, or `nil` if
-  /// it has none.
+  /// The URL of the document, as ``resourceURL(ofHref:)`` gives the files and the resources of the network: a file
+  /// URL with its symbolic links resolved, or `nil` if it has none.
   package var resolvedBaseURL: URL? {
-    baseURL.map(Self.resolved)
+    baseURL.map { $0.isFileURL ? Self.resolved($0) : $0.absoluteURL }
   }
 
   /// The loader of a document in a file that this loader read, such as one that a `<use>` element shows: its
-  /// relative URLs are relative to the file, and it reads the files of the same folder, into the same cache.
+  /// relative URLs are relative to the file, and it reads the files of the same folder, into the same cache. The
+  /// loader of a document that was read from the network reads no files.
   ///
-  /// - Parameter url: The URL of the file, as ``fileURL(ofHref:)`` gives it.
+  /// - Parameter url: The URL of the file, as ``resourceURL(ofHref:)`` gives it.
   package func rebased(to url: URL) -> ExternalResourceLoader {
-    ExternalResourceLoader(baseURL: url, resolvedFolder: folder, cache: cache, fetch: fetch)
+    ExternalResourceLoader(
+      baseURL: url, resolvedFolder: url.isFileURL ? folder : nil, allowsNetwork: allowsNetwork, cache: cache,
+      fetch: fetch)
   }
 
-  private init(baseURL: URL, resolvedFolder: URL?, cache: ExternalResourceCache, fetch: @escaping Fetch) {
+  private init(
+    baseURL: URL, resolvedFolder: URL?, allowsNetwork: Bool, cache: ExternalResourceCache, fetch: @escaping Fetch
+  ) {
     self.baseURL = baseURL
     folder = resolvedFolder
+    self.allowsNetwork = allowsNetwork
     self.cache = cache
     self.fetch = fetch
   }
