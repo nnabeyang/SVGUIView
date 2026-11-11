@@ -857,12 +857,12 @@ public class SVGUIView: UIView {
 
   /// Reads the files that the document refers to for a rendering, as the configuration allows.
   private var resourceLoader: ExternalResourceLoader {
-    guard let baseURL else { return .none }
-    let folder = configuration.externalResources.folder(forDocumentAt: baseURL)
-    if let fetch = Self.resourceFetch {
-      return ExternalResourceLoader(baseURL: baseURL, folder: folder, cache: resourceCache, fetch: fetch)
-    }
-    return ExternalResourceLoader(baseURL: baseURL, folder: folder, cache: resourceCache)
+    let resources = configuration.externalResources
+    // A document without a base URL reads no files, and only the network by absolute URLs.
+    guard baseURL != nil || resources.network else { return .none }
+    return ExternalResourceLoader(
+      baseURL: baseURL, folder: baseURL.flatMap(resources.folder(forDocumentAt:)), allowsNetwork: resources.network,
+      cache: resourceCache, fetch: Self.resourceFetch ?? ExternalResourceLoader.defaultFetch)
   }
 
   /// The number of pixels in a point of the screen of the view, or of the traits of the app for a view that isn't on

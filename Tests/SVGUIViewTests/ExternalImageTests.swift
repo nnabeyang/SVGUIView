@@ -36,7 +36,7 @@ private final class DocumentFolder {
   }
 
   /// A PNG of a green pixel.
-  private static func greenPNG() throws -> Data {
+  static func greenPNG() throws -> Data {
     let context = try #require(
       CGContext(
         data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
@@ -68,6 +68,24 @@ private final class ReadingSignal: Sendable {
       self.continuation.yield()
       try await Task.sleep(for: .seconds(600))
       return Data()
+    }
+  }
+}
+
+/// Answers the requests of the network with a green image, and counts them, in place of the network.
+private final class NetworkStub: Sendable {
+  let requests = Mutex<[URL]>([])
+  private let png: Data
+
+  init() throws {
+    png = try DocumentFolder.greenPNG()
+  }
+
+  var fetch: @Sendable (URL) async throws -> Data {
+    { url in
+      guard !url.isFileURL else { return try Data(contentsOf: url) }
+      self.requests.withLock { $0.append(url) }
+      return self.png
     }
   }
 }
@@ -189,6 +207,87 @@ struct ExternalImageTests {
     let view = SVGUIView(data: folder.data, baseURL: folder.documentURL)
     view.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
     view.configuration = SVGUIViewConfiguration(timeoutDuration: .seconds(600))
+    let signal = ReadingSignal()
+    let task = SVGUIView.$resourceFetch.withValue(signal.fetch) {
+      Task { _ = try await view.takeSnapshot() }
+    }
+    for await _ in signal.started { break }
+    task.cancel()
+    let result = await task.result
+    #expect(throws: SVGRenderingError.cancelled) { try result.get() }
+  }
+
+  private static let networkImage = Data(
+    document(#"<image href="https://example.test/images/green.png" width="20" height="20"/>"#).utf8)
+
+  @Test("an image of the network is read only when the configuration allows the network")
+  func network() async throws {
+    let folder = try DocumentFolder()
+    let stub = try NetworkStub()
+    try await SVGUIView.$resourceFetch.withValue(stub.fetch) { () async throws in
+      let view = SVGUIView(data: Self.networkImage, baseURL: folder.documentURL)
+      #expect(try await center(of: view) == Self.clearPixel)
+      view.configuration = SVGUIViewConfiguration(externalResources: .none)
+      #expect(try await center(of: view) == Self.clearPixel)
+      #expect(stub.requests.withLock { $0 }.isEmpty)
+      view.configuration = SVGUIViewConfiguration(externalResources: .documentFolder.allowingNetwork())
+      #expect(try await center(of: view) == Self.greenPixel)
+      #expect(stub.requests.withLock { $0 }.map(\.absoluteString) == ["https://example.test/images/green.png"])
+    }
+  }
+
+  @Test("allowing the network keeps the files that the setting reads")
+  func networkAndFiles() async throws {
+    let folder = try DocumentFolder()
+    let stub = try NetworkStub()
+    try await SVGUIView.$resourceFetch.withValue(stub.fetch) { () async throws in
+      let view = SVGUIView(data: folder.data, baseURL: folder.documentURL)
+      view.configuration = SVGUIViewConfiguration(externalResources: .documentFolder.allowingNetwork())
+      #expect(try await center(of: view) == Self.greenPixel)
+      view.configuration = SVGUIViewConfiguration(externalResources: .none.allowingNetwork())
+      #expect(try await center(of: view) == Self.clearPixel)
+      #expect(stub.requests.withLock { $0 }.isEmpty)
+    }
+  }
+
+  @Test("data without a base URL reads the network by absolute URLs, and a document of the network by relative ones")
+  func networkBaseURL() async throws {
+    let stub = try NetworkStub()
+    try await SVGUIView.$resourceFetch.withValue(stub.fetch) { () async throws in
+      let view = SVGUIView(data: Self.networkImage)
+      #expect(try await center(of: view) == Self.clearPixel)
+      view.configuration = SVGUIViewConfiguration(externalResources: .none.allowingNetwork())
+      #expect(try await center(of: view) == Self.greenPixel)
+      let relative = Data(document(#"<image href="images/green.png" width="20" height="20"/>"#).utf8)
+      let document = SVGUIView(data: relative, baseURL: URL(string: "https://other.test/docs/image.svg"))
+      #expect(try await center(of: document) == Self.clearPixel)
+      document.configuration = SVGUIViewConfiguration(externalResources: .documentFolder.allowingNetwork())
+      #expect(try await center(of: document) == Self.greenPixel)
+      #expect(
+        stub.requests.withLock { $0 }.map(\.absoluteString) == [
+          "https://example.test/images/green.png", "https://other.test/docs/images/green.png",
+        ])
+    }
+  }
+
+  @Test("reading the network takes part of the time of a rendering, which times out", .timeLimit(.minutes(1)))
+  func networkTimeout() async throws {
+    let view = SVGUIView(data: Self.networkImage)
+    view.configuration = SVGUIViewConfiguration(externalResources: .none.allowingNetwork())
+    let signal = ReadingSignal()
+    await #expect(throws: SVGRenderingError.timedOut) {
+      try await SVGUIView.$resourceFetch.withValue(signal.fetch) {
+        _ = try await center(of: view, timeout: .milliseconds(200))
+      }
+    }
+  }
+
+  @Test("cancelling the task that waits for a snapshot stops reading the network", .timeLimit(.minutes(1)))
+  func networkCancellation() async throws {
+    let view = SVGUIView(data: Self.networkImage)
+    view.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
+    view.configuration = SVGUIViewConfiguration(
+      timeoutDuration: .seconds(600), externalResources: .none.allowingNetwork())
     let signal = ReadingSignal()
     let task = SVGUIView.$resourceFetch.withValue(signal.fetch) {
       Task { _ = try await view.takeSnapshot() }

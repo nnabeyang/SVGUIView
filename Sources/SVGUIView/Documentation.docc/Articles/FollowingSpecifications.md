@@ -75,8 +75,9 @@ without them:
 - The `FillPaint` and `StrokePaint` inputs of filter primitives.
 - SVG Tiny 1.2.
 - HTML inside `<foreignObject>`.
-- The network. Only `data:` URLs, references within the document, and the
-  image files that ``ExternalResources`` allows are loaded.
+- The network, unless ``ExternalResources/allowingNetwork()`` allows it. By
+  default, only `data:` URLs, references within the document, and the files
+  that ``ExternalResources`` allows are loaded. `http` URLs are never read.
 
 ### Where rendering differs from browsers
 
@@ -136,7 +137,6 @@ where they stopped. To keep them in step with the clock, seek to the time with
 
 These features are planned, but not supported yet:
 
-- Images and references on the network, as an option.
 - Math functions other than `calc()`, `min()`, `max()` and `clamp()`, such as
   `round()` and `sin()`.
 - The `rect()`, `xywh()`, `path()` and `shape()` shapes of `clip-path`.

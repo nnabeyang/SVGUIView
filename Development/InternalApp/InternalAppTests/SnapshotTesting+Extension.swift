@@ -1,10 +1,11 @@
 import Foundation
 import SVGSnapshotReferences
 import SVGTestSuite
-import SVGUIView
 import SnapshotTesting
 import Testing
 import UIKit
+
+@testable import SVGUIView
 
 /// Renders an SVG file and compares the image with its reference image.
 ///
@@ -34,12 +35,20 @@ func assertSVGSnapshot(
   // The tests check what a rendering draws, not how fast. On CI, many renderings run in parallel and can be
   // slow, so the timeout is longer than the default and only catches a rendering that never ends.
   view.configuration = SVGUIViewConfiguration(
-    timeoutDuration: .seconds(60), externalResources: .folder(TestSuite.bundle.bundleURL))
+    timeoutDuration: .seconds(60), externalResources: NetworkCopies.resources)
   view.frame = UIScreen.main.bounds
   view.layoutIfNeeded()
+  // The resources of the network are read from their copies in the test suite.
+  let rendered: Result<UIImage, SVGRenderingError> = await SVGUIView.$resourceFetch.withValue(NetworkCopies.fetch) {
+    do throws(SVGRenderingError) {
+      return .success(try await view.takeSnapshot(at: time ?? .zero))
+    } catch {
+      return .failure(error)
+    }
+  }
   let image: UIImage
   do {
-    image = try await view.takeSnapshot(at: time ?? .zero)
+    image = try rendered.get()
   } catch .missingRootElement {
     // A document without a root `svg` element, such as one in another namespace, draws nothing, and its
     // reference image is empty.
