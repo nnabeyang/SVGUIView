@@ -11,9 +11,7 @@ import UniformTypeIdentifiers
 private func images(in content: String) async throws -> [(frame: CGRect, image: CGRect?)] {
   let svg = #"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">"# + content + "</svg>"
   let base = SVGParser.parse(data: Data(svg.utf8))
-  let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .min, option: .meet), stretches: false, scales: false
-  )
+  let fit = ContentFit(preserveAspectRatio: PreserveAspectRatio(xAlign: .min, yAlign: .min, option: .meet))
   let tree = try #require(
     await RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 400, height: 400), scale: 1).build(fit: fit))
   var found = [(frame: CGRect, image: CGRect?)]()

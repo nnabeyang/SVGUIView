@@ -15,7 +15,7 @@ func filteredNodes(_ content: String, scale: CGFloat) async throws -> [FilteredN
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
   let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   let tree = try #require(await RenderTreeBuilder(base: base, viewPort: rect, scale: scale).build(fit: fit))
   let nodes = tree.root.map { [$0] + $0.descendants } ?? []
   return nodes.compactMap { node in
@@ -279,7 +279,7 @@ private func paintedContents(_ content: String, onGPU: Bool) async throws -> [Pa
   let base = SVGParser.parse(data: Data(svg.utf8))
   let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
   let fit = ContentFit(
-    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet), stretches: false, scales: true)
+    preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   let tree = try #require(await RenderTreeBuilder(base: base.at(time: 0), viewPort: rect, scale: 3).build(fit: fit))
   let planner = LayerPlanner(
     promoted: base.elementsWithAnimatedCompositing(), painting: base.elementsWithAnimatedPainting(), scale: 3)
