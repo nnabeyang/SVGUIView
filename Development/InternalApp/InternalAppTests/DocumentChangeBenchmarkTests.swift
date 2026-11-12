@@ -6,8 +6,9 @@ import XCTest
 /// Measures how long a view takes to show a change of its document in every frame, as an app that edits shapes
 /// makes while a finger drags one, for documents of several sizes.
 ///
-/// The measurements compare the two ways that an app has to change what a view shows: giving the view the data of
-/// the changed document, and changing an attribute of an element of the document of the view.
+/// The measurements compare the ways that an app has to change what a view shows: giving the view the data of
+/// the changed document, changing an attribute of an element of the document of the view, and inserting, removing
+/// and moving elements of it.
 ///
 /// Besides the time and the time of the CPU of all the frames, each test reports, in the log and in an attachment,
 /// how long a change kept the main thread, from the change until the view had started its rendering, and how long
@@ -36,6 +37,12 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
     case transform
     /// Changes the `d` attribute of one path, as dragging a control point of a curve does.
     case path
+    /// Inserts a new shape after the shapes of a group in one frame and removes it in the next one, as drawing a
+    /// shape and taking it back do.
+    case insertion
+    /// Moves one element after its siblings in one frame and back in the next one, as bringing a shape to the front
+    /// and sending it back do.
+    case order
   }
 
   /// The identifiers of the elements that the measurements change: a rectangle and the path after it, in the middle
@@ -134,6 +141,8 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
     // measurement.
     var blocked: [Duration] = []
     var shown: [Duration] = []
+    // The shape that the insertions insert and remove.
+    var inserted: SVGDocument.Element?
     measure(metrics: [XCTClockMetric(), XCTCPUMetric()]) {
       var isDone = false
       Task {
@@ -147,6 +156,24 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
           case .path:
             view.document.element(id: targets.path)?
               .setAttribute("d", to: Self.pathData(x: x, y: y, offset: frame % 16))
+          case .insertion:
+            if let shape = inserted {
+              shape.remove()
+              inserted = nil
+            } else {
+              let shape = view.document.createElement("rect")
+              shape.setAttribute("x", to: "\(x)")
+              shape.setAttribute("y", to: "\(y)")
+              shape.setAttribute("width", to: "12")
+              shape.setAttribute("height", to: "12")
+              try? view.document.element(id: targets.rect)?.parent?.append(shape)
+              inserted = shape
+            }
+          case .order:
+            if let rect = view.document.element(id: targets.rect), let parent = rect.parent {
+              let path = view.document.element(id: targets.path)
+              try? parent.insert(rect, before: frame % 2 == 1 ? nil : path)
+            }
           }
           // Core Animation asks the view to display once in a frame: this starts the rendering as that does.
           view.layer.displayIfNeeded()
@@ -181,6 +208,17 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
   @MainActor func testPath500() throws { try measure(.path, count: 500) }
   @MainActor func testPath2000() throws { try measure(.path, count: 2000) }
   @MainActor func testPath5000() throws { try measure(.path, count: 5000) }
+  @MainActor func testInsertion100() throws { try measure(.insertion, count: 100) }
+  @MainActor func testInsertion500() throws { try measure(.insertion, count: 500) }
+  @MainActor func testInsertion2000() throws { try measure(.insertion, count: 2000) }
+  @MainActor func testInsertion5000() throws { try measure(.insertion, count: 5000) }
+  @MainActor func testOrder100() throws { try measure(.order, count: 100) }
+  @MainActor func testOrder500() throws { try measure(.order, count: 500) }
+  @MainActor func testOrder2000() throws { try measure(.order, count: 2000) }
+  @MainActor func testOrder5000() throws { try measure(.order, count: 5000) }
+  @MainActor func testInsertion2000WithSiblingCombinators() throws {
+    try measure(.insertion, count: 2000, hasSiblingCombinators: true)
+  }
   @MainActor func testTransform2000WithSiblingCombinators() throws {
     try measure(.transform, count: 2000, hasSiblingCombinators: true)
   }
