@@ -128,7 +128,7 @@ struct StyleSheetSources: Sendable {
         for source in rule.sources {
           let descriptor: CTFontDescriptor?
           switch source {
-          case .url(let url, _) where url.lowercased().hasPrefix("data:"):
+          case .url(let url, _) where EmbeddedImage.isDataURL(url):
             descriptor = EmbeddedImage.data(ofHref: url).flatMap(DocumentFonts.descriptor(of:))
           case .url(let url, _):
             descriptor = await loader.data(forHref: url).flatMap(DocumentFonts.descriptor(of:))

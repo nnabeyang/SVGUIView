@@ -165,10 +165,35 @@ struct ExternalResourceLoaderTests {
     arguments: [
       ("data:;base64,YQ==", "a"), (" DATA:image/png;BASE64,YQ==", "a"), ("data:;base64,YQ==#view", "a"),
       ("data:,YQ==", "YQ=="), ("data:image/svg+xml,%3Csvg%20viewBox='0,0,1,1'/%3E#v", "<svg viewBox='0,0,1,1'/>"),
-      ("YQ==", nil), ("data:YQ==", nil),
+      ("data:;base64,Y%51==", "a"), ("data: ;base64 ,YQ==", "a"),
+      ("\tdata:;base64,YQ==\n ", "a"), ("data:,a b", "a b"), ("data:,", ""), ("YQ==", nil), ("data:YQ==", nil),
+      ("dat:,a", nil), ("xdata:,a", nil),
     ])
   func dataURL(href: String, expected: String?) {
     #expect(EmbeddedImage.data(ofHref: href).map { String(decoding: $0, as: UTF8.self) } == expected)
+  }
+
+  @Test(
+    "an href is a data URL where it starts with data: in any case after whitespace",
+    arguments: [
+      ("data:,a", true), ("DaTa:,a", true), (" \n\tdata:", true), ("data", false), ("data;,a", false),
+      ("images/data:a", false), ("", false), ("\u{1A}data:", false), ("dat\u{1A}:", false),
+    ])
+  func isDataURL(href: String, expected: Bool) {
+    #expect(EmbeddedImage.isDataURL(href) == expected)
+  }
+
+  @Test("an image element keeps the fragment of a data URL, which names a view of the SVG image")
+  func dataURLFragment() throws {
+    func fragment(_ href: String) throws -> String? {
+      let svg = #"<svg xmlns="http://www.w3.org/2000/svg"><image id="i" href="\#(href)"/></svg>"#
+      let base = SVGParser.parse(data: Data(svg.utf8))
+      return try #require(base["i"] as? SVGImageElement).fragment
+    }
+    #expect(try fragment("data:image/svg+xml,%3Csvg/%3E#v%20w") == "v w")
+    #expect(try fragment("data:image/svg+xml,%3Csvg/%3E") == nil)
+    #expect(try fragment("data:YQ==#v") == nil)
+    #expect(try fragment("images/a.svg#v") == "v")
   }
 
   @Test("the fragment of an href", arguments: [("a.svg#v", "v"), ("data:,x#v%20w", "v w"), ("a.svg", nil), ("a.svg#", nil)])

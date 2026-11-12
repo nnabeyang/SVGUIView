@@ -55,7 +55,7 @@ package struct ExternalResourceLoader: Sendable {
   ///   the `href` references neither, a file outside the folder, or the network when the loader doesn't read it.
   package func resourceURL(ofHref href: String) -> URL? {
     let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !href.isEmpty, !href.hasPrefix("#"), !href.lowercased().hasPrefix("data:"),
+    guard !href.isEmpty, !href.hasPrefix("#"), !EmbeddedImage.isDataURL(href),
       let absolute = (baseURL.map { URL(string: href, relativeTo: $0) } ?? URL(string: href))?.absoluteURL,
       var components = URLComponents(url: absolute, resolvingAgainstBaseURL: false)
     else { return nil }

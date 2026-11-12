@@ -44,15 +44,16 @@ final class SVGFeImageElement: SVGElement, SVGFilterPrimitiveElement {
 
     result = attributes["result"]
 
-    let href = attributes["href", default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+    // An href can be a data URL of megabytes, which is read without copying it more than once.
+    let href = EmbeddedImage.trimmed(attributes["href", default: ""])
     if href.isEmpty {
       source = nil
     } else if href.hasPrefix("#") {
-      source = fragmentID(of: href).map { .element($0) }
-    } else if href.lowercased().hasPrefix("data:") {
+      source = fragmentID(of: String(href)).map { .element($0) }
+    } else if EmbeddedImage.isDataURL(href) {
       source = EmbeddedImage.data(ofHref: href).map { .data($0) }
     } else {
-      source = .external(href)
+      source = .external(String(href))
     }
     preserveAspectRatio =
       PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""]) ?? PreserveAspectRatio()

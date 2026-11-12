@@ -35,15 +35,19 @@ final class SVGImageElement: ShapeGeometry {
 
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
-    let href = attributes["href", default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+    // An href can be a data URL of megabytes, which is read without copying it more than once.
+    let href = EmbeddedImage.trimmed(attributes["href", default: ""])
     if href.isEmpty || href.hasPrefix("#") {
       source = nil
-    } else if href.lowercased().hasPrefix("data:") {
-      source = EmbeddedImage.data(ofHref: href).map { .data($0) }
+      fragment = nil
+    } else if EmbeddedImage.isDataURL(href) {
+      let url = EmbeddedImage.dataURL(ofHref: href)
+      source = url.map { .data($0.data) }
+      fragment = url?.fragment
     } else {
-      source = .external(href)
+      source = .external(String(href))
+      fragment = EmbeddedImage.fragment(ofHref: href)
     }
-    fragment = source == nil ? nil : EmbeddedImage.fragment(ofHref: href)
     // The position and the size are geometry properties, which style sheets set, and whose presentation attributes
     // are read as CSS.
     x = base.style.x
