@@ -7,7 +7,7 @@ import UIKit
 
 /// Tests that a view plays, pauses and seeks the animations of its document.
 @MainActor
-@Suite("Playback", .serialized)
+@Suite("Playback", .serialized, .timeLimit(.minutes(2)))
 struct PlaybackTests {
   /// A document whose square changes from black to lime in one second, and stays lime.
   private static let document = #"""
