@@ -4,30 +4,69 @@ import ImageIO
 
 /// The data of an image that an `href` holds, of `<image>` and `<feImage>`.
 enum EmbeddedImage {
+  /// The `href` without its leading and trailing whitespace, as a part of it and not a copy, since an `href` can be a
+  /// data URL of megabytes.
+  static func trimmed(_ href: some StringProtocol) -> Substring {
+    let scalars = href.unicodeScalars
+    let isWhitespace = { CharacterSet.whitespacesAndNewlines.contains($0) }
+    guard let first = scalars.firstIndex(where: { !isWhitespace($0) }),
+      let last = scalars.lastIndex(where: { !isWhitespace($0) })
+    else { return Substring() }
+    return Substring(href[first...last])
+  }
+
+  /// Whether an `href` is a data URL: whether it starts with `data:` in any case after whitespace. It reads only the
+  /// start of the `href`.
+  static func isDataURL(_ href: some StringProtocol) -> Bool {
+    let scheme = trimmed(href.prefix(64 + 5)).utf8.prefix(5)
+    return scheme.count == 5
+      && zip(scheme, "data:".utf8).allSatisfy { byte, expected in
+        byte == expected || (expected >= UInt8(ascii: "a") && byte == expected - 0x20)
+      }
+  }
+
   /// The data of a data URL, or `nil` if the `href` isn't a data URL.
   ///
   /// The data after the first comma is base64 if the media type ends with `;base64`, and percent-encoded text
   /// otherwise, as the Fetch standard reads data URLs. A fragment after `#` isn't part of the data.
-  static func data(ofHref href: String) -> Data? {
-    let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard href.lowercased().hasPrefix("data:"), let comma = href.firstIndex(of: ",") else { return nil }
-    let mediaType = href[href.index(href.startIndex, offsetBy: 5)..<comma]
-    var body = href[href.index(after: comma)...]
-    if let hash = body.firstIndex(of: "#") {
+  static func data(ofHref href: some StringProtocol) -> Data? {
+    dataURL(ofHref: href)?.data
+  }
+
+  /// The data and the fragment of a data URL, or `nil` if the `href` isn't a data URL or its data can't be read.
+  ///
+  /// It reads the `href` once and copies only the data, since a data URL can be megabytes long.
+  static func dataURL(ofHref href: some StringProtocol) -> (data: Data, fragment: String?)? {
+    let href = trimmed(href)
+    guard isDataURL(href), let comma = href.utf8.firstIndex(of: UInt8(ascii: ",")) else { return nil }
+    let mediaType = href[href.utf8.index(href.startIndex, offsetBy: 5)..<comma]
+    var body = href[href.utf8.index(after: comma)...]
+    var fragment: String?
+    if let hash = body.utf8.firstIndex(of: UInt8(ascii: "#")) {
+      fragment = decodedFragment(body[body.utf8.index(after: hash)...])
       body = body[..<hash]
     }
-    let text = String(body).removingPercentEncoding ?? String(body)
-    if mediaType.trimmingCharacters(in: .whitespaces).lowercased().hasSuffix(";base64") {
-      return Data(base64Encoded: text, options: .ignoreUnknownCharacters)
+    // Most data URLs, such as the base64 of images, have no percent-encoded characters, and are copied only once.
+    var text = String(body)
+    if body.utf8.contains(UInt8(ascii: "%")) {
+      text = text.removingPercentEncoding ?? text
     }
-    return Data(text.utf8)
+    if mediaType.trimmingCharacters(in: .whitespaces).lowercased().hasSuffix(";base64") {
+      return Data(base64Encoded: text, options: .ignoreUnknownCharacters).map { ($0, fragment) }
+    }
+    return (Data(text.utf8), fragment)
   }
 
   /// The fragment of a URL after `#`, which names an element of an SVG image, or `nil` if it has none.
-  static func fragment(ofHref href: String) -> String? {
-    let href = href.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let hash = href.firstIndex(of: "#") else { return nil }
-    let fragment = String(href[href.index(after: hash)...])
+  static func fragment(ofHref href: some StringProtocol) -> String? {
+    let href = trimmed(href)
+    guard let hash = href.utf8.firstIndex(of: UInt8(ascii: "#")) else { return nil }
+    return decodedFragment(href[href.utf8.index(after: hash)...])
+  }
+
+  /// The fragment without its percent-encoding, or `nil` if it's empty.
+  private static func decodedFragment(_ fragment: Substring) -> String? {
+    let fragment = String(fragment)
     return fragment.isEmpty ? nil : fragment.removingPercentEncoding ?? fragment
   }
 

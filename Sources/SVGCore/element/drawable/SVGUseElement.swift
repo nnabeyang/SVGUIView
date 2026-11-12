@@ -44,7 +44,7 @@ final class SVGUseElement: SVGDrawableElement {
   /// The URL and the ID of an `href` that names an element of another document, such as `other.svg#a`.
   static func externalHref(_ href: String?) -> (url: String, id: String)? {
     guard let href = href?.trimmingCharacters(in: .whitespacesAndNewlines), !href.hasPrefix("#"),
-      !href.lowercased().hasPrefix("data:"), let hash = href.firstIndex(of: "#")
+      !EmbeddedImage.isDataURL(href), let hash = href.firstIndex(of: "#")
     else { return nil }
     let url = String(href[..<hash])
     let id = String(href[href.index(after: hash)...])
