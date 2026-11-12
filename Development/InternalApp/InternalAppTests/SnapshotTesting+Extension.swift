@@ -12,6 +12,9 @@ import UIKit
 /// With a time, the file is rendered as it is at that time of its animations, and the name of the reference image
 /// ends with the time in milliseconds, such as `-500ms`.
 ///
+/// The file is rendered in a view of the size of the screen, or with `atIntrinsicSize`, of the intrinsic content size
+/// of the view, so that the size of the reference image is the size of the document.
+///
 /// Reference images are read from `__Snapshots__/<environment>/<test file>/` next to the test file when that
 /// directory exists, and otherwise from the `SVGSnapshotReferences` bundle. New reference images, and all of
 /// them when `SNAPSHOT_TESTING_RECORD` is `all`, are written next to the test file. When a comparison fails,
@@ -20,6 +23,7 @@ import UIKit
 func assertSVGSnapshot(
   of file: SVGFile,
   at time: Duration? = nil,
+  atIntrinsicSize: Bool = false,
   fileID: StaticString = #fileID,
   filePath: StaticString = #filePath,
   testName: String = #function,
@@ -36,7 +40,7 @@ func assertSVGSnapshot(
   // slow, so the timeout is longer than the default and only catches a rendering that never ends.
   view.configuration = SVGUIViewConfiguration(
     timeoutDuration: .seconds(60), externalResources: NetworkCopies.resources)
-  view.frame = UIScreen.main.bounds
+  view.frame = CGRect(origin: .zero, size: atIntrinsicSize ? view.intrinsicContentSize : UIScreen.main.bounds.size)
   view.layoutIfNeeded()
   // The resources of the network are read from their copies in the test suite.
   let rendered: Result<UIImage, SVGRenderingError> = await SVGUIView.$resourceFetch.withValue(NetworkCopies.fetch) {

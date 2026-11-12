@@ -144,8 +144,39 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
     }
   }
 
+  /// The size of the document where nothing gives it a size, as browsers size an SVG image in an `<img>` element
+  /// without a size: the intrinsic size of the element by the CSS default sizing algorithm.
+  ///
+  /// A `width` or a `height` that's a percentage, a viewport unit or missing isn't a size. One that's missing takes
+  /// the other one and the ratio of the view box, and without them, the document fits the ratio of its view box in
+  /// the default object size of 300 × 150, or takes that size without a view box.
   package var size: CGSize {
-    outermostSize { length, mode in length.value(context: self, mode: mode) }
+    intrinsicSize(viewBox: nil).resolved(width: nil, height: nil)
+  }
+
+  /// The size and the ratio that the element has as the root of an SVG image: its `width` and `height` where they're
+  /// absolute lengths, and the ratio of its view box, or of its size where it has no view box.
+  ///
+  /// - Parameter viewBox: The view box that replaces the element's, which the `<view>` element that the fragment of
+  ///   the URL of an image names gives, or `nil`.
+  func intrinsicSize(viewBox: CGRect?) -> IntrinsicSize {
+    func absolute(_ length: SVGLength?, mode: SVGLengthMode) -> CGFloat? {
+      guard let length, !length.dependsOnViewport else { return nil }
+      let value = length.value(context: self, mode: mode)
+      return value >= 0 ? value : nil
+    }
+    let width = absolute(self.width, mode: .width)
+    let height = absolute(self.height, mode: .height)
+    let viewBox = viewBox ?? self.viewBox?.toCGRect()
+    let ratio: CGFloat? =
+      if let viewBox, viewBox.width > 0, viewBox.height > 0 {
+        viewBox.width / viewBox.height
+      } else if let width, let height, width > 0, height > 0 {
+        width / height
+      } else {
+        nil
+      }
+    return IntrinsicSize(width: width, height: height, ratio: ratio)
   }
 
   /// The width and the height of the element as the outermost `svg` element, with the lengths resolved by a closure.
@@ -190,5 +221,19 @@ extension SVGSVGElement {
   func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {
     let preserveAspectRatio = preserveAspectRatio ?? PreserveAspectRatio()
     return preserveAspectRatio.getTransform(viewBox: viewBox, size: size)
+  }
+}
+
+extension SVGLength {
+  /// Whether the length is relative to a viewport or a box that an SVG image only has once it's placed: a
+  /// percentage, a viewport unit, or a sum or a math function with one.
+  fileprivate var dependsOnViewport: Bool {
+    if hasPercent { return true }
+    return terms.contains { term in
+      switch term {
+      case .vw, .vh, .vi, .vb, .vmin, .vmax, .calc: true
+      default: false
+      }
+    }
   }
 }

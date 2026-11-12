@@ -57,6 +57,28 @@ SVGUIView treats invalid values as the specifications do:
 - A custom property that refers to itself through `var()` is invalid, and a
   `var()` of it takes its fallback.
 
+### The size of a document
+
+A view sizes a document as browsers size an SVG image in an `<img>` element
+without a size. This size is the intrinsic content size of the view, the frame
+that ``SVGUIView/SVGUIView/init(data:)`` and
+``SVGUIView/SVGUIView/init(contentsOf:)`` give the view, and the size that
+`SVGView` takes where SwiftUI proposes none:
+
+- The `width` and `height` of the root element are its size where they're
+  absolute lengths, such as `width="24"`.
+- A missing one takes the other one and the ratio of the view box.
+- Without them, the document fits the ratio of its view box in 300 × 150
+  points, the default size of an image in CSS. A document with only
+  `viewBox="0 0 24 24"` is 150 × 150 points, and one without a view box is
+  300 × 150 points.
+- Percentages and viewport units, such as `width="100%"`, aren't sizes, since
+  they're relative to the view.
+
+In a view of another size, the percentages and the viewport units of the
+document are relative to the view, and the content mode of the view places
+the document in it.
+
 ### Features that SVGUIView doesn't support
 
 These features aren't supported, and documents that use them are rendered

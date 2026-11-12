@@ -65,8 +65,8 @@ final class LoadedImageCollector {
 extension LoadedImage {
   /// The size and the ratio of the image.
   ///
-  /// A bitmap has the size of its pixels. An SVG image has the size of its root's `width` and `height` where they're
-  /// absolute lengths, and the ratio of its view box, or of its size where it has no view box.
+  /// A bitmap has the size of its pixels. An SVG image has the intrinsic size of its root element, with the view box
+  /// that the fragment of its URL gives.
   var intrinsicSize: IntrinsicSize {
     switch content {
     case .bitmap(let image):
@@ -74,38 +74,7 @@ extension LoadedImage {
       let height = CGFloat(image.height)
       return IntrinsicSize(width: width, height: height, ratio: height > 0 ? width / height : nil)
     case .document(let document):
-      guard let svg = document.root else { return IntrinsicSize() }
-      func absolute(_ length: SVGLength?, mode: SVGLengthMode) -> CGFloat? {
-        guard let length, !length.dependsOnViewport else { return nil }
-        let value = length.value(context: svg, mode: mode)
-        return value >= 0 ? value : nil
-      }
-      let width = absolute(svg.width, mode: .width)
-      let height = absolute(svg.height, mode: .height)
-      let viewBox = viewBox ?? svg.viewBox?.toCGRect()
-      let ratio: CGFloat? =
-        if let viewBox, viewBox.width > 0, viewBox.height > 0 {
-          viewBox.width / viewBox.height
-        } else if let width, let height, width > 0, height > 0 {
-          width / height
-        } else {
-          nil
-        }
-      return IntrinsicSize(width: width, height: height, ratio: ratio)
-    }
-  }
-}
-
-extension SVGLength {
-  /// Whether the length is relative to a viewport or a box that an SVG image only has once it's placed: a
-  /// percentage, a viewport unit, or a sum or a math function with one.
-  fileprivate var dependsOnViewport: Bool {
-    if hasPercent { return true }
-    return terms.contains { term in
-      switch term {
-      case .vw, .vh, .vi, .vb, .vmin, .vmax, .calc: true
-      default: false
-      }
+      return document.root?.intrinsicSize(viewBox: viewBox) ?? IntrinsicSize()
     }
   }
 }

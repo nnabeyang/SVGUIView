@@ -168,7 +168,7 @@ public class SVGUIView: UIView {
 
   /// Creates a view that displays the SVG file at the given URL.
   ///
-  /// The view's frame is sized to the SVG document's `width` and `height`.
+  /// The view's frame is sized to its ``intrinsicContentSize``.
   /// The URL becomes the view's ``baseURL``, so that the document reads the
   /// files that it refers to, such as the images beside it, as the
   /// configuration's ``SVGUIViewConfiguration/externalResources`` allows.
@@ -215,7 +215,7 @@ public class SVGUIView: UIView {
 
   /// Creates a view that displays the given SVG data.
   ///
-  /// The view's frame is sized to the SVG document's `width` and `height`.
+  /// The view's frame is sized to its ``intrinsicContentSize``.
   ///
   /// - Parameter data: The SVG data to display.
   public convenience init(data: Data = Data()) {
@@ -225,7 +225,7 @@ public class SVGUIView: UIView {
   /// Creates a view that displays the given SVG data, which refers to other
   /// files relative to a URL.
   ///
-  /// The view's frame is sized to the SVG document's `width` and `height`.
+  /// The view's frame is sized to its ``intrinsicContentSize``.
   ///
   /// - Parameters:
   ///   - data: The SVG data to display.
@@ -667,6 +667,15 @@ public class SVGUIView: UIView {
     baseContext.root
   }
 
+  /// The size of the document, as browsers size an SVG image in an `<img>`
+  /// element without a size.
+  ///
+  /// It's the `width` and `height` of the root element where they're absolute
+  /// lengths. A missing one takes the other one and the ratio of the view box.
+  /// Without them, the document fits the ratio of its view box in 300 × 150
+  /// points, or is 300 × 150 points without a view box. Percentages and
+  /// viewport units aren't sizes, since they're relative to the view. The size
+  /// is zero without a document.
   override public var intrinsicContentSize: CGSize {
     svg?.size ?? .zero
   }
