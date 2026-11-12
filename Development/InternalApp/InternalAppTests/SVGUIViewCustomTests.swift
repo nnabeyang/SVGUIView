@@ -25,6 +25,12 @@ extension SnapshotTests {
       try await assertSVGSnapshot(of: file)
     }
 
+    /// Documents rendered at the size that they give the view, so that the reference images have that size.
+    @Test(arguments: SVGFile.all(root: "custom", in: "sizing"))
+    func sizing(_ file: SVGFile) async throws {
+      try await assertSVGSnapshot(of: file, atIntrinsicSize: true)
+    }
+
     @Test(arguments: SVGFile.all(root: "custom", in: "text"))
     func text(_ file: SVGFile) async throws {
       try await assertSVGSnapshot(of: file)
