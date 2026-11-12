@@ -76,6 +76,29 @@ final class DocumentElement: Sendable {
       id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
       texts: texts, children: children)
   }
+
+  /// The element with a child inserted at a position among its children. The character data before the position
+  /// stays before the new child.
+  func insertingChild(_ child: DocumentElement, at index: Int) -> DocumentElement {
+    var children = children
+    children.insert(child, at: index)
+    var texts = texts
+    texts.insert("", at: index + 1)
+    return DocumentElement(
+      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      texts: texts, children: children)
+  }
+
+  /// The element without the child at a position. The character data before and after the child goes together.
+  func removingChild(at index: Int) -> DocumentElement {
+    var children = children
+    children.remove(at: index)
+    var texts = texts
+    texts[index] += texts.remove(at: index + 1)
+    return DocumentElement(
+      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      texts: texts, children: children)
+  }
 }
 
 /// A parsed SVG document.
@@ -85,10 +108,11 @@ final class DocumentElement: Sendable {
 package struct DocumentTree: Sendable {
   /// The root element, or `nil` for data without an element.
   let root: DocumentElement?
-  /// The positions of the elements, as lists of child positions from the root. Changes to attributes keep them.
+  /// The positions of the elements, as lists of child positions from the root. Changes to attributes keep them, and
+  /// insertions and removals change the ones of the elements that move.
   private let paths: [ElementID: [Int]]
   /// The languages of the user, in the order of preference, which `systemLanguage` matches.
-  let languages: [String]
+  package let languages: [String]
 
   init(root: DocumentElement?, languages: [String]) {
     var paths = [ElementID: [Int]]()
@@ -149,7 +173,111 @@ package struct DocumentTree: Sendable {
     DocumentTree(root: root?.replacingDescendant(at: path[...], with: replacement), languages: languages)
   }
 
+  // MARK: - Changing the tree
+
+  /// A document of one new element of the SVG namespace without attributes, which isn't in another document yet.
+  ///
+  /// - Parameters:
+  ///   - localName: The name of the element, such as `rect`.
+  ///   - identifier: The raw value of the identifier of the element, which no element of the document that it's
+  ///     inserted in has.
+  ///   - languages: The languages of the user, which the document that it's inserted in has.
+  package init(elementNamed localName: String, identifier: Int, languages: [String]) {
+    self.init(
+      root: DocumentElement(
+        id: ElementID(rawValue: identifier), name: SVGElementName(rawValue: localName) ?? .unknown, localName: localName, attributes: [:], text: "",
+        children: []),
+      languages: languages)
+  }
+
+  /// The document with the root of another document, and its descendants, inserted among the children of an element,
+  /// or `nil` if the document doesn't have the element, the position is out of range, or the other document is empty.
+  ///
+  /// The parent and its ancestors are copied with their identifiers, and every other subtree is shared. The
+  /// identifiers of the inserted elements must be ones that the document doesn't have.
+  ///
+  /// - Parameters:
+  ///   - subtree: The document whose root is inserted.
+  ///   - parent: The element that gets the child.
+  ///   - index: The position among the children of the parent, up to their count.
+  package func inserting(_ subtree: DocumentTree, into parent: ElementID, at index: Int) -> DocumentTree? {
+    guard let root, let inserted = subtree.root, let parentPath = paths[parent] else { return nil }
+    let parentElement = parentPath.reduce(root) { $0.children[$1] }
+    guard (0...parentElement.children.count).contains(index) else { return nil }
+    var paths = paths
+    // The later siblings and their descendants move one position on.
+    for sibling in parentElement.children[index...] {
+      Self.shift(sibling, at: parentPath.count, by: 1, in: &paths)
+    }
+    let prefix = parentPath + [index]
+    for (id, path) in subtree.paths {
+      paths[id] = prefix + path
+    }
+    return DocumentTree(
+      root: root.replacingDescendant(at: parentPath[...], with: parentElement.insertingChild(inserted, at: index)),
+      paths: paths, languages: languages)
+  }
+
+  /// The document without an element and its descendants, and the document of the removed element, or `nil` if the
+  /// document doesn't have the element, or the element is the root.
+  package func removing(_ id: ElementID) -> (tree: DocumentTree, removed: DocumentTree)? {
+    guard let root, let path = paths[id], let index = path.last else { return nil }
+    let parentPath = path.dropLast()
+    let parentElement = parentPath.reduce(root) { $0.children[$1] }
+    let removed = DocumentTree(root: parentElement.children[index], languages: languages)
+    var paths = paths
+    for id in removed.paths.keys {
+      paths[id] = nil
+    }
+    // The later siblings and their descendants move one position back.
+    for sibling in parentElement.children[(index + 1)...] {
+      Self.shift(sibling, at: parentPath.count, by: -1, in: &paths)
+    }
+    return (
+      DocumentTree(
+        root: root.replacingDescendant(at: parentPath, with: parentElement.removingChild(at: index)), paths: paths,
+        languages: languages),
+      removed
+    )
+  }
+
+  /// Moves the position of an element and its descendants at a depth of their paths.
+  private static func shift(_ element: DocumentElement, at depth: Int, by offset: Int, in paths: inout [ElementID: [Int]]) {
+    paths[element.id]?[depth] += offset
+    for child in element.children {
+      shift(child, at: depth, by: offset, in: &paths)
+    }
+  }
+
   // MARK: - Finding elements
+
+  /// Whether the document has an element.
+  package func contains(_ id: ElementID) -> Bool {
+    paths[id] != nil
+  }
+
+  /// The largest raw value of the identifiers of the elements, or `nil` for a document without an element.
+  package var largestElementID: Int? {
+    paths.keys.lazy.map(\.rawValue).max()
+  }
+
+  /// The parent of an element, or `nil` if the element is the root or the document doesn't have it.
+  package func parent(of id: ElementID) -> ElementID? {
+    guard let root, let path = paths[id], !path.isEmpty else { return nil }
+    return path.dropLast().reduce(root) { $0.children[$1] }.id
+  }
+
+  /// The children of an element, which are none if the document doesn't have the element.
+  package func children(of id: ElementID) -> [ElementID] {
+    guard let root, let path = paths[id] else { return [] }
+    return path.reduce(root) { $0.children[$1] }.children.map(\.id)
+  }
+
+  /// Whether an element is another element or one of its descendants.
+  package func isElement(_ id: ElementID, inSubtreeOf ancestor: ElementID) -> Bool {
+    guard let path = paths[id], let ancestorPath = paths[ancestor] else { return false }
+    return path.starts(with: ancestorPath)
+  }
 
   /// The cursor at an element, or `nil` if the document has no such element.
   func cursor(at id: ElementID) -> ElementCursor? {
