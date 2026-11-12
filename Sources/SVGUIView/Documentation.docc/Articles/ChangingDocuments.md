@@ -1,6 +1,6 @@
 # Changing a Document
 
-Find the elements of the document that a view displays, and change their attributes, classes and styles from Swift.
+Find the elements of the document that a view displays, change their attributes, classes and styles, and insert and remove elements from Swift.
 
 ## Overview
 
@@ -54,8 +54,62 @@ An ``SVGDocument/Element`` reads and changes its attributes as they're written:
 
 A change is visible at once to the methods that read the document. Values
 aren't checked: a value that SVGUIView can't parse is ignored when the
-document is rendered, as it is when the document is written with it. Elements
-can't be inserted or removed.
+document is rendered, as it is when the document is written with it.
+
+### Changing the tree
+
+``SVGDocument/createElement(_:)`` creates an element of the SVG namespace, and
+``SVGDocument/Element/append(_:)`` and
+``SVGDocument/Element/insert(_:before:)`` insert it among the children of
+another element. ``SVGDocument/Element/remove()`` removes an element from its
+parent, with its descendants.
+
+```swift
+let circle = document.createElement("circle")
+circle.setAttribute("cx", to: "50")
+circle.setAttribute("cy", to: "50")
+circle.setAttribute("r", to: "10")
+try document.rootElement?.append(circle)
+
+// Later, take the circle out of the document.
+circle.remove()
+```
+
+``SVGDocument/Element/parent`` and ``SVGDocument/Element/children`` walk the
+tree. Inserting an element that has a parent moves it, and since an element is
+painted over the siblings before it, moving an element among its siblings
+changes what covers what:
+
+```swift
+// Bring the shape to the front, or send it to the back.
+try shape.parent?.append(shape)
+try shape.parent?.insert(shape, before: shape.parent?.children.first)
+```
+
+An element that isn't in the tree, because it was created and not inserted
+yet or because it was removed, is read and changed as any other element, with
+its descendants, so a group can be made with its children before it's
+inserted. ``SVGDocument/Element/isConnected`` tells whether an element is in
+the tree. The view shows only the elements of the tree, and the searches of
+the document find only them.
+
+The document keeps the elements that are removed, so that an element can be
+inserted again as the same element, such as to undo its removal. They take
+memory until the document is released.
+
+Inserting an element where it can't be throws an
+``SVGDocument/HierarchyError``: in itself or in one of its descendants, in an
+element of another document, or before an element that isn't a child of the
+parent. The root element stays where it is.
+
+An inserted element starts the CSS animations that its styles give it at the
+time that it's inserted, and starts no transitions, also when it was removed
+and is inserted again. SMIL animation elements can be inserted and removed as
+other elements, and play on the timeline of the document.
+
+The character data of elements, such as the text of a `<text>` element, can't
+be changed yet, and a `<style>` element that is inserted or removed doesn't
+change the style sheets of the document.
 
 ### Showing the changes
 

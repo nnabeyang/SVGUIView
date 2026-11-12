@@ -5,9 +5,12 @@ import SVGCore
 /// The API follows the DOM where it fits Swift. Find elements with
 /// ``element(id:)``, ``querySelector(_:)`` and ``querySelectorAll(_:)``, and
 /// change their attributes, their classes and the declarations of their
-/// `style` attributes. A change is visible at once to the methods that read the
-/// document, and the view shows it at its next rendering. The changes made in
-/// one turn of the run loop are rendered together.
+/// `style` attributes. Create elements with ``createElement(_:)``, and insert,
+/// move and remove them with ``Element/append(_:)``,
+/// ``Element/insert(_:before:)`` and ``Element/remove()``. A change is visible
+/// at once to the methods that read the document, and the view shows it at its
+/// next rendering. The changes made in one turn of the run loop are rendered
+/// together.
 ///
 /// ```swift
 /// if let button = svgView.document.element(id: "play") {
@@ -28,14 +31,20 @@ import SVGCore
 public final class SVGDocument {
   /// The tree of the document with every change, which reading the document sees.
   private var tree: DocumentTree
-  /// The changes that the view hasn't rendered yet, by the elements and the names of the attributes, with `nil` for an
-  /// attribute that is removed.
-  private var changes = [ElementID: [String: String?]]()
+  /// The elements that aren't in the tree, by the roots of their trees: the ones that were created and not inserted
+  /// yet, and the ones that were removed, with their descendants. The document keeps them, so that they can be
+  /// inserted again.
+  private var detached = [ElementID: DocumentTree]()
+  /// The raw value of the identifier of the next element that is created.
+  private var nextElementID: Int
+  /// What changed in the tree that the view hasn't rendered yet.
+  private var changes = DocumentChanges()
   /// The view that shows the document, or `nil` for a document that a view no longer shows.
   weak var host: (any DocumentHost)?
 
   init(tree: DocumentTree) {
     self.tree = tree
+    nextElementID = (tree.largestElementID ?? -1) + 1
   }
 
   /// The root `svg` element, or `nil` if the document has no element.
@@ -118,35 +127,176 @@ public final class SVGDocument {
     return seconds.isFinite ? .seconds(seconds) : nil
   }
 
-  /// Takes the changes that the view hasn't rendered yet.
-  func takeChanges() -> [ElementID: [String: String?]] {
-    defer { changes = [:] }
-    return changes
+  /// Creates an element of the SVG namespace, which isn't in the tree of the
+  /// document until it's inserted, as the DOM's `createElementNS()` does.
+  ///
+  /// ```swift
+  /// let circle = document.createElement("circle")
+  /// circle.setAttribute("r", to: "10")
+  /// try document.rootElement?.append(circle)
+  /// ```
+  ///
+  /// The attributes, the classes, the style and the children of an element
+  /// that isn't in the tree can be read and changed as the ones of any other
+  /// element. The view shows the element once it's in the tree.
+  ///
+  /// - Parameter localName: The name of the element, such as `rect`. An
+  ///   element with a name that SVGUIView doesn't know isn't rendered.
+  public func createElement(_ localName: String) -> Element {
+    let created = DocumentTree(elementNamed: localName, identifier: nextElementID, languages: tree.languages)
+    nextElementID += 1
+    // The tree has the element that it was made with as its root.
+    guard let id = created.rootElement else { preconditionFailure("A created element has no tree") }
+    detached[id] = created
+    return Element(document: self, id: id)
+  }
+
+  /// Takes the tree of the document and what changed in it that the view hasn't rendered yet.
+  func takeChanges() -> (tree: DocumentTree, changes: DocumentChanges) {
+    defer { changes = DocumentChanges() }
+    return (tree, changes)
+  }
+
+  /// Where an element is: in the tree of the document, or in one of the trees of the elements that aren't in it.
+  private enum Location {
+    case connected
+    /// - Parameter root: The root of the tree that the element is in.
+    case detached(root: ElementID)
+  }
+
+  private func location(of id: ElementID) -> Location? {
+    if tree.contains(id) { return .connected }
+    if detached[id] != nil { return .detached(root: id) }
+    return detached.first { $0.value.contains(id) }.map { .detached(root: $0.key) }
+  }
+
+  /// The tree that an element is in, or `nil` for an element that the document doesn't have.
+  private func tree(containing id: ElementID) -> DocumentTree? {
+    switch location(of: id) {
+    case .connected: tree
+    case .detached(let root): detached[root]
+    case nil: nil
+    }
   }
 
   fileprivate func elements(matching selectors: String, in scope: ElementID?) throws(SelectorError) -> [Element] {
     do {
-      return try tree.elements(matching: selectors, in: scope).map { Element(document: self, id: $0) }
+      // The descendants of an element that isn't in the tree are found in the tree that it's in.
+      let searched = scope.flatMap { tree(containing: $0) } ?? tree
+      return try searched.elements(matching: selectors, in: scope).map { Element(document: self, id: $0) }
     } catch {
       throw SelectorError(selectors: error.selectors)
     }
   }
 
   fileprivate func localName(of id: ElementID) -> String {
-    tree.localName(of: id) ?? ""
+    tree(containing: id)?.localName(of: id) ?? ""
   }
 
   fileprivate func attribute(_ name: String, of id: ElementID) -> String? {
-    tree.attributes(of: id)?[Self.attributeName(name)]
+    tree(containing: id)?.attributes(of: id)?[Self.attributeName(name)]
   }
 
   /// Sets or removes an attribute, unless it already has the value.
   fileprivate func setAttribute(_ name: String, to value: String?, of id: ElementID) {
     let name = Self.attributeName(name)
-    guard let attributes = tree.attributes(of: id), attributes[name] != value else { return }
-    tree = tree.changingAttributes([id: [name: value]])
-    changes[id, default: [:]][name] = .some(value)
-    host?.documentDidChange()
+    switch location(of: id) {
+    case .connected:
+      guard let attributes = tree.attributes(of: id), attributes[name] != value else { return }
+      tree = tree.changingAttributes([id: [name: value]])
+      changes.attributes.insert(id)
+      host?.documentDidChange()
+    case .detached(let root):
+      // The view doesn't show the element, so it has nothing to render again.
+      detached[root] = detached[root]?.changingAttributes([id: [name: value]])
+    case nil:
+      break
+    }
+  }
+
+  fileprivate func parent(of id: ElementID) -> Element? {
+    tree(containing: id)?.parent(of: id).map { Element(document: self, id: $0) }
+  }
+
+  fileprivate func children(of id: ElementID) -> [Element] {
+    (tree(containing: id)?.children(of: id) ?? []).map { Element(document: self, id: $0) }
+  }
+
+  fileprivate func isConnected(_ id: ElementID) -> Bool {
+    tree.contains(id)
+  }
+
+  /// Inserts an element among the children of another one, before one of them or after the last one, after removing
+  /// it from where it is.
+  fileprivate func insert(_ child: ElementID, into parent: ElementID, before reference: ElementID?)
+    throws(HierarchyError)
+  {
+    guard let parentLocation = location(of: parent), let childLocation = location(of: child) else { return }
+    guard child != tree.rootElement else { throw HierarchyError(reason: .rootElement) }
+    // An element can't be inserted in itself or in one of its descendants.
+    if self.tree(containing: child)?.isElement(parent, inSubtreeOf: child) == true {
+      throw HierarchyError(reason: .containsParent)
+    }
+    if let reference, self.tree(containing: parent)?.parent(of: reference) != parent {
+      throw HierarchyError(reason: .referenceNotChild)
+    }
+    // An element that is inserted before itself stays before the sibling after it.
+    var reference = reference
+    if reference == child {
+      let siblings = self.tree(containing: parent)?.children(of: parent) ?? []
+      reference = siblings.firstIndex(of: child).flatMap { siblings.dropFirst($0 + 1).first }
+    }
+    // The element is taken from where it is, with its descendants.
+    let subtree: DocumentTree
+    switch childLocation {
+    case .detached(let root) where root == child:
+      guard let taken = detached.removeValue(forKey: root) else { return }
+      subtree = taken
+    default:
+      guard let taken = take(child, from: childLocation) else { return }
+      subtree = taken
+    }
+    let siblings = (self.tree(containing: parent)?.children(of: parent) ?? [])
+    let index = reference.flatMap { siblings.firstIndex(of: $0) } ?? siblings.count
+    switch parentLocation {
+    case .connected:
+      guard let inserted = tree.inserting(subtree, into: parent, at: index) else { return }
+      tree = inserted
+      changes.restructured.insert(parent)
+      changes.inserted.insert(child)
+      host?.documentDidChange()
+    case .detached(let root):
+      detached[root] = detached[root]?.inserting(subtree, into: parent, at: index)
+    }
+  }
+
+  /// Removes an element from its parent, with its descendants, and keeps it as an element that isn't in the tree.
+  /// The root element and an element without a parent stay where they are.
+  fileprivate func remove(_ id: ElementID) {
+    guard let location = location(of: id), let removed = take(id, from: location) else { return }
+    detached[id] = removed
+  }
+
+  /// Takes an element with its descendants out of the tree that it's in, or returns `nil` if it's the root of the
+  /// tree.
+  private func take(_ id: ElementID, from location: Location) -> DocumentTree? {
+    switch location {
+    case .connected:
+      guard let parent = tree.parent(of: id), let (remaining, removed) = tree.removing(id) else { return nil }
+      // The element that follows the removed one is matched again by the sibling combinators.
+      let siblings = tree.children(of: parent)
+      if let following = siblings.firstIndex(of: id).flatMap({ siblings.dropFirst($0 + 1).first }) {
+        changes.followingRemoved.insert(following)
+      }
+      tree = remaining
+      changes.restructured.insert(parent)
+      host?.documentDidChange()
+      return removed
+    case .detached(let root):
+      guard let (remaining, removed) = detached[root]?.removing(id) else { return nil }
+      detached[root] = remaining
+      return removed
+    }
   }
 
   /// The name of an attribute as the document keeps it, which keeps `href` of the XLink namespace as `href`.
@@ -204,6 +354,28 @@ extension SVGDocument {
     /// The selectors as they were given.
     public let selectors: String
   }
+
+  /// The error of an element that can't be inserted where it was asked to
+  /// be, as the DOM's `HierarchyRequestError` and `NotFoundError` are.
+  public struct HierarchyError: Error, Equatable, Sendable {
+    /// Why an element can't be inserted.
+    public enum Reason: Equatable, Sendable {
+      /// The element is the parent that it would be inserted in, or one of
+      /// the ancestors of that parent.
+      case containsParent
+      /// The element, or the element to insert it before, is an element of
+      /// another document.
+      case differentDocument
+      /// The element to insert before isn't a child of the parent.
+      case referenceNotChild
+      /// The element is the root element of the document, which stays where
+      /// it is.
+      case rootElement
+    }
+
+    /// Why the element can't be inserted.
+    public let reason: Reason
+  }
 }
 
 @MainActor
@@ -238,6 +410,78 @@ extension SVGDocument.Element {
   ///   `href` of the XLink namespace can also be named `xlink:href`.
   public func removeAttribute(_ name: String) {
     document.setAttribute(name, to: nil, of: id)
+  }
+
+  /// The parent of the element, or `nil` for the root element and for an
+  /// element that isn't in another one.
+  public var parent: SVGDocument.Element? {
+    document.parent(of: id)
+  }
+
+  /// The child elements of the element, in document order.
+  ///
+  /// The children include the elements that SVGUIView doesn't render, such
+  /// as `<style>` elements and animation elements.
+  public var children: [SVGDocument.Element] {
+    document.children(of: id)
+  }
+
+  /// Whether the element is in the tree of the document: whether it's the
+  /// root element or one of its descendants.
+  ///
+  /// It's `false` for an element that ``SVGDocument/createElement(_:)``
+  /// created and that wasn't inserted yet, for an element that was removed,
+  /// and for their descendants.
+  public var isConnected: Bool {
+    document.isConnected(id)
+  }
+
+  /// Inserts an element after the last child of this element, as the DOM's
+  /// `appendChild()` does.
+  ///
+  /// An element that has a parent is removed from it first, so appending an
+  /// element moves it. An element is painted over the siblings before it, so
+  /// appending an element to its own parent brings it to the front.
+  ///
+  /// - Parameter child: The element to insert, with its descendants.
+  /// - Throws: ``SVGDocument/HierarchyError`` if the element is this element
+  ///   or one of its ancestors, the root element of the document, or an
+  ///   element of another document.
+  public func append(_ child: SVGDocument.Element) throws(SVGDocument.HierarchyError) {
+    try insert(child, before: nil)
+  }
+
+  /// Inserts an element before a child of this element, as the DOM's
+  /// `insertBefore()` does.
+  ///
+  /// An element that has a parent is removed from it first, so inserting an
+  /// element moves it.
+  ///
+  /// - Parameters:
+  ///   - child: The element to insert, with its descendants.
+  ///   - reference: The child of this element to insert the element before,
+  ///     or `nil` to insert it after the last child.
+  /// - Throws: ``SVGDocument/HierarchyError`` if the element is this element
+  ///   or one of its ancestors, the root element of the document, or an
+  ///   element of another document, or if `reference` isn't a child of this
+  ///   element.
+  public func insert(_ child: SVGDocument.Element, before reference: SVGDocument.Element?)
+    throws(SVGDocument.HierarchyError)
+  {
+    guard child.document === document, reference.map({ $0.document === document }) ?? true else {
+      throw SVGDocument.HierarchyError(reason: .differentDocument)
+    }
+    try document.insert(child.id, into: id, before: reference?.id)
+  }
+
+  /// Removes the element from its parent, with its descendants, as the DOM's
+  /// `remove()` does.
+  ///
+  /// The document keeps the element, so it can be read, changed and inserted
+  /// again. The root element, and an element without a parent, stay where
+  /// they are.
+  public func remove() {
+    document.remove(id)
   }
 
   /// The first descendant of the element in document order that a list of
