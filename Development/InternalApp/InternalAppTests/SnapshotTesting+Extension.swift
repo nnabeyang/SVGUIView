@@ -72,7 +72,7 @@ func assertSVGSnapshot(
   let testName = String(testName.prefix { $0 != "(" })
   let failure = verifySnapshot(
     of: image,
-    as: .image(precision: 0.999, perceptualPrecision: 0.98),
+    as: .wideGamutImage(precision: 0.999, perceptualPrecision: 0.98),
     named: time.map { "\(file.name)-\(milliseconds(of: $0))ms" } ?? file.name,
     record: recordMode,
     snapshotDirectory: snapshotDirectory(filePath: filePath),
@@ -85,6 +85,82 @@ func assertSVGSnapshot(
   if let failure {
     Issue.record(Comment(rawValue: failure), sourceLocation: sourceLocation)
   }
+}
+
+extension Snapshotting where Value == UIImage, Format == UIImage {
+  /// Compares images as `image(precision:perceptualPrecision:)` does, and, where either image is of a wide gamut,
+  /// also in Display P3.
+  ///
+  /// `image(precision:perceptualPrecision:)` draws both images into sRGB before it compares them, so a color
+  /// outside sRGB that is clamped to sRGB matches the same color rendered in Display P3. Images of sRGB are compared
+  /// only in sRGB, as before.
+  static func wideGamutImage(precision: Float, perceptualPrecision: Float) -> Snapshotting {
+    let image = Diffing<UIImage>.image(precision: precision, perceptualPrecision: perceptualPrecision)
+    return Snapshotting(
+      pathExtension: "png",
+      diffing: .diff(toData: image.toData, fromData: image.fromData) { reference, rendered in
+        if let failure = image.diffV2(reference, rendered) { return failure }
+        guard let message = wideGamutDifference(reference, rendered, precision: precision) else { return nil }
+        return (
+          message,
+          [.data(image.toData(reference), name: "reference.png"), .data(image.toData(rendered), name: "failure.png")]
+        )
+      })
+  }
+}
+
+/// How much a component of a pixel in Display P3, out of 255, can differ between two images that match.
+///
+/// It is as large as the differences of the edges of shapes, and smaller than the difference between a color
+/// outside sRGB and the color clamped to sRGB, such as 51 in the green of `color(display-p3 1 0 0)`.
+private let wideGamutTolerance = 16
+
+/// Why two images of the same size differ in Display P3, or `nil` if they match or neither is of a wide gamut.
+///
+/// - Parameter precision: The fraction of the pixels that must match.
+func wideGamutDifference(_ reference: UIImage, _ rendered: UIImage, precision: Float) -> String? {
+  guard let reference = reference.cgImage, let rendered = rendered.cgImage,
+    reference.width == rendered.width, reference.height == rendered.height,
+    reference.colorSpace?.isWideGamutRGB == true || rendered.colorSpace?.isWideGamutRGB == true
+  else { return nil }
+  guard let referencePixels = displayP3Pixels(of: reference), let renderedPixels = displayP3Pixels(of: rendered)
+  else { return "The images couldn't be drawn in Display P3." }
+  let pixelCount = reference.width * reference.height
+  var differentPixels = 0
+  var largest = 0
+  referencePixels.withUnsafeBufferPointer { referencePixels in
+    renderedPixels.withUnsafeBufferPointer { renderedPixels in
+      for pixel in 0..<pixelCount {
+        var differs = false
+        for component in pixel * 4..<pixel * 4 + 4 {
+          let difference = abs(Int(referencePixels[component]) - Int(renderedPixels[component]))
+          largest = max(largest, difference)
+          differs = differs || difference > wideGamutTolerance
+        }
+        if differs { differentPixels += 1 }
+      }
+    }
+  }
+  let allowed = Int((1 - precision) * Float(pixelCount))
+  guard differentPixels > allowed else { return nil }
+  return
+    "\(differentPixels) of \(pixelCount) pixels differ in Display P3, by up to \(largest) out of 255, more than \(allowed) can"
+}
+
+/// The red, green, blue and alpha of the pixels of an image, premultiplied, in 8 bits of Display P3.
+private func displayP3Pixels(of image: CGImage) -> [UInt8]? {
+  guard let space = CGColorSpace(name: CGColorSpace.displayP3) else { return nil }
+  var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+  let drawn = pixels.withUnsafeMutableBytes { pixels in
+    guard
+      let context = CGContext(
+        data: pixels.baseAddress, width: image.width, height: image.height, bitsPerComponent: 8,
+        bytesPerRow: image.width * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return false }
+    context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    return true
+  }
+  return drawn ? pixels : nil
 }
 
 /// The time in whole milliseconds, for the names of reference images, which can't have a period.
