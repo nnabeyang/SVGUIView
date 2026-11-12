@@ -12,7 +12,9 @@ import UIKit
 struct DataLoadingTests {
   /// A document of the given size, from its view box.
   private static func document(width: Int, height: Int) -> Data {
-    Data(#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 \#(width) \#(height)"><rect width="1" height="1"/></svg>"#.utf8)
+    Data(
+      #"<svg xmlns="http://www.w3.org/2000/svg" width="\#(width)" height="\#(height)" viewBox="0 0 \#(width) \#(height)"><rect width="1" height="1"/></svg>"#
+        .utf8)
   }
 
   private func makeView() -> SVGUIView {

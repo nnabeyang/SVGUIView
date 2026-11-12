@@ -102,11 +102,28 @@ struct RenderTreeBuilderTests {
     #expect(nested.content?.overflowClip == CGRect(x: 0, y: 0, width: 5, height: 6))
   }
 
-  @Test("the intrinsic size of the root element is 0 in viewport units, which no view gives yet")
-  func intrinsicSizeInViewportUnits() throws {
-    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" style="width: 10vw; height: 20px"/>"#
+  @Test(
+    "the intrinsic size of the root element is its absolute width and height, and otherwise the default size of an image",
+    arguments: [
+      // A view box alone fits its ratio in 300 × 150, as Chrome and Safari size the document in an img element.
+      (#"viewBox="0 0 24 24""#, CGSize(width: 150, height: 150)),
+      (#"viewBox="0 0 200 100""#, CGSize(width: 300, height: 150)),
+      (#"viewBox="0 0 100 200""#, CGSize(width: 75, height: 150)),
+      ("", CGSize(width: 300, height: 150)),
+      // Percentages and viewport units aren't sizes, which no view gives yet.
+      (#"width="50%" viewBox="0 0 24 24""#, CGSize(width: 150, height: 150)),
+      (#"width="50%" height="50%""#, CGSize(width: 300, height: 150)),
+      (#"style="width: 10vw; height: 20px""#, CGSize(width: 300, height: 20)),
+      // One size takes the other one from the ratio, or from the default size without one.
+      (#"width="60" viewBox="0 0 20 10""#, CGSize(width: 60, height: 30)),
+      (#"width="60""#, CGSize(width: 60, height: 150)),
+      (#"width="60" height="40" viewBox="0 0 20 10""#, CGSize(width: 60, height: 40)),
+      (#"width="60" height="40""#, CGSize(width: 60, height: 40)),
+    ])
+  func intrinsicSize(attributes: String, size: CGSize) throws {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" \#(attributes)/>"#
     let root = try #require(SVGParser.parse(data: Data(svg.utf8)).root)
-    #expect(root.size == CGSize(width: 0, height: 20))
+    #expect(root.size == size)
   }
 
   /// The transform of a rotation by 90 degrees about a point.
