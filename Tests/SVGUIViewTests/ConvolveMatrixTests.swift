@@ -81,13 +81,13 @@ struct ConvolveMatrixTests {
     #expect(abs(Int(pixel[3]) - 128) <= 1 && abs(Int(pixel[0]) - 128) <= 1 && pixel[1] == 0 && pixel[2] == 0)
   }
 
-  @Test("a kernel that doesn't have as many numbers as the order passes the input through")
-  func passThrough() async throws {
-    for attributes in [#"order="3 3" kernelMatrix="1 2""#, #"order="0" kernelMatrix="1""#] {
-      let rendering = try await render(square("<feConvolveMatrix " + attributes + "/>"))
-      #expect(rendering.pixel(10 * rendering.scale, 10 * rendering.scale) == red)
-      #expect(rendering.pixel(6 * rendering.scale - 1, 10 * rendering.scale) == transparent)
-    }
+  @Test(
+    "a kernel that doesn't have as many numbers as the order passes the input through",
+    arguments: [#"order="3 3" kernelMatrix="1 2""#, #"order="0" kernelMatrix="1""#])
+  func passThrough(attributes: String) async throws {
+    let rendering = try await render(square("<feConvolveMatrix " + attributes + "/>"))
+    #expect(rendering.pixel(10 * rendering.scale, 10 * rendering.scale) == red)
+    #expect(rendering.pixel(6 * rendering.scale - 1, 10 * rendering.scale) == transparent)
   }
 
   @Test("a target out of the kernel is transparent black", arguments: [#"targetX="3""#, #"targetY="-1""#])

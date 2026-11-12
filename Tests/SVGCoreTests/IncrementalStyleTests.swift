@@ -125,7 +125,7 @@ struct IncrementalStyleTests {
       #expect(Set(map.keys) == Set(fullMap.keys))
       // The elements that the maps hold are the ones in the tree of the context.
       for value in map.values {
-        #expect(next.root?.elements.contains { $0.index == value } == true)
+        #expect(try #require(next.root).elements.contains { $0.index == value })
       }
     }
     #expect(next.contents.count == full.contents.count)

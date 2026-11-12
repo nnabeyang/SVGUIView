@@ -27,12 +27,11 @@ struct FilterColorSpaceTests {
     #expect(sRGB[0] < 150 && sRGB[1] < 150, "\(sRGB)")
   }
 
-  @Test("a color that a filter doesn't mix stays the same in either color space")
-  func unmixedColor() async throws {
-    for space in ["", #"color-interpolation-filters="sRGB""#] {
-      // The pixel is five standard deviations from the edges of the yellow, where the blur doesn't reach.
-      let color = try await pixel(blurredEdge(space), x: 5, y: 10)
-      #expect(color == [255, 255, 0, 255], "\(space): \(color)")
-    }
+  @Test(
+    "a color that a filter doesn't mix stays the same in either color space",
+    arguments: ["", #"color-interpolation-filters="sRGB""#])
+  func unmixedColor(space: String) async throws {
+    // The pixel is five standard deviations from the edges of the yellow, where the blur doesn't reach.
+    #expect(try await pixel(blurredEdge(space), x: 5, y: 10) == [255, 255, 0, 255])
   }
 }

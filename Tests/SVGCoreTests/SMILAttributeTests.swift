@@ -86,10 +86,7 @@ struct SMILAttributeTests {
       <style>.on { fill: green }</style>
       <rect id="e" width="10" height="10" fill="red"><set attributeName="class" to="on" begin="1s"/></rect>
       """#, at: 2, as: SVGRectElement.self)
-    guard case .color(let fill) = rect.style.fill else {
-      Issue.record("The fill isn't a color")
-      return
-    }
+    let fill = try #require(rect.style.fill.color, "The fill isn't a color")
     #expect(fill.components?.green ?? 0 > 0.4)
   }
 

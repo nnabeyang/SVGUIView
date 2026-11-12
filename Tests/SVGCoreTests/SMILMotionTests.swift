@@ -106,10 +106,7 @@ struct SMILMotionTests {
       await builder.build(
         fit: ContentFit(
           preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))))
-    guard case .viewport(let viewport) = tree.root, case .shape(let shape) = viewport.content?.children.last else {
-      Issue.record("The rectangle isn't a shape of the root")
-      return
-    }
+    let shape = try #require(tree.root?.viewport?.content?.children.last?.shape, "The rectangle isn't a shape of the root")
     // The point (1, 0) is scaled to (2, 0), and then moved by 5.
     #expect(CGPoint(x: 1, y: 0).applying(shape.transform) == CGPoint(x: 7, y: 0))
   }

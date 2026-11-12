@@ -45,8 +45,8 @@ struct StyleTests {
   }
 
   @Test("presentation attributes take inherit, but no other keyword that every property takes")
-  func attributeKeywords() {
-    #expect(OpacityProperty.declared(attribute: " inherit ").map { if case .inherit = $0 { true } else { false } } == true)
+  func attributeKeywords() throws {
+    #expect(try #require(OpacityProperty.declared(attribute: " inherit ")).isInherit)
     #expect(OpacityProperty.declared(attribute: "initial") == nil)
     #expect(OpacityProperty.declared(attribute: "unset") == nil)
   }
@@ -70,11 +70,8 @@ struct StyleTests {
   }
 
   @Test("declarations in style sheets are parsed without their comments")
-  func cssComments() {
-    guard case .value(let width) = declared(StrokeWidthProperty.self, css: "/* a */ 2px /* b */") else {
-      Issue.record("stroke-width isn't parsed")
-      return
-    }
+  func cssComments() throws {
+    let width = try #require(declared(StrokeWidthProperty.self, css: "/* a */ 2px /* b */")?.value, "stroke-width isn't parsed")
     #expect(width == .pixel(2))
   }
 
@@ -107,11 +104,9 @@ struct StyleTests {
   }
 
   @Test("transform in a style sheet, whose lengths have units")
-  func cssTransform() {
-    guard case .value(let transform) = declared(TransformProperty.self, css: "translate(10px, 20px) scale(2)") else {
-      Issue.record("transform isn't parsed")
-      return
-    }
+  func cssTransform() throws {
+    let transform = try #require(
+      declared(TransformProperty.self, css: "translate(10px, 20px) scale(2)")?.value, "transform isn't parsed")
     #expect(transform == TransformList(functions: [.translate(.pixel(10), .pixel(20)), .scale(2, 2)]))
     #expect(declared(TransformProperty.self, css: "translate(10, 20)") == nil)
   }
@@ -139,11 +134,8 @@ struct StyleTests {
   ]
 
   @Test("transform-origin in a style sheet", arguments: transformOrigins)
-  func cssTransformOrigin(text: String, origin: TransformOrigin) {
-    guard case .value(let value) = declared(TransformOriginProperty.self, css: text) else {
-      Issue.record("transform-origin isn't parsed")
-      return
-    }
+  func cssTransformOrigin(text: String, origin: TransformOrigin) throws {
+    let value = try #require(declared(TransformOriginProperty.self, css: text)?.value, "transform-origin isn't parsed")
     #expect(value == origin)
   }
 
@@ -157,11 +149,8 @@ struct StyleTests {
   }
 
   @Test("transform-origin is a presentation attribute, and transform-box isn't")
-  func transformOriginAttribute() {
-    guard case .value(let origin) = TransformOriginProperty.declared(attribute: "10 20") else {
-      Issue.record("The attribute isn't parsed")
-      return
-    }
+  func transformOriginAttribute() throws {
+    let origin = try #require(TransformOriginProperty.declared(attribute: "10 20")?.value, "The attribute isn't parsed")
     #expect(origin == TransformOrigin(x: .number(10), y: .number(20)))
     let cascaded = CascadedValues(
       CascadedValues.presentationAttributes(
@@ -324,15 +313,19 @@ struct StyleTests {
     #expect(!WidthProperty.accepts(attributeOn: .symbol) && !WidthProperty.accepts(attributeOn: .use))
   }
 
+  /// Values of `mix-blend-mode`, and the modes that they declare, or `nil` for a value that isn't valid.
+  private static let blendModes: [(String, MixBlendMode?)] = [
+    ("multiply", .multiply), ("Color-Dodge", .colorDodge), ("soft-light", .softLight), ("luminosity", .luminosity),
+    ("xor", nil), ("plus-lighter", nil),
+  ]
+
+  @Test("mix-blend-mode is one of the 16 blend modes, in any case", arguments: blendModes)
+  func blendMode(text: String, mode: MixBlendMode?) {
+    #expect(declared(MixBlendModeProperty.self, css: text)?.value == mode)
+  }
+
   @Test("mix-blend-mode and isolation are keywords that aren't presentation attributes or inherited")
   func blending() throws {
-    let modes: [(String, MixBlendMode?)] = [
-      ("multiply", .multiply), ("Color-Dodge", .colorDodge), ("soft-light", .softLight), ("luminosity", .luminosity),
-      ("xor", nil), ("plus-lighter", nil),
-    ]
-    for (text, mode) in modes {
-      #expect(declared(MixBlendModeProperty.self, css: text).flatMap { if case .value(let v) = $0 { v } else { nil } } == mode)
-    }
     #expect(MixBlendMode.allCases.count == 16)
     let cascaded = CascadedValues(
       CascadedValues.presentationAttributes(
@@ -435,7 +428,7 @@ struct StyleTests {
   }
 
   @Test("color: currentColor is the color of the parent, and fill: currentColor stays a keyword")
-  func currentColor() {
+  func currentColor() throws {
     let parent = style([PropertyDeclaration(ColorProperty.self, .value(.color(.named(.init(name: "red")))))])
     let child = style(
       [
@@ -443,16 +436,10 @@ struct StyleTests {
         PropertyDeclaration(FillProperty.self, .value(.currentColor)),
       ], parent: parent)
     #expect(child.color.description == "red")
-    guard case .currentColor = child.fill else {
-      Issue.record("fill isn't currentColor")
-      return
-    }
+    try #require(child.fill == .currentColor, "fill isn't currentColor")
     // A descendant with its own color paints with it.
     let grandchild = style([PropertyDeclaration(ColorProperty.self, .value(.color(.named(.init(name: "blue")))))], parent: child)
-    guard case .color(let color) = grandchild.resolved(grandchild.fill) else {
-      Issue.record("currentColor isn't resolved")
-      return
-    }
+    let color = try #require(grandchild.resolved(grandchild.fill).color, "currentColor isn't resolved")
     #expect(color.description == "blue")
   }
 
@@ -483,21 +470,14 @@ struct StyleTests {
   func viewportFontSize() {
     let parent = style([PropertyDeclaration(FontSizeProperty.self, .value(.length(.vw(2))))])
     let child = style([PropertyDeclaration(FontSizeProperty.self, .value(.length(.ems(1.5))))], parent: parent)
-    guard case .length(.vw(let value)) = child.fontSize else {
-      Issue.record("font-size isn't in vw")
-      return
-    }
-    #expect(value == 3)
+    #expect(child.fontSize == .length(.vw(3)))
   }
 
   @Test("a font-size keyword stays a keyword, which monospace resolves to a smaller size")
-  func fontSizeKeyword() {
+  func fontSizeKeyword() throws {
     let parent = style([PropertyDeclaration(FontSizeProperty.self, .value(.medium))])
     let child = style([PropertyDeclaration(FontFamilyProperty.self, .value("monospace"))], parent: parent)
-    guard case .medium = child.fontSize else {
-      Issue.record("font-size isn't medium")
-      return
-    }
+    try #require(child.fontSize == .medium, "font-size isn't medium")
     #expect(child.font.sizeValue(context: SVGLengthContextStub()) == 13)
     #expect(parent.font.sizeValue(context: SVGLengthContextStub()) == 16)
   }
@@ -555,15 +535,12 @@ struct StyleTests {
   ]
 
   @Test("d in a style sheet is none or path() with path data that has no error", arguments: pathData)
-  func cssPathData(text: String, data: PathData?) {
+  func cssPathData(text: String, data: PathData?) throws {
     guard let data else {
       #expect(declared(DProperty.self, css: text) == nil)
       return
     }
-    guard case .value(let value) = declared(DProperty.self, css: text) else {
-      Issue.record("d isn't parsed")
-      return
-    }
+    let value = try #require(declared(DProperty.self, css: text)?.value, "d isn't parsed")
     #expect(value == data)
   }
 
@@ -704,9 +681,11 @@ struct StyleTests {
   func miterLimit() {
     #expect(StrokeMiterlimitProperty.parse("5", origin: .attribute) == 5)
     #expect(StrokeMiterlimitProperty.parse(" 1 ", origin: .attribute) == 1)
-    for text in ["5mm", "20%", "0.5"] {
-      #expect(StrokeMiterlimitProperty.parse(text, origin: .attribute) == nil, "\(text)")
-    }
+  }
+
+  @Test("stroke-miterlimit with a unit or less than 1 isn't valid", arguments: ["5mm", "20%", "0.5"])
+  func invalidMiterLimit(text: String) {
+    #expect(StrokeMiterlimitProperty.parse(text, origin: .attribute) == nil)
   }
 
   @Test("stroke-dasharray and stroke-dashoffset are lengths with units, and em is resolved with the font size")

@@ -41,19 +41,18 @@ struct DisplacementMapTests {
     #expect(try await pixel(content, x: 10, y: 12) == [0, 0, 0, 0])
   }
 
-  @Test("a scale of 0 and a map of 0.5 in the color space of the primitive move nothing")
-  func nothingMoves() async throws {
-    for content in [
-      square(displaced(map: #"flood-color="red""#, scale: "0")),
-      square(
-        displaced(map: #"flood-color="rgb(128, 128, 128)""#, scale: "8"),
-        attributes: #"color-interpolation-filters="sRGB""#),
-    ] {
-      #expect(try await pixel(content, x: 6, y: 6) == [255, 0, 0, 255])
-      #expect(try await pixel(content, x: 13, y: 13) == [255, 0, 0, 255])
-      #expect(try await pixel(content, x: 5, y: 10) == [0, 0, 0, 0])
-      #expect(try await pixel(content, x: 14, y: 10) == [0, 0, 0, 0])
-    }
+  @Test(
+    "a scale of 0 and a map of 0.5 in the color space of the primitive move nothing",
+    arguments: [
+      (#"flood-color="red""#, "0", ""),
+      (#"flood-color="rgb(128, 128, 128)""#, "8", #"color-interpolation-filters="sRGB""#),
+    ])
+  func nothingMoves(map: String, scale: String, attributes: String) async throws {
+    let content = square(displaced(map: map, scale: scale), attributes: attributes)
+    #expect(try await pixel(content, x: 6, y: 6) == [255, 0, 0, 255])
+    #expect(try await pixel(content, x: 13, y: 13) == [255, 0, 0, 255])
+    #expect(try await pixel(content, x: 5, y: 10) == [0, 0, 0, 0])
+    #expect(try await pixel(content, x: 14, y: 10) == [0, 0, 0, 0])
   }
 
   @Test("a map of 0.5 in sRGB is less than 0.5 in linearRGB, and moves the input")

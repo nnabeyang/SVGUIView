@@ -70,10 +70,9 @@ struct AnimationParsingTests {
     "linear() fills in the inputs that are missing, and raises the inputs that are less than one before them",
     arguments: linearFunctions)
   func linearInputs(text: String, points: [(Double, Double)]) throws {
-    guard case .piecewiseLinear(let parsed) = try #require(easing(text)) else {
-      Issue.record("not linear(): \(text)")
-      return
-    }
+    let function = try #require(easing(text))
+    let linear: [EasingFunction.LinearPoint]? = if case .piecewiseLinear(let points) = function { points } else { nil }
+    let parsed = try #require(linear, "not linear(): \(text)")
     try #require(parsed.count == points.count)
     for (point, (input, output)) in zip(parsed, points) {
       #expect(isClose(point.input, input) && isClose(point.output, output), "\(point) in \(text)")

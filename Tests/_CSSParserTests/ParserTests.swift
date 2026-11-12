@@ -279,7 +279,7 @@ struct ParserTests {
   }
 
   @Test("parseEntirely reports first custom error")
-  func entirelyReportsFirstError() {
+  func entirelyReportsFirstError() throws {
     enum E: Error, Equatable, CustomStringConvertible {
       case foo
 
@@ -292,10 +292,8 @@ struct ParserTests {
     let result: Result<Void, ParseError> = parser.parseEntirely { p in
       .failure(p.newCustomError(error: E.foo))
     }
-    guard case .failure(let error) = result else {
-      Issue.record("unexpected result: \(result))")
-      return
-    }
+    let failure: ParseError<E>? = if case .failure(let error) = result { error } else { nil }
+    let error = try #require(failure, "unexpected result: \(result)")
     #expect(error == .init(kind: .custom(.foo), location: .init(line: 0, column: 1)))
   }
 

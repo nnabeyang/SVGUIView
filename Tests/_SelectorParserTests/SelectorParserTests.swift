@@ -34,10 +34,7 @@ struct SelectorParserTests {
       parser: DummyParser.default(),
       input: &input,
       parseRelative: .no)
-    guard case .success = list else {
-      Issue.record("Expected to parse successfully")
-      return
-    }
+    #expect(!list.isFailure, "Expected to parse successfully")
   }
 
   @Test("parsing various selectors succeeds or fails as expected")

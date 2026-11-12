@@ -129,13 +129,16 @@ struct LayerPlannerTests {
     let (layer, _) = try await plan(
       spin + #"<g transform="translate(10 0)">"# + spinning("r", #"transform="translate(0 5)" opacity="0.25""#)
         + "</g>")
-    guard case .container(let fit) = layer.children.first, case .container(let svg) = fit.children.first,
-      case .container(let group) = svg.children.first, case .container(let rect) = group.children.first,
-      case .painted(let painted) = rect.children.first, case .shape(let shape) = painted.nodes.first
-    else {
-      Issue.record("The layers aren't nested as expected")
-      return
-    }
+    let nested: (group: ContainerLayer, rect: ContainerLayer, shape: ShapeNode)? =
+      if case .container(let fit) = layer.children.first, case .container(let svg) = fit.children.first,
+        case .container(let group) = svg.children.first, case .container(let rect) = group.children.first,
+        case .painted(let painted) = rect.children.first, case .shape(let shape) = painted.nodes.first
+      {
+        (group, rect, shape)
+      } else {
+        nil
+      }
+    let (group, rect, shape) = try #require(nested, "The layers aren't nested as expected")
     #expect(group.transform == CGAffineTransform(translationX: 10, y: 0))
     #expect(rect.transform == CGAffineTransform(translationX: 0, y: 5))
     #expect(rect.opacity == 0.25)

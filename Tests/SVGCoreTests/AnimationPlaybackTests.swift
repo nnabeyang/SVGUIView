@@ -158,7 +158,7 @@ struct AnimationPlaybackTests {
     let id = try #require(base.cssAnimations().first)
     let paused = base.changingAttributes(
       [a: ["style": "animation: f 2s linear 1s forwards; animation-play-state: paused"]], at: 2)
-    #expect(paused.playback(of: id)?.isPaused == true)
+    #expect(try #require(paused.playback(of: id)).isPaused)
     #expect(opacity(of: "a", in: paused, at: 10) == 0.5)
     #expect(paused.animationEnd() == 0)
     let played = paused.changingAttributes([a: ["style": "animation: f 2s linear 1s forwards"]], at: 10)

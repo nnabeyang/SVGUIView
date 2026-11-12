@@ -30,12 +30,12 @@ struct TurbulenceTests {
     }
   }
 
-  @Test("noise with a negative frequency or number of octaves is transparent black")
-  func errors() async throws {
-    for attributes in [#"baseFrequency="0.1 -0.1""#, #"baseFrequency="0.1" numOctaves="-1""#] {
-      let content = filtered(#"<feTurbulence type="fractalNoise" "# + attributes + "/>")
-      #expect(try await render(content).components.allSatisfy { $0 == 0 })
-    }
+  @Test(
+    "noise with a negative frequency or number of octaves is transparent black",
+    arguments: [#"baseFrequency="0.1 -0.1""#, #"baseFrequency="0.1" numOctaves="-1""#])
+  func errors(attributes: String) async throws {
+    let content = filtered(#"<feTurbulence type="fractalNoise" "# + attributes + "/>")
+    #expect(try await render(content).components.allSatisfy { $0 == 0 })
   }
 
   @Test("the seed is truncated towards 0, and the seeds of 0 and 1 are the same")

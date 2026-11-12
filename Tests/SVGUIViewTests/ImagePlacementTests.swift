@@ -84,15 +84,17 @@ struct ImagePlacementTests {
       + attributes + "/>"
   }
 
-  @Test("a bitmap is interpolated where it's scaled by default, and isn't for pixelated, crisp-edges and optimizeSpeed")
+  @Test("a bitmap is interpolated where it's scaled by default")
   func imageRendering() async throws {
     let smooth = try await pixel(redAndBlue(""), x: 9, y: 10)
     #expect(smooth[2] > 20, "\(smooth)")
-    for value in ["pixelated", "crisp-edges", "optimizeSpeed"] {
-      let left = try await pixel(redAndBlue(#"image-rendering="\#(value)""#), x: 9, y: 10)
-      let right = try await pixel(redAndBlue(#"image-rendering="\#(value)""#), x: 10, y: 10)
-      #expect(left[0] > 245 && left[2] < 10, "\(value) \(left)")
-      #expect(right[2] > 245 && right[0] < 10, "\(value) \(right)")
-    }
+  }
+
+  @Test("a bitmap isn't interpolated for pixelated, crisp-edges and optimizeSpeed", arguments: ["pixelated", "crisp-edges", "optimizeSpeed"])
+  func imageRenderingWithoutInterpolation(value: String) async throws {
+    let left = try await pixel(redAndBlue(#"image-rendering="\#(value)""#), x: 9, y: 10)
+    let right = try await pixel(redAndBlue(#"image-rendering="\#(value)""#), x: 10, y: 10)
+    #expect(left[0] > 245 && left[2] < 10, "\(left)")
+    #expect(right[2] > 245 && right[0] < 10, "\(right)")
   }
 }

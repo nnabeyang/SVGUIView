@@ -214,7 +214,7 @@ struct PlaybackTests {
   func showsLayers() async throws {
     let (view, _) = try await makeView()
     #expect(view.layer.contents == nil)
-    #expect(view.layer.sublayers?.isEmpty == false)
+    #expect(try !#require(view.layer.sublayers).isEmpty)
     view.configuration = SVGUIViewConfiguration(timeoutDuration: patience, animation: .none)
     try await waitUntil("The view shows no image") { view.layer.contents != nil }
     #expect(view.layer.contents != nil)

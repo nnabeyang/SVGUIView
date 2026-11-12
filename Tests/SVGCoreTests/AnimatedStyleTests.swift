@@ -119,10 +119,7 @@ struct AnimatedStyleTests {
     let fill = try style(
       "<style>@keyframes k { from { fill: currentColor } to { fill: rgb(0, 0, 255) } }</style>"
         + #"<rect id="r" color="rgb(255, 0, 0)" style="animation: k 1s linear"/>"#, at: 0.5)
-    guard case .color(let mixed) = fill.fill, let components = mixed.components else {
-      Issue.record("The fill isn't a color: \(fill.fill)")
-      return
-    }
+    let components = try #require(fill.fill.color?.components, "The fill isn't a color: \(fill.fill)")
     #expect(isClose(components.red, 0.5) && isClose(components.green, 0) && isClose(components.blue, 0.5))
   }
 

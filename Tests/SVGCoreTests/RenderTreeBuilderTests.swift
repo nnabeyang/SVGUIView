@@ -26,25 +26,16 @@ struct RenderTreeBuilderTests {
 
   /// The children of the root `<svg>` element.
   private func children(of tree: RenderTree) throws -> [RenderNode] {
-    guard case .viewport(let viewport) = tree.root else {
-      Issue.record("The root isn't a viewport")
-      return []
-    }
+    let viewport = try #require(tree.root?.viewport, "The root isn't a viewport")
     return try #require(viewport.content).children
   }
 
-  private func use(_ node: RenderNode) throws -> UseNode {
-    guard case .use(let use) = node else { throw NodeError.unexpected(node) }
-    return use
+  private func use(_ node: RenderNode, sourceLocation: SourceLocation = #_sourceLocation) throws -> UseNode {
+    try #require(node.use, "The node isn't a use element: \(node)", sourceLocation: sourceLocation)
   }
 
-  private func shape(_ node: RenderNode?) throws -> ShapeNode {
-    guard case .shape(let shape) = node else { throw NodeError.unexpected(node) }
-    return shape
-  }
-
-  private enum NodeError: Error {
-    case unexpected(RenderNode?)
+  private func shape(_ node: RenderNode?, sourceLocation: SourceLocation = #_sourceLocation) throws -> ShapeNode {
+    try #require(node?.shape, "The node isn't a shape: \(String(describing: node))", sourceLocation: sourceLocation)
   }
 
   @Test("a symbol isn't drawn itself, and a use element shows it in a viewport of its size and with its opacity")
@@ -58,10 +49,8 @@ struct RenderTreeBuilderTests {
     #expect(nodes.count == 1)
     let use = try use(try #require(nodes.first))
     #expect(use.instance?.opacity == 0.8)
-    guard case .viewport(let viewport)? = use.instance?.content, let content = viewport.content else {
-      Issue.record("The use element doesn't show a viewport")
-      return
-    }
+    let viewport = try #require(use.instance?.content?.viewport, "The use element doesn't show a viewport")
+    let content = try #require(viewport.content)
     #expect(viewport.opacity == 0.5)
     // A symbol has no transform of its own.
     #expect(viewport.transform == .identity)
@@ -74,10 +63,8 @@ struct RenderTreeBuilderTests {
   func rootPosition() async throws {
     let tree = try await renderTree(
       #"<svg x="5" y="5" width="10" height="10"><rect width="10" height="10"/></svg>"#, attributes: #"x="3" y="3""#)
-    guard case .viewport(let root) = tree.root, case .viewport(let nested)? = try children(of: tree).first else {
-      Issue.record("The root and its child aren't viewports")
-      return
-    }
+    let root = try #require(tree.root?.viewport, "The root isn't a viewport")
+    let nested = try #require(try children(of: tree).first?.viewport, "The child isn't a viewport")
     #expect(root.translation == .identity)
     #expect(nested.translation == CGAffineTransform(translationX: 5, y: 5))
   }
@@ -86,10 +73,8 @@ struct RenderTreeBuilderTests {
   func rootSizeInViewportUnits() async throws {
     // The view is 20 by 20, so the root element is 2 by 4, and its view box of 20 by 20 is scaled to fit.
     let tree = try await renderTree(#"<rect width="20" height="20"/>"#, attributes: #"style="width: 10vw; height: 20vh""#)
-    guard case .viewport(let root) = tree.root, let content = root.content else {
-      Issue.record("The root isn't a viewport")
-      return
-    }
+    let root = try #require(tree.root?.viewport, "The root isn't a viewport")
+    let content = try #require(root.content)
     #expect(content.viewBoxTransform.a == 0.1 && content.viewBoxTransform.d == 0.1)
   }
 
@@ -112,10 +97,7 @@ struct RenderTreeBuilderTests {
   func nestedViewportIgnoresStyles() async throws {
     let tree = try await renderTree(
       #"<style>svg svg { width: 50px; height: 50px; x: 3px }</style><svg x="1" width="5" height="6" style="y: 2px"/>"#)
-    guard case .viewport(let nested)? = try children(of: tree).last else {
-      Issue.record("The child isn't a viewport")
-      return
-    }
+    let nested = try #require(try children(of: tree).last?.viewport, "The child isn't a viewport")
     #expect(nested.translation == CGAffineTransform(translationX: 1, y: 0))
     #expect(nested.content?.overflowClip == CGRect(x: 0, y: 0, width: 5, height: 6))
   }
@@ -147,10 +129,8 @@ struct RenderTreeBuilderTests {
   func rootTransform(attributes: String, transform: CGAffineTransform) async throws {
     let tree = try await renderTree(
       #"<svg width="10" height="10" transform="rotate(90)"/>"#, attributes: #"width="40" height="20" "# + attributes)
-    guard case .viewport(let root) = tree.root, case .viewport(let nested)? = try children(of: tree).first else {
-      Issue.record("The root and its child aren't viewports")
-      return
-    }
+    let root = try #require(tree.root?.viewport, "The root isn't a viewport")
+    let nested = try #require(try children(of: tree).first?.viewport, "The child isn't a viewport")
     expectClose(root.transform, transform)
     // The transform of a nested svg element applies about the origin of its user space.
     expectClose(nested.transform, CGAffineTransform(rotationAngle: .pi / 2))
@@ -160,10 +140,7 @@ struct RenderTreeBuilderTests {
   func rootTransformOriginInStyleSheet() async throws {
     let tree = try await renderTree(
       "<style>svg { transform-origin: 0 0 }</style>", attributes: #"width="40" height="20" transform="rotate(90)""#)
-    guard case .viewport(let root) = tree.root else {
-      Issue.record("The root isn't a viewport")
-      return
-    }
+    let root = try #require(tree.root?.viewport, "The root isn't a viewport")
     expectClose(root.transform, CGAffineTransform(rotationAngle: .pi / 2))
   }
 
@@ -174,10 +151,8 @@ struct RenderTreeBuilderTests {
     let tree = try await renderTree(
       #"<filter id="f"><feOffset dx="1"/></filter><rect width="10" height="10"/>"#,
       attributes: #"width="40" height="20" transform="rotate(90)" filter="url(#f)""#)
-    guard case .filtered(let filtered) = tree.root, case .viewport(let source) = filtered.source else {
-      Issue.record("The root isn't a filtered viewport")
-      return
-    }
+    let filtered = try #require(tree.root?.filtered, "The root isn't filtered")
+    let source = try #require(filtered.source?.viewport, "The source isn't a viewport")
     // The viewBox of 20 by 20 is centered in the viewport of 40 by 20.
     expectClose(filtered.transform, CGAffineTransform(translationX: 10, y: 0).concatenating(Self.rotation(about: 20, 10)))
     #expect(source.transform == .identity)
@@ -230,10 +205,7 @@ struct RenderTreeBuilderTests {
     let png = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII="
     let tree = try await renderTree(
       #"<image x="5" y="5" width="10" height="10" href="data:image/png;base64,\#(png)" "# + attributes + "/>")
-    guard case .image(let image?, _)? = try shape(try children(of: tree).first).content else {
-      Issue.record("The image isn't decoded")
-      return
-    }
+    let image = try #require(try shape(try children(of: tree).first).content?.image?.paint, "The image isn't decoded")
     #expect(image.rect == rect)
     #expect(image.clip == clip)
   }
@@ -261,12 +233,8 @@ struct RenderTreeBuilderTests {
     let png = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII="
     let tree = try await renderTree(
       #"<g image-rendering="pixelated"><image width="10" height="10" href="data:image/png;base64,\#(png)"/></g>"#)
-    guard case .group(let group) = try children(of: tree).first,
-      case .image(let image?, _)? = try shape(group.children.first).content
-    else {
-      Issue.record("The image isn't in the group")
-      return
-    }
+    let group = try group(try children(of: tree).first)
+    let image = try #require(try shape(group.children.first).content?.image?.paint, "The image isn't in the group")
     #expect(!image.interpolates)
   }
 
@@ -283,10 +251,7 @@ struct RenderTreeBuilderTests {
 
   /// The image that the first child of a document shows.
   private func imagePaint(of tree: RenderTree) throws -> ImagePaint {
-    guard case .image(let image?, _)? = try shape(try children(of: tree).first).content else {
-      throw NodeError.unexpected(try children(of: tree).first)
-    }
-    return image
+    try #require(try shape(try children(of: tree).first).content?.image?.paint, "The image isn't decoded")
   }
 
   @Test(
@@ -296,10 +261,8 @@ struct RenderTreeBuilderTests {
     let image = try imagePaint(of: try await renderTree(svgImage(svgImageURL(), attributes)))
     #expect(image.rect == rect)
     #expect(image.clip == clip)
-    guard case .document(.viewport(let root)) = image.content, let content = root.content else {
-      Issue.record("The image isn't a document")
-      return
-    }
+    let root = try #require(image.content.document?.viewport, "The image isn't a document")
+    let content = try #require(root.content)
     // The root of the image places the corner of its view box at the corner of the rectangle where it's drawn.
     let corner = CGPoint(x: 1, y: 1).applying(content.viewBoxTransform).applying(root.translation)
     #expect(abs(corner.x - rect.minX) < 1e-9 && abs(corner.y - rect.minY) < 1e-9, "\(corner)")
@@ -320,10 +283,7 @@ struct RenderTreeBuilderTests {
   func svgImageData(url: String) async throws {
     let image = try imagePaint(of: try await renderTree(svgImage(url)))
     #expect(image.rect == CGRect(x: 5, y: 7.5, width: 10, height: 5))
-    guard case .document = image.content else {
-      Issue.record("The image isn't a document")
-      return
-    }
+    try #require(image.content.document != nil, "The image isn't a document")
   }
 
   @Test("SVG images in SVG images are drawn three deep")
@@ -372,10 +332,8 @@ struct RenderTreeBuilderTests {
     // A filter without primitives draws nothing, and a gradient without stops takes the ones that it references.
     let drawn = shapes(of: try children(of: tree)).filter { $0.geometry != nil }
     #expect(drawn.count == 1)
-    guard case .vector(fill: .gradient(.some), _, _)? = drawn.first?.content else {
-      Issue.record("The rect isn't filled with the gradient")
-      return
-    }
+    let gradient = try #require(drawn.first?.content?.vector?.fill?.gradient, "The rect isn't filled with a gradient")
+    #expect(gradient != nil, "The gradient paints nothing")
   }
 
   @Test("a switch element skips an unknown element with content")
@@ -405,10 +363,7 @@ struct RenderTreeBuilderTests {
   @Test("a use element that references an element that contains it shows nothing")
   func useCycle() async throws {
     let tree = try await renderTree(##"<g id="g"><use href="#g"/></g>"##)
-    guard case .group(let group) = try children(of: tree).first else {
-      Issue.record("The first child isn't a group")
-      return
-    }
+    let group = try #require(try children(of: tree).first?.group, "The first child isn't a group")
     #expect(try use(try #require(group.children.first)).instance == nil)
   }
 
@@ -430,10 +385,8 @@ struct RenderTreeBuilderTests {
       <rect width="20" height="20" fill="url(#b)"/>
       """##)
     let rect = try shape(try children(of: tree).last)
-    guard case .vector(.gradient(.linear(let gradient)), _, _) = rect.content else {
-      Issue.record("The rectangle isn't filled with a linear gradient")
-      return
-    }
+    let gradient = try #require(
+      rect.content?.vector?.fill?.gradient??.linear, "The rectangle isn't filled with a linear gradient")
     #expect(gradient.colors.count == 2)
     #expect(gradient.locations == [0, 1])
     #expect(gradient.x2 == 0)
@@ -450,10 +403,8 @@ struct RenderTreeBuilderTests {
       <rect width="20" height="20" fill="url(#c)"/>
       """##)
     let rect = try shape(try children(of: tree).last)
-    guard case .vector(.gradient(.linear(let gradient)), _, _) = rect.content else {
-      Issue.record("The rectangle isn't filled with a linear gradient")
-      return
-    }
+    let gradient = try #require(
+      rect.content?.vector?.fill?.gradient??.linear, "The rectangle isn't filled with a linear gradient")
     #expect(gradient.locations == [0, 1])
     #expect(gradient.x2 == 0)
   }
@@ -477,10 +428,8 @@ struct RenderTreeBuilderTests {
     let tree = try await renderTree(
       #"<linearGradient id="g">\#(stops)</linearGradient><rect width="20" height="20" fill="url(#g)"/>"#)
     let rect = try shape(try children(of: tree).last)
-    guard case .vector(.gradient(.linear(let gradient)), _, _) = rect.content else {
-      Issue.record("The rectangle isn't filled with a linear gradient")
-      return
-    }
+    let gradient = try #require(
+      rect.content?.vector?.fill?.gradient??.linear, "The rectangle isn't filled with a linear gradient")
     #expect(gradient.locations == locations)
     #expect(gradient.colors.count == locations.count)
   }
@@ -533,10 +482,7 @@ struct RenderTreeBuilderTests {
   func nestedViewBox() async throws {
     let tree = try await renderTree(
       #"<svg width="20" height="20" viewBox="0 0 10 10"><rect width="50%" height="50%"/></svg>"#)
-    guard case .viewport(let nested) = try children(of: tree).first else {
-      Issue.record("The first child isn't a viewport")
-      return
-    }
+    let nested = try #require(try children(of: tree).first?.viewport, "The first child isn't a viewport")
     let rect = try shape(try #require(nested.content).children.first)
     #expect(try #require(rect.geometry).frame == CGRect(x: 0, y: 0, width: 5, height: 5))
   }
@@ -598,7 +544,7 @@ struct RenderTreeBuilderTests {
   func textCharacterPositions(text: String, same: String) async throws {
     func glyphBounds(_ content: String) async throws -> CGRect {
       let tree = try await renderTree(#"<g font-size="4">"# + content + "</g>")
-      guard case .group(let group) = try children(of: tree).first else { throw NodeError.unexpected(nil) }
+      let group = try group(try children(of: tree).first)
       return try group.children.map { try #require(try shape($0).geometry).path.cgPath.boundingBoxOfPath }
         .reduce(CGRect.null) { $0.union($1) }
     }
@@ -648,10 +594,7 @@ struct RenderTreeBuilderTests {
     let instance = try #require(node.instance)
     #expect(instance.translation == CGAffineTransform(translationX: 3, y: 4))
     // The symbol's view box of 10 fits the width and the height of 5 of the attributes, and not the properties.
-    guard case .viewport(let viewport)? = instance.content else {
-      Issue.record("The symbol isn't a viewport")
-      return
-    }
+    let viewport = try #require(instance.content?.viewport, "The symbol isn't a viewport")
     #expect(viewport.content?.viewBoxTransform == CGAffineTransform(scaleX: 0.5, y: 0.5))
   }
 
@@ -943,10 +886,7 @@ struct RenderTreeBuilderTests {
         <rect width="3" height="3" fill="red"/>
       </switch>
       """##)
-    guard case .group(let group) = try children(of: tree).first else {
-      Issue.record("The switch element isn't a group")
-      return
-    }
+    let group = try #require(try children(of: tree).first?.group, "The switch element isn't a group")
     #expect(group.transform == CGAffineTransform(scaleX: 2, y: 2))
     let shapes = shapes(of: group.children)
     #expect(shapes.count == 1)
@@ -1008,10 +948,8 @@ struct RenderTreeBuilderTests {
     #expect(try use(nodes[nodes.count - 2]).instance?.content == nil)
     let rect = try shape(nodes.last)
     #expect(rect.clip != nil)
-    guard case .vector(fill: .gradient(.some), _, _)? = rect.content else {
-      Issue.record("The rect isn't filled with the gradient")
-      return
-    }
+    let gradient = try #require(rect.content?.vector?.fill?.gradient, "The rect isn't filled with a gradient")
+    #expect(gradient != nil, "The gradient paints nothing")
   }
 
   @Test("a tspan whose conditions are false renders no characters")
@@ -1025,10 +963,7 @@ struct RenderTreeBuilderTests {
   func tspanShapes() async throws {
     let tree = try await renderTree(
       #"<text x="2" y="10" font-size="4" fill="red">a<tspan fill="lime">b<tspan>c</tspan></tspan>d</text>"#)
-    guard case .group(let text) = try children(of: tree).first else {
-      Issue.record("The text isn't a group")
-      return
-    }
+    let text = try #require(try children(of: tree).first?.group, "The text isn't a group")
     let shapes = shapes(of: text.children)
     #expect(shapes.count == 3)
     #expect(Set(shapes.map(\.id.element)).count == 3)
@@ -1041,10 +976,7 @@ struct RenderTreeBuilderTests {
   func aGroup() async throws {
     let tree = try await renderTree(
       #"<a href="https://example.com" transform="translate(5)" fill="lime"><rect width="10" height="10"/></a>"#)
-    guard case .group(let group) = try children(of: tree).first else {
-      Issue.record("The a isn't a group")
-      return
-    }
+    let group = try #require(try children(of: tree).first?.group, "The a isn't a group")
     #expect(group.transform == CGAffineTransform(translationX: 5, y: 0))
     let shapes = shapes(of: group.children)
     #expect(shapes.count == 1)
@@ -1055,10 +987,7 @@ struct RenderTreeBuilderTests {
   func aSpans() async throws {
     let tree = try await renderTree(
       #"<text x="2" y="10" font-size="4" fill="red">a<a fill="lime">b</a><tspan>c<a fill="blue">d</a></tspan></text>"#)
-    guard case .group(let text) = try children(of: tree).first else {
-      Issue.record("The text isn't a group")
-      return
-    }
+    let text = try #require(try children(of: tree).first?.group, "The text isn't a group")
     #expect(
       shapes(of: text.children).map { fillColor(of: $0)?.components ?? [] }
         == [[1, 0, 0, 1], [0, 1, 0, 1], [1, 0, 0, 1], [0, 0, 1, 1]])
@@ -1120,10 +1049,7 @@ struct RenderTreeBuilderTests {
   @Test("a tspan outside text isn't rendered, and a hidden tspan takes its place without painting")
   func tspanOutsideTextAndHidden() async throws {
     let outside = try await renderTree(#"<g><tspan x="2" y="10">a</tspan></g>"#)
-    guard case .group(let group) = try children(of: outside).first else {
-      Issue.record("The g isn't a group")
-      return
-    }
+    let group = try #require(try children(of: outside).first?.group, "The g isn't a group")
     #expect(group.children.isEmpty)
     let hidden = try await renderTree(#"<text x="2" y="10" font-size="4">a<tspan visibility="hidden">b</tspan>c</text>"#)
     let shapes = shapes(of: try children(of: hidden))
@@ -1143,18 +1069,12 @@ struct RenderTreeBuilderTests {
   /// The children of the group of the text in a group, after the definitions.
   private func textChildren(_ content: String, definitions: String = "") async throws -> [RenderNode] {
     let tree = try await renderTree("<defs>" + definitions + #"</defs><g font-size="4">"# + content + "</g>")
-    guard case .group(let text)? = try children(of: tree).last,
-      case .group(let group)? = text.children.first
-    else {
-      Issue.record("The text isn't a group in a group")
-      return []
-    }
-    return group.children
+    let text = try #require(try children(of: tree).last?.group, "The text isn't a group")
+    return try #require(text.children.first?.group, "The text isn't a group in a group").children
   }
 
-  private func group(_ node: RenderNode?) throws -> GroupNode {
-    guard case .group(let group) = node else { throw NodeError.unexpected(node) }
-    return group
+  private func group(_ node: RenderNode?, sourceLocation: SourceLocation = #_sourceLocation) throws -> GroupNode {
+    try #require(node?.group, "The node isn't a group: \(String(describing: node))", sourceLocation: sourceLocation)
   }
 
   @Test("the glyphs of a tspan with opacity are a group with it, and the glyphs around it aren't")
@@ -1186,10 +1106,7 @@ struct RenderTreeBuilderTests {
       #"<text x="2" y="10">aaaa<tspan filter="url(#f)">b</tspan></text>"#,
       definitions: #"<filter id="f"><feOffset dx="1"/></filter>"#)
     let textFrame = try #require(try shape(nodes.first).geometry).frame
-    guard case .filtered(let filtered)? = nodes.last else {
-      Issue.record("The tspan isn't filtered")
-      return
-    }
+    let filtered = try #require(nodes.last?.filtered, "The tspan isn't filtered")
     #expect(filtered.frame == textFrame)
   }
 
@@ -1569,10 +1486,7 @@ struct RenderTreeBuilderTests {
         <rect x="5" y="5" width="10" height="10"/>
       </g>
       """#)
-    guard case .group(let group) = try children(of: tree).last else {
-      Issue.record("The last child isn't a group")
-      return
-    }
+    let group = try #require(try children(of: tree).last?.group, "The last child isn't a group")
     #expect(try #require(group.clip).frame == CGRect(x: 0, y: 0, width: 15, height: 15))
   }
 
@@ -1635,10 +1549,7 @@ struct RenderTreeBuilderTests {
   func clipPathOfEmptyBounds() async throws {
     let tree = try await renderTree(
       ##"<clipPath id="c"><rect width="10" height="10"/></clipPath><g clip-path="url(#c)"/>"##)
-    guard case .group(let group) = try children(of: tree).last else {
-      Issue.record("The last child isn't a group")
-      return
-    }
+    let group = try #require(try children(of: tree).last?.group, "The last child isn't a group")
     #expect(group.clip == nil)
   }
 
@@ -1650,10 +1561,7 @@ struct RenderTreeBuilderTests {
       <clipPath id="c"><use href="#r"/></clipPath>
       <g clip-path="url(#c)"><use href="#r" x="1"/></g>
       """##)
-    guard case .group(let group) = try children(of: tree).last else {
-      Issue.record("The last child isn't a group")
-      return
-    }
+    let group = try #require(try children(of: tree).last?.group, "The last child isn't a group")
     let clip = try #require(group.clip)
     #expect(clip.frame == CGRect(x: 3, y: 3, width: 10, height: 10))
     #expect(clip.shapes.count == 1)
@@ -1700,34 +1608,27 @@ struct RenderTreeBuilderTests {
       <mask id="m"><rect width="20" height="20" fill="url(#p)"/></mask>
       <rect width="10" height="10" mask="url(#m)"/>
       """##)
-    guard case .mask(let mask) = try shape(try children(of: tree).last).mask else {
-      Issue.record("The rectangle isn't masked")
-      return
-    }
+    let mask = try #require(try shape(try children(of: tree).last).mask.mask, "The rectangle isn't masked")
     #expect(mask.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
     #expect(mask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
-    guard case .vector(.pattern(let paint), _, _) = try shape(mask.contents.first).content else {
-      Issue.record("The content of the mask isn't filled with a pattern")
-      return
-    }
+    let paint = try #require(
+      try shape(mask.contents.first).content?.vector?.fill?.pattern, "The content of the mask isn't filled with a pattern")
     // The rectangle in the tile references the pattern again, which paints black.
-    guard case .vector(.color(let color), _, _) = try shape(try #require(paint).content.first).content else {
-      Issue.record("The content of the pattern isn't filled with a color")
-      return
-    }
+    let tile = try #require(paint)
+    let color = try #require(
+      try shape(tile.content.first).content?.vector?.fill?.color, "The content of the pattern isn't filled with a color")
     #expect(color == CGColor.opaqueBlack)
   }
 
   /// The mask of the last child of the root element.
   private func lastMask(_ content: String) async throws -> MaskEffect {
     let tree = try await renderTree(content)
-    guard case .mask(let mask) = try shape(try children(of: tree).last).mask else { throw NodeError.unexpected(nil) }
-    return mask
+    return try #require(try shape(try children(of: tree).last).mask.mask, "The last child isn't masked")
   }
 
   /// The mask of the first content of a mask, or `nil` if it has none.
   private func contentMask(of mask: MaskEffect) throws -> MaskEffect? {
-    if case .mask(let effect) = try shape(mask.contents.first).mask { effect } else { nil }
+    try shape(mask.contents.first).mask.mask
   }
 
   @Test("an element in a mask whose mask leads back to the mask is drawn without its mask, wherever it's drawn")
@@ -1773,10 +1674,7 @@ struct RenderTreeBuilderTests {
     let tree = try await renderTree(
       #"<style>@keyframes w { from { stroke-width: 10px } to { stroke-width: 50% } }</style>"#
         + #"<rect width="10" height="10" stroke="black" style="animation: w 1s linear"/>"#, at: 0.5)
-    guard case .vector(_, let stroke?, _)? = try shape(try children(of: tree).last).content else {
-      Issue.record("The rect has no stroke")
-      return
-    }
+    let stroke = try #require(try shape(try children(of: tree).last).content?.vector?.stroke, "The rect has no stroke")
     // 5px and 25% of the viewBox of 20 by 20.
     #expect(abs(stroke.width - 10) < 0.001)
   }
@@ -1801,12 +1699,9 @@ struct RenderTreeBuilderTests {
       <rect width="20" height="20" mask="url(#m)"/>
       """##)
     #expect(mask.contents.count == 2)
-    guard case .group(let group) = mask.contents.first else { throw NodeError.unexpected(mask.contents.first) }
+    let group = try group(mask.contents.first)
     #expect(group.children.count == 1)
-    guard case .vector(_, let stroke?, _)? = try shape(mask.contents.last).content else {
-      Issue.record("The line has no stroke")
-      return
-    }
+    let stroke = try #require(try shape(mask.contents.last).content?.vector?.stroke, "The line has no stroke")
     #expect(stroke.width == 4)
   }
 
@@ -1828,7 +1723,7 @@ struct RenderTreeBuilderTests {
       <rect width="10" height="10" mask="url(#m)"/><rect x="10" width="10" height="10" mask="url(#m)"/>
       """##)
     let ids = try shapes(of: try children(of: tree)).map { shape in
-      guard case .mask(let mask) = shape.mask else { throw NodeError.unexpected(nil) }
+      let mask = try #require(shape.mask.mask, "The shape isn't masked")
       return try self.shape(mask.contents.first).id
     }
     #expect(ids.count == 2)
@@ -1844,10 +1739,7 @@ struct RenderTreeBuilderTests {
       <rect width="20" height="20" fill="url(#b)"/>
       """##)
     let rect = try shape(try children(of: tree).last)
-    guard case .vector(.pattern(let paint), _, _) = rect.content else {
-      Issue.record("The rectangle isn't filled with a pattern")
-      return
-    }
+    let paint = try #require(rect.content?.vector?.fill?.pattern, "The rectangle isn't filled with a pattern")
     let pattern = try #require(paint)
     #expect(pattern.tileSize == CGSize(width: 10, height: 10))
     #expect(pattern.origin == CGPoint(x: 2, y: 0))
@@ -1862,15 +1754,10 @@ struct RenderTreeBuilderTests {
       <pattern id="p" width="1" height="1"><rect width="1" height="1" fill="url(#p)"/></pattern>
       <rect width="20" height="20" fill="url(#p)"/>
       """##)
-    guard case .vector(.pattern(let paint), _, _) = try shape(try children(of: tree).last).content else {
-      Issue.record("The rectangle isn't filled with a pattern")
-      return
-    }
+    let paint = try #require(
+      try shape(try children(of: tree).last).content?.vector?.fill?.pattern, "The rectangle isn't filled with a pattern")
     let content = try shape(try #require(paint).content.first)
-    guard case .vector(.color(let color), _, _) = content.content else {
-      Issue.record("The content of the pattern isn't filled with a color")
-      return
-    }
+    let color = try #require(content.content?.vector?.fill?.color, "The content of the pattern isn't filled with a color")
     #expect(color == CGColor.opaqueBlack)
   }
 
@@ -1878,8 +1765,8 @@ struct RenderTreeBuilderTests {
   private func markers(_ content: String) async throws -> [ViewportNode] {
     let tree = try await renderTree(
       #"<marker id="m" markerWidth="2" markerHeight="4"><rect width="1" height="1"/></marker>"# + content)
-    guard case .group(let group) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
-    #expect(group.children.first.map { if case .shape = $0 { true } else { false } } == true)
+    let group = try group(try children(of: tree).last)
+    #expect(try #require(group.children.first).shape != nil)
     return group.children.dropFirst().compactMap { if case .viewport(let marker) = $0 { marker } else { nil } }
   }
 
@@ -1947,7 +1834,7 @@ struct RenderTreeBuilderTests {
       #"<marker id="m" markerWidth="2" markerHeight="4"><rect width="1" height="1"/></marker>"#
         + #"<path d="M 2 2 L 18 18" fill="lime" stroke="blue" marker-start="url(#m)" marker-end="url(#m)" "#
         + #"paint-order="\#(order)"/>"#)
-    guard case .group(let group) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
+    let group = try group(try children(of: tree).last)
     #expect(layers(of: group.children) == expected)
     let ids = group.children.compactMap { if case .shape(let shape) = $0 { shape.id } else { nil } }
     #expect(Set(ids).count == ids.count)
@@ -1957,7 +1844,7 @@ struct RenderTreeBuilderTests {
   @Test("a shape without markers whose stroke is painted first paints it as a shape of its own")
   func strokeFirst() async throws {
     let tree = try await renderTree(#"<rect width="10" height="10" fill="lime" stroke="blue" paint-order="stroke"/>"#)
-    guard case .group(let group) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
+    let group = try group(try children(of: tree).last)
     #expect(layers(of: group.children) == ["stroke", "fill"])
     let plain = try await renderTree(#"<rect width="10" height="10" fill="lime" stroke="blue" paint-order="fill"/>"#)
     #expect(layers(of: try children(of: plain)) == ["shape"])
@@ -1967,7 +1854,7 @@ struct RenderTreeBuilderTests {
   func tspanPaintOrder() async throws {
     let tree = try await renderTree(
       #"<text x="2" y="10" font-size="4" fill="lime" stroke="blue">A<tspan paint-order="stroke">B</tspan></text>"#)
-    guard case .group(let text) = try children(of: tree).last else { throw NodeError.unexpected(nil) }
+    let text = try group(try children(of: tree).last)
     #expect(layers(of: text.children) == ["shape", "stroke", "fill"])
     let ids = text.children.compactMap { if case .shape(let shape) = $0 { shape.id } else { nil } }
     #expect(Set(ids).count == ids.count)
@@ -2046,10 +1933,8 @@ struct RenderTreeBuilderTests {
   func dashLengths() async throws {
     let tree = try await renderTree(
       #"<rect width="10" height="10" stroke="black" stroke-dasharray="10% 1mm" stroke-dashoffset="5%"/>"#)
-    guard case .vector(_, let stroke?, _)? = try shape(try children(of: tree).last).content else {
-      Issue.record("The rectangle has no stroke")
-      return
-    }
+    let stroke = try #require(
+      try shape(try children(of: tree).last).content?.vector?.stroke, "The rectangle has no stroke")
     // The viewport of 20 by 20 makes 100% 20, and 1mm is 96 / 25.4 pixels.
     let dashes = try #require(stroke.dashes)
     #expect(dashes.count == 2 && abs(dashes[0] - 2) < 0.001 && abs(dashes[1] - 96 / 25.4) < 0.001, "\(dashes)")
@@ -2068,23 +1953,15 @@ struct RenderTreeBuilderTests {
       return stroke
     }
     let gradient = try #require(try await stroke(#"<rect width="10" height="10" stroke="url(#g)"/>"#))
-    guard case .gradient(.some) = gradient.paint else {
-      Issue.record("The stroke isn't a gradient")
-      return
-    }
+    #expect(try #require(gradient.paint.gradient, "The stroke isn't a gradient") != nil)
     let pattern = try #require(
       try await stroke(#"<rect width="10" height="10" stroke="url(#p)" stroke-opacity="0.5"/>"#))
-    guard case .pattern(let paint?) = pattern.paint else {
-      Issue.record("The stroke isn't a pattern")
-      return
-    }
+    let patternPaint = try #require(pattern.paint.pattern, "The stroke isn't a pattern")
+    let paint = try #require(patternPaint)
     #expect(paint.opacity == 0.5)
     let span = try #require(
       try await stroke(#"<text x="2" y="10" font-size="4">a<tspan stroke="url(#g)">b</tspan></text>"#))
-    guard case .gradient(.some) = span.paint else {
-      Issue.record("The stroke of the tspan isn't a gradient")
-      return
-    }
+    #expect(try #require(span.paint.gradient, "The stroke of the tspan isn't a gradient") != nil)
     #expect(try await stroke(#"<rect width="10" height="10" stroke="none"/>"#) == nil)
   }
 
@@ -2107,10 +1984,9 @@ struct RenderTreeBuilderTests {
     #expect(color(try await stroke(#"stroke="url(#p) lime" stroke-opacity="0.5""#)) == [0, 1, 0, 0.5])
     #expect(try await stroke(#"stroke="url(#o)""#) == nil)
     #expect(try await stroke(#"stroke="url(#o) none""#) == nil)
-    guard case .gradient(.some)? = try await stroke(#"stroke="url(#u) lime""#)?.paint else {
-      Issue.record("A gradient with userSpaceOnUse units isn't used")
-      return
-    }
+    let gradient = try #require(
+      try await stroke(#"stroke="url(#u) lime""#)?.paint.gradient, "A gradient with userSpaceOnUse units isn't used")
+    #expect(gradient != nil)
   }
 
   @Test("a reference to an element that doesn't exist or isn't a paint server paints the fallback, or nothing")
@@ -2132,15 +2008,11 @@ struct RenderTreeBuilderTests {
     #expect(color(try await fill(#"fill="url(#r) lime""#)) == [0, 1, 0, 1])
     #expect(try await fill(#"fill="url(#missing) none""#) == nil)
     #expect(try await fill(#"fill="url(#missing)""#) == nil)
-    guard case .vector(_, nil, _)? = try await content(#"stroke="url(#missing)""#) else {
-      Issue.record("A stroke that references nothing is painted")
-      return
-    }
+    let vector = try #require(try await content(#"stroke="url(#missing)""#)?.vector)
+    #expect(vector.stroke == nil, "A stroke that references nothing is painted")
     // A gradient without stops is a paint server, which paints nothing instead of the fallback.
-    guard case .gradient(nil)? = try await fill(#"fill="url(#empty) lime""#) else {
-      Issue.record("A gradient without stops doesn't paint nothing")
-      return
-    }
+    let empty = try #require(try await fill(#"fill="url(#empty) lime""#)?.gradient, "A gradient without stops isn't used")
+    #expect(empty == nil, "A gradient without stops doesn't paint nothing")
   }
 
   @Test("a pattern without width or height paints the fallback, and one that references another takes its own children")
@@ -2151,11 +2023,9 @@ struct RenderTreeBuilderTests {
       return fill
     }
     let empty = #"<pattern id="z" width="0" height="1"><rect width="1" height="1"/></pattern>"#
-    guard case .color(let color)? = try await fill(empty + #"<rect width="10" height="10" fill="url(#z) lime"/>"#)
-    else {
-      Issue.record("A pattern without width doesn't paint the fallback")
-      return
-    }
+    let color = try #require(
+      try await fill(empty + #"<rect width="10" height="10" fill="url(#z) lime"/>"#)?.color,
+      "A pattern without width doesn't paint the fallback")
     #expect(color.components == [0, 1, 0, 1])
     #expect(try await fill(empty + #"<rect width="10" height="10" fill="url(#z)"/>"#) == nil)
     let referencing = #"""
@@ -2163,10 +2033,8 @@ struct RenderTreeBuilderTests {
       <pattern id="b" href="#a"><rect width="10" height="10" fill="lime"/></pattern>
       <rect width="10" height="10" fill="url(#b)"/>
       """#
-    guard case .pattern(let paint?)? = try await fill(referencing) else {
-      Issue.record("The rectangle isn't filled with a pattern")
-      return
-    }
+    let patternPaint = try #require(try await fill(referencing)?.pattern, "The rectangle isn't filled with a pattern")
+    let paint = try #require(patternPaint)
     #expect(paint.tileSize == CGSize(width: 10, height: 10))
     #expect(fillColor(of: try shape(paint.content.first))?.components == [0, 1, 0, 1])
   }
@@ -2180,18 +2048,14 @@ struct RenderTreeBuilderTests {
       </pattern>
       <rect x="2" y="2" width="10" height="16" fill="url(#p)"/>
       """#)
-    guard case .vector(.pattern(let paint?), _, _) = try shape(try children(of: tree).last).content else {
-      Issue.record("The rectangle isn't filled with a pattern")
-      return
-    }
+    let pattern = try #require(
+      try shape(try children(of: tree).last).content?.vector?.fill?.pattern, "The rectangle isn't filled with a pattern")
+    let paint = try #require(pattern)
     #expect(paint.viewBoxTransform == CGAffineTransform(scaleX: 10, y: 16))
     // The line is in the units of the box, which the transform scales with its stroke.
     let line = try shape(paint.content.first)
     #expect(line.geometry?.path.cgPath.boundingBoxOfPath == CGRect(x: 0, y: 0, width: 1, height: 1))
-    guard case .vector(_, let stroke?, _)? = line.content else {
-      Issue.record("The line has no stroke")
-      return
-    }
+    let stroke = try #require(line.content?.vector?.stroke, "The line has no stroke")
     #expect(stroke.width == 0.1)
   }
 
@@ -2204,25 +2068,20 @@ struct RenderTreeBuilderTests {
       </pattern>
       <rect width="10" height="10" fill="url(#p)"/>
       """#)
-    guard case .vector(.pattern(let paint?), _, _) = try shape(try children(of: tree).last).content else {
-      Issue.record("The rectangle isn't filled with a pattern")
-      return
-    }
+    let pattern = try #require(
+      try shape(try children(of: tree).last).content?.vector?.fill?.pattern, "The rectangle isn't filled with a pattern")
+    let paint = try #require(pattern)
     try #require(paint.content.count == 2)
-    guard case .group = paint.content[0], case .shape = paint.content[1] else {
-      Issue.record("The group and the line aren't drawn")
-      return
-    }
+    #expect(paint.content[0].group != nil, "The group isn't drawn")
+    #expect(paint.content[1].shape != nil, "The line isn't drawn")
   }
 
   @Test("the root svg element and a nested one composite their content with their opacity")
   func viewportOpacity() async throws {
     let tree = try await renderTree(
       #"<svg width="10" height="10" opacity="0.25"><rect width="10" height="10"/></svg>"#, attributes: #"opacity="0.5""#)
-    guard case .viewport(let root) = tree.root, case .viewport(let nested) = try children(of: tree).first else {
-      Issue.record("The svg elements aren't viewports")
-      return
-    }
+    let root = try #require(tree.root?.viewport, "The root isn't a viewport")
+    let nested = try #require(try children(of: tree).first?.viewport, "The nested svg element isn't a viewport")
     #expect(root.opacity == 0.5)
     #expect(nested.opacity == 0.25)
   }
@@ -2239,10 +2098,8 @@ struct RenderTreeBuilderTests {
       """##)
     let shapes = shapes(of: try children(of: tree))
     #expect(try #require(shapes.dropLast().last?.clip).shapes.isEmpty)
-    guard case .mask(let mask) = try #require(shapes.last).mask else {
-      Issue.record("The rectangle isn't masked")
-      return
-    }
+    let last = try #require(shapes.last)
+    let mask = try #require(last.mask.mask, "The rectangle isn't masked")
     // The content shows the `<use>` element that references the one without display, which shows nothing.
     let outer = try use(try #require(mask.contents.first))
     #expect(try use(try #require(outer.instance?.content)).instance?.content == nil)
@@ -2252,10 +2109,10 @@ struct RenderTreeBuilderTests {
   private func radialGradient(_ gradient: String) async throws -> RadialGradientPaint {
     let tree = try await renderTree(
       gradient + #"<svg width="20" height="10" viewBox="0 0 40 20"><rect width="40" height="20" fill="url(#g)"/></svg>"#)
-    guard case .viewport(let viewport) = try children(of: tree).last,
-      case .vector(.gradient(.radial(let paint)?), _, _)? = try shape(viewport.content?.children.first).content
-    else { throw NodeError.unexpected(nil) }
-    return paint
+    let viewport = try #require(try children(of: tree).last?.viewport, "The last child isn't a viewport")
+    return try #require(
+      try shape(viewport.content?.children.first).content?.vector?.fill?.gradient??.radial,
+      "The rectangle isn't filled with a radial gradient")
   }
 
   @Test("cy and r of a radial gradient in user space are percentages of the height and of the diagonal")
@@ -2299,10 +2156,9 @@ struct RenderTreeBuilderTests {
   func floodColor(attributes: String, expected: [Int]) async throws {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feFlood "## + attributes + ##"/></filter><rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .flood(let color) = try #require(filtered.primitives.first).primitive else {
-      Issue.record("The primitive isn't a flood")
-      return
-    }
+    let primitive = try #require(filtered.primitives.first).primitive
+    let flood: [UInt8]? = if case .flood(let color) = primitive { color } else { nil }
+    let color = try #require(flood, "The primitive isn't a flood")
     #expect(color.count == 4)
     for (component, value) in zip(color, expected) {
       #expect(abs(Int(component) - value) <= 1, "\(color) isn't \(expected)")
@@ -2331,26 +2187,20 @@ struct RenderTreeBuilderTests {
     #expect(filtered.frame == CGRect(x: 10, y: 0, width: 10, height: 5))
     #expect(filtered.effectRect == CGRect(x: 9, y: -0.5, width: 12, height: 6))
     #expect(filtered.primitives.first?.result == "a")
-    guard case .offset(_, let translation) = filtered.primitives[0].primitive else {
-      Issue.record("The first primitive isn't an offset")
-      return
-    }
+    let translation = try #require(
+      filtered.primitives[0].primitive.offset, "The first primitive isn't an offset"
+    ).translation
     #expect(translation == CGAffineTransform(translationX: 5, y: 0))
     #expect(filtered.primitives[1].subregion == CGRect(x: 10, y: -0.5, width: 5, height: 6))
-    guard case .gaussianBlur(let blur) = filtered.primitives[1].primitive,
-      case .hetero(let x, let y) = blur.standardDeviation
-    else {
-      Issue.record("The second primitive isn't a Gaussian blur with two standard deviations")
-      return
-    }
+    let blur = try #require(filtered.primitives[1].primitive.gaussianBlur, "The second primitive isn't a Gaussian blur")
+    let deviations: (x: CGFloat, y: CGFloat)? =
+      if case .hetero(let x, let y) = blur.standardDeviation { (x, y) } else { nil }
+    let (x, y) = try #require(deviations, "The Gaussian blur doesn't have two standard deviations")
     #expect(x == 1)
     #expect(y == 1)
-    guard case .merge(let inputs) = filtered.primitives[2].primitive else {
-      Issue.record("The third primitive isn't a merge")
-      return
-    }
+    let inputs = try #require(filtered.primitives[2].primitive.merge, "The third primitive isn't a merge")
     #expect(inputs.count == 2)
-    #expect(inputs.first.map { $0 == nil } == true)
+    #expect(try #require(inputs.first) == nil)
   }
 
   @Test(
@@ -2406,10 +2256,7 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feColorMatrix "## + attributes + ##"/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .colorMatrix(_, let matrix) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a color matrix")
-      return
-    }
+    let matrix = try #require(filtered.primitives.first?.primitive.colorMatrix, "The primitive isn't a color matrix").matrix
     #expect(matrix.count == 20)
     #expect(zip(matrix, expected).allSatisfy { abs($0 - $1) < 0.001 }, "\(matrix)")
   }
@@ -2446,12 +2293,13 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feComponentTransfer>"## + children + ##"</feComponentTransfer></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .componentTransfer(_, let red, let green, let blue, let alpha) = filtered.primitives.first?.primitive
-    else {
-      Issue.record("The primitive isn't a component transfer")
-      return
-    }
-    #expect([red, green, blue, alpha] == expected)
+    let functions: [TransferFunction]? =
+      if case .componentTransfer(_, let red, let green, let blue, let alpha) = filtered.primitives.first?.primitive {
+        [red, green, blue, alpha]
+      } else {
+        nil
+      }
+    #expect(try #require(functions, "The primitive isn't a component transfer") == expected)
   }
 
   /// Transfer functions, components, and what they map the components to.
@@ -2485,17 +2333,12 @@ struct RenderTreeBuilderTests {
     #expect(outer.transform == CGAffineTransform(translationX: 5, y: 0))
     #expect(outer.opacity == 0.5)
     #expect(outer.colorInterpolationFilters == .sRGB)
-    guard case .colorMatrix = outer.primitives.first?.primitive, case .filtered(let inner) = outer.source else {
-      Issue.record("The last filter isn't a matrix of a filtered source")
-      return
-    }
+    #expect(outer.primitives.first?.primitive.colorMatrix != nil, "The last filter isn't a matrix")
+    let inner = try #require(outer.source?.filtered, "The source of the last filter isn't filtered")
     #expect(inner.transform == .identity)
     #expect(inner.opacity == 1)
     #expect(inner.effectRect == CGRect(x: -1, y: -1, width: 12, height: 12))
-    guard case .offset = inner.primitives.first?.primitive else {
-      Issue.record("The first filter isn't the offset")
-      return
-    }
+    #expect(inner.primitives.first?.primitive.offset != nil, "The first filter isn't the offset")
     // The function covers what the first filter paints, which is its region.
     #expect(outer.effectRect.contains(inner.effectRect))
   }
@@ -2503,10 +2346,7 @@ struct RenderTreeBuilderTests {
   @Test("a reference to a missing filter in a list leaves the element without filters")
   func missingFilterInList() async throws {
     let tree = try await renderTree(##"<rect width="10" height="10" filter="grayscale() url(#missing)"/>"##)
-    guard case .shape = try children(of: tree).first else {
-      Issue.record("The element is filtered")
-      return
-    }
+    #expect(try #require(try children(of: tree).first).shape != nil, "The element is filtered")
   }
 
   @Test("a blur and a shadow cover what the source paints, as far as they move it")
@@ -2525,17 +2365,15 @@ struct RenderTreeBuilderTests {
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
     let steps = filtered.primitives
     #expect(steps.count == 4)
-    guard case .colorMatrix(let input, let matrix) = steps[0].primitive,
-      case .gaussianBlur(let blur) = steps[1].primitive, case .offset(_, let offset) = steps[2].primitive,
-      case .merge(let inputs) = steps[3].primitive
-    else {
-      Issue.record("The steps aren't a matrix, a blur, an offset and a merge")
-      return
-    }
+    let (input, matrix) = try #require(steps[0].primitive.colorMatrix, "The first step isn't a matrix")
+    let blur = try #require(steps[1].primitive.gaussianBlur, "The second step isn't a blur")
+    let offset = try #require(steps[2].primitive.offset, "The third step isn't an offset").translation
+    let inputs = try #require(steps[3].primitive.merge, "The fourth step isn't a merge")
     // The first primitive takes the source graphic, and the color of red is 1 in linearRGB too.
-    #expect(input.map { if case .sourceGraphic = $0 { true } else { false } } == true)
+    #expect(input == .sourceGraphic)
     #expect(matrix[4] == 1 && matrix[9] == 0 && matrix[18] == 0.5)
-    if case .iso(let deviation) = blur.standardDeviation { #expect(deviation == 2) } else { Issue.record("\(blur)") }
+    let deviation: CGFloat? = if case .iso(let deviation) = blur.standardDeviation { deviation } else { nil }
+    #expect(try #require(deviation, "The blur doesn't have one standard deviation: \(blur)") == 2)
     #expect(offset == CGAffineTransform(translationX: 2, y: 2))
     #expect(inputs.count == 2)
     // Only the result is clipped to the subregion, and it has the name of the primitive.
@@ -2552,13 +2390,9 @@ struct RenderTreeBuilderTests {
     let steps = filtered.primitives
     #expect(steps.count == 5)
     let name = try #require(steps[0].result)
-    guard case .colorMatrix(let input, _) = steps[1].primitive, case .other(let inputName) = input,
-      case .offset(_, let offset) = steps[3].primitive
-    else {
-      Issue.record("The shadow doesn't take the named result of the offset")
-      return
-    }
-    #expect(inputName == name)
+    let input = try #require(steps[1].primitive.colorMatrix, "The second step isn't a matrix").input
+    let offset = try #require(steps[3].primitive.offset, "The fourth step isn't an offset").translation
+    #expect(input == .other(name), "The shadow doesn't take the named result of the offset")
     // A percentage isn't a number, so the offset has its initial value of 2 times the height.
     #expect(offset == CGAffineTransform(translationX: 5, y: 40))
   }
@@ -2581,13 +2415,16 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feComposite "## + attributes + ##" in2="SourceAlpha"/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .composite(let compositeOperator, let k, _, let input2) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a composite")
-      return
-    }
+    let composite: (operator: SVGCompositeOperator, k: [Float], input2: SVGFilterInput?)? =
+      if case .composite(let compositeOperator, let k, _, let input2) = filtered.primitives.first?.primitive {
+        (compositeOperator, k, input2)
+      } else {
+        nil
+      }
+    let (compositeOperator, k, input2) = try #require(composite, "The primitive isn't a composite")
     #expect(compositeOperator == expected)
     #expect(k == expectedK)
-    #expect(input2.map { if case .sourceAlpha = $0 { true } else { false } } == true)
+    #expect(input2 == .sourceAlpha)
   }
 
   @Test("a feOffset has its input, which is the result of the primitive before without in")
@@ -2616,15 +2453,9 @@ struct RenderTreeBuilderTests {
     #expect(filtered.effectRect == CGRect(x: 0, y: 0, width: 10, height: 5))
     #expect(filtered.frame == CGRect(x: 0, y: 0, width: 4, height: 4))
     #expect(filtered.transform == CGAffineTransform(a: 2, b: 0, c: 0, d: 2, tx: 2, ty: 3))
-    guard case .offset(_, let translation) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't an offset")
-      return
-    }
+    let translation = try #require(filtered.primitives.first?.primitive.offset, "The primitive isn't an offset").translation
     #expect(translation == CGAffineTransform(translationX: 2, y: 0))
-    guard case .viewport(let viewport) = filtered.source else {
-      Issue.record("The source isn't a viewport")
-      return
-    }
+    let viewport = try #require(filtered.source?.viewport, "The source isn't a viewport")
     #expect(viewport.translation == .identity)
     #expect(viewport.content?.viewBoxTransform == .identity)
   }
@@ -2714,10 +2545,7 @@ struct RenderTreeBuilderTests {
     #expect(filtered.clip != nil)
     #expect(filtered.mask.isMask)
     #expect(filtered.opacity == 0.5)
-    guard case .filtered(let first) = filtered.source else {
-      Issue.record("The source of the last filter isn't the first filter")
-      return
-    }
+    let first = try #require(filtered.source?.filtered, "The source of the last filter isn't the first filter")
     #expect(first.clip == nil)
     #expect(!first.mask.isMask)
     #expect(first.opacity == 1)
@@ -2802,10 +2630,8 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feMorphology "## + attributes + ##"/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .morphology(_, let morphologyOperator, let radius) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a morphology")
-      return
-    }
+    let (_, morphologyOperator, radius) = try #require(
+      filtered.primitives.first?.primitive.morphology, "The primitive isn't a morphology")
     #expect(morphologyOperator == expected)
     #expect(radius == expectedRadius)
   }
@@ -2815,10 +2641,7 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f" primitiveUnits="objectBoundingBox"><feMorphology radius="0.1 0.5"/></filter>"##
         + ##"<rect width="10" height="20" filter="url(#f)"/>"##)
-    guard case .morphology(_, _, let radius) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a morphology")
-      return
-    }
+    let radius = try #require(filtered.primitives.first?.primitive.morphology, "The primitive isn't a morphology").radius
     #expect(radius == CGSize(width: 1, height: 10))
   }
 
@@ -2859,10 +2682,7 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feTurbulence "## + attributes + ##"/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .turbulence(let turbulence) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a turbulence")
-      return
-    }
+    let turbulence = try #require(filtered.primitives.first?.primitive.turbulence, "The primitive isn't a turbulence")
     #expect(turbulence == expected)
   }
 
@@ -2871,10 +2691,7 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f" primitiveUnits="objectBoundingBox"><feTurbulence baseFrequency="0.1"/></filter>"##
         + ##"<rect width="10" height="20" filter="url(#f)"/>"##)
-    guard case .turbulence(let turbulence) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a turbulence")
-      return
-    }
+    let turbulence = try #require(filtered.primitives.first?.primitive.turbulence, "The primitive isn't a turbulence")
     #expect(turbulence?.baseFrequency == CGSize(width: 0.1, height: 0.1))
     #expect(filtered.primitives.first?.subregion == filtered.effectRect)
   }
@@ -2899,11 +2716,8 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feDisplacementMap "## + attributes + ##"/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .displacementMap(let input, let input2, let scale, let x, let y) = filtered.primitives.first?.primitive
-    else {
-      Issue.record("The primitive isn't a displacement map")
-      return
-    }
+    let (input, input2, scale, x, y) = try #require(
+      filtered.primitives.first?.primitive.displacementMap, "The primitive isn't a displacement map")
     #expect(input == expectedInput)
     #expect(input2 == expectedInput2)
     #expect(scale == expectedScale)
@@ -2916,10 +2730,9 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f" primitiveUnits="objectBoundingBox"><feDisplacementMap scale="0.5"/></filter>"##
         + ##"<rect width="10" height="20" filter="url(#f)"/>"##)
-    guard case .displacementMap(_, _, let scale, _, _) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a displacement map")
-      return
-    }
+    let scale = try #require(
+      filtered.primitives.first?.primitive.displacementMap, "The primitive isn't a displacement map"
+    ).scale
     #expect(scale == CGSize(width: 5, height: 10))
   }
 
@@ -2966,10 +2779,9 @@ struct RenderTreeBuilderTests {
     let filtered = try await filteredNode(
       ##"<filter id="f"><feConvolveMatrix "## + attributes + ##"/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .convolveMatrix(_, let matrix) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a convolve matrix")
-      return
-    }
+    let convolveMatrix: ConvolveMatrixPrimitive?? =
+      if case .convolveMatrix(_, let matrix) = filtered.primitives.first?.primitive { matrix } else { nil }
+    let matrix = try #require(convolveMatrix, "The primitive isn't a convolve matrix")
     #expect(matrix == expected)
   }
 
@@ -3055,10 +2867,7 @@ struct RenderTreeBuilderTests {
   func lighting(primitive: String, expected: LightingPrimitive?) async throws {
     let filtered = try await filteredNode(
       ##"<filter id="f">"## + primitive + ##"</filter><rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .lighting(_, let lighting) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a lighting")
-      return
-    }
+    let lighting = try #require(filtered.primitives.first?.primitive.lighting, "The primitive isn't a lighting").lighting
     #expect(lighting == expected)
   }
 
@@ -3068,10 +2877,7 @@ struct RenderTreeBuilderTests {
       ##"<filter id="f" primitiveUnits="objectBoundingBox"><feDiffuseLighting>"##
         + ##"<fePointLight x="0.5" y="0.25" z="0.1"/></feDiffuseLighting></filter>"##
         + ##"<rect x="10" width="10" height="20" filter="url(#f)"/>"##)
-    guard case .lighting(_, let lighting) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't a lighting")
-      return
-    }
+    let lighting = try #require(filtered.primitives.first?.primitive.lighting, "The primitive isn't a lighting").lighting
     #expect(lighting?.lightSource == .point(position: SIMD3(15, 5, Float(0.1 * (sqrt(500.0) / sqrt(2.0))))))
   }
 
@@ -3081,13 +2887,12 @@ struct RenderTreeBuilderTests {
       ##"<filter id="f"><feDiffuseLighting><feSpotLight limitingConeAngle="0">"##
         + ##"<animate attributeName="limitingConeAngle" from="0" to="50" dur="10s" fill="freeze"/>"##
         + ##"</feSpotLight></feDiffuseLighting></filter><rect width="10" height="10" filter="url(#f)"/>"##, at: 5)
-    guard case .filtered(let filtered) = try children(of: tree).last,
-      case .lighting(_, let lighting) = filtered.primitives.first?.primitive,
-      case .spot(_, _, _, let angle) = lighting?.lightSource
-    else {
-      Issue.record("The primitive isn't a spot light")
-      return
-    }
+    let filtered = try #require(try children(of: tree).last?.filtered, "The rectangle isn't filtered")
+    let lighting = try #require(
+      filtered.primitives.first?.primitive.lighting?.lighting, "The primitive isn't a lighting with a light source")
+    let spotAngle: Float?? =
+      if case .spot(_, _, _, let angle) = lighting.lightSource { angle } else { nil }
+    let angle = try #require(spotAngle, "The light source isn't a spot light")
     #expect(angle == 25)
   }
 
@@ -3098,11 +2903,7 @@ struct RenderTreeBuilderTests {
   /// The primitive of the first `feImage` of the filter of the last element.
   private func imagePrimitive(_ content: String) async throws -> ImagePrimitive? {
     let filtered = try await filteredNode(content)
-    guard case .image(let image) = filtered.primitives.first?.primitive else {
-      Issue.record("The primitive isn't an image")
-      return nil
-    }
-    return image
+    return try #require(filtered.primitives.first?.primitive.image, "The primitive isn't an image")
   }
 
   @Test("a feImage places an image of a data URL in its subregion by its preserveAspectRatio")
@@ -3111,10 +2912,7 @@ struct RenderTreeBuilderTests {
       ##"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">"##
         + ##"<feImage width="10" href=""## + Self.redPixel + ##""/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .picture(let paint) = image else {
-      Issue.record("The image isn't a picture")
-      return
-    }
+    let paint = try #require(image?.picture, "The image isn't a picture")
     #expect(paint.rect == CGRect(x: 0, y: 5, width: 10, height: 10))
   }
 
@@ -3123,10 +2921,7 @@ struct RenderTreeBuilderTests {
     let image = try await imagePrimitive(
       ##"<filter id="f"><feImage image-rendering="optimizeSpeed" href=""## + Self.redPixel + ##""/></filter>"##
         + ##"<rect width="10" height="10" filter="url(#f)"/>"##)
-    guard case .picture(let paint) = image else {
-      Issue.record("The image isn't a picture")
-      return
-    }
+    let paint = try #require(image?.picture, "The image isn't a picture")
     #expect(!paint.interpolates)
   }
 
@@ -3137,10 +2932,7 @@ struct RenderTreeBuilderTests {
         + ##"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">"##
         + ##"<feImage x="5" y="6" href="#r"/></filter><rect width="10" height="10" filter="url(#f)"/>"##,
     )
-    guard case .element(_, let origin) = image else {
-      Issue.record("The image isn't an element")
-      return
-    }
+    let origin = try #require(image?.element, "The image isn't an element").origin
     #expect(origin == CGPoint(x: 5, y: 6))
   }
 
@@ -3162,12 +2954,9 @@ struct RenderTreeBuilderTests {
     let nested = try await renderTree(
       ##"<filter id="f"><feOffset/></filter><g filter="url(#f)"><g filter="url(#f)"><rect width="10" height="10"/>"##
         + ##"</g></g>"##)
-    guard case .filtered(let outer) = try children(of: nested).last, case .group(let group) = outer.source,
-      case .filtered(let inner) = group.children.first
-    else {
-      Issue.record("The nested filters aren't both drawn")
-      return
-    }
+    let outer = try #require(try children(of: nested).last?.filtered, "The outer filter isn't drawn")
+    let group = try group(outer.source)
+    let inner = try #require(group.children.first?.filtered, "The inner filter isn't drawn")
     #expect(inner.source != nil)
   }
 
@@ -3193,10 +2982,7 @@ struct RenderTreeBuilderTests {
         <svg width="20" height="20"><rect x="10" width="10" height="10" display="none"/><rect width="5" height="5"/></svg>
       </g>
       """##)
-    guard case .group(let group) = try children(of: tree).last else {
-      Issue.record("The last child isn't a group")
-      return
-    }
+    let group = try #require(try children(of: tree).last?.group, "The last child isn't a group")
     #expect(try #require(group.clip).frame == CGRect(x: 0, y: 0, width: 5, height: 5))
   }
 
@@ -3211,10 +2997,9 @@ struct RenderTreeBuilderTests {
       <defs><rect id="r" width="4" height="4"/></defs>
       """##)
     let nodes = try children(of: tree)
-    guard case .group(let group) = nodes[0], case .viewport(let svg) = nodes[1], case .use(let use) = nodes[2] else {
-      Issue.record("The children aren't a group, an svg element and a use element")
-      return
-    }
+    let group = try #require(nodes[0].group, "The first child isn't a group")
+    let svg = try #require(nodes[1].viewport, "The second child isn't a viewport")
+    let use = try #require(nodes[2].use, "The third child isn't a use element")
     let groupMask = try #require(group.mask)
     #expect(groupMask.frame == CGRect(x: 2, y: 0, width: 5, height: 5))
     #expect(groupMask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
@@ -3233,10 +3018,9 @@ struct RenderTreeBuilderTests {
       <rect width="10" height="10" fill="url(#b)"/>
       """##)
     for node in try children(of: tree).suffix(2) {
-      guard case .vector(.gradient(.some), _, _) = try shape(node).content else {
-        Issue.record("The rectangle isn't filled with a gradient")
-        continue
-      }
+      let gradient = try #require(
+        try shape(node).content?.vector?.fill?.gradient, "The rectangle isn't filled with a gradient")
+      #expect(gradient != nil, "The gradient paints nothing")
     }
   }
 
@@ -3249,10 +3033,7 @@ struct RenderTreeBuilderTests {
       """##)
     let rect = try shape(try children(of: tree).last)
     #expect(rect.transform == .identity)
-    guard case .vector(.pattern(let paint), _, _) = rect.content else {
-      Issue.record("The rectangle isn't filled with a pattern")
-      return
-    }
+    let paint = try #require(rect.content?.vector?.fill?.pattern, "The rectangle isn't filled with a pattern")
     #expect(try #require(paint).transform == .identity)
   }
 
@@ -3311,15 +3092,15 @@ struct RenderTreeBuilderTests {
     arguments: transformedElements)
   func transformOrigins(content: String, point: CGPoint, expected: CGPoint) async throws {
     let node = try children(of: try await renderTree(content)).last
-    let transform: CGAffineTransform =
+    let transform: CGAffineTransform? =
       switch node {
       case .shape(let shape): shape.transform
       case .group(let group): group.transform
       case .use(let use): use.transform
       case .viewport(let viewport): viewport.transform
-      default: throw NodeError.unexpected(node)
+      default: nil
       }
-    let moved = point.applying(transform)
+    let moved = point.applying(try #require(transform, "The node has no transform: \(String(describing: node))"))
     #expect(abs(moved.x - expected.x) < 1e-9 && abs(moved.y - expected.y) < 1e-9, "\(moved)")
   }
 
@@ -3332,11 +3113,8 @@ struct RenderTreeBuilderTests {
         <rect width="5" height="5" transform="translate(3 4)"/>
       </svg>
       """##)
-    guard case .filtered(let filtered) = try children(of: tree).last, case .viewport(let viewport) = filtered.source
-    else {
-      Issue.record("The svg element isn't filtered")
-      return
-    }
+    let filtered = try #require(try children(of: tree).last?.filtered, "The svg element isn't filtered")
+    let viewport = try #require(filtered.source?.viewport, "The source isn't a viewport")
     #expect(filtered.transform == CGAffineTransform(translationX: 1, y: 2))
     #expect(viewport.transform == .identity)
     let rect = try shape(try #require(viewport.content).children.first)
@@ -3380,10 +3158,7 @@ struct RenderTreeBuilderTests {
 
   private func filteredNode(_ content: String) async throws -> FilteredNode {
     let tree = try await renderTree(content)
-    guard case .filtered(let filtered) = try children(of: tree).last else {
-      throw NodeError.unexpected(try children(of: tree).last)
-    }
-    return filtered
+    return try #require(try children(of: tree).last?.filtered, "The last child isn't filtered")
   }
 }
 

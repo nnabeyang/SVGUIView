@@ -120,10 +120,8 @@ struct ExternalStyleSheetTests {
     let loader = ExternalResourceLoader(
       baseURL: url, folder: files.url.appending(path: "docs"), cache: ExternalResourceCache())
     let resolved = await base.resolvingExternalStyleSheets(loader: loader)
-    guard case .color(let color) = try #require(resolved["r"]).style.fill else {
-      Issue.record("fill isn't a color")
-      return
-    }
+    let element = try #require(resolved["r"])
+    let color = try #require(element.style.fill.color, "fill isn't a color")
     #expect(color.description == "lime")
   }
 

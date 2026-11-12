@@ -43,17 +43,17 @@ struct ContainerTests {
     #expect(try await pixel(svg: moved + all + "</svg>", x: 7, y: 10) == Self.lime)
   }
 
-  @Test("a group, an svg element and a use element are masked")
-  func masks() async throws {
-    for content in [
+  @Test(
+    "a group, an svg element and a use element are masked",
+    arguments: [
       #"<g mask="url(#m)"><rect width="20" height="20" fill="lime"/></g>"#,
       #"<svg width="20" height="20" mask="url(#m)"><rect width="20" height="20" fill="lime"/></svg>"#,
       ##"<defs><rect id="r" width="20" height="20" fill="lime"/></defs><use href="#r" mask="url(#m)"/>"##,
-    ] {
-      let svg = document(Self.leftHalf + content)
-      #expect(try await pixel(svg: svg, x: 5, y: 10) == Self.lime, "\(content)")
-      #expect(try await pixel(svg: svg, x: 15, y: 10) == Self.clear, "\(content)")
-    }
+    ])
+  func masks(content: String) async throws {
+    let svg = document(Self.leftHalf + content)
+    #expect(try await pixel(svg: svg, x: 5, y: 10) == Self.lime)
+    #expect(try await pixel(svg: svg, x: 15, y: 10) == Self.clear)
   }
 
   @Test("the mask of a group applies once to its children composited together")
@@ -70,15 +70,15 @@ struct ContainerTests {
     #expect(abs(Int(pixel[3]) - 128) < 8)
   }
 
-  @Test("the root svg element and a nested one composite their content with their opacity")
-  func svgOpacity() async throws {
-    for svg in [
+  @Test(
+    "the root svg element and a nested one composite their content with their opacity",
+    arguments: [
       #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" opacity="0.5"><rect width="20" height="20" fill="lime"/></svg>"#,
-      document(#"<svg width="20" height="20" opacity="0.5"><rect width="20" height="20" fill="lime"/></svg>"#),
-    ] {
-      let pixel = try await pixel(svg: svg, x: 10, y: 10)
-      #expect(abs(Int(pixel[1]) - 128) < 8, "\(pixel)")
-      #expect(abs(Int(pixel[3]) - 128) < 8, "\(pixel)")
-    }
+      #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><svg width="20" height="20" opacity="0.5"><rect width="20" height="20" fill="lime"/></svg></svg>"#,
+    ])
+  func svgOpacity(svg: String) async throws {
+    let pixel = try await pixel(svg: svg, x: 10, y: 10)
+    #expect(abs(Int(pixel[1]) - 128) < 8, "\(pixel)")
+    #expect(abs(Int(pixel[3]) - 128) < 8, "\(pixel)")
   }
 }
