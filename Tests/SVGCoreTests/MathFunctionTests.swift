@@ -79,10 +79,7 @@ struct MathFunctionTests {
   func resolvedLengths() throws {
     let context = context()
     let max = try #require(SVGLength(mathFunction: "max(10px, 5%)"))
-    guard case .calc = max else {
-      Issue.record("max() isn't an expression")
-      return
-    }
+    try #require(max.isCalc, "max() isn't an expression")
     #expect(max.value(total: 400, context: context) == 20)
     #expect(max.value(total: 100, context: context) == 10)
     let clamp = try #require(SVGLength(mathFunction: "clamp(10px, 50% - 20px, 100px)"))
@@ -111,10 +108,7 @@ struct MathFunctionTests {
     #expect(style.width?.value(total: 400, context: context()) == 180)
     #expect(style.width?.value(total: 100, context: context()) == 0)
     #expect(style.y == .percent(10))
-    guard case .calc = style.height else {
-      Issue.record("min() of lengths in different units isn't an expression")
-      return
-    }
+    try #require(style.height?.isCalc == true, "min() of lengths in different units isn't an expression")
     #expect(style.height?.value(total: 400, context: context()) == 20)
   }
 

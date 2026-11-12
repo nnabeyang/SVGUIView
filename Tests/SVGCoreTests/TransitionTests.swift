@@ -174,10 +174,7 @@ struct TransitionTests {
     let changed = try changing(base, "g", "fill", to: "rgb(0, 0, 255)", at: 0)
     let element = try #require(base.document.element(id: "a"))
     #expect(changed.animations.transitions.keys.map { $0 } == [element])
-    guard case .color(let color) = style(of: "a", in: changed, at: 0.5)?.fill, let components = color.components else {
-      Issue.record("not a color")
-      return
-    }
+    let components = try #require(style(of: "a", in: changed, at: 0.5)?.fill.color?.components, "not a color")
     #expect(isClose(components.red, 0.5) && isClose(components.blue, 0.5))
   }
 

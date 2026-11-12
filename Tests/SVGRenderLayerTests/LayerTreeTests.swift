@@ -260,7 +260,7 @@ struct LayerTreeTests {
       content, root: #"width="100%" height="100%" viewBox="0 0 480 360""#, at: [0, 0.5], scale: 1)
     let masked = between.map { $0.filter { $0.mask != nil } }
     #expect(masked.map(\.count) == [1, 1])
-    #expect(masked[0].first?.masksToBounds == false)
+    #expect(try !#require(masked[0].first).masksToBounds)
     // The mask of the next time is the same layer with the same image.
     #expect(masked[0].first?.mask === masked[1].first?.mask)
     #expect((masked[0].first?.mask?.contents as AnyObject?) === (masked[1].first?.mask?.contents as AnyObject?))

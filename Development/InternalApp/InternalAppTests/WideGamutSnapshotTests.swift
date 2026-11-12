@@ -37,7 +37,7 @@ struct WideGamutSnapshotTests {
     let snapshotting = Snapshotting<UIImage, UIImage>.wideGamutImage(precision: 0.999, perceptualPrecision: 0.98)
     let red = try reds().displayP3
     let read = try #require(snapshotting.diffing.fromData(snapshotting.diffing.toData(red)).cgImage)
-    #expect(read.colorSpace?.isWideGamutRGB == true)
+    #expect(try #require(read.colorSpace).isWideGamutRGB)
     #expect(snapshotting.diffing.diffV2(red, UIImage(cgImage: read)) == nil)
   }
 

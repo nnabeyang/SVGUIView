@@ -24,10 +24,10 @@ struct StyleDeclarationsTests {
   }
 
   @Test("reading, setting and removing a declaration")
-  func change() {
+  func change() throws {
     var style = StyleDeclarations("fill: red; opacity: 0.5 !important")
     #expect(style.declaration(named: "Fill") == .init(name: "fill", value: "red", isImportant: false))
-    #expect(style.declaration(named: "opacity")?.isImportant == true)
+    #expect(try #require(style.declaration(named: "opacity")).isImportant)
     #expect(style.declaration(named: "stroke") == nil)
     style.set("fill", to: " lime ", isImportant: false)
     #expect(style.text == "fill: lime; opacity: 0.5 !important")

@@ -159,10 +159,7 @@ struct CascadeTests {
       """#
     let context = SVGParser.parse(data: Data(svg.utf8))
     let rect = try #require(context.root?.children.first as? SVGRectElement)
-    guard case .color(let color) = rect.style.fill else {
-      Issue.record("fill isn't a color")
-      return
-    }
+    let color = try #require(rect.style.fill.color, "fill isn't a color")
     #expect(color.description == "blue")
   }
 

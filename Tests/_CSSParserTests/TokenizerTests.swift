@@ -56,10 +56,7 @@ struct TokenizerTests {
   func consumeQuotedString_Success() throws {
     let input = #""Hello, World" vvv"#
     var tokenizer = Tokenizer(input: input)
-    guard case .success(let value) = consumeQuotedString(tokenizer: &tokenizer, singleQuote: false) else {
-      Issue.record("Expected success")
-      return
-    }
+    let value = try #require(try? consumeQuotedString(tokenizer: &tokenizer, singleQuote: false).get(), "Expected success")
     #expect(value == "Hello, World")
   }
 
@@ -67,10 +64,7 @@ struct TokenizerTests {
   func consumeNumeric_NumberTokenParsing() throws {
     let input = #"-123.456"#
     var tokenizer = Tokenizer(input: input)
-    guard case .number(let value) = consumeNumeric(tokenizer: &tokenizer) else {
-      Issue.record("Expected number token")
-      return
-    }
+    let value = try #require(consumeNumeric(tokenizer: &tokenizer).number, "Expected number token")
     #expect(abs(value.value - -123.456) <= 0.0001)
     #expect(value.intValue == nil)
     #expect(value.hasSign)
@@ -83,10 +77,9 @@ struct TokenizerTests {
        World" vvv
       """#
     var tokenizer = Tokenizer(input: input)
-    guard case .failure(let value) = consumeQuotedString(tokenizer: &tokenizer, singleQuote: false) else {
-      Issue.record("Expected failure")
-      return
-    }
+    let result = consumeQuotedString(tokenizer: &tokenizer, singleQuote: false)
+    let failure: BadString? = if case .failure(let failure) = result { failure } else { nil }
+    let value = try #require(failure, "Expected failure")
     #expect(value.rawValue == "Hello,")
   }
 
@@ -177,58 +170,43 @@ struct TokenizerTests {
     #expect(tokens.count == 9)
 
     // 10
-    if case .number(let n0) = tokens[0] {
-      #expect(n0.value == 10.0)
-      #expect(n0.intValue == 10)
-      #expect(!n0.hasSign)
-    } else {
-      Issue.record("Expected number token at index 0")
-    }
+    let n0 = try #require(tokens[0].number, "Expected number token at index 0")
+    #expect(n0.value == 10.0)
+    #expect(n0.intValue == 10)
+    #expect(!n0.hasSign)
 
     #expect(tokens[1] == .comma)
 
     // 10.5
-    if case .number(let n1) = tokens[2] {
-      #expect(abs(n1.value - 10.5) <= 0.0001)
-      #expect(n1.intValue == nil)
-      #expect(!n1.hasSign)
-    } else {
-      Issue.record("Expected number token at index 2")
-    }
+    let n1 = try #require(tokens[2].number, "Expected number token at index 2")
+    #expect(abs(n1.value - 10.5) <= 0.0001)
+    #expect(n1.intValue == nil)
+    #expect(!n1.hasSign)
 
     #expect(tokens[3] == .comma)
 
     // -3e2
-    if case .number(let n2) = tokens[4] {
-      #expect(abs(n2.value - (-300.0)) <= 0.0001)
-      #expect(n2.intValue == nil)
-      #expect(n2.hasSign)
-    } else {
-      Issue.record("Expected number token at index 4")
-    }
+    let n2 = try #require(tokens[4].number, "Expected number token at index 4")
+    #expect(abs(n2.value - (-300.0)) <= 0.0001)
+    #expect(n2.intValue == nil)
+    #expect(n2.hasSign)
 
     #expect(tokens[5] == .comma)
 
     // 50%
-    if case .percentage(let p) = tokens[6] {
-      #expect(abs(p.unitValue - 0.5) <= 0.0001)
-      #expect(p.intValue == 50)
-      #expect(!p.hasSign)
-    } else {
-      Issue.record("Expected percentage token at index 6")
-    }
+    let p = try #require(tokens[6].percentage, "Expected percentage token at index 6")
+    #expect(abs(p.unitValue - 0.5) <= 0.0001)
+    #expect(p.intValue == 50)
+    #expect(!p.hasSign)
 
     #expect(tokens[7] == .comma)
 
     // 12px
-    if case .dimention(let d) = tokens[8] {
-      #expect(abs(d.value - 12.0) <= 0.0001)
-      #expect(d.intValue == 12)
-      #expect(d.unit == "px")
-      #expect(!d.hasSign)
-    } else {
-      Issue.record("Expected dimension token at index 8")
-    }
+    let d = try #require(tokens[8].dimention, "Expected dimension token at index 8")
+    #expect(abs(d.value - 12.0) <= 0.0001)
+    #expect(d.intValue == 12)
+    #expect(d.unit == "px")
+    #expect(!d.hasSign)
   }
 
   @Test("blocks and closers tokenization order")

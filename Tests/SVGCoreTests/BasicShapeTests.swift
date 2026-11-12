@@ -94,10 +94,9 @@ struct BasicShapeTests {
 
   @Test("an offset from the right or the bottom edge is a length from the left or the top")
   func offsetFromEnd() throws {
-    guard case .circle(_, let center) = try shape("circle(at right 10px bottom 20%)") else {
-      Issue.record("Not a circle")
-      return
-    }
+    let circle = try shape("circle(at right 10px bottom 20%)")
+    let position: ShapePosition? = if case .circle(_, let center) = circle { center } else { nil }
+    let center = try #require(position, "Not a circle")
     let point = center.point(in: CGRect(x: 0, y: 0, width: 200, height: 100), context: LengthContext())
     #expect(abs(point.x - 190) < 0.001 && abs(point.y - 80) < 0.001)
   }

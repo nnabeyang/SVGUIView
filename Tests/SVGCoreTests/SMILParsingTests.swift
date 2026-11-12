@@ -216,7 +216,7 @@ struct SMILParsingTests {
     #expect(root.children.flatMap { $0.children.map(\.name) } == [.animate, .set, .animateMotion])
     #expect(root.children[0].text == "Hello!")
     #expect(context.root?.children.map(\.type) == [.text, .rect, .path, .circle])
-    #expect(context.root?.children.allSatisfy { $0.children.isEmpty } == true)
+    #expect(try #require(context.root).children.allSatisfy { $0.children.isEmpty })
     #expect(context.animations.smil.last?.motionPath == "p")
   }
 }

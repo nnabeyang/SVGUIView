@@ -327,7 +327,7 @@ struct SVGUIViewTests {
   @Test("a view plays the animations of its document by default, and Reduce Motion holds them")
   func defaultAnimation() {
     #expect(SVGUIViewConfiguration().animation == .play)
-    #expect(SVGUIViewConfiguration().playsWithReduceMotion == false)
+    #expect(!SVGUIViewConfiguration().playsWithReduceMotion)
     #expect(SVGUIView(frame: .zero).configuration.animation == .play)
   }
 

@@ -147,10 +147,7 @@ struct SMILAnimationTests {
         #"<animate attributeName="width" from="10" to="30" dur="2s"/><animate attributeName="fill" from="rgb(0, 0, 0)" to="rgb(0, 200, 0)" dur="2s"/>"#
       ), at: 1)
     #expect(style.width == .number(20))
-    guard case .color(let fill) = style.fill else {
-      Issue.record("The fill isn't a color")
-      return
-    }
+    let fill = try #require(style.fill.color, "The fill isn't a color")
     #expect(isClose(fill.components?.green ?? 0, 100.0 / 255))
   }
 }

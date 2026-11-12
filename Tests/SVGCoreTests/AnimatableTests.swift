@@ -124,10 +124,7 @@ struct AnimatableTests {
   func paints() throws {
     let red = Paint.color(try color("red"))
     let blue = Paint.color(try color("blue"))
-    guard case .color(let halfway) = try #require(red.interpolated(to: blue, progress: 0.5)) else {
-      Issue.record("halfway isn't a color")
-      return
-    }
+    let halfway = try #require(red.interpolated(to: blue, progress: 0.5)?.color, "halfway isn't a color")
     #expect(matches(halfway, (0.5, 0, 0.5, 1)))
     #expect(red.interpolated(to: .url("#a", fallback: nil), progress: 0.5) == nil)
     #expect(red.interpolated(to: .none, progress: 0.5) == nil)
@@ -209,25 +206,13 @@ struct AnimatableTests {
 
   @Test("font weights are interpolated as numbers")
   func fontWeights() throws {
-    guard case .number(let weight) = try #require(SVGUIFont.Weight.normal.interpolated(to: .bold, progress: 0.5))
-    else {
-      Issue.record("the weight isn't a number")
-      return
-    }
-    #expect(weight == 550)
+    #expect(SVGUIFont.Weight.normal.interpolated(to: .bold, progress: 0.5) == .number(550))
     #expect(SVGUIFont.Weight.lighter.interpolated(to: .bold, progress: 0.5) == nil)
   }
 
   @Test("font sizes are interpolated as lengths")
   func fontSizes() throws {
-    guard
-      case .length(let size) = try #require(
-        SVGUIFont.Size.length(.pixel(10)).interpolated(to: .length(.pixel(20)), progress: 0.5))
-    else {
-      Issue.record("the size isn't a length")
-      return
-    }
-    #expect(size == .pixel(15))
+    #expect(SVGUIFont.Size.length(.pixel(10)).interpolated(to: .length(.pixel(20)), progress: 0.5) == .length(.pixel(15)))
     #expect(SVGUIFont.Size.medium.interpolated(to: .length(.pixel(20)), progress: 0.5) == nil)
   }
 
@@ -257,10 +242,7 @@ struct AnimatableTests {
     let list = try #require(
       TransformList(functions: [.translate(.pixel(10), .pixel(0)), .rotate(90)])
         .interpolated(to: TransformList(functions: [.scale(1, 1)]), progress: 0.5))
-    guard list.functions.count == 1, case .matrix(let matrix) = list.functions[0] else {
-      Issue.record("The list isn't a matrix: \(list)")
-      return
-    }
+    let matrix = try #require(Self.matrix(list), "The list isn't a matrix: \(list)")
     expectClose(matrix, CGAffineTransform(translationX: 5, y: 0).rotated(by: .pi / 4))
 
     let scale = try #require(
@@ -359,10 +341,7 @@ struct AnimatableTests {
     let resolver = StyleResolver(style: style, parent: .initial, root: .initial)
     let red = Paint.color(try color("rgb(100, 0, 0)"))
     let sum = try #require(FillProperty.added(red, to: .currentColor, in: resolver))
-    guard case .color(let summed) = sum else {
-      Issue.record("The sum isn't a color")
-      return
-    }
+    let summed = try #require(sum.color, "The sum isn't a color")
     #expect(matches(summed, (110.0 / 255, 20.0 / 255, 30.0 / 255, 1)))
     let distance = try #require(StrokeProperty.distance(.currentColor, red, in: resolver))
     #expect(distance > 0)

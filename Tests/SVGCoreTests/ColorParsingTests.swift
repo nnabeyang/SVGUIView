@@ -124,10 +124,7 @@ struct ColorParsingTests {
       "color(display-p3 1 1 1)", "color(rec2020 1 1 1)", "color(xyz 0.95047 1 1.08883)",
     ])
   func colorsInSRGB(text: String) throws {
-    guard case .color(let color) = Paint(text) else {
-      Issue.record("\(text) isn't a color")
-      return
-    }
+    let color = try #require(Paint(text)?.color, "\(text) isn't a color")
     #expect(!color.isOutsideSRGB)
     let c = try #require(color.components)
     #expect([c.red, c.green, c.blue].allSatisfy { (0...1).contains($0) }, "\(text): \(c)")
@@ -351,11 +348,8 @@ struct ColorParsingTests {
 
   @Test("stop-color, flood-color and style sheets read the colors of the color spaces of CSS Color 4")
   func otherPropertiesInColorSpaces() throws {
-    guard case .color(let white) = ColorValue("oklab(1 0 0)"), let components = white.components else {
-      Issue.record("oklab() isn't a color value")
-      return
-    }
-    #expect(isClose([components.red, components.green, components.blue].map { ($0 * 255).rounded() }, [255, 255, 255]))
+    let white = try #require(ColorValue("oklab(1 0 0)")?.color?.components, "oklab() isn't a color value")
+    #expect(isClose([white.red, white.green, white.blue].map { ($0 * 255).rounded() }, [255, 255, 255]))
     let base = parse(
       "<style>rect { fill: color(srgb 0 0.5 0) }</style>"
         + #"<rect id="a" width="10" height="10"/><stop id="s" stop-color="lab(100 0 0)"/>"#)
@@ -363,10 +357,7 @@ struct ColorParsingTests {
     let rect = try #require(elements.first { $0.base.id == "a" })
     #expect(isClose(rgba(of: rect.style.fill), [0, 127.5, 0, 1]))
     let stop = try #require(elements.first { $0.base.id == "s" })
-    guard case .color(let color) = stop.style.stopColor, let components = color.components else {
-      Issue.record("The stop color isn't a color")
-      return
-    }
+    let components = try #require(stop.style.stopColor.color?.components, "The stop color isn't a color")
     #expect(isClose([components.red * 255, components.green * 255, components.blue * 255].map { $0.rounded() }, [255, 255, 255]))
   }
 
