@@ -313,15 +313,19 @@ struct StyleTests {
     #expect(!WidthProperty.accepts(attributeOn: .symbol) && !WidthProperty.accepts(attributeOn: .use))
   }
 
+  /// Values of `mix-blend-mode`, and the modes that they declare, or `nil` for a value that isn't valid.
+  private static let blendModes: [(String, MixBlendMode?)] = [
+    ("multiply", .multiply), ("Color-Dodge", .colorDodge), ("soft-light", .softLight), ("luminosity", .luminosity),
+    ("xor", nil), ("plus-lighter", nil),
+  ]
+
+  @Test("mix-blend-mode is one of the 16 blend modes, in any case", arguments: blendModes)
+  func blendMode(text: String, mode: MixBlendMode?) {
+    #expect(declared(MixBlendModeProperty.self, css: text)?.value == mode)
+  }
+
   @Test("mix-blend-mode and isolation are keywords that aren't presentation attributes or inherited")
   func blending() throws {
-    let modes: [(String, MixBlendMode?)] = [
-      ("multiply", .multiply), ("Color-Dodge", .colorDodge), ("soft-light", .softLight), ("luminosity", .luminosity),
-      ("xor", nil), ("plus-lighter", nil),
-    ]
-    for (text, mode) in modes {
-      #expect(declared(MixBlendModeProperty.self, css: text).flatMap { if case .value(let v) = $0 { v } else { nil } } == mode)
-    }
     #expect(MixBlendMode.allCases.count == 16)
     let cascaded = CascadedValues(
       CascadedValues.presentationAttributes(
@@ -677,9 +681,11 @@ struct StyleTests {
   func miterLimit() {
     #expect(StrokeMiterlimitProperty.parse("5", origin: .attribute) == 5)
     #expect(StrokeMiterlimitProperty.parse(" 1 ", origin: .attribute) == 1)
-    for text in ["5mm", "20%", "0.5"] {
-      #expect(StrokeMiterlimitProperty.parse(text, origin: .attribute) == nil, "\(text)")
-    }
+  }
+
+  @Test("stroke-miterlimit with a unit or less than 1 isn't valid", arguments: ["5mm", "20%", "0.5"])
+  func invalidMiterLimit(text: String) {
+    #expect(StrokeMiterlimitProperty.parse(text, origin: .attribute) == nil)
   }
 
   @Test("stroke-dasharray and stroke-dashoffset are lengths with units, and em is resolved with the font size")

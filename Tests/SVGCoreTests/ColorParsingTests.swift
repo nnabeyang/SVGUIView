@@ -269,11 +269,15 @@ struct ColorParsingTests {
     #expect(ColorValue(text) == nil)
   }
 
-  @Test("hex colors have 3, 4, 6 or 8 digits and nothing after them, and the modern rgb() mixes numbers and percentages")
-  func hexColorsAndMixedValues() {
-    for text in ["#abc", "#abcd", "#aabbcc", "#aabbccdd", "rgb(0 50% 0)"] {
-      #expect(Paint(text) != nil, "\(text)")
-    }
+  @Test(
+    "hex colors have 3, 4, 6 or 8 digits, and the modern rgb() mixes numbers and percentages",
+    arguments: ["#abc", "#abcd", "#aabbcc", "#aabbccdd", "rgb(0 50% 0)"])
+  func hexColorsAndMixedValues(text: String) {
+    #expect(Paint(text) != nil)
+  }
+
+  @Test("a hex color has nothing after its digits")
+  func hexColorWithLetterAfterIt() {
     #expect(Paint("#aaaaz") == nil)
   }
 
@@ -321,15 +325,19 @@ struct ColorParsingTests {
     #expect(Paint("url(#a) #0f0") == .url("a", fallback: Paint("#0f0")))
     #expect(Paint("url(#a)  none ") == .url("a", fallback: Paint.none))
     #expect(Paint("url(#a) currentColor") == .url("a", fallback: .currentColor))
-    // SVG 2 has no ICC colors, so a value with one is invalid.
-    for text in [
-      "url(#a) url(#b)", "url(#a) foo", "url(#a) green blue", "url(#a) green icc-color(acmecmyk, 0.11, 0.48)",
-    ] {
-      #expect(Paint(text) == nil, "\(text)")
-    }
     #expect(
       ComputedStyle.initial.resolved(.url("a", fallback: .currentColor))
         == .url("a", fallback: .color(ComputedStyle.initial.color)))
+  }
+
+  // SVG 2 has no ICC colors, so a value with one is invalid.
+  @Test(
+    "a paint server reference with something other than a fallback after it isn't a paint",
+    arguments: [
+      "url(#a) url(#b)", "url(#a) foo", "url(#a) green blue", "url(#a) green icc-color(acmecmyk, 0.11, 0.48)",
+    ])
+  func invalidPaintServerFallbacks(text: String) {
+    #expect(Paint(text) == nil)
   }
 
   @Test("stop-color, flood-color and style sheets read the same colors")

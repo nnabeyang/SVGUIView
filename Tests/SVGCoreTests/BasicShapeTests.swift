@@ -160,15 +160,6 @@ struct BasicShapeTests {
     #expect(ClipPathProperty.interpolates(polygons.0, polygons.1, in: resolver))
     let insets = (try #require(clipPath("inset(0 round 2px)")), try #require(clipPath("inset(10% round 4px)")))
     #expect(ClipPathProperty.interpolates(insets.0, insets.1, in: resolver))
-    for (a, b) in [
-      ("circle(10px)", "circle(10px) fill-box"), ("circle(10px)", "ellipse(10px 10px)"), ("circle()", "circle(10px)"),
-      ("polygon(0 0, 1px 1px, 2px 0)", "polygon(evenodd, 0 0, 1px 1px, 2px 0)"),
-      ("polygon(0 0, 1px 1px, 2px 0)", "polygon(0 0, 1px 1px)"), ("url(#a)", "url(#b)"), ("circle()", "none"),
-    ] {
-      let (from, to) = (try #require(clipPath(a)), try #require(clipPath(b)))
-      #expect(!ClipPathProperty.interpolates(from, to, in: resolver), "\(a) and \(b)")
-      #expect(ClipPathProperty.interpolated(from, to, progress: 0.4, in: resolver) == from)
-    }
     // An overshoot doesn't make a radius negative.
     let radii = (try #require(clipPath("circle(10px)")), try #require(clipPath("circle(20px)")))
     #expect(
@@ -176,5 +167,19 @@ struct BasicShapeTests {
         == .shape(.circle(radius: .length(.pixel(0)), center: .center), box: .strokeBox))
     // SMIL animations change clip paths discretely.
     #expect(!ClipPathProperty.isInterpolable)
+  }
+
+  @Test(
+    "shapes of different kinds or boxes, with different numbers of points, and other values change discretely",
+    arguments: [
+      ("circle(10px)", "circle(10px) fill-box"), ("circle(10px)", "ellipse(10px 10px)"), ("circle()", "circle(10px)"),
+      ("polygon(0 0, 1px 1px, 2px 0)", "polygon(evenodd, 0 0, 1px 1px, 2px 0)"),
+      ("polygon(0 0, 1px 1px, 2px 0)", "polygon(0 0, 1px 1px)"), ("url(#a)", "url(#b)"), ("circle()", "none"),
+    ])
+  func discreteInterpolation(a: String, b: String) throws {
+    let resolver = StyleResolver(style: .initial, parent: .initial, root: .initial)
+    let (from, to) = (try #require(clipPath(a)), try #require(clipPath(b)))
+    #expect(!ClipPathProperty.interpolates(from, to, in: resolver))
+    #expect(ClipPathProperty.interpolated(from, to, progress: 0.4, in: resolver) == from)
   }
 }

@@ -189,40 +189,38 @@ struct LayerTreeTests {
     (#"width="100%" height="100%" viewBox="0 0 480 360" style="animation: s 1s linear""#, true),
   ]
 
-  @Test("layers show the transform of the root element as a rendering into one bitmap does", arguments: rootTransforms)
-  func rootTransformAgreement(document: (root: String, moves: Bool)) async throws {
+  @Test(
+    "layers show the transform of the root element as a rendering into one bitmap does",
+    arguments: rootTransforms, [1.0, 2.0])
+  func rootTransformAgreement(document: (root: String, moves: Bool), scale: CGFloat) async throws {
     let content =
       keyframes + #"<rect x="-50" y="-50" width="600" height="600" fill="white"/>"#
       + #"<rect x="10" y="10" width="50" height="30" fill="red"/>"#
       + #"<circle cx="60" cy="60" r="20" fill="blue" stroke="black" stroke-width="4"/>"#
     let times = [0, 0.25, 0.5]
-    for scale in [1.0, 2.0] {
-      let renderings = try await renderings(content, root: document.root, at: times, scale: scale)
-      for (time, (single, layers)) in zip(times, renderings) {
-        let (count, largest) = differences(single, layers)
-        let description = "\(count) pixels differ by up to \(largest) at the time \(time) and the scale \(scale)"
-        if document.moves {
-          // The screen resamples the edges of the shapes and of the viewport that turns with them.
-          #expect(count <= single.count / 4 / 15, "\(description)")
-        } else {
-          #expect(count == 0, "\(description)")
-        }
-      }
-      // The root element turns in the bitmap.
+    let renderings = try await renderings(content, root: document.root, at: times, scale: scale)
+    for (time, (single, layers)) in zip(times, renderings) {
+      let (count, largest) = differences(single, layers)
+      let description = "\(count) pixels differ by up to \(largest) at the time \(time)"
       if document.moves {
-        #expect(renderings[0].bitmap != renderings[2].bitmap)
+        // The screen resamples the edges of the shapes and of the viewport that turns with them.
+        #expect(count <= single.count / 4 / 15, "\(description)")
+      } else {
+        #expect(count == 0, "\(description)")
       }
+    }
+    // The root element turns in the bitmap.
+    if document.moves {
+      #expect(renderings[0].bitmap != renderings[2].bitmap)
     }
   }
 
-  @Test("layers show the edges between pixels as a rendering into one bitmap does", arguments: edges)
-  func edgeAgreement(document: (content: String, root: String)) async throws {
-    for scale in [1.0, 2.0, 3.0] {
-      let (single, layers) = try #require(
-        try await renderings(document.content, root: document.root, at: [0], scale: scale).first)
-      let (count, largest) = differences(single, layers)
-      #expect(count == 0, "\(count) pixels differ by up to \(largest) at the scale \(scale)")
-    }
+  @Test("layers show the edges between pixels as a rendering into one bitmap does", arguments: edges, [1.0, 2.0, 3.0])
+  func edgeAgreement(document: (content: String, root: String), scale: CGFloat) async throws {
+    let (single, layers) = try #require(
+      try await renderings(document.content, root: document.root, at: [0], scale: scale).first)
+    let (count, largest) = differences(single, layers)
+    #expect(count == 0, "\(count) pixels differ by up to \(largest)")
   }
 
   /// The layers of a document at the times, shown one time after another in the same host, after each time.
@@ -271,20 +269,19 @@ struct LayerTreeTests {
     #expect(onPixels[0].count { $0.masksToBounds } == 2)
   }
 
-  @Test("layers show what a rendering into one bitmap shows, at one time after another", arguments: documents)
-  func agreement(document: (content: String, moves: Bool)) async throws {
+  @Test(
+    "layers show what a rendering into one bitmap shows, at one time after another", arguments: documents, [1.0, 2.0])
+  func agreement(document: (content: String, moves: Bool), scale: CGFloat) async throws {
     let times = [0, 0.25, 0.5, 0.75]
-    for scale in [1.0, 2.0] {
-      for (time, (single, layers)) in zip(times, try await renderings(document.content, at: times, scale: scale)) {
-        let (count, largest) = differences(single, layers)
-        let description = "\(count) pixels differ by up to \(largest) at the time \(time) and the scale \(scale)"
-        if document.moves {
-          // A moving layer keeps its pixels, which the screen resamples where it rotates them or moves them between
-          // the pixels of the screen, which changes the antialiased edges.
-          #expect(count <= single.count / 4 / 30, "\(description)")
-        } else {
-          #expect(count == 0, "\(description)")
-        }
+    for (time, (single, layers)) in zip(times, try await renderings(document.content, at: times, scale: scale)) {
+      let (count, largest) = differences(single, layers)
+      let description = "\(count) pixels differ by up to \(largest) at the time \(time)"
+      if document.moves {
+        // A moving layer keeps its pixels, which the screen resamples where it rotates them or moves them between
+        // the pixels of the screen, which changes the antialiased edges.
+        #expect(count <= single.count / 4 / 30, "\(description)")
+      } else {
+        #expect(count == 0, "\(description)")
       }
     }
   }
