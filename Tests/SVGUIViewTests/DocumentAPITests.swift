@@ -7,7 +7,7 @@ import UIKit
 
 /// Tests that an app finds and changes the elements of a view's document, and that the view shows the changes.
 @MainActor
-@Suite("Document API", .serialized)
+@Suite("Document API", .serialized, .timeLimit(.minutes(2)))
 struct DocumentAPITests {
   /// A document whose square is red, which has no green.
   private static let square = #"""

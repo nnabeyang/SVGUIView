@@ -10,7 +10,7 @@ import UIKit
 // Several tests compare how long a rendering takes, and renderings occupy the threads of the cooperative
 // thread pool, which CI machines have few of, so run them one at a time.
 @MainActor
-@Suite("SVGUIView", .serialized)
+@Suite("SVGUIView", .serialized, .timeLimit(.minutes(2)))
 struct SVGUIViewTests {
   /// A view that shows its document as a still image, in one image, whose renderings the tests check.
   private func makeView(_ svg: String, timeoutDuration: Duration = patience) -> SVGUIView {
