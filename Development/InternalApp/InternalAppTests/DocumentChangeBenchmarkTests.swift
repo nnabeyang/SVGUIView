@@ -10,9 +10,12 @@ import XCTest
 /// the changed document, changing an attribute of an element of the document of the view, inserting, removing
 /// and moving elements of it, and changing the character data of a text and of the style sheet.
 ///
-/// Besides the time and the time of the CPU of all the frames, each test reports, in the log and in an attachment,
-/// how long a change kept the main thread, from the change until the view had started its rendering, and how long
-/// the whole frame took, until the view showed the change.
+/// Besides the time and the time of the CPU of all the frames, and the time of the stages of the renderings, each test
+/// reports, in the log and in an attachment, how long a change kept the main thread, from the change until the view
+/// had started its rendering, and how long the whole frame took, until the view showed the change.
+///
+/// The continuous measurements change the document at every frame without waiting for the renderings, as dragging a
+/// shape does, and report how many images the view showed, and how long after the changes that they show.
 ///
 /// Like ``BenchmarkTests``, the tests run only when `TEST_RUNNER_RUN_BENCHMARKS` is `1`, and are meant for the
 /// Release configuration. They are a separate class, so that running `BenchmarkTests` alone measures what it did.
@@ -127,71 +130,116 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
     }
   }
 
+  /// A view in a window that shows a document of `count` elements, with what the changes of a measurement change.
+  @MainActor
+  private final class Scene {
+    let view: SVGUIView
+    /// The documents that giving the data alternates between: only the place of one rectangle differs.
+    let documents: [Data]
+    private let targets: (rect: String, path: String)
+    /// The place of the path that the measurements change.
+    private let x: Int
+    private let y: Int
+    /// The shape that the insertions insert and remove.
+    private var inserted: SVGDocument.Element?
+
+    init(_ change: Change, count: Int, hasSiblingCombinators: Bool) throws {
+      let window = try XCTUnwrap(
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first)
+      documents = (0..<2).map {
+        DocumentChangeBenchmarkTests.document(
+          count: count, offset: $0 * 4, hasSiblingCombinators: hasSiblingCombinators, hasLabel: change == .text)
+      }
+      view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), data: documents[0])
+      view.contentMode = .scaleAspectFit
+      window.addSubview(view)
+      targets = DocumentChangeBenchmarkTests.targets(count: count)
+      let index = count / 2 / 2 * 2 + 1
+      (x, y) = (index % 50 * 20 + 4, index / 50 * 20 + 2)
+    }
+
+    /// Makes the change of a frame.
+    func apply(_ change: Change, frame: Int) {
+      switch change {
+      case .data:
+        view.data = documents[frame % 2]
+      case .transform:
+        view.document.element(id: targets.rect)?.setAttribute("transform", to: "translate(\(frame % 16) 0)")
+      case .path:
+        view.document.element(id: targets.path)?
+          .setAttribute("d", to: DocumentChangeBenchmarkTests.pathData(x: x, y: y, offset: frame % 16))
+      case .insertion:
+        if let shape = inserted {
+          shape.remove()
+          inserted = nil
+        } else {
+          let shape = view.document.createElement("rect")
+          shape.setAttribute("x", to: "\(x)")
+          shape.setAttribute("y", to: "\(y)")
+          shape.setAttribute("width", to: "12")
+          shape.setAttribute("height", to: "12")
+          try? view.document.element(id: targets.rect)?.parent?.append(shape)
+          inserted = shape
+        }
+      case .order:
+        if let rect = view.document.element(id: targets.rect), let parent = rect.parent {
+          let path = view.document.element(id: targets.path)
+          try? parent.insert(rect, before: frame % 2 == 1 ? nil : path)
+        }
+      case .text:
+        view.document.element(id: "label")?.textContent = "Frame \(frame)"
+      case .stylesheet:
+        view.document.element(id: "style")?.textContent =
+          DocumentChangeBenchmarkTests.stylesheet + (frame.isMultiple(of: 2) ? "" : ".a{stroke-width:2}")
+      }
+    }
+  }
+
+  /// The metrics of the measurements: the time and the time of the CPU of all the frames, and the time of the stages
+  /// of the renderings, which tells which stage a change makes longer.
+  private static var metrics: [any XCTMetric] {
+    [XCTClockMetric(), XCTCPUMetric()]
+      + ["Style", "Build", "Paint"].map {
+        XCTOSSignpostMetric(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering", name: $0)
+      }
+  }
+
+  /// Shows the scene's first rendering, and returns the scene.
+  @MainActor
+  private func makeScene(_ change: Change, count: Int, hasSiblingCombinators: Bool) throws -> Scene {
+    let scene = try Scene(change, count: count, hasSiblingCombinators: hasSiblingCombinators)
+    scene.view.layoutIfNeeded()
+    scene.view.layer.displayIfNeeded()
+    run { !scene.view.isRendering }
+    return scene
+  }
+
+  /// Attaches the report of a measurement, and prints it.
+  private func report(_ report: String) {
+    print("\(name) \(report)")
+    let attachment = XCTAttachment(string: report)
+    attachment.name = "Times per change"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
   /// Measures the frames of a view that shows a document of `count` elements, and makes a change in each frame.
   @MainActor
   private func measure(_ change: Change, count: Int, hasSiblingCombinators: Bool = false) throws {
-    let window = try XCTUnwrap(
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first)
-    // The documents that giving the data alternates between: only the place of one rectangle differs.
-    let documents = (0..<2).map {
-      Self.document(
-        count: count, offset: $0 * 4, hasSiblingCombinators: hasSiblingCombinators, hasLabel: change == .text)
-    }
-    let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), data: documents[0])
-    view.contentMode = .scaleAspectFit
-    window.addSubview(view)
+    let scene = try makeScene(change, count: count, hasSiblingCombinators: hasSiblingCombinators)
+    let view = scene.view
     defer { view.removeFromSuperview() }
-    view.layoutIfNeeded()
-    view.layer.displayIfNeeded()
-    run { !view.isRendering }
-
-    let targets = Self.targets(count: count)
-    let index = count / 2 / 2 * 2 + 1
-    let (x, y) = (index % 50 * 20 + 4, index / 50 * 20 + 2)
     let clock = ContinuousClock()
     // How long each change kept the main thread, and how long its frame took, in all the iterations of the
     // measurement.
     var blocked: [Duration] = []
     var shown: [Duration] = []
-    // The shape that the insertions insert and remove.
-    var inserted: SVGDocument.Element?
-    measure(metrics: [XCTClockMetric(), XCTCPUMetric()]) {
+    measure(metrics: Self.metrics) {
       var isDone = false
       Task {
         for frame in 1...Self.frames {
           let start = clock.now
-          switch change {
-          case .data:
-            view.data = documents[frame % 2]
-          case .transform:
-            view.document.element(id: targets.rect)?.setAttribute("transform", to: "translate(\(frame % 16) 0)")
-          case .path:
-            view.document.element(id: targets.path)?
-              .setAttribute("d", to: Self.pathData(x: x, y: y, offset: frame % 16))
-          case .insertion:
-            if let shape = inserted {
-              shape.remove()
-              inserted = nil
-            } else {
-              let shape = view.document.createElement("rect")
-              shape.setAttribute("x", to: "\(x)")
-              shape.setAttribute("y", to: "\(y)")
-              shape.setAttribute("width", to: "12")
-              shape.setAttribute("height", to: "12")
-              try? view.document.element(id: targets.rect)?.parent?.append(shape)
-              inserted = shape
-            }
-          case .order:
-            if let rect = view.document.element(id: targets.rect), let parent = rect.parent {
-              let path = view.document.element(id: targets.path)
-              try? parent.insert(rect, before: frame % 2 == 1 ? nil : path)
-            }
-          case .text:
-            view.document.element(id: "label")?.textContent = "Frame \(frame)"
-          case .stylesheet:
-            view.document.element(id: "style")?.textContent =
-              Self.stylesheet + (frame.isMultiple(of: 2) ? "" : ".a{stroke-width:2}")
-          }
+          scene.apply(change, frame: frame)
           // Core Animation asks the view to display once in a frame: this starts the rendering as that does.
           view.layer.displayIfNeeded()
           blocked.append(clock.now - start)
@@ -203,14 +251,67 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
       run { isDone }
     }
 
-    let report = String(
-      format: "%d elements, %d bytes. Main thread per change: %@. Frame: %@", count, documents[0].count,
-      Self.summary(of: blocked), Self.summary(of: shown))
-    print("\(name) \(report)")
-    let attachment = XCTAttachment(string: report)
-    attachment.name = "Times per change"
-    attachment.lifetime = .keepAlways
-    add(attachment)
+    report(
+      String(
+        format: "%d elements, %d bytes. Main thread per change: %@. Frame: %@", count, scene.documents[0].count,
+        Self.summary(of: blocked), Self.summary(of: shown)))
+  }
+
+  /// Measures a view that shows a document of `count` elements, and makes a change at every frame of 60 Hz without
+  /// waiting for the renderings, as dragging a shape makes them.
+  ///
+  /// It reports how many of the changes the view showed images for, and how long after the latest change that an
+  /// image shows the view showed it.
+  @MainActor
+  private func measureContinuous(_ change: Change, count: Int) throws {
+    let scene = try makeScene(change, count: count, hasSiblingCombinators: false)
+    let view = scene.view
+    defer { view.removeFromSuperview() }
+    let clock = ContinuousClock()
+    let interval = Duration.seconds(1) / 60
+    var shownImages: [Int] = []
+    var latencies: [Duration] = []
+    measure(metrics: Self.metrics) {
+      // The time of the latest change that each rendering shows, by the generation of the rendering.
+      var changeTimes: [Int: ContinuousClock.Instant] = [:]
+      var generation = view.renderingGeneration
+      var contents = view.layer.contents as AnyObject?
+      var latestChange = clock.now
+      var images = 0
+      var frame = 0
+      let start = clock.now
+      while frame < Self.frames || view.isRendering || view.layer.needsDisplay() {
+        let now = clock.now
+        if frame < Self.frames, now >= start + interval * frame {
+          frame += 1
+          scene.apply(change, frame: frame)
+          latestChange = now
+          view.layer.displayIfNeeded()
+        }
+        // A rendering that starts now, here or when the one before it finishes, shows the changes until now.
+        while generation < view.renderingGeneration {
+          generation += 1
+          changeTimes[generation] = latestChange
+        }
+        if let shown = view.layer.contents as AnyObject?, shown !== contents {
+          contents = shown
+          images += 1
+          // The view starts the next rendering when it shows one, if the document changed meanwhile.
+          let shownGeneration = view.isRendering ? view.renderingGeneration - 1 : view.renderingGeneration
+          if let time = changeTimes[shownGeneration] {
+            latencies.append(clock.now - time)
+          }
+        }
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.001))
+      }
+      shownImages.append(images)
+    }
+
+    report(
+      String(
+        format: "%d elements, %d bytes. Images shown for %d changes: %@. From the latest change to its image: %@",
+        count, scene.documents[0].count, Self.frames,
+        shownImages.map(String.init).joined(separator: ", "), Self.summary(of: latencies)))
   }
 
   @MainActor func testData100() throws { try measure(.data, count: 100) }
@@ -245,4 +346,8 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
   @MainActor func testTransform2000WithSiblingCombinators() throws {
     try measure(.transform, count: 2000, hasSiblingCombinators: true)
   }
+  @MainActor func testContinuousTransform500() throws { try measureContinuous(.transform, count: 500) }
+  @MainActor func testContinuousTransform2000() throws { try measureContinuous(.transform, count: 2000) }
+  @MainActor func testContinuousTransform5000() throws { try measureContinuous(.transform, count: 5000) }
+  @MainActor func testContinuousPath2000() throws { try measureContinuous(.path, count: 2000) }
 }
