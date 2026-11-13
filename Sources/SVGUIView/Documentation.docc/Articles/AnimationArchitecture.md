@@ -181,16 +181,29 @@ combinators. Their ancestors are copied with the new children, and every other
 element is shared with the document before the change. A change of the
 `<style>` elements makes the style sheets again from the tree, and every
 element with them.
-The view then renders the whole document again, and paints every layer again.
 Unlike a new size, a change doesn't cancel the rendering in progress: the view
 renders the latest document when that rendering ends. The animations and
 transitions that the change starts play in the frames after it like any other
 animation.
 
+A single change is rendered into one image, as a still view shows its
+document. A change that follows another one within 0.3 seconds makes the
+changes continuous, as an app makes them while a finger drags a shape. Until
+the document doesn't change for 0.3 seconds, the view shows it in layers, as it
+shows playing animations, and then it shows one image again:
+
+- Each element whose attributes change gets a layer of its own, like an
+  element whose `transform` or `opacity` an animation changes. A change of only
+  its `transform` attribute moves the layer, and paints nothing again, unless a
+  selector of the style sheets matches attributes.
+- A rendering reuses the render nodes and the painted layers of the one before,
+  except the ones of the elements that the changes made again, of the elements
+  whose children changed, and of the elements that reference them, such as a
+  `<use>` element or a shape painted with a gradient, or that reference an ID
+  that names another element after the changes.
+
 Finer invalidation is added only when measurements show the need, such as an
-index of the classes and attributes that selectors use, or painting again only
-the layers whose painting a change affects, and only updating the properties
-of a layer whose `transform` or `opacity` is the only thing that changes.
+index of the classes and attributes that selectors use.
 
 ## Animation model
 
@@ -420,8 +433,10 @@ animations don't play shows one image, as a snapshot renders it, and not its
 layers: the screen resamples the contents of a layer that an animation moves
 or rotates, even at the time when the animation holds it still, which changes
 the antialiased edges. The frames of animations that play change in every
-frame, where these edges don't show. A view renders one frame in the other way
-when its animations start or stop playing.
+frame, where these edges don't show. The continuous changes of a document are
+shown in layers for the same reason, and the view shows one image again when
+they end. A view renders one frame in the other way when its animations start
+or stop playing.
 
 ### Playback with layers
 
@@ -680,8 +695,8 @@ documents instead.
   changing path shapes, many elements, and filters.
 - The time of each rendering is recorded as a "Render" signpost interval, with
   its stages as "Style", "Build" and "Paint" intervals in it, and "Plan" for a
-  rendering into layers. A frame
-  that a slower rendering skips is a "Skipped frame" event. Running a filter on
+  rendering into layers, with "Changes" for the render nodes and the layers
+  that changes of the document make again. A frame that a slower rendering skips is a "Skipped frame" event. Running a filter on
   the GPU is a "Filter on GPU" interval in "Paint", with the size of the filter
   region, and making the renderer is a "Prepare GPU filters" interval. The
   benchmarks of the test app measure the renderings and the time of the CPU

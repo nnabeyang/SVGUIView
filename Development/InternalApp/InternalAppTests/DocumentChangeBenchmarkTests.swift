@@ -15,7 +15,7 @@ import XCTest
 /// had started its rendering, and how long the whole frame took, until the view showed the change.
 ///
 /// The continuous measurements change the document at every frame without waiting for the renderings, as dragging a
-/// shape does, and report how many images the view showed, and how long after the changes that they show.
+/// shape does, and report how many renderings the view showed, and how long after the changes that they show.
 ///
 /// Like ``BenchmarkTests``, the tests run only when `TEST_RUNNER_RUN_BENCHMARKS` is `1`, and are meant for the
 /// Release configuration. They are a separate class, so that running `BenchmarkTests` alone measures what it did.
@@ -260,8 +260,8 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
   /// Measures a view that shows a document of `count` elements, and makes a change at every frame of 60 Hz without
   /// waiting for the renderings, as dragging a shape makes them.
   ///
-  /// It reports how many of the changes the view showed images for, and how long after the latest change that an
-  /// image shows the view showed it.
+  /// It reports how many renderings the view showed for the changes, in one image or in layers, and how long after
+  /// the latest change that a rendering shows the view showed it.
   @MainActor
   private func measureContinuous(_ change: Change, count: Int) throws {
     let scene = try makeScene(change, count: count, hasSiblingCombinators: false)
@@ -275,7 +275,7 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
       // The time of the latest change that each rendering shows, by the generation of the rendering.
       var changeTimes: [Int: ContinuousClock.Instant] = [:]
       var generation = view.renderingGeneration
-      var contents = view.layer.contents as AnyObject?
+      var shownGeneration = view.shownRenderingGeneration
       var latestChange = clock.now
       var images = 0
       var frame = 0
@@ -293,11 +293,10 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
           generation += 1
           changeTimes[generation] = latestChange
         }
-        if let shown = view.layer.contents as AnyObject?, shown !== contents {
-          contents = shown
+        // The view shows an image, or layers while the changes are continuous.
+        if view.shownRenderingGeneration != shownGeneration {
+          shownGeneration = view.shownRenderingGeneration
           images += 1
-          // The view starts the next rendering when it shows one, if the document changed meanwhile.
-          let shownGeneration = view.isRendering ? view.renderingGeneration - 1 : view.renderingGeneration
           if let time = changeTimes[shownGeneration] {
             latencies.append(clock.now - time)
           }
@@ -309,7 +308,7 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
 
     report(
       String(
-        format: "%d elements, %d bytes. Images shown for %d changes: %@. From the latest change to its image: %@",
+        format: "%d elements, %d bytes. Renderings shown for %d changes: %@. From the latest change to its rendering: %@",
         count, scene.documents[0].count, Self.frames,
         shownImages.map(String.init).joined(separator: ", "), Self.summary(of: latencies)))
   }

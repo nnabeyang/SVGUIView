@@ -4,6 +4,9 @@ import Foundation
 package struct DocumentChanges: Sendable {
   /// The elements whose attributes changed.
   package var attributes = Set<ElementID>()
+  /// The elements in `attributes` whose attributes other than `transform` changed. The others only moved, which
+  /// doesn't change what they paint in their own coordinates.
+  package var paintingAttributes = Set<ElementID>()
   /// The elements that got or lost children, or whose children changed their order.
   package var restructured = Set<ElementID>()
   /// The elements that were inserted, with their descendants, which includes the ones that were moved.
@@ -91,52 +94,10 @@ extension SVGBaseContext {
       ? StyleSheetSources(
         document: document, processingInstructions: self.stylesheet.sources?.processingInstructions ?? []
       ).stylesheet : self.stylesheet
-    var changed = Set<ElementID>()
-    var reordered = Set<ElementID>()
-    var containing = Set<ElementID>()
-    /// Makes an element again with its descendants, and its later siblings where sibling combinators can match them
-    /// in another way.
-    func change(_ start: ElementCursor) {
-      var cursor = start
-      changed.insert(cursor.element.id)
-      if stylesheet.hasSiblingCombinators {
-        var sibling = cursor.nextSibling
-        while let current = sibling {
-          changed.insert(current.element.id)
-          sibling = current.nextSibling
-        }
-      }
-      while let parent = cursor.parent, containing.insert(parent.element.id).inserted {
-        cursor = parent
-      }
-    }
-    if changes.stylesheets, let root = document.root {
-      // Every element is cascaded with the new style sheets.
-      change(ElementCursor(root: root))
-    }
-    for id in changes.attributes.union(changes.inserted).union(changes.texts) {
-      guard let cursor = document.cursor(at: id) else { continue }
-      change(cursor)
-    }
-    if stylesheet.hasSiblingCombinators {
-      for id in changes.followingRemoved {
-        guard let cursor = document.cursor(at: id) else { continue }
-        change(cursor)
-      }
-    }
-    for id in changes.restructured {
-      guard var cursor = document.cursor(at: id) else { continue }
-      // The pseudo-classes of the structure of the tree can match the element and any of its children in another
-      // way, and text keeps its character data by its spans, so they are made again.
-      if stylesheet.hasStructuralPseudoClasses || cursor.element.name == .text || cursor.isInText {
-        change(cursor)
-        continue
-      }
-      reordered.insert(id)
-      while let parent = cursor.parent, containing.insert(parent.element.id).inserted {
-        cursor = parent
-      }
-    }
+    let elements = Self.changedElements(by: changes, in: document, with: stylesheet)
+    let changed = elements.remade
+    let reordered = elements.reordered
+    let containing = elements.containing
     let root = root?.remade(
       changing: changed, reordering: reordered, containing: containing, in: document, with: stylesheet, parent: nil,
       root: nil)

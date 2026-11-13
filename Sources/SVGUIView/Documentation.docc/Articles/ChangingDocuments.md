@@ -134,6 +134,19 @@ changes made in one turn of the run loop are rendered together.
 ``SVGUIView/SVGUIView/takeSnapshot(rect:at:scale:)`` includes the changes that the
 view hasn't rendered yet.
 
+A change doesn't stop the rendering in progress: the view shows it, and then
+renders the latest document. So an app that changes the document at every frame,
+such as while a finger drags a shape, sees renderings even when rendering the
+document takes longer than a frame.
+
+Changes that follow one another within a short time are continuous changes.
+While they last, the view shows the document in layers, as it shows playing
+animations: an element whose `transform` attribute changes moves its layer, and
+only the layers of the elements whose painting changes are painted again. When
+the document stops changing, the view shows one image again, as a snapshot
+renders it. So dragging a shape doesn't paint the rest of the document again,
+while the pixels of a still view stay those of a snapshot.
+
 Assigning new ``SVGUIView/SVGUIView/data`` to the view, or giving it to
 ``SVGUIView/SVGUIView/setData(_:)``, replaces its document.
 The document that it replaces can still be read and changed, but the view no

@@ -21,6 +21,9 @@ struct Stylesheet: Sendable {
   /// Whether a selector has a pseudo-class of the structure of the tree, such as `:first-child`, `:nth-child()` or
   /// `:empty`, so that inserting or removing an element can change what the rules give its parent and its siblings.
   let hasStructuralPseudoClasses: Bool
+  /// Whether a selector has an attribute selector, such as `[transform]`, so that any attribute of an element can
+  /// change what the rules give it.
+  let hasAttributeSelectors: Bool
   /// The style sheets that the rules come from, where some of them are in other files, or `nil` if the rules are all
   /// in the document.
   let sources: StyleSheetSources?
@@ -44,6 +47,8 @@ struct Stylesheet: Sendable {
     hasStructuralPseudoClasses = rules.contains { rule in
       rule.selectors.slice.contains { !$0.visit(&structuralFinder) }
     }
+    var attributeFinder = AttributeSelectorFinder()
+    hasAttributeSelectors = rules.contains { rule in rule.selectors.slice.contains { !$0.visit(&attributeFinder) } }
   }
 
   func matchElement(element: ElementCursor) -> [RuleMatch] {
@@ -96,6 +101,22 @@ private struct StructuralPseudoClassFinder: SelectorVisitor {
   mutating func visitSimpleSelector(_ component: Component<Impl>) -> Bool {
     switch component {
     case .empty, .nth, .nthOf: false
+    default: true
+    }
+  }
+}
+
+/// Stops at the first attribute selector of a selector, including the ones in the selectors of `:not()` and `:is()`.
+private struct AttributeSelectorFinder: SelectorVisitor {
+  typealias Impl = SVGSelectorImpl
+
+  mutating func visitSelectorList(listKind _: SelectorListKind, list: [Selector<Impl>]) -> Bool {
+    list.allSatisfy { $0.visit(&self) }
+  }
+
+  mutating func visitSimpleSelector(_ component: Component<Impl>) -> Bool {
+    switch component {
+    case .attributeInNoNamespaceExists, .attributeInNoNamespace, .attributeOther: false
     default: true
     }
   }

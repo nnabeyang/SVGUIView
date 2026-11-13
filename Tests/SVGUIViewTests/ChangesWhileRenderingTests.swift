@@ -59,6 +59,8 @@ struct ChangesWhileRenderingTests {
     let view = SVGUIView(
       frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(Self.heldDocument.utf8),
       baseURL: URL(filePath: "/held/doc.svg"))
+    // The changes of the tests are rendered into one image, not as continuous changes.
+    view.continuousChangeInterval = .zero
     view.layer.displayIfNeeded()
     return view
   }

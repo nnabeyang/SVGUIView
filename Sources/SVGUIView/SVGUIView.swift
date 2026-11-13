@@ -19,9 +19,10 @@ import os
 /// hidden or has no size, or while the app is in the background, and they stop
 /// after the time at which the document doesn't change any more. While its
 /// animations play, the view shows its document in layers of its layer,
-/// instead of in one image. While they don't, such as when they're paused or
-/// have ended, it shows the image that ``takeSnapshot(rect:at:scale:)`` renders for
-/// the time.
+/// instead of in one image. It does the same while an app changes the document
+/// continuously, such as while a finger drags a shape. Otherwise, such as when
+/// the animations are paused or have ended, it shows the image that
+/// ``takeSnapshot(rect:at:scale:)`` renders for the time.
 public class SVGUIView: UIView {
   /// The context of the document, with the values that the view finds in it.
   private var loaded: LoadedDocument {
@@ -97,7 +98,8 @@ public class SVGUIView: UIView {
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
   /// Records each rendering as a "Render" interval, and each frame that a slower rendering skips as a "Skipped frame"
   /// event, which Instruments and the metrics of XCTest measure. A rendering records its stages as "Style", "Build"
-  /// and "Paint" intervals in it, and one into layers a "Plan" interval too.
+  /// and "Paint" intervals in it, and one into layers a "Plan" interval too, after a "Changes" interval that finds
+  /// what changes of the document since the layers that the view shows make again.
   nonisolated static let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering")
   /// The size that the view last rendered at, so that it renders again when its size changes.
   private var renderedSize: CGSize?
@@ -105,11 +107,13 @@ public class SVGUIView: UIView {
   private(set) var renderingGeneration = 0
   /// Whether the latest rendering hasn't finished yet.
   private(set) var isRendering = false
+  /// The count of the latest rendering that the view showed, which benchmarks follow.
+  private(set) var shownRenderingGeneration = 0
   /// Whether a frame of the animations waits for the rendering in progress, which shows the latest time when it
   /// starts, so that frames that come while rendering is slower are skipped.
   private var needsFrame = false
   /// Whether the document changed after the rendering in progress started, so that it's rendered again when that
-  /// rendering ends, with every layer painted again.
+  /// rendering ends.
   private var needsRendering = false
   /// Counts the contexts of the document, which the changes of the document and of its animations make, so that a
   /// rendering that started before the latest one is followed by one that shows it.
@@ -118,6 +122,28 @@ public class SVGUIView: UIView {
   private var renderedContextGeneration = 0
   /// What the latest rendering that started depends on besides the context of the document.
   private var renderedInputs: RenderingInputs?
+  /// What the layers that the view shows depend on besides the context of the document, or `nil` if it shows no
+  /// layers.
+  private var shownInputs: RenderingInputs?
+  /// The context of the document that the layers that the view shows were rendered from, and its count.
+  private var shownContext: (generation: Int, context: SVGBaseContext)?
+  /// The elements that the changes of the document made again since the context of the latest rendering that
+  /// finished, by the counts of the contexts that the changes made, which tell the next rendering what it can't
+  /// reuse of the layers that the view shows.
+  private var changeLog = [(generation: Int, elements: ChangedElements)]()
+  /// Whether the document changes at every frame, as while an app drags a shape, where the view shows it in layers,
+  /// so that it only paints the layers of the changed elements again, and only moves the layers of the elements whose
+  /// transforms change.
+  private(set) var isChangingContinuously = false
+  /// The elements whose attributes changed while the document changes continuously, which get layers of their own.
+  private var changingElements = Set<ElementID>()
+  /// The time of the latest change of the document.
+  private var lastChange: ContinuousClock.Instant?
+  /// Ends the continuous changes when the document doesn't change for a while.
+  private var continuousChangesEnd: Task<Void, Never>?
+  /// How long after a change another one makes the changes continuous, and how long after the last one they end,
+  /// which tests shorten.
+  var continuousChangeInterval: Duration = .milliseconds(300)
   /// The time of the animations that the latest rendering shows.
   private var renderedTime: Duration?
   /// Whether the latest rendering that started renders into layers, or `nil` before the first one.
@@ -431,12 +457,13 @@ public class SVGUIView: UIView {
     renderingTask?.cancel()
     needsFrame = false
     needsRendering = false
-    startRendering()
+    // The layers that the view shows are reused where the changes since them leave them as they are.
+    startRendering(reusesLayers: true)
   }
 
   /// What a rendering depends on besides the changes of the document, where a rendering in progress for other ones
   /// isn't worth showing.
-  private struct RenderingInputs: Equatable {
+  private struct RenderingInputs: Equatable, Sendable {
     let size: CGSize
     let scale: CGFloat
     let wideGamut: Bool
@@ -457,20 +484,42 @@ public class SVGUIView: UIView {
   private func applyDocumentChanges() {
     let (tree, changes) = document.takeChanges()
     guard !changes.isEmpty else { return }
-    // A frame that starts before the view displays the changes doesn't reuse what the frames before made of the
-    // document without them.
-    shownNodes = RenderNodeCache()
-    shownLayers = nil
     // The CSS animations and the transitions that the changes start start at the time that the view displays. A view
     // that doesn't play animations, or that Reduce Motion holds, shows the new values at once.
     baseContext = baseContext.changing(
       to: tree, changes: changes, at: displayedTime.seconds,
       startsTransitions: configuration.animation != .none && !isHeldByReduceMotion)
+    // A rendering in progress can show layers of a context before the changes, which the next rendering reuses.
+    changeLog.append((contextGeneration, baseContext.changedElements(by: changes)))
+    noteChange(changes)
     // Changes can make the animations last longer, after the clock stopped at their end.
     updatePlayback()
     resumeFinishedWaiters()
     // The size of the document can change with the attributes of its root element.
     invalidateIntrinsicContentSize()
+  }
+
+  /// Notes a change of the document: a change soon after another one makes the changes continuous, until the
+  /// document doesn't change for a while.
+  ///
+  /// A single change is rendered into one image, as a still view shows. Continuous changes are shown in layers, as
+  /// playing animations are, and the view shows one image again when they end.
+  private func noteChange(_ changes: DocumentChanges) {
+    let now = ContinuousClock.now
+    defer { lastChange = now }
+    if let lastChange, now - lastChange < continuousChangeInterval {
+      isChangingContinuously = true
+    }
+    guard isChangingContinuously else { return }
+    changingElements.formUnion(changes.attributes)
+    continuousChangesEnd?.cancel()
+    continuousChangesEnd = Task { @MainActor [weak self, continuousChangeInterval] in
+      try? await Task.sleep(for: continuousChangeInterval)
+      guard !Task.isCancelled, let self else { return }
+      isChangingContinuously = false
+      changingElements = []
+      updatePlayback()
+    }
   }
 
   /// Starts rendering the document at the time that the view displays.
@@ -480,7 +529,8 @@ public class SVGUIView: UIView {
   private func startRendering(reusesLayers: Bool = false) {
     let rect = bounds
     renderedSize = rect.size
-    renderedInputs = renderingInputs
+    let inputs = renderingInputs
+    renderedInputs = inputs
     renderedContextGeneration = contextGeneration
     let generation = nextRenderingGeneration()
     let scale = displayScale
@@ -494,13 +544,27 @@ public class SVGUIView: UIView {
     let document = documentGeneration
     // The animations play in layers. A still frame is rendered into one image, as `takeSnapshot(rect:at:scale:)` renders it,
     // so that the view shows what a snapshot of the frame shows.
-    let promoted = rendersLayers ? promoted : nil
+    let promoted = rendersLayers ? promoted.union(changingElements) : nil
     renderedInLayers = promoted != nil
     let painting = paintsFiltersIntoOwnLayers ? nil : painting
     let usesGPU = runsFiltersOnGPU && !isInBackground
-    let previous = reusesLayers ? shownLayers : nil
-    let previousNodes = reusesLayers ? shownNodes : RenderNodeCache()
-    let previousStyled = reusesLayers ? shownStyled : nil
+    // The layers that the view shows are reused for the same size, data and content mode, where the changes of the
+    // document since them leave them as they are.
+    let reuses = reusesLayers && shownInputs == inputs
+    let previous = reuses ? shownLayers : nil
+    let previousNodes = reuses ? shownNodes : RenderNodeCache()
+    // Only a frame of the same context can look the same, and a rendering that finished after a change shows the
+    // context before it.
+    let previousStyled = reuses && shownContext?.generation == contextGeneration ? shownStyled : nil
+    let changes: DocumentChangesSinceShown? = shownContext.flatMap { shown in
+      guard reuses else { return nil }
+      let entries = changeLog.filter { $0.generation > shown.generation }
+      guard !entries.isEmpty else { return nil }
+      var elements = ChangedElements()
+      for entry in entries { elements.formUnion(entry.elements) }
+      return DocumentChangesSinceShown(context: shown.context, elements: elements)
+    }
+    let renderedContext = (generation: contextGeneration, context: capturedBase)
     isRendering = true
     let signpost = Self.signposter.beginInterval(
       "Render", id: Self.signposter.makeSignpostID(),
@@ -513,8 +577,8 @@ public class SVGUIView: UIView {
         let rendered = await SVGUIView.makeLayers(
           rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, promoted: promoted, painting: painting,
           usesGPU: usesGPU,
-          previous: previous, previousNodes: previousNodes, previousStyled: previousStyled, time: time, fit: fit,
-          resources: resources, timeoutDuration: timeoutDuration)
+          previous: previous, previousNodes: previousNodes, previousStyled: previousStyled, changes: changes,
+          time: time, fit: fit, resources: resources, timeoutDuration: timeoutDuration)
         let result: Result<RenderedContainer, SVGRenderingError>
         switch rendered {
         case .success(.unchanged):
@@ -546,6 +610,9 @@ public class SVGUIView: UIView {
             view.adoptStyleSheets(of: resolved, ofDocument: document)
             view.shownNodes = nodes
             view.shownStyled = styled
+            view.shownInputs = inputs
+            view.shownContext = renderedContext
+            view.changeLog.removeAll { $0.generation <= renderedContext.generation }
           }
         }
       } else {
@@ -562,6 +629,7 @@ public class SVGUIView: UIView {
             view.adoptStyleSheets(of: rendered.resolved, ofDocument: document)
           }
           view.show(result.map(\.image))
+          view.changeLog.removeAll { $0.generation <= renderedContext.generation }
         }
       }
     }
@@ -574,10 +642,11 @@ public class SVGUIView: UIView {
     guard generation == renderingGeneration else { return }
     isRendering = false
     show(self)
+    shownRenderingGeneration = generation
     if needsRendering {
       needsRendering = false
       needsFrame = false
-      startRendering()
+      startRendering(reusesLayers: true)
     } else if needsFrame {
       needsFrame = false
       startRendering(reusesLayers: true)
@@ -656,7 +725,7 @@ public class SVGUIView: UIView {
   /// Whether the view shows its document in layers, which it does while its animations play, whether it can be seen
   /// or not, so that it doesn't render again when it's seen again.
   private var rendersLayers: Bool {
-    playsAnimations || showsStillFramesInLayers && configuration.animation != .none
+    playsAnimations || isChangingContinuously || showsStillFramesInLayers && configuration.animation != .none
   }
 
   /// Whether the animations advance: they play, and the view can be seen.
@@ -748,13 +817,20 @@ public class SVGUIView: UIView {
     case .success(let image):
       layerTreeHost.removeFromSuperlayer()
       layerTree.clear()
-      shownLayers = nil
-      shownNodes = RenderNodeCache()
-      shownStyled = nil
+      forgetShownLayers()
       layer.contents = image
     case .failure(let error):
       show(error)
     }
+  }
+
+  /// Forgets the layers that the view showed, which the next rendering doesn't reuse.
+  private func forgetShownLayers() {
+    shownLayers = nil
+    shownNodes = RenderNodeCache()
+    shownStyled = nil
+    shownInputs = nil
+    shownContext = nil
   }
 
   /// Shows the result of a rendering into layers, in the layer that hosts them.
@@ -784,9 +860,7 @@ public class SVGUIView: UIView {
     case .missingRootElement, .zeroSizedRect:
       layer.contents = nil
       layerTree.clear()
-      shownLayers = nil
-      shownNodes = RenderNodeCache()
-      shownStyled = nil
+      forgetShownLayers()
     case .cancelled:
       // A newer rendering cancels the one before it, so this is not worth a warning.
       break
@@ -1025,6 +1099,7 @@ public class SVGUIView: UIView {
     previous: RenderedContainer?,
     previousNodes: RenderNodeCache,
     previousStyled: SVGBaseContext?,
+    changes: DocumentChangesSinceShown?,
     time: Duration,
     fit: ContentFit,
     resources: ExternalResourceLoader,
@@ -1044,26 +1119,47 @@ public class SVGUIView: UIView {
       let base = signposter.withIntervalSignpost("Style") { resolved.at(time: time.seconds) }
       // A frame whose animated values are the same as the frame that the view shows looks the same.
       if let previousStyled, base.hasSameAnimatedValues(as: previousStyled) { return LayerFrame.unchanged }
+      // The nodes and the painting of the elements that the changes of the document since the layers that the view
+      // shows make again can differ from them, and every one can where the changes make every element again.
+      let changed = changes.map { changes in
+        signposter.withIntervalSignpost("Changes") { base.changedNodes(since: changes.context, by: changes.elements) }
+      }
+      let reusesNodes = changed.map { $0 != nil } ?? true
       let buildInterval = signposter.beginInterval("Build")
       let tree = await RenderTreeBuilder(
-        base: base, viewPort: rect, scale: scale, reusing: previousNodes, resources: resources
+        base: base, viewPort: rect, scale: scale, reusing: reusesNodes ? previousNodes : RenderNodeCache(),
+        changed: changed??.nodes, resources: resources
       ).build(fit: fit)
       signposter.endInterval("Build", buildInterval)
       guard let tree else { return nil }
       let plan = signposter.withIntervalSignpost("Plan") {
-        LayerPlanner(promoted: promoted, painting: painting, scale: scale).plan(tree, in: rect)
+        LayerPlanner(
+          promoted: promoted,
+          painting: changed.map { changed in changed.flatMap { changed in painting?.union(changed.painting) } }
+            ?? painting,
+          scale: scale
+        ).plan(tree, in: rect)
       }
       let paintInterval = signposter.beginInterval("Paint")
       defer { signposter.endInterval("Paint", paintInterval) }
       let wideGamut = wideGamut && tree.usesWideGamut
       guard
         let layers = await plan.painted(
-          scale: scale, wideGamut: wideGamut, reusing: previous, runsFiltersOnGPU: usesGPU)
+          scale: scale, wideGamut: wideGamut, reusing: reusesNodes ? previous : nil, runsFiltersOnGPU: usesGPU)
       else { return nil }
       return LayerFrame.changed(
         layers: layers, nodes: tree.reusableNodes, styled: base,
         resolved: readsStyleSheets ? resolved : nil)
     }
+  }
+
+  /// The changes of the document since the context of the layers that the view shows, which a rendering doesn't reuse
+  /// the layers and the nodes of.
+  private struct DocumentChangesSinceShown: Sendable {
+    /// The context of the layers that the view shows.
+    let context: SVGBaseContext
+    /// The elements that the changes made again.
+    let elements: ChangedElements
   }
 
   /// The view of a rendering, which the rendering holds weakly, and only holds on the main actor while it shows its
