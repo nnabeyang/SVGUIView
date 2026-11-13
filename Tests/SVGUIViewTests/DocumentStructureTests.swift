@@ -137,7 +137,7 @@ struct DocumentStructureTests {
     #expect(a.parent == nil)
     #expect(a1.parent == a)
     #expect(document.element(id: "a1") == nil)
-    #expect(try document.rootElement?.children.map { $0.attribute("id") } == ["b"])
+    #expect(document.rootElement?.children.map { $0.attribute("id") } == ["b"])
     // The removed elements are read and changed, and found among the descendants of the removed element.
     #expect(a.children.map { $0.attribute("id") } == ["a1", "a2"])
     #expect(try a.querySelectorAll("rect") == a.children)
@@ -152,7 +152,7 @@ struct DocumentStructureTests {
     #expect(a1.isConnected)
     #expect(a1.attribute("fill") == "lime")
     #expect(document.element(id: "a1") == a1)
-    #expect(try document.rootElement?.children.map { $0.attribute("id") } == ["a", "b"])
+    #expect(document.rootElement?.children.map { $0.attribute("id") } == ["a", "b"])
   }
 
   @Test("the root element stays where it is")
