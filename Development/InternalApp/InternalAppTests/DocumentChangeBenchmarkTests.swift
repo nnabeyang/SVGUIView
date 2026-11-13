@@ -7,8 +7,8 @@ import XCTest
 /// makes while a finger drags one, for documents of several sizes.
 ///
 /// The measurements compare the ways that an app has to change what a view shows: giving the view the data of
-/// the changed document, changing an attribute of an element of the document of the view, and inserting, removing
-/// and moving elements of it.
+/// the changed document, changing an attribute of an element of the document of the view, inserting, removing
+/// and moving elements of it, and changing the character data of a text and of the style sheet.
 ///
 /// Besides the time and the time of the CPU of all the frames, each test reports, in the log and in an attachment,
 /// how long a change kept the main thread, from the change until the view had started its rendering, and how long
@@ -43,6 +43,10 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
     /// Moves one element after its siblings in one frame and back in the next one, as bringing a shape to the front
     /// and sending it back do.
     case order
+    /// Changes the character data of a text after the shapes, as a counter that shows a value does.
+    case text
+    /// Changes the character data of the `<style>` element, which cascades every element again.
+    case stylesheet
   }
 
   /// The identifiers of the elements that the measurements change: a rectangle and the path after it, in the middle
@@ -64,11 +68,14 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
   ///   - offset: How far the rectangle that the measurements change has moved.
   ///   - hasSiblingCombinators: Whether the style sheet has a rule with a sibling combinator, which makes a change of
   ///     an element compute the styles of the siblings after it again.
-  private static func document(count: Int, offset: Int = 0, hasSiblingCombinators: Bool = false) -> Data {
+  ///   - hasLabel: Whether a text follows the shapes.
+  private static func document(
+    count: Int, offset: Int = 0, hasSiblingCombinators: Bool = false, hasLabel: Bool = false
+  ) -> Data {
     let columns = 50
     let target = targets(count: count).rect
     var text = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 \#((count + columns - 1) / columns * 20)">"#
-    text += "<style>.a{stroke:#333;stroke-width:1}.b{fill:none;stroke:#c33}g>path{stroke-linecap:round}"
+    text += #"<style id="style">"# + stylesheet
     if hasSiblingCombinators { text += "rect+path{stroke-width:2}" }
     text += "</style>"
     for index in 0..<count {
@@ -83,9 +90,13 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
       }
       if index % groupSize == groupSize - 1 || index == count - 1 { text += "</g>" }
     }
+    if hasLabel { text += #"<text id="label" x="4" y="14" font-size="12">Frame 0</text>"# }
     text += "</svg>"
     return Data(text.utf8)
   }
+
+  /// The rules of the style sheet of the documents.
+  private static let stylesheet = ".a{stroke:#333;stroke-width:1}.b{fill:none;stroke:#c33}g>path{stroke-linecap:round}"
 
   /// The mean, the median, the 95th percentile and the largest of the durations, in milliseconds.
   private static func summary(of durations: [Duration]) -> String {
@@ -123,7 +134,8 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first)
     // The documents that giving the data alternates between: only the place of one rectangle differs.
     let documents = (0..<2).map {
-      Self.document(count: count, offset: $0 * 4, hasSiblingCombinators: hasSiblingCombinators)
+      Self.document(
+        count: count, offset: $0 * 4, hasSiblingCombinators: hasSiblingCombinators, hasLabel: change == .text)
     }
     let view = SVGUIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300), data: documents[0])
     view.contentMode = .scaleAspectFit
@@ -174,6 +186,11 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
               let path = view.document.element(id: targets.path)
               try? parent.insert(rect, before: frame % 2 == 1 ? nil : path)
             }
+          case .text:
+            view.document.element(id: "label")?.textContent = "Frame \(frame)"
+          case .stylesheet:
+            view.document.element(id: "style")?.textContent =
+              Self.stylesheet + (frame.isMultiple(of: 2) ? "" : ".a{stroke-width:2}")
           }
           // Core Animation asks the view to display once in a frame: this starts the rendering as that does.
           view.layer.displayIfNeeded()
@@ -216,6 +233,12 @@ final class DocumentChangeBenchmarkTests: XCTestCase {
   @MainActor func testOrder500() throws { try measure(.order, count: 500) }
   @MainActor func testOrder2000() throws { try measure(.order, count: 2000) }
   @MainActor func testOrder5000() throws { try measure(.order, count: 5000) }
+  @MainActor func testText100() throws { try measure(.text, count: 100) }
+  @MainActor func testText500() throws { try measure(.text, count: 500) }
+  @MainActor func testText2000() throws { try measure(.text, count: 2000) }
+  @MainActor func testText5000() throws { try measure(.text, count: 5000) }
+  @MainActor func testStylesheet500() throws { try measure(.stylesheet, count: 500) }
+  @MainActor func testStylesheet2000() throws { try measure(.stylesheet, count: 2000) }
   @MainActor func testInsertion2000WithSiblingCombinators() throws {
     try measure(.insertion, count: 2000, hasSiblingCombinators: true)
   }
