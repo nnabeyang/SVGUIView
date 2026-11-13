@@ -323,7 +323,12 @@ The surface is:
 - **Changing elements:** reading, setting and removing attributes,
   changing the `style` attribute's declarations, and adding, removing and
   toggling classes. A change starts the CSS Transitions of the values that it
-  changes. Elements can't be inserted or removed yet.
+  changes.
+- **Changing the tree:** creating elements, inserting them among the children
+  of other elements, removing them and moving them. The document stays a
+  persistent tree: a change copies the parent and its ancestors, and the
+  elements whose styles the change can't change are shared with the tree
+  before it.
 - **Controlling animations:** the CSS animations of the document or of one
   element, each with ``SVGDocument/Animation/play()``,
   ``SVGDocument/Animation/pause()``, ``SVGDocument/Animation/currentTime``,

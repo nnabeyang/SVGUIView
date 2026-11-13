@@ -18,6 +18,9 @@ struct Stylesheet: Sendable {
   /// Whether a selector has a sibling combinator, `+` or `~`, so that an element's attributes can change what the
   /// rules give its later siblings and their descendants.
   let hasSiblingCombinators: Bool
+  /// Whether a selector has a pseudo-class of the structure of the tree, such as `:first-child`, `:nth-child()` or
+  /// `:empty`, so that inserting or removing an element can change what the rules give its parent and its siblings.
+  let hasStructuralPseudoClasses: Bool
   /// The style sheets that the rules come from, where some of them are in other files, or `nil` if the rules are all
   /// in the document.
   let sources: StyleSheetSources?
@@ -37,6 +40,10 @@ struct Stylesheet: Sendable {
     self.fonts = fonts
     var finder = SiblingCombinatorFinder()
     hasSiblingCombinators = rules.contains { rule in rule.selectors.slice.contains { !$0.visit(&finder) } }
+    var structuralFinder = StructuralPseudoClassFinder()
+    hasStructuralPseudoClasses = rules.contains { rule in
+      rule.selectors.slice.contains { !$0.visit(&structuralFinder) }
+    }
   }
 
   func matchElement(element: ElementCursor) -> [RuleMatch] {
@@ -74,5 +81,22 @@ private struct SiblingCombinatorFinder: SelectorVisitor {
 
   mutating func visitComplexSelector(combinatorToRight: Combinator?) -> Bool {
     !(combinatorToRight?.isSibling ?? false)
+  }
+}
+
+/// Stops at the first pseudo-class of the structure of the tree of a selector, including the ones in the selectors of
+/// `:not()` and `:is()`.
+private struct StructuralPseudoClassFinder: SelectorVisitor {
+  typealias Impl = SVGSelectorImpl
+
+  mutating func visitSelectorList(listKind _: SelectorListKind, list: [Selector<Impl>]) -> Bool {
+    list.allSatisfy { $0.visit(&self) }
+  }
+
+  mutating func visitSimpleSelector(_ component: Component<Impl>) -> Bool {
+    switch component {
+    case .empty, .nth, .nthOf: false
+    default: true
+    }
   }
 }
