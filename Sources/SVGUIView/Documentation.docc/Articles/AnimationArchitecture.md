@@ -178,7 +178,9 @@ A change made through the document API makes again only the elements whose
 computed values it can change: the changed elements and their descendants, plus
 their following siblings and theirs when the style sheets use sibling
 combinators. Their ancestors are copied with the new children, and every other
-element is shared with the document before the change.
+element is shared with the document before the change. A change of the
+`<style>` elements makes the style sheets again from the tree, and every
+element with them.
 The view then renders the whole document again, and paints every layer again,
 as it does for a new size. The animations and transitions that the change
 starts play in the frames after it like any other animation.
@@ -329,6 +331,9 @@ The surface is:
   persistent tree: a change copies the parent and its ancestors, and the
   elements whose styles the change can't change are shared with the tree
   before it.
+- **Changing text:** ``SVGDocument/Element/textContent`` reads and replaces
+  the character data of elements, including the style sheets of `<style>`
+  elements.
 - **Controlling animations:** the CSS animations of the document or of one
   element, each with ``SVGDocument/Animation/play()``,
   ``SVGDocument/Animation/pause()``, ``SVGDocument/Animation/currentTime``,

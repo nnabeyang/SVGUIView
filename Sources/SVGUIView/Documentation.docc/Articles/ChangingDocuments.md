@@ -107,9 +107,25 @@ time that it's inserted, and starts no transitions, also when it was removed
 and is inserted again. SMIL animation elements can be inserted and removed as
 other elements, and play on the timeline of the document.
 
-The character data of elements, such as the text of a `<text>` element, can't
-be changed yet, and a `<style>` element that is inserted or removed doesn't
-change the style sheets of the document.
+### Changing text and style sheets
+
+``SVGDocument/Element/textContent`` reads the character data of an element and
+its descendants, such as the text of a `<text>` element. Setting it replaces
+the children of the element with the text, as the DOM does, and the document
+keeps the removed children as it keeps other removed elements.
+
+```swift
+score.textContent = "Score: \(points)"
+```
+
+The style sheets of the document come from its `<style>` elements in the tree.
+Inserting or removing a `<style>` element, or changing its text or its `type`,
+makes the style sheets again, as a browser does. A change of the style sheets
+cascades every element of the document again, which takes as long as giving
+the view new data, so change attributes or classes to change a few elements.
+The change starts the transitions of the values that it changes, and the
+animations that it starts start at the time of the change. A style sheet that
+reads files with `@import` reads them again at the next rendering.
 
 ### Showing the changes
 

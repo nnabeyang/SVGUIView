@@ -96,6 +96,22 @@ struct ExternalStyleSheetViewTests {
     #expect(Rendering(components: try pixels(of: image), width: image.width, scale: 1).pixel(x: 2, y: 10) == Self.lime)
   }
 
+  @Test("a style element that the document API inserts or changes reads the style sheets in other files")
+  func changedStyleElements() async throws {
+    let folder = try StyleFolder(Self.files.merging(["styles/blue.css": "#r { fill: blue }"]) { $1 })
+    let view = try #require(SVGUIView(contentsOf: folder.url.appending(path: "doc.svg")))
+    #expect(try await center(of: view) == Self.lime)
+    let style = try #require(view.document.rootElement?.children.first)
+    style.textContent = "@import url(styles/blue.css);"
+    #expect(try await center(of: view) == [0, 0, 255, 255])
+    style.remove()
+    #expect(try await center(of: view) == Self.black)
+    let inserted = view.document.createElement("style")
+    inserted.textContent = "@import url(styles/lime.css);"
+    try view.document.rootElement?.append(inserted)
+    #expect(try await center(of: view) == Self.lime)
+  }
+
   @Test("a use element shows an element of another document with the style sheets of that document")
   func externalUse() async throws {
     let folder = try StyleFolder([
