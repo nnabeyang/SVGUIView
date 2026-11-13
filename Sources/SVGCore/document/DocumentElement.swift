@@ -89,6 +89,13 @@ final class DocumentElement: Sendable {
       texts: texts, children: children)
   }
 
+  /// The element with character data in place of its children and its character data.
+  func replacingChildren(withText text: String) -> DocumentElement {
+    DocumentElement(
+      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      texts: [text], children: [])
+  }
+
   /// The element without the child at a position. The character data before and after the child goes together.
   func removingChild(at index: Int) -> DocumentElement {
     var children = children
@@ -239,6 +246,60 @@ package struct DocumentTree: Sendable {
         languages: languages),
       removed
     )
+  }
+
+  /// The document with the children of an element replaced by character data, and the documents of the removed
+  /// children in their order, or `nil` if the document doesn't have the element.
+  ///
+  /// The element and its ancestors are copied with their identifiers, and every other subtree is shared.
+  package func replacingChildren(of id: ElementID, withText text: String) -> (
+    tree: DocumentTree, removed: [DocumentTree]
+  )? {
+    guard let root, let path = paths[id] else { return nil }
+    let element = path.reduce(root) { $0.children[$1] }
+    let removed = element.children.map { DocumentTree(root: $0, languages: languages) }
+    var paths = paths
+    for tree in removed {
+      for id in tree.paths.keys {
+        paths[id] = nil
+      }
+    }
+    return (
+      DocumentTree(
+        root: root.replacingDescendant(at: path[...], with: element.replacingChildren(withText: text)), paths: paths,
+        languages: languages),
+      removed
+    )
+  }
+
+  /// The character data of an element and its descendants in document order, or `nil` if the document doesn't have
+  /// the element. Only the elements whose character data the parser keeps, such as `<text>` and `<style>`, have
+  /// it.
+  package func textContent(of id: ElementID) -> String? {
+    guard let element = cursor(at: id)?.element else { return nil }
+    var content = ""
+    func visit(_ element: DocumentElement) {
+      for (index, child) in element.children.enumerated() {
+        content += element.texts[index]
+        visit(child)
+      }
+      content += element.texts[element.children.count]
+    }
+    visit(element)
+    return content
+  }
+
+  /// Whether an element is a `<style>` element, or `false` if the document doesn't have the element.
+  package func isStyleElement(_ id: ElementID) -> Bool {
+    cursor(at: id)?.element.name == .style
+  }
+
+  /// Whether the document has a `<style>` element, whose style sheet a document that it's in reads.
+  package var hasStyleElement: Bool {
+    func visit(_ element: DocumentElement) -> Bool {
+      element.name == .style || element.children.contains(where: visit)
+    }
+    return root.map(visit) ?? false
   }
 
   /// Moves the position of an element and its descendants at a depth of their paths.

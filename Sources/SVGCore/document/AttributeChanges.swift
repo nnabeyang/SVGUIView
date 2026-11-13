@@ -11,11 +11,17 @@ package struct DocumentChanges: Sendable {
   /// The elements that followed an element when it was removed from their parent, which sibling combinators can
   /// match in another way without it.
   package var followingRemoved = Set<ElementID>()
+  /// The elements whose character data changed.
+  package var texts = Set<ElementID>()
+  /// Whether the `<style>` elements of the tree changed: one was inserted or removed, or its character data or its
+  /// type changed. The style sheets are made again from the tree, and every element with them.
+  package var stylesheets = false
 
   package init() {}
 
   package var isEmpty: Bool {
-    attributes.isEmpty && restructured.isEmpty && inserted.isEmpty && followingRemoved.isEmpty
+    attributes.isEmpty && restructured.isEmpty && inserted.isEmpty && followingRemoved.isEmpty && texts.isEmpty
+      && !stylesheets
   }
 }
 
@@ -46,8 +52,10 @@ extension SVGBaseContext {
   /// the children that it had, in their new order, unless the style sheets have pseudo-classes of the structure of
   /// the tree, such as `:nth-child()`, which make the element and its descendants again. Their ancestors are copied
   /// with the new children, and every other element is shared. The SMIL animations, what animations can change and
-  /// the elements that references find are found again in the new tree. The style sheets stay the same, since they
-  /// come from the contents of `<style>` elements.
+  /// the elements that references find are found again in the new tree. The elements whose character data changed
+  /// are made again as the ones whose attributes changed. When the `<style>` elements changed, the style sheets are
+  /// made again from the tree, without the rules of the style sheets in other files, which the next rendering reads
+  /// again, and every element is made again with them.
   ///
   /// This is for the context of a document at time zero, such as the one that parsing makes, whose elements have no
   /// animated values.
@@ -76,6 +84,13 @@ extension SVGBaseContext {
     to document: DocumentTree, changes: DocumentChanges, at time: Double = 0, startsTransitions: Bool = true
   ) -> SVGBaseContext {
     guard !changes.isEmpty else { return self }
+    // The style sheets are made again from the `<style>` elements of the tree. The ones of the processing
+    // instructions stay, and the ones in other files are read again by the next rendering.
+    let stylesheet =
+      changes.stylesheets
+      ? StyleSheetSources(
+        document: document, processingInstructions: self.stylesheet.sources?.processingInstructions ?? []
+      ).stylesheet : self.stylesheet
     var changed = Set<ElementID>()
     var reordered = Set<ElementID>()
     var containing = Set<ElementID>()
@@ -95,7 +110,11 @@ extension SVGBaseContext {
         cursor = parent
       }
     }
-    for id in changes.attributes.union(changes.inserted) {
+    if changes.stylesheets, let root = document.root {
+      // Every element is cascaded with the new style sheets.
+      change(ElementCursor(root: root))
+    }
+    for id in changes.attributes.union(changes.inserted).union(changes.texts) {
       guard let cursor = document.cursor(at: id) else { continue }
       change(cursor)
     }
