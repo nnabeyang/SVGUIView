@@ -9,7 +9,8 @@ import os
 /// The view parses SVG data and renders it in a background task. Assign new data
 /// to ``data`` to change the displayed image. The view renders again when its
 /// size or its `contentMode` changes, and a new rendering stops the one in
-/// progress. Releasing the view stops its rendering too.
+/// progress. A change of ``document`` doesn't stop it: the view renders the
+/// change after it. Releasing the view stops its rendering too.
 ///
 /// With a ``SVGUIViewConfiguration/animation`` other than
 /// ``SVGUIViewConfiguration/AnimationMode/none``, the view plays the animations
@@ -27,6 +28,7 @@ public class SVGUIView: UIView {
     didSet {
       // The values of another context aren't compared with the frame that the view shows.
       shownStyled = nil
+      contextGeneration += 1
     }
   }
   private var baseContext: SVGBaseContext {
@@ -94,8 +96,8 @@ public class SVGUIView: UIView {
   }
   static let logger = Logger(subsystem: "com.github.nnabeyang.SVGUIView", category: "main")
   /// Records each rendering as a "Render" interval, and each frame that a slower rendering skips as a "Skipped frame"
-  /// event, which Instruments and the metrics of XCTest measure. A rendering into layers records its stages as
-  /// "Style", "Build", "Plan" and "Paint" intervals in it.
+  /// event, which Instruments and the metrics of XCTest measure. A rendering records its stages as "Style", "Build"
+  /// and "Paint" intervals in it, and one into layers a "Plan" interval too.
   nonisolated static let signposter = OSSignposter(subsystem: "com.github.nnabeyang.SVGUIView", category: "Rendering")
   /// The size that the view last rendered at, so that it renders again when its size changes.
   private var renderedSize: CGSize?
@@ -106,6 +108,16 @@ public class SVGUIView: UIView {
   /// Whether a frame of the animations waits for the rendering in progress, which shows the latest time when it
   /// starts, so that frames that come while rendering is slower are skipped.
   private var needsFrame = false
+  /// Whether the document changed after the rendering in progress started, so that it's rendered again when that
+  /// rendering ends, with every layer painted again.
+  private var needsRendering = false
+  /// Counts the contexts of the document, which the changes of the document and of its animations make, so that a
+  /// rendering that started before the latest one is followed by one that shows it.
+  private var contextGeneration = 0
+  /// The context that the latest rendering that started shows.
+  private var renderedContextGeneration = 0
+  /// What the latest rendering that started depends on besides the context of the document.
+  private var renderedInputs: RenderingInputs?
   /// The time of the animations that the latest rendering shows.
   private var renderedTime: Duration?
   /// Whether the latest rendering that started renders into layers, or `nil` before the first one.
@@ -398,22 +410,57 @@ public class SVGUIView: UIView {
     layer.setNeedsDisplay()
   }
 
-  /// Starts rendering the document for the layer's display, and stops the rendering in progress.
+  /// Starts rendering the document for the layer's display, and stops the rendering in progress for another size,
+  /// other data or another content mode.
   ///
   /// The view renders in the background and keeps showing its current image until the new one is ready,
   /// so that it does not blink. Implementing `draw(_:)` instead would make UIKit replace the image with an
   /// empty one before drawing.
+  ///
+  /// Changes of the document don't stop the rendering in progress, whose result the view can still show. The view
+  /// renders the latest document after it, so that it shows renderings while an app changes the document at every
+  /// frame, even when rendering takes longer than a frame.
   override public func display(_: CALayer) {
     applyDocumentChanges()
+    if isRendering, renderedInputs == renderingInputs {
+      if renderedContextGeneration != contextGeneration {
+        needsRendering = true
+      }
+      return
+    }
     renderingTask?.cancel()
     needsFrame = false
+    needsRendering = false
     startRendering()
+  }
+
+  /// What a rendering depends on besides the changes of the document, where a rendering in progress for other ones
+  /// isn't worth showing.
+  private struct RenderingInputs: Equatable {
+    let size: CGSize
+    let scale: CGFloat
+    let wideGamut: Bool
+    let contentMode: UIView.ContentMode
+    let document: Int
+    let externalResources: ExternalResources
+    let inLayers: Bool
+  }
+
+  /// What a rendering that starts now depends on besides the changes of the document.
+  private var renderingInputs: RenderingInputs {
+    RenderingInputs(
+      size: bounds.size, scale: displayScale, wideGamut: displaysWideGamut, contentMode: contentMode,
+      document: documentGeneration, externalResources: configuration.externalResources, inLayers: rendersLayers)
   }
 
   /// Makes the context of the document with the changes that the view hasn't rendered yet.
   private func applyDocumentChanges() {
     let (tree, changes) = document.takeChanges()
     guard !changes.isEmpty else { return }
+    // A frame that starts before the view displays the changes doesn't reuse what the frames before made of the
+    // document without them.
+    shownNodes = RenderNodeCache()
+    shownLayers = nil
     // The CSS animations and the transitions that the changes start start at the time that the view displays. A view
     // that doesn't play animations, or that Reduce Motion holds, shows the new values at once.
     baseContext = baseContext.changing(
@@ -433,6 +480,8 @@ public class SVGUIView: UIView {
   private func startRendering(reusesLayers: Bool = false) {
     let rect = bounds
     renderedSize = rect.size
+    renderedInputs = renderingInputs
+    renderedContextGeneration = contextGeneration
     let generation = nextRenderingGeneration()
     let scale = displayScale
     let wideGamut = displaysWideGamut
@@ -525,7 +574,11 @@ public class SVGUIView: UIView {
     guard generation == renderingGeneration else { return }
     isRendering = false
     show(self)
-    if needsFrame {
+    if needsRendering {
+      needsRendering = false
+      needsFrame = false
+      startRendering()
+    } else if needsFrame {
       needsFrame = false
       startRendering(reusesLayers: true)
     }
@@ -917,16 +970,22 @@ public class SVGUIView: UIView {
         base.needsExternalStyleSheets
         ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
       guard !Task.isCancelled else { return nil }
-      let builder = RenderTreeBuilder(
-        base: resolved.at(time: time.seconds), viewPort: rect, scale: scale, resources: resources)
-      guard let tree = await builder.build(fit: fit) else { return nil }
+      let signposter = Self.signposter
+      let base = signposter.withIntervalSignpost("Style") { resolved.at(time: time.seconds) }
+      let buildInterval = signposter.beginInterval("Build")
+      let builder = RenderTreeBuilder(base: base, viewPort: rect, scale: scale, resources: resources)
+      let built = await builder.build(fit: fit)
+      signposter.endInterval("Build", buildInterval)
+      guard let tree = built else { return nil }
       // The tree tells which colors the bitmap shows.
       let space = CGColorSpace.rendering(wideGamut: wideGamut && tree.usesWideGamut)
       guard let graphics = CGContext.bitmap(size: rect.size, scale: scale, space: space) else {
         return .failure(.allocationFailed)
       }
       graphics.concatenate(CGAffineTransform(scale, 0, 0, -scale, 0, CGFloat(graphics.height)))
+      let paintInterval = signposter.beginInterval("Paint")
       await CGPainter(scale: scale).paint(tree, into: graphics)
+      signposter.endInterval("Paint", paintInterval)
       guard !Task.isCancelled else { return nil }
       // Making the image copies the bitmap, which can fail as allocating it can.
       guard let image = graphics.makeImage() else { return .failure(.allocationFailed) }

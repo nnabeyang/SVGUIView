@@ -181,9 +181,11 @@ combinators. Their ancestors are copied with the new children, and every other
 element is shared with the document before the change. A change of the
 `<style>` elements makes the style sheets again from the tree, and every
 element with them.
-The view then renders the whole document again, and paints every layer again,
-as it does for a new size. The animations and transitions that the change
-starts play in the frames after it like any other animation.
+The view then renders the whole document again, and paints every layer again.
+Unlike a new size, a change doesn't cancel the rendering in progress: the view
+renders the latest document when that rendering ends. The animations and
+transitions that the change starts play in the frames after it like any other
+animation.
 
 Finer invalidation is added only when measurements show the need, such as an
 index of the classes and attributes that selectors use, or painting again only
@@ -513,6 +515,15 @@ rendering when playback starts.
 During playback, nothing is cancelled. When the background work for a frame
 isn't finished by the next frame, the view keeps showing the previous frame and
 starts the next work from the latest time, skipping the frames in between.
+
+Changes made through the document API don't cancel either, whether the
+animations play or not. A rendering that is in progress when the document
+changes is shown, and the view renders the latest document after it, skipping
+the changes in between. So an app that changes the document at every frame,
+such as one that drags a shape, sees renderings even when rendering takes
+longer than a frame. A new size, new data, another content mode or another
+screen still cancels the rendering in progress, whose image would be of no
+use.
 `transform` and `opacity` changes are computed with the rest of a frame, in the
 background.
 
@@ -668,7 +679,8 @@ documents instead.
 - A set of benchmark documents covers different kinds of work: transforms only,
   changing path shapes, many elements, and filters.
 - The time of each rendering is recorded as a "Render" signpost interval, with
-  its stages as "Style", "Build", "Plan" and "Paint" intervals in it, and a frame
+  its stages as "Style", "Build" and "Paint" intervals in it, and "Plan" for a
+  rendering into layers. A frame
   that a slower rendering skips is a "Skipped frame" event. Running a filter on
   the GPU is a "Filter on GPU" interval in "Paint", with the size of the filter
   region, and making the renderer is a "Prepare GPU filters" interval. The
