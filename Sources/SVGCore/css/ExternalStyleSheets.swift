@@ -25,16 +25,24 @@ struct ExternalStyleSheet: Sendable, Equatable {
 /// The style sheets of a document in the order that they cascade in, where some of them are in other files: the
 /// style sheets of the `xml-stylesheet` processing instructions, and then each `<style>` element, after the style
 /// sheets that its `@import` rules read.
-struct StyleSheetSources: Sendable {
+struct StyleSheetSources: Sendable, Equatable {
   /// A style sheet of a `<style>` element or of a file.
-  struct Sheet: Sendable {
+  struct Sheet: Sendable, Equatable {
+    /// The CSS text that the style sheet is parsed from.
+    let text: String
     var imports = [ExternalStyleSheet]()
     var rules = [CSSRule]()
     var keyframes = [KeyframesRule]()
     var fontFaces = [FontFaceRule]()
 
+    /// Style sheets are the same when they are parsed from the same text.
+    static func == (lhs: Sheet, rhs: Sheet) -> Bool {
+      lhs.text == rhs.text
+    }
+
     /// The style sheet of CSS text.
     init(css text: String) {
+      self.text = text
       var parser = CSSParser(input: Parser(input: ParserInput(input: text)))
       for rule in parser.parseRules() {
         switch rule {
@@ -50,6 +58,27 @@ struct StyleSheetSources: Sendable {
 
   var processingInstructions = [ExternalStyleSheet]()
   var sheets = [Sheet]()
+
+  init() {}
+
+  /// The style sheets of the `<style>` elements of a document, in document order, after the style sheets of
+  /// processing instructions.
+  init(document: DocumentTree, processingInstructions: [ExternalStyleSheet]) {
+    self.processingInstructions = processingInstructions
+    func visit(_ element: DocumentElement) {
+      element.children.forEach(visit)
+      if element.name == .style, Self.isCSS(type: element.writtenAttributes["type"]) {
+        sheets.append(Sheet(css: element.text))
+      }
+    }
+    document.root.map(visit)
+  }
+
+  /// Whether a `<style>` element with a `type` attribute has a style sheet of CSS, which the document reads: the
+  /// type is CSS, empty or not given.
+  static func isCSS(type: String?) -> Bool {
+    ["", "text/css"].contains((type ?? "").trimmingCharacters(in: .whitespaces).lowercased())
+  }
 
   /// Whether a style sheet is in another file, or a style sheet has `@font-face` rules, whose fonts a rendering
   /// reads.
@@ -188,8 +217,11 @@ extension SVGBaseContext {
 
   /// The context with the style sheets of another context of the same document, which read the style sheets in other
   /// files, such as a context that ``resolvingExternalStyleSheets(loader:at:)`` made before the document changed.
+  ///
+  /// A context whose `<style>` elements changed since keeps its style sheets, which the next rendering reads.
   package func adoptingStyleSheets(of other: SVGBaseContext, at time: Double) -> SVGBaseContext {
-    replacingStylesheet(other.stylesheet, at: time)
+    guard other.stylesheet.sources == stylesheet.sources else { return self }
+    return replacingStylesheet(other.stylesheet, at: time)
   }
 
   /// The context without the rules of the style sheets in other files, which the next rendering reads again, such as

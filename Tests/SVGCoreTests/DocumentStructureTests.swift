@@ -160,4 +160,59 @@ struct DocumentStructureTests {
   func noStructuralPseudoClasses(rule: String) {
     #expect(!parse("<style>\(rule)</style>").stylesheet.hasStructuralPseudoClasses)
   }
+
+  @Test("the children of an element are replaced by character data, and kept as documents of their own")
+  func replacesChildren() throws {
+    let tree = parse(#"<text id="text">a<tspan id="s">b<tspan id="i">c</tspan></tspan>d<tspan id="e"/></text>"#).document
+    #expect(tree.textContent(of: try tree.require("text")) == "abcd")
+    #expect(tree.textContent(of: try tree.require("s")) == "bc")
+    let text = try tree.require("text")
+    let (replaced, removed) = try #require(tree.replacingChildren(of: text, withText: "xyz"))
+    #expect(replaced.textContent(of: text) == "xyz")
+    #expect(replaced.children(of: text).isEmpty)
+    #expect(!replaced.contains(try tree.require("i")))
+    replaced.expectConsistentPositions()
+    #expect(removed.map(\.rootElement) == [try tree.require("s"), try tree.require("e")])
+    #expect(removed[0].textContent(of: try tree.require("s")) == "bc")
+    removed[0].expectConsistentPositions()
+    // The document that it's made from stays the same.
+    #expect(tree.textContent(of: text) == "abcd")
+  }
+
+  @Test("the style sheets made from the tree are the ones of the style elements that parsing reads")
+  func stylesheetsOfTree() throws {
+    let base = parse(
+      #"<style>rect { fill: red }</style><g><style type=" Text/CSS ">g { fill: lime }</style></g>"#
+        + #"<style type="text/plain">circle { fill: red }</style><style type="">a { fill: blue }</style>"#)
+    let sources = StyleSheetSources(document: base.document, processingInstructions: [])
+    #expect(sources.sheets.map(\.text) == ["rect { fill: red }", "g { fill: lime }", "a { fill: blue }"])
+    #expect(sources.stylesheet.rules.count == base.stylesheet.rules.count)
+    #expect(base.document.hasStyleElement)
+    #expect(!parse(Self.content).document.hasStyleElement)
+  }
+
+  @Test("the style sheets of another context are adopted only when they come from the same style elements")
+  func adoptsStyleSheets() {
+    let base = parse("<style>@import url(a.css); rect { fill: red }</style>")
+    let same = parse(#"<style>@import url(a.css); rect { fill: red }</style><rect/>"#)
+    let other = parse("<style>@import url(a.css); rect { fill: blue } g { fill: lime }</style>")
+    #expect(base.stylesheet.sources == same.stylesheet.sources)
+    #expect(base.stylesheet.sources != other.stylesheet.sources)
+    #expect(base.adoptingStyleSheets(of: other, at: 0).stylesheet.rules.count == 1)
+  }
+
+  @Test("a change of the style elements makes the style sheets and every element again")
+  func changesStylesheets() throws {
+    let base = parse(#"<style id="style">rect { fill: red }</style>"# + Self.content)
+    let style = try base.document.require("style")
+    let (tree, _) = try #require(base.document.replacingChildren(of: style, withText: "g { fill: lime }"))
+    var changes = DocumentChanges()
+    changes.texts.insert(style)
+    changes.stylesheets = true
+    let changed = base.changing(to: tree, changes: changes)
+    #expect(changed.stylesheet.rules.count == 1)
+    for element in base.root?.elements ?? [] {
+      #expect(!(changed.root?.elements.contains { $0 === element } ?? false), "\(element.base.id ?? "")")
+    }
+  }
 }

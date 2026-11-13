@@ -196,11 +196,45 @@ struct DocumentStructureTests {
     #expect(a.parent == document.rootElement)
   }
 
+  // MARK: - Character data
+
+  @Test("the text content of an element is the character data of its descendants in document order")
+  func readsTextContent() throws {
+    let document = makeView(
+      #"<g id="g"><text id="t">a<tspan id="s">b<tspan>c</tspan></tspan>d</text><rect id="r"/></g>"#
+    ).document
+    #expect(try document.require("t").textContent == "abcd")
+    #expect(try document.require("s").textContent == "bc")
+    #expect(try document.require("g").textContent == "abcd")
+    #expect(try document.require("r").textContent == "")
+  }
+
+  @Test("setting the text content replaces the children, which are kept and inserted again as the same elements")
+  func setsTextContent() throws {
+    let document = makeView(#"<text id="t">a<tspan id="s">b</tspan>c</text>"#).document
+    let text = try document.require("t")
+    let span = try document.require("s")
+    text.textContent = "xyz"
+    #expect(text.textContent == "xyz")
+    #expect(text.children.isEmpty)
+    #expect(!span.isConnected)
+    #expect(span.parent == nil)
+    #expect(span.textContent == "b")
+    try text.append(span)
+    #expect(text.textContent == "xyzb")
+    #expect(span.parent == text)
+    // An element that isn't in the tree gets character data too.
+    let created = document.createElement("tspan")
+    created.textContent = "d"
+    #expect(created.textContent == "d")
+  }
+
   // MARK: - Rendering
 
   nonisolated private static let style = "<style>rect + rect { fill: lime } rect:first-child { stroke: black } g:empty + g { opacity: 0.5 }</style>"
   nonisolated private static let siblings = "<style>rect + rect { fill: lime } rect ~ circle { fill: blue }</style>"
   nonisolated private static let keyframes = "<style>@keyframes k { to { fill: lime } } .on { animation: k 1s linear }</style>"
+  nonisolated private static let text = #"<text id="t" y="15" font-size="8">a<tspan id="s" fill="lime">b</tspan>c</text>"#
 
   nonisolated private static let changes: [StructureChange] = [
     StructureChange(
@@ -360,6 +394,78 @@ struct DocumentStructureTests {
     ) { document in
       try document.require("t").append(try document.require("s"))
     },
+    StructureChange(
+      "an appended style element", before: content, after: content + "<style>rect { fill: lime }</style>"
+    ) { document in
+      let style = document.createElement("style")
+      style.textContent = "rect { fill: lime }"
+      try document.rootElement?.append(style)
+    },
+    StructureChange(
+      "a removed style element", before: #"<style id="s">rect { fill: lime }</style>"# + content, after: content
+    ) { document in
+      try document.require("s").remove()
+    },
+    StructureChange(
+      "the character data of a style element",
+      before: #"<style id="s">rect { fill: lime }</style>"# + content,
+      after: #"<style id="s">rect + rect { stroke: black } g { fill: blue }</style>"# + content
+    ) { document in
+      try document.require("s").textContent = "rect + rect { stroke: black } g { fill: blue }"
+    },
+    StructureChange(
+      "a style element whose type isn't CSS", before: #"<style id="s">rect { fill: lime }</style>"# + content,
+      after: #"<style id="s" type="text/plain">rect { fill: lime }</style>"# + content
+    ) { document in
+      try document.require("s").setAttribute("type", to: "text/plain")
+    },
+    StructureChange(
+      "a style element whose type becomes CSS",
+      before: #"<style id="s" type="text/plain">rect { fill: lime }</style>"# + content,
+      after: #"<style id="s" type="text/css">rect { fill: lime }</style>"# + content
+    ) { document in
+      try document.require("s").setAttribute("type", to: "text/css")
+    },
+    StructureChange(
+      "a group with a style element, made before it's inserted", before: content,
+      after: content + #"<g><style>g { fill: lime }</style><rect x="10" width="10" height="10"/></g>"#
+    ) { document in
+      let group = document.createElement("g")
+      let style = document.createElement("style")
+      try group.append(style)
+      try group.append(document.make("rect", ["x": "10", "width": "10", "height": "10"]))
+      style.textContent = "g { fill: lime }"
+      try document.rootElement?.append(group)
+    },
+    StructureChange(
+      "a style element whose animation an element runs", before: #"<rect width="20" height="20" fill="red" class="on"/>"#,
+      after: keyframes + #"<rect width="20" height="20" fill="red" class="on"/>"#
+    ) { document in
+      let style = document.createElement("style")
+      style.textContent = "@keyframes k { to { fill: lime } } .on { animation: k 1s linear }"
+      try document.rootElement?.insert(style, before: document.rootElement?.children.first)
+    },
+    StructureChange(
+      "the character data of text, which replaces its spans", before: text,
+      after: #"<text id="t" y="15" font-size="8">xyz</text>"#
+    ) { document in
+      try document.require("t").textContent = "xyz"
+    },
+    StructureChange(
+      "the character data of a span", before: text,
+      after: #"<text id="t" y="15" font-size="8">a<tspan id="s" fill="lime">bbb</tspan>c</text>"#
+    ) { document in
+      try document.require("s").textContent = "bbb"
+    },
+    StructureChange(
+      "the character data of a span that :empty matches",
+      before: "<style>tspan:empty + tspan { fill: lime }</style>"
+        + #"<text y="15" font-size="8"><tspan id="e"></tspan><tspan>b</tspan></text>"#,
+      after: "<style>tspan:empty + tspan { fill: lime }</style>"
+        + #"<text y="15" font-size="8"><tspan id="e">a</tspan><tspan>b</tspan></text>"#
+    ) { document in
+      try document.require("e").textContent = "a"
+    },
   ]
 
   /// The pixels of the snapshot of a view at a time.
@@ -491,5 +597,35 @@ struct DocumentStructureTests {
     try await waitForGreen(in: view) { $0 == 0 }
     try view.document.require("g").append(square)
     try await waitForGreen(in: view) { $0 == 255 }
+  }
+
+  @Test("a style element applies once it's in the tree")
+  func stylesheetInTree() async throws {
+    let (view, _) = try await showView(#"<rect width="20" height="20" fill="red"/>"#)
+    try await waitForRendering(of: view)
+    let generation = view.renderingGeneration
+    let group = view.document.createElement("g")
+    let style = view.document.createElement("style")
+    style.textContent = "rect { fill: rgb(0, 255, 0) }"
+    try group.append(style)
+    try await waitForRendering(of: view)
+    #expect(view.renderingGeneration == generation)
+    try view.document.rootElement?.append(group)
+    try await waitForGreen(in: view) { $0 == 255 }
+    group.remove()
+    try await waitForGreen(in: view) { $0 == 0 }
+  }
+
+  @Test("a change of the style sheets starts the transitions of the values that it changes")
+  func stylesheetTransitions() async throws {
+    let (view, clock) = try await showView(
+      #"<style id="s">rect { transition: fill 1s linear; fill: rgb(0, 0, 0) }</style><rect width="20" height="20"/>"#,
+      animation: .play)
+    try view.document.require("s").textContent = "rect { transition: fill 1s linear; fill: rgb(0, 200, 0) }"
+    try await waitForRendering(of: view)
+    clock.advance(by: .milliseconds(500))
+    try await waitForGreen(in: view) { (99...101).contains($0) }
+    clock.advance(by: .seconds(1))
+    try await waitForGreen(in: view) { $0 == 200 }
   }
 }

@@ -205,12 +205,48 @@ public final class SVGDocument {
       guard let attributes = tree.attributes(of: id), attributes[name] != value else { return }
       tree = tree.changingAttributes([id: [name: value]])
       changes.attributes.insert(id)
+      // The type of a `<style>` element decides whether the document reads its style sheet.
+      if name == "type", tree.isStyleElement(id) {
+        changes.stylesheets = true
+      }
       host?.documentDidChange()
     case .detached(let root):
       // The view doesn't show the element, so it has nothing to render again.
       detached[root] = detached[root]?.changingAttributes([id: [name: value]])
     case nil:
       break
+    }
+  }
+
+  fileprivate func textContent(of id: ElementID) -> String {
+    tree(containing: id)?.textContent(of: id) ?? ""
+  }
+
+  /// Replaces the children and the character data of an element with character data, and keeps the children as
+  /// elements that aren't in the tree.
+  fileprivate func setTextContent(_ text: String, of id: ElementID) {
+    guard let location = location(of: id), let current = tree(containing: id) else { return }
+    // An element without children that already has the character data stays the same.
+    guard !current.children(of: id).isEmpty || current.textContent(of: id) != text,
+      let (replaced, removed) = current.replacingChildren(of: id, withText: text)
+    else { return }
+    for child in removed {
+      guard let root = child.rootElement else { continue }
+      detached[root] = child
+    }
+    switch location {
+    case .connected:
+      tree = replaced
+      changes.texts.insert(id)
+      if !removed.isEmpty {
+        changes.restructured.insert(id)
+      }
+      if tree.isStyleElement(id) || removed.contains(where: \.hasStyleElement) {
+        changes.stylesheets = true
+      }
+      host?.documentDidChange()
+    case .detached(let root):
+      detached[root] = replaced
     }
   }
 
@@ -264,6 +300,9 @@ public final class SVGDocument {
       tree = inserted
       changes.restructured.insert(parent)
       changes.inserted.insert(child)
+      if subtree.hasStyleElement {
+        changes.stylesheets = true
+      }
       host?.documentDidChange()
     case .detached(let root):
       detached[root] = detached[root]?.inserting(subtree, into: parent, at: index)
@@ -290,6 +329,9 @@ public final class SVGDocument {
       }
       tree = remaining
       changes.restructured.insert(parent)
+      if removed.hasStyleElement {
+        changes.stylesheets = true
+      }
       host?.documentDidChange()
       return removed
     case .detached(let root):
@@ -410,6 +452,27 @@ extension SVGDocument.Element {
   ///   `href` of the XLink namespace can also be named `xlink:href`.
   public func removeAttribute(_ name: String) {
     document.setAttribute(name, to: nil, of: id)
+  }
+
+  /// The character data of the element and its descendants, in document
+  /// order.
+  ///
+  /// Setting it replaces the children of the element with the character
+  /// data, as the DOM does. The document keeps the children that it removes,
+  /// which can be inserted again.
+  ///
+  /// The character data that the document keeps is the one of `<text>`,
+  /// `<tspan>`, `<textPath>`, `<a>` and `<style>`. Other elements keep the
+  /// character data that's set, but SVGUIView doesn't render it. Changing
+  /// the character data of a `<style>` element makes the style sheets of the
+  /// document again, which cascades every element again.
+  ///
+  /// ```swift
+  /// label.textContent = "Score: \(score)"
+  /// ```
+  public var textContent: String {
+    get { document.textContent(of: id) }
+    nonmutating set { document.setTextContent(newValue, of: id) }
   }
 
   /// The parent of the element, or `nil` for the root element and for an

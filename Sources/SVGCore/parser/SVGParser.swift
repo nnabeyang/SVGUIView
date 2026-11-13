@@ -216,9 +216,7 @@ extension SVGParser: XMLParserDelegate {
     guard let open = stack.popLast() else { return }
     precondition(name == open.name)
     // A style sheet whose type isn't CSS isn't read.
-    if open.name == .style,
-      ["", "text/css"].contains(open.attributes["type", default: ""].trimmingCharacters(in: .whitespaces).lowercased())
-    {
+    if open.name == .style, StyleSheetSources.isCSS(type: open.attributes["type"]) {
       // The rules are numbered in document order across `<style>` elements, so that a later rule wins a tie.
       styleSources.sheets.append(StyleSheetSources.Sheet(css: open.texts.joined()))
     }
