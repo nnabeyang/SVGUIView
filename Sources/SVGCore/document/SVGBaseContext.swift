@@ -171,7 +171,9 @@ package struct SVGBaseContext: Sendable {
       animated =
         root.restyled(parent: nil, root: nil, animations: animations, in: restyleScope, replacements: &replacements)
         as? SVGSVGElement
-      return SVGBaseContext(updating: self, root: animated, animations: animations, replacements: replacements)
+      return SVGBaseContext(
+        updating: self, document: document, stylesheet: stylesheet, root: animated, animations: animations,
+        isAnimated: isAnimated, restyleScope: restyleScope, instanceStyles: instanceStyles, replacements: replacements)
     } else {
       // Animations of attributes that aren't properties change the attributes before the cascade, so the elements
       // are made again from the document with the animated attributes.
@@ -194,16 +196,17 @@ package struct SVGBaseContext: Sendable {
   /// - Parameter replacements: The elements that are made again, by the identities of the elements that they
   ///   replace.
   private init(
-    updating context: SVGBaseContext, root: SVGSVGElement?, animations: DocumentAnimations,
+    updating context: SVGBaseContext, document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?,
+    animations: DocumentAnimations, isAnimated: Bool, restyleScope: RestyleScope?, instanceStyles: InstanceStyles,
     replacements: [ObjectIdentifier: any SVGElement]
   ) {
-    document = context.document
-    stylesheet = context.stylesheet
+    self.document = document
+    self.stylesheet = stylesheet
     self.root = root?.outermost
     self.animations = animations
-    isAnimated = context.isAnimated
-    restyleScope = context.restyleScope
-    instanceStyles = context.instanceStyles
+    self.isAnimated = isAnimated
+    self.restyleScope = restyleScope
+    self.instanceStyles = instanceStyles
     func replaced<T>(_ element: T) -> T where T: SVGElement {
       replacements[element.index] as? T ?? element
     }
@@ -219,6 +222,22 @@ package struct SVGBaseContext: Sendable {
     patterns = context.patterns.mapValues(replaced)
     filters = context.filters.mapValues(replaced)
     markers = context.markers.mapValues(replaced)
+  }
+
+  /// The context of a changed document whose elements are those of a context before the changes, with some of them
+  /// made again, and that has no animations, which keeps the elements that references find, with the replaced ones
+  /// replaced.
+  ///
+  /// - Parameter replacements: The elements that are made again, by the identities of the elements that they
+  ///   replace.
+  init(
+    changing context: SVGBaseContext, document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?,
+    animations: DocumentAnimations, replacements: [ObjectIdentifier: any SVGElement]
+  ) {
+    self.init(
+      updating: context, document: document, stylesheet: stylesheet, root: root, animations: animations,
+      isAnimated: !animations.transitions.isEmpty, restyleScope: nil,
+      instanceStyles: InstanceStyles(document: document, stylesheet: stylesheet), replacements: replacements)
   }
 
   /// The context with the computed values of every element computed again at the given time, which `at(time:)` does

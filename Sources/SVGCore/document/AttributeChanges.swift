@@ -7,6 +7,8 @@ package struct DocumentChanges: Sendable {
   /// The elements in `attributes` whose attributes other than `transform` changed. The others only moved, which
   /// doesn't change what they paint in their own coordinates.
   package var paintingAttributes = Set<ElementID>()
+  /// The elements in `attributes` whose `id` changed, which makes references find other elements.
+  package var identifiers = Set<ElementID>()
   /// The elements that got or lost children, or whose children changed their order.
   package var restructured = Set<ElementID>()
   /// The elements that were inserted, with their descendants, which includes the ones that were moved.
@@ -43,6 +45,8 @@ extension SVGBaseContext {
     guard !changes.isEmpty else { return self }
     var documentChanges = DocumentChanges()
     documentChanges.attributes = Set(changes.keys)
+    documentChanges.paintingAttributes = Set(changes.filter { $0.value.keys.contains { $0 != "transform" } }.keys)
+    documentChanges.identifiers = Set(changes.filter { $0.value.keys.contains("id") }.keys)
     return changing(
       to: document.changingAttributes(changes), changes: documentChanges, at: time, startsTransitions: startsTransitions)
   }
@@ -55,7 +59,10 @@ extension SVGBaseContext {
   /// the children that it had, in their new order, unless the style sheets have pseudo-classes of the structure of
   /// the tree, such as `:nth-child()`, which make the element and its descendants again. Their ancestors are copied
   /// with the new children, and every other element is shared. The SMIL animations, what animations can change and
-  /// the elements that references find are found again in the new tree. The elements whose character data changed
+  /// the elements that references find are found again in the new tree, except when only attributes other than `id`
+  /// changed in a document without animations: then the SMIL animations stay, unless an animation element changed,
+  /// and the elements that references find are replaced by the ones made again. The CSS animations of the elements
+  /// that aren't made again play on without looking at them. The elements whose character data changed
   /// are made again as the ones whose attributes changed. When the `<style>` elements changed, the style sheets are
   /// made again from the tree, without the rules of the style sheets in other files, which the next rendering reads
   /// again, and every element is made again with them.
@@ -101,28 +108,53 @@ extension SVGBaseContext {
     let root = root?.remade(
       changing: changed, reordering: reordered, containing: containing, in: document, with: stylesheet, parent: nil,
       root: nil)
-    // The times that the document API begins and ends the SMIL animations at stay with their elements.
-    let added = Dictionary(
-      self.animations.smil.map { ($0.elementID, ($0.addedBegins, $0.addedEnds)) }, uniquingKeysWith: { first, _ in first })
-    var animations = DocumentAnimations(
-      keyframes: stylesheet.keyframes,
-      smil: SMILAnimation.animations(of: document).map { animation in
+    // Changes of attributes keep the tree and the elements that IDs name, so they keep the SMIL animations, and the
+    // elements that references find, unless they change animation elements.
+    let keepsTree =
+      changes.inserted.isEmpty && changes.restructured.isEmpty && changes.texts.isEmpty && !changes.stylesheets
+      && changes.identifiers.isEmpty
+    let smil: [SMILAnimation]
+    if keepsTree, self.animations.smil.isEmpty,
+      !changes.attributes.contains(where: { document.cursor(at: $0)?.element.name.isAnimation ?? false })
+    {
+      smil = []
+    } else {
+      // The times that the document API begins and ends the SMIL animations at stay with their elements.
+      let added = Dictionary(
+        self.animations.smil.map { ($0.elementID, ($0.addedBegins, $0.addedEnds)) },
+        uniquingKeysWith: { first, _ in first })
+      smil = SMILAnimation.animations(of: document).map { animation in
         var animation = animation
         if let (begins, ends) = added[animation.elementID] {
           animation.addedBegins = begins
           animation.addedEnds = ends
         }
         return animation
-      }, time: 0)
+      }
+    }
+    var animations = DocumentAnimations(keyframes: stylesheet.keyframes, smil: smil, time: 0)
     animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
     // The inserted elements and their descendants, whose animations start and whose transitions are cancelled.
     let inserted = changes.inserted.isEmpty ? [] : Self.elements(of: root, in: changes.inserted)
-    animations.playback = playback(of: root, at: time, starting: inserted)
-    let context = SVGBaseContext(
-      document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
+    animations.playback = playback(
+      of: root, at: time, starting: inserted, remade: changed, containing: containing,
+      removesElements: !changes.restructured.isEmpty)
+    let context: SVGBaseContext
+    if keepsTree, animations.smil.isEmpty, animations.keyframes.isEmpty,
+      let replacements = Self.replacements(from: self.root, to: root)
+    {
+      // The context isn't animated, so only the elements that the changes made again are replaced in its tables.
+      context = SVGBaseContext(
+        changing: self, document: document, stylesheet: stylesheet, root: root as? SVGSVGElement,
+        animations: animations, replacements: replacements)
+    } else {
+      context = SVGBaseContext(
+        document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
+    }
     guard startsTransitions else { return context }
     animations.transitions = transitions(
-      changingTo: context, of: Self.elements(of: root, in: changed).subtracting(inserted), at: time)
+      changingTo: context, of: Self.elements(of: root, in: changed, containing: containing).subtracting(inserted),
+      at: time)
     if !changes.restructured.isEmpty || !changes.inserted.isEmpty {
       // The removed elements have no transitions any more, and the inserted ones start none.
       let present = Set((root?.elements ?? []).map(\.base.elementID))
@@ -188,14 +220,27 @@ extension SVGBaseContext {
   /// The playback of the CSS animations of a new tree of the document, whose elements run the animations that start
   /// at the time, and the ones that play on from this context.
   ///
-  /// - Parameter starting: The elements whose animations start at the time, though this context has them, such as
-  ///   the ones that were removed and inserted again.
-  private func playback(of root: (any SVGElement)?, at time: Double, starting: Set<ElementID> = [])
-    -> [CSSAnimationID: AnimationPlayback]
-  {
-    let before = Dictionary(uniqueKeysWithValues: cssAnimationStates(of: self.root))
-    var playback = [CSSAnimationID: AnimationPlayback]()
-    for (id, isPaused) in cssAnimationStates(of: root) {
+  /// - Parameters:
+  ///   - starting: The elements whose animations start at the time, though this context has them, such as the ones
+  ///     that were removed and inserted again.
+  ///   - remade: The elements that the changes made again with their descendants, whose computed values can
+  ///     differ, or `nil` for every element. The other elements keep the playback of their animations.
+  ///   - containing: The ancestors of the elements that the changes made again or reordered.
+  ///   - removesElements: Whether the changes can have removed elements, whose animations are left out.
+  private func playback(
+    of root: (any SVGElement)?, at time: Double, starting: Set<ElementID> = [], remade: Set<ElementID>? = nil,
+    containing: Set<ElementID> = [], removesElements: Bool = false
+  ) -> [CSSAnimationID: AnimationPlayback] {
+    var scope = Set<ElementID>()
+    let before = Dictionary(
+      uniqueKeysWithValues: cssAnimationStates(of: self.root, in: remade, containing: containing, scope: &scope))
+    let after = cssAnimationStates(of: root, in: remade, containing: containing, scope: &scope)
+    var playback = animations.playback.filter { !scope.contains($0.key.element) }
+    if removesElements, !playback.isEmpty {
+      let present = Set((root?.elements ?? []).map(\.base.elementID))
+      playback = playback.filter { present.contains($0.key.element) }
+    }
+    for (id, isPaused) in after {
       var current: AnimationPlayback
       if let wasPaused = before[id], !starting.contains(id.element) {
         current = animations.playback(of: id, isPaused: wasPaused)
@@ -217,17 +262,80 @@ extension SVGBaseContext {
     return playback
   }
 
-  /// The CSS animations of the elements of a tree, and whether `animation-play-state` pauses them.
-  private func cssAnimationStates(of root: (any SVGElement)?) -> [(CSSAnimationID, Bool)] {
-    (root?.elements ?? []).flatMap { element in
+  /// The CSS animations of the elements of a tree in sets, with their descendants, and whether
+  /// `animation-play-state` pauses them.
+  ///
+  /// - Parameters:
+  ///   - set: The elements whose animations are found, with their descendants, or `nil` for every element.
+  ///   - containing: The ancestors of the elements in `set`, which the search goes through.
+  ///   - scope: The elements whose animations are found, which the found ones are added to.
+  private func cssAnimationStates(
+    of root: (any SVGElement)?, in set: Set<ElementID>?, containing: Set<ElementID>, scope: inout Set<ElementID>
+  ) -> [(CSSAnimationID, Bool)] {
+    var states = [(CSSAnimationID, Bool)]()
+    for element in Self.elementsInSubtrees(of: root, in: set, containing: containing) {
+      scope.insert(element.base.elementID)
       let style = element.style
-      return style.cssAnimations(keyframes: animations.keyframes).map { name, occurrence, index in
+      states += style.cssAnimations(keyframes: animations.keyframes).map { name, occurrence, index in
         (
           CSSAnimationID(element: element.base.elementID, name: name, occurrence: occurrence),
           ElementAnimation.timing(of: style, at: index).isPaused
         )
       }
     }
+    return states
+  }
+
+  /// The elements of a tree that are in a set, and their descendants, found through the ancestors of the elements
+  /// in the set without visiting the other elements, or every element of the tree for a set that's `nil`.
+  ///
+  /// - Parameter containing: The ancestors of the elements in `set`.
+  private static func elementsInSubtrees(
+    of root: (any SVGElement)?, in set: Set<ElementID>?, containing: Set<ElementID>
+  ) -> [any SVGElement] {
+    guard let set else { return root?.elements ?? [] }
+    var elements = [any SVGElement]()
+    func visit(_ element: any SVGElement) {
+      let id = element.base.elementID
+      if set.contains(id) {
+        elements += element.elements
+        return
+      }
+      guard containing.contains(id) else { return }
+      for child in element.children {
+        visit(child)
+      }
+    }
+    if let root { visit(root) }
+    return elements
+  }
+
+  /// The identifiers of the elements of a tree that are in a set, and of their descendants, found through their
+  /// ancestors.
+  private static func elements(
+    of root: (any SVGElement)?, in set: Set<ElementID>, containing: Set<ElementID>
+  ) -> Set<ElementID> {
+    Set(elementsInSubtrees(of: root, in: set, containing: containing).map(\.base.elementID))
+  }
+
+  /// The elements of a tree that replace the ones of another tree of the same elements, by the identities of the
+  /// elements that they replace, or `nil` if the trees have different elements.
+  ///
+  /// The elements that the trees share aren't visited.
+  static func replacements(from old: (any SVGElement)?, to new: (any SVGElement)?) -> [ObjectIdentifier: any SVGElement]? {
+    guard let old, let new else { return old == nil && new == nil ? [:] : nil }
+    var replacements = [ObjectIdentifier: any SVGElement]()
+    func pair(_ old: any SVGElement, _ new: any SVGElement) -> Bool {
+      if old === new { return true }
+      let oldChildren = old.children
+      let newChildren = new.children
+      guard old.base.elementID == new.base.elementID, type(of: old) == type(of: new),
+        oldChildren.count == newChildren.count
+      else { return false }
+      replacements[old.index] = new
+      return zip(oldChildren, newChildren).allSatisfy(pair)
+    }
+    return pair(old, new) ? replacements : nil
   }
 }
 

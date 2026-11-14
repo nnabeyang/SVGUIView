@@ -208,6 +208,9 @@ public final class SVGDocument {
       if name != "transform" {
         changes.paintingAttributes.insert(id)
       }
+      if name == "id" {
+        changes.identifiers.insert(id)
+      }
       // The type of a `<style>` element decides whether the document reads its style sheet.
       if name == "type", tree.isStyleElement(id) {
         changes.stylesheets = true
