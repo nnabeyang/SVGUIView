@@ -120,11 +120,16 @@ package struct DocumentTree: Sendable {
   private let paths: [ElementID: [Int]]
   /// The languages of the user, in the order of preference, which `systemLanguage` matches.
   package let languages: [String]
+  /// Whether the document can have SMIL animation elements: it had some when it was made, or an insertion inserted
+  /// some. Removals don't change it.
+  let mayHaveAnimationElements: Bool
 
   init(root: DocumentElement?, languages: [String]) {
     var paths = [ElementID: [Int]]()
+    var hasAnimationElements = false
     func visit(_ element: DocumentElement, path: [Int]) {
       paths[element.id] = path
+      if element.name.isAnimation { hasAnimationElements = true }
       for (index, child) in element.children.enumerated() {
         visit(child, path: path + [index])
       }
@@ -132,13 +137,16 @@ package struct DocumentTree: Sendable {
     if let root {
       visit(root, path: [])
     }
-    self.init(root: root, paths: paths, languages: languages)
+    self.init(root: root, paths: paths, languages: languages, mayHaveAnimationElements: hasAnimationElements)
   }
 
-  private init(root: DocumentElement?, paths: [ElementID: [Int]], languages: [String]) {
+  private init(
+    root: DocumentElement?, paths: [ElementID: [Int]], languages: [String], mayHaveAnimationElements: Bool
+  ) {
     self.root = root
     self.paths = paths
     self.languages = languages
+    self.mayHaveAnimationElements = mayHaveAnimationElements
   }
 
   /// The document with the given attributes of its elements replaced by the values that SMIL animations give them,
@@ -172,7 +180,8 @@ package struct DocumentTree: Sendable {
           writtenAttributes: isAnimated ? element.writtenAttributes : nil, texts: element.texts,
           children: element.children))
     }
-    return DocumentTree(root: root, paths: paths, languages: languages)
+    return DocumentTree(
+      root: root, paths: paths, languages: languages, mayHaveAnimationElements: mayHaveAnimationElements)
   }
 
   /// The document with the element at `path`, a list of child positions from the root, replaced.
@@ -222,7 +231,8 @@ package struct DocumentTree: Sendable {
     }
     return DocumentTree(
       root: root.replacingDescendant(at: parentPath[...], with: parentElement.insertingChild(inserted, at: index)),
-      paths: paths, languages: languages)
+      paths: paths, languages: languages,
+      mayHaveAnimationElements: mayHaveAnimationElements || subtree.mayHaveAnimationElements)
   }
 
   /// The document without an element and its descendants, and the document of the removed element, or `nil` if the
@@ -243,7 +253,7 @@ package struct DocumentTree: Sendable {
     return (
       DocumentTree(
         root: root.replacingDescendant(at: parentPath, with: parentElement.removingChild(at: index)), paths: paths,
-        languages: languages),
+        languages: languages, mayHaveAnimationElements: mayHaveAnimationElements),
       removed
     )
   }
@@ -267,7 +277,7 @@ package struct DocumentTree: Sendable {
     return (
       DocumentTree(
         root: root.replacingDescendant(at: path[...], with: element.replacingChildren(withText: text)), paths: paths,
-        languages: languages),
+        languages: languages, mayHaveAnimationElements: mayHaveAnimationElements),
       removed
     )
   }

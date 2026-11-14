@@ -59,10 +59,12 @@ extension SVGBaseContext {
   /// the children that it had, in their new order, unless the style sheets have pseudo-classes of the structure of
   /// the tree, such as `:nth-child()`, which make the element and its descendants again. Their ancestors are copied
   /// with the new children, and every other element is shared. The SMIL animations, what animations can change and
-  /// the elements that references find are found again in the new tree, except when only attributes other than `id`
-  /// changed in a document without animations: then the SMIL animations stay, unless an animation element changed,
-  /// and the elements that references find are replaced by the ones made again. The CSS animations of the elements
-  /// that aren't made again play on without looking at them. The elements whose character data changed
+  /// the elements that references find are found again in the new tree, with these exceptions. A document that has
+  /// never had animation elements has no SMIL animations to find. In a document without animations, changes that keep
+  /// the style sheets and the `id` attributes keep the elements that references find, with the ones made again
+  /// replaced, and find again only the elements of the IDs of the removed and the inserted elements; changes of only
+  /// attributes keep the SMIL animations too, unless an animation element changed. The CSS animations of the
+  /// elements that aren't made again play on without looking at them. The elements whose character data changed
   /// are made again as the ones whose attributes changed. When the `<style>` elements changed, the style sheets are
   /// made again from the tree, without the rules of the style sheets in other files, which the next rendering reads
   /// again, and every element is made again with them.
@@ -108,15 +110,19 @@ extension SVGBaseContext {
     let root = root?.remade(
       changing: changed, reordering: reordered, containing: containing, in: document, with: stylesheet, parent: nil,
       root: nil)
-    // Changes of attributes keep the tree and the elements that IDs name, so they keep the SMIL animations, and the
-    // elements that references find, unless they change animation elements.
-    let keepsTree =
-      changes.inserted.isEmpty && changes.restructured.isEmpty && changes.texts.isEmpty && !changes.stylesheets
-      && changes.identifiers.isEmpty
+    // A document that has never had animation elements has no SMIL animations. Changes that keep the style sheets
+    // and the IDs of the elements keep the elements that references find, with the ones made again, removed and
+    // inserted.
+    let keepsIDs = !changes.stylesheets && changes.identifiers.isEmpty
     let smil: [SMILAnimation]
-    if keepsTree, self.animations.smil.isEmpty,
+    if !document.mayHaveAnimationElements {
+      smil = []
+    } else if keepsIDs, self.animations.smil.isEmpty, changes.inserted.isEmpty, changes.restructured.isEmpty,
+      changes.texts.isEmpty,
       !changes.attributes.contains(where: { document.cursor(at: $0)?.element.name.isAnimation ?? false })
     {
+      // Changes of attributes other than `id` keep the elements that animations change, so they make an animation
+      // valid only by changing it.
       smil = []
     } else {
       // The times that the document API begins and ends the SMIL animations at stay with their elements.
@@ -134,31 +140,37 @@ extension SVGBaseContext {
     }
     var animations = DocumentAnimations(keyframes: stylesheet.keyframes, smil: smil, time: 0)
     animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
-    // The inserted elements and their descendants, whose animations start and whose transitions are cancelled.
-    let inserted = changes.inserted.isEmpty ? [] : Self.elements(of: root, in: changes.inserted)
+    // The inserted elements and their descendants, whose animations start and whose transitions are cancelled. The
+    // inserted elements are made again, so they're found through their ancestors.
+    let inserted =
+      changes.inserted.isEmpty ? [] : Self.elements(of: root, in: changes.inserted, containing: containing)
     animations.playback = playback(
       of: root, at: time, starting: inserted, remade: changed, containing: containing,
-      removesElements: !changes.restructured.isEmpty)
+      keepingElementsOf: changes.restructured.isEmpty ? nil : document)
     let context: SVGBaseContext
-    if keepsTree, animations.smil.isEmpty, animations.keyframes.isEmpty,
-      let replacements = Self.replacements(from: self.root, to: root)
+    if keepsIDs, animations.smil.isEmpty, animations.keyframes.isEmpty,
+      let treeChanges = Self.treeChanges(from: self.root, to: root)
     {
-      // The context isn't animated, so only the elements that the changes made again are replaced in its tables.
+      // The context isn't animated, so only the elements that the changes made again, removed and inserted change
+      // its tables.
       context = SVGBaseContext(
         changing: self, document: document, stylesheet: stylesheet, root: root as? SVGSVGElement,
-        animations: animations, replacements: replacements)
+        animations: animations, changes: treeChanges)
     } else {
       context = SVGBaseContext(
         document: document, stylesheet: stylesheet, root: root as? SVGSVGElement, animations: animations)
     }
     guard startsTransitions else { return context }
     animations.transitions = transitions(
-      changingTo: context, of: Self.elements(of: root, in: changed, containing: containing).subtracting(inserted),
-      at: time)
+      changingTo: context,
+      of: Self.elementsInSubtrees(of: root, in: changed, containing: containing).filter {
+        !inserted.contains($0.base.elementID)
+      }, at: time)
     if !changes.restructured.isEmpty || !changes.inserted.isEmpty {
       // The removed elements have no transitions any more, and the inserted ones start none.
-      let present = Set((root?.elements ?? []).map(\.base.elementID))
-      animations.transitions = animations.transitions.filter { present.contains($0.key) && !inserted.contains($0.key) }
+      animations.transitions = animations.transitions.filter {
+        document.contains($0.key) && !inserted.contains($0.key)
+      }
     }
     guard !animations.transitions.isEmpty else { return context }
     let transitioned = SVGBaseContext(
@@ -203,20 +215,6 @@ extension SVGBaseContext {
     return SVGBaseContext(document: document, stylesheet: stylesheet, root: root, animations: animations)
   }
 
-  /// The elements of a tree that are in a set, and their descendants.
-  private static func elements(of root: (any SVGElement)?, in set: Set<ElementID>) -> Set<ElementID> {
-    var elements = Set<ElementID>()
-    func visit(_ element: any SVGElement, isInSet: Bool) {
-      let isInSet = isInSet || set.contains(element.base.elementID)
-      if isInSet { elements.insert(element.base.elementID) }
-      for child in element.children {
-        visit(child, isInSet: isInSet)
-      }
-    }
-    if let root { visit(root, isInSet: false) }
-    return elements
-  }
-
   /// The playback of the CSS animations of a new tree of the document, whose elements run the animations that start
   /// at the time, and the ones that play on from this context.
   ///
@@ -226,19 +224,19 @@ extension SVGBaseContext {
   ///   - remade: The elements that the changes made again with their descendants, whose computed values can
   ///     differ, or `nil` for every element. The other elements keep the playback of their animations.
   ///   - containing: The ancestors of the elements that the changes made again or reordered.
-  ///   - removesElements: Whether the changes can have removed elements, whose animations are left out.
+  ///   - document: The document of the new tree when the changes can have removed elements, whose animations are
+  ///     left out, or `nil` if they haven't.
   private func playback(
     of root: (any SVGElement)?, at time: Double, starting: Set<ElementID> = [], remade: Set<ElementID>? = nil,
-    containing: Set<ElementID> = [], removesElements: Bool = false
+    containing: Set<ElementID> = [], keepingElementsOf document: DocumentTree? = nil
   ) -> [CSSAnimationID: AnimationPlayback] {
     var scope = Set<ElementID>()
     let before = Dictionary(
       uniqueKeysWithValues: cssAnimationStates(of: self.root, in: remade, containing: containing, scope: &scope))
     let after = cssAnimationStates(of: root, in: remade, containing: containing, scope: &scope)
     var playback = animations.playback.filter { !scope.contains($0.key.element) }
-    if removesElements, !playback.isEmpty {
-      let present = Set((root?.elements ?? []).map(\.base.elementID))
-      playback = playback.filter { present.contains($0.key.element) }
+    if let document {
+      playback = playback.filter { document.contains($0.key.element) }
     }
     for (id, isPaused) in after {
       var current: AnimationPlayback
@@ -318,25 +316,53 @@ extension SVGBaseContext {
     Set(elementsInSubtrees(of: root, in: set, containing: containing).map(\.base.elementID))
   }
 
-  /// The elements of a tree that replace the ones of another tree of the same elements, by the identities of the
-  /// elements that they replace, or `nil` if the trees have different elements.
+  /// How the elements of a tree differ from the ones of another tree of the same document: the elements that
+  /// replace elements of the other tree, and the subtrees that only one of the trees has, or `nil` if their roots
+  /// are different elements.
   ///
-  /// The elements that the trees share aren't visited.
-  static func replacements(from old: (any SVGElement)?, to new: (any SVGElement)?) -> [ObjectIdentifier: any SVGElement]? {
-    guard let old, let new else { return old == nil && new == nil ? [:] : nil }
-    var replacements = [ObjectIdentifier: any SVGElement]()
+  /// The children of two elements are paired by their elements in the document. The elements that the trees share
+  /// aren't visited.
+  static func treeChanges(from old: (any SVGElement)?, to new: (any SVGElement)?) -> TreeChanges? {
+    guard let old, let new else { return old == nil && new == nil ? TreeChanges() : nil }
+    var changes = TreeChanges()
     func pair(_ old: any SVGElement, _ new: any SVGElement) -> Bool {
       if old === new { return true }
+      guard old.base.elementID == new.base.elementID, type(of: old) == type(of: new) else { return false }
+      changes.replacements[old.index] = new
       let oldChildren = old.children
       let newChildren = new.children
-      guard old.base.elementID == new.base.elementID, type(of: old) == type(of: new),
-        oldChildren.count == newChildren.count
-      else { return false }
-      replacements[old.index] = new
-      return zip(oldChildren, newChildren).allSatisfy(pair)
+      if oldChildren.count == newChildren.count,
+        zip(oldChildren, newChildren).allSatisfy({ $0.base.elementID == $1.base.elementID })
+      {
+        return zip(oldChildren, newChildren).allSatisfy(pair)
+      }
+      // Children were inserted, removed or moved.
+      var kept = [ElementID: any SVGElement]()
+      for child in oldChildren {
+        guard kept.updateValue(child, forKey: child.base.elementID) == nil else { return false }
+      }
+      for child in newChildren {
+        if let oldChild = kept.removeValue(forKey: child.base.elementID) {
+          guard pair(oldChild, child) else { return false }
+        } else {
+          changes.added.append(child)
+        }
+      }
+      changes.removed += oldChildren.filter { kept[$0.base.elementID] != nil }
+      return true
     }
-    return pair(old, new) ? replacements : nil
+    return pair(old, new) ? changes : nil
   }
+}
+
+/// How the elements of a tree differ from the ones of another tree of the same document.
+struct TreeChanges {
+  /// The elements that are made again, by the identities of the elements that they replace.
+  var replacements = [ObjectIdentifier: any SVGElement]()
+  /// The elements of the other tree that this tree doesn't have, without their descendants.
+  var removed = [any SVGElement]()
+  /// The elements that the other tree doesn't have, without their descendants.
+  var added = [any SVGElement]()
 }
 
 extension SVGElement {
