@@ -165,7 +165,9 @@ A new animation frame redoes only part of the work of the frame before it:
   from the cascade. When the values are the same as in the frame before, nothing
   else is done for the frame.
 - **Render tree and layers:** The render tree and the plan of its layers are
-  made again for every frame.
+  made again for every frame. The plan needs the rectangle that each shape
+  paints in, which a shape with a stroke gets by outlining the stroke. The node of
+  a shape computes it once, and the frames that reuse the node keep it.
 - **Painting:** Only the layers that contain an element whose painting changes
   are painted again. An element whose `transform` or `opacity` is the only thing
   that changes keeps its contents, and only the properties of its layer change.
