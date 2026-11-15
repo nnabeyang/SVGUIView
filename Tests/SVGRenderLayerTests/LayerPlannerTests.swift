@@ -266,4 +266,43 @@ struct LayerPlannerTests {
     let (layer, base) = try await plan(content)
     #expect(describe(.container(layer), in: base, marksChanges: true) == expected)
   }
+
+  /// Documents whose element `g` has children that changed their order, with the IDs of the elements that get layers
+  /// of their own, and the layers as text.
+  private static let reorderings: [(String, [String], String)] = [
+    // The layers of the children of a container are painted again only where they paint other nodes, which their
+    // keys tell.
+    (
+      #"<g id="g"><rect id="a" width="10" height="10"/><rect id="b" width="10" height="10"/>"#
+        + #"<rect id="c" width="10" height="10"/></g>"#,
+      ["g", "a"], "clip(-(svg(g(a([a]) [b c]))))"
+    ),
+    // An element that paints its children as one image paints them again.
+    (
+      #"<clipPath id="clip"><rect width="5" height="5"/></clipPath><g id="g" clip-path="url(#clip)">"#
+        + #"<rect id="a" width="10" height="10"/><rect id="b" width="10" height="10"/></g>"#,
+      ["g"], "clip(-(svg(g([g]*))))"
+    ),
+    (
+      #"<rect id="a" width="10" height="10"/><g id="g" opacity="0.5" style="mix-blend-mode: multiply">"#
+        + #"<rect id="b" width="10" height="10"/><rect id="c" width="10" height="10"/></g>"#,
+      [], "clip(-([svg]*))"
+    ),
+  ]
+
+  @Test("the layers of an element whose children changed their order", arguments: reorderings)
+  func reorderedLayers(content: String, promoted: [String], expected: String) async throws {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"# + content + "</svg>"
+    let base = SVGParser.parse(data: Data(svg.utf8))
+    let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
+    let fit = ContentFit(preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
+    let tree = try #require(await RenderTreeBuilder(base: base.at(time: 0), viewPort: rect, scale: 1).build(fit: fit))
+    let elements = base.root?.elements ?? []
+    func elementID(_ name: String) throws -> ElementID {
+      try #require(elements.first { $0.base.id == name }).base.elementID
+    }
+    let planner = LayerPlanner(
+      promoted: Set(try promoted.map(elementID)), painting: [], reordered: [try elementID("g")], scale: 1)
+    #expect(describe(.container(planner.plan(tree, in: rect)), in: base, marksChanges: true) == expected)
+  }
 }

@@ -142,8 +142,10 @@ document takes longer than a frame.
 Changes that follow one another within a short time are continuous changes.
 While they last, the view shows the document in layers, as it shows playing
 animations: an element whose `transform` attribute changes moves its layer, and
-only the layers of the elements whose painting changes are painted again. When
-the document stops changing, the view shows one image again, as a snapshot
+only the layers of the elements whose painting changes are painted again.
+Inserting, removing or moving an element, or changing the character data of a
+text, likewise paints again only the layers of the elements that it changes.
+When the document stops changing, the view shows one image again, as a snapshot
 renders it. So dragging a shape doesn't paint the rest of the document again,
 while the pixels of a still view stay those of a snapshot.
 
