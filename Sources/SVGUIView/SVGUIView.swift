@@ -135,8 +135,13 @@ public class SVGUIView: UIView {
   /// so that it only paints the layers of the changed elements again, and only moves the layers of the elements whose
   /// transforms change.
   private(set) var isChangingContinuously = false
-  /// The elements whose attributes changed while the document changes continuously, which get layers of their own.
+  /// The elements that changed while the document changes continuously, which get layers of their own.
   private var changingElements = Set<ElementID>()
+  /// How many elements the changes of the tree add to `changingElements` at most, so that inserting a new element at
+  /// every frame, as drawing does, doesn't make layers without end.
+  static let maximumRestructuringElements = 64
+  /// How many elements in `changingElements` the changes of the tree added.
+  private var restructuringElementCount = 0
   /// The time of the latest change of the document.
   private var lastChange: ContinuousClock.Instant?
   /// Ends the continuous changes when the document doesn't change for a while.
@@ -511,13 +516,23 @@ public class SVGUIView: UIView {
       isChangingContinuously = true
     }
     guard isChangingContinuously else { return }
-    changingElements.formUnion(changes.attributes)
+    changingElements.formUnion(changes.attributes.union(changes.texts))
+    // An inserted or moved element gets a layer of its own, and so do the parent that it changes, which keeps its
+    // layer when the element leaves, and the element that followed it where it was, which divides the layers of the
+    // elements around it there. The layers of those elements then stay the same, wherever the element is.
+    let restructuring = changes.inserted.union(changes.restructured).union(changes.followingRemoved)
+      .subtracting(changingElements)
+    if restructuringElementCount + restructuring.count <= Self.maximumRestructuringElements {
+      changingElements.formUnion(restructuring)
+      restructuringElementCount += restructuring.count
+    }
     continuousChangesEnd?.cancel()
     continuousChangesEnd = Task { @MainActor [weak self, continuousChangeInterval] in
       try? await Task.sleep(for: continuousChangeInterval)
       guard !Task.isCancelled, let self else { return }
       isChangingContinuously = false
       changingElements = []
+      restructuringElementCount = 0
       updatePlayback()
     }
   }
@@ -1137,6 +1152,7 @@ public class SVGUIView: UIView {
           promoted: promoted,
           painting: changed.map { changed in changed.flatMap { changed in painting?.union(changed.painting) } }
             ?? painting,
+          reordered: changed??.reordered ?? [],
           scale: scale
         ).plan(tree, in: rect)
       }

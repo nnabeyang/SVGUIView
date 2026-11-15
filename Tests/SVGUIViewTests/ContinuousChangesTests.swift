@@ -144,6 +144,12 @@ struct ContinuousChangesTests {
           try element("group", in: document).append(shape)
         },
       ]),
+    ContinuousChange(
+      testDescription: "the character data of a text",
+      document: shapes + #"<text id="label" x="1" y="19" font-size="4" fill="black">0</text>"#,
+      steps: ["1", "22", "333", ""].map { text in
+        { try element("label", in: $0).textContent = text }
+      }),
   ]
 
   @Test("the layers of continuous changes show what a snapshot of the document shows", arguments: changes)
@@ -194,6 +200,104 @@ struct ContinuousChangesTests {
     // The layer of the shape has new contents, and every other layer keeps its contents.
     #expect(layerContents(of: view).subtracting(contents).count == 1)
     #expect(contents.subtracting(layerContents(of: view)).count == 1)
+    #expect(try await differenceFromSnapshot(of: view) <= 1)
+  }
+
+  /// A shape like the ones of `shapes`, which the tests insert.
+  private static func insertedShape(in document: SVGDocument, x: Int = 6) -> SVGDocument.Element {
+    let shape = document.createElement("rect")
+    shape.setAttribute("x", to: "\(x)")
+    shape.setAttribute("y", to: "12")
+    shape.setAttribute("width", to: "2")
+    shape.setAttribute("height", to: "2")
+    shape.setAttribute("fill", to: "black")
+    return shape
+  }
+
+  @Test("inserting and removing a shape continuously paints only the layer of the inserted shape again")
+  func insertionPaintsOneLayer() async throws {
+    let view = try await makeView(Self.shapes)
+    let group = try Self.element("group", in: view.document)
+    var inserted: SVGDocument.Element?
+    func toggle(_ document: SVGDocument) throws {
+      if let shape = inserted {
+        shape.remove()
+        inserted = nil
+      } else {
+        let shape = Self.insertedShape(in: document)
+        try group.append(shape)
+        inserted = shape
+      }
+    }
+    for _ in 1...4 {
+      try await apply(toggle, to: view)
+    }
+    var shown = layerContents(of: view)
+    for step in 5...8 {
+      try await apply(toggle, to: view)
+      // A new shape is painted into a layer of its own, and the layers around it keep their contents.
+      let contents = layerContents(of: view)
+      #expect(contents.subtracting(shown).count == (inserted == nil ? 0 : 1), "step \(step)")
+      #expect(try await differenceFromSnapshot(of: view) <= 1, "step \(step)")
+      shown.formUnion(contents)
+    }
+  }
+
+  @Test("moving a shape between its siblings continuously paints only its layer again")
+  func reorderingPaintsOneLayer() async throws {
+    let view = try await makeView(Self.shapes + #"<rect id="front" x="12" y="12" width="6" height="6" fill="navy"/>"#)
+    func move(_ document: SVGDocument, step: Int) throws {
+      let root = try #require(document.rootElement)
+      let moving = try Self.element("moving", in: document)
+      try root.insert(moving, before: step.isMultiple(of: 2) ? try Self.element("group", in: document) : nil)
+    }
+    for step in 1...4 {
+      try await apply({ try move($0, step: step) }, to: view)
+    }
+    var contents = layerContents(of: view)
+    for step in 5...8 {
+      try await apply({ try move($0, step: step) }, to: view)
+      // The moved shape is painted again, as an inserted one is, since it can inherit from another parent, and the
+      // layers around it keep their contents wherever it is.
+      let shown = layerContents(of: view)
+      #expect(shown.subtracting(contents).count == 1, "step \(step)")
+      #expect(contents.subtracting(shown).count == 1, "step \(step)")
+      #expect(try await differenceFromSnapshot(of: view) <= 1, "step \(step)")
+      contents = shown
+    }
+  }
+
+  @Test("changing the character data of a text continuously paints only its layer again")
+  func textPaintsOneLayer() async throws {
+    let view = try await makeView(
+      Self.shapes + #"<text id="label" x="1" y="19" font-size="4" fill="black">0</text>"#)
+    let label = try Self.element("label", in: view.document)
+    for value in 1...3 {
+      try await apply({ _ in label.textContent = "\(value)" }, to: view)
+    }
+    var contents = layerContents(of: view)
+    for value in 4...6 {
+      try await apply({ _ in label.textContent = "\(value)" }, to: view)
+      let shown = layerContents(of: view)
+      // The text has a layer of its own, apart from the shapes.
+      #expect(shown.count > 1, "value \(value)")
+      #expect(shown.subtracting(contents).count == 1, "value \(value)")
+      #expect(contents.subtracting(shown).count == 1, "value \(value)")
+      #expect(try await differenceFromSnapshot(of: view) <= 1, "value \(value)")
+      contents = shown
+    }
+  }
+
+  @Test("inserting shapes continuously gives layers of their own to a limited number of them")
+  func insertedLayersAreLimited() async throws {
+    let view = try await makeView(Self.shapes)
+    let group = try Self.element("group", in: view.document)
+    let count = SVGUIView.maximumRestructuringElements + 10
+    for index in 0..<count {
+      try await apply({ try group.append(Self.insertedShape(in: $0, x: index % 18)) }, to: view)
+    }
+    // The shapes after the limit are painted together into one layer.
+    #expect(layerContents(of: view).count <= SVGUIView.maximumRestructuringElements + 4)
     #expect(try await differenceFromSnapshot(of: view) <= 1)
   }
 

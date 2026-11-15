@@ -196,6 +196,14 @@ shows playing animations, and then it shows one image again:
   element whose `transform` or `opacity` an animation changes. A change of only
   its `transform` attribute moves the layer, and paints nothing again, unless a
   selector of the style sheets matches attributes.
+- An element that's inserted or moved, or whose character data changes, gets a
+  layer of its own too, and so do the parent whose children change and the
+  element that followed a removed or moved element. The layers of the elements
+  around them then paint the same elements whether they're there or not, so
+  they aren't painted again, and an element whose children only change their
+  order paints none of them again. At most 64 elements get layers of their own
+  this way while the changes last, so that inserting an element at every frame
+  doesn't make layers without end.
 - A rendering reuses the render nodes and the painted layers of the one before,
   except the ones of the elements that the changes made again, of the elements
   whose children changed, and of the elements that reference them, such as a

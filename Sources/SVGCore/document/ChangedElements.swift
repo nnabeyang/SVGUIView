@@ -32,9 +32,12 @@ package struct ChangedNodes: Sendable {
   /// The elements whose render nodes can differ: the ones that the changes make again, their ancestors, and the
   /// ones that reference them.
   package let nodes: Set<ElementID>
-  /// The elements whose painting can differ, with the ones whose children changed, without the ancestors that only
-  /// contain them, nor the elements that only moved.
+  /// The elements whose painting can differ, without the ones whose children only changed their order or left them,
+  /// the ancestors that only contain them, nor the elements that only moved.
   package let painting: Set<ElementID>
+  /// The elements whose children changed their order, or that some of them left, which paint other children where
+  /// they're painted as one image.
+  package let reordered: Set<ElementID>
 }
 
 extension SVGBaseContext {
@@ -115,8 +118,7 @@ extension SVGBaseContext {
   package func changedNodes(since old: SVGBaseContext, by changes: ChangedElements) -> ChangedNodes? {
     guard !changes.isEverything, let root else { return nil }
     var nodes = changes.reordered.union(changes.containing)
-    // An element whose children changed paints other children.
-    var painting = changes.reordered
+    var painting = Set<ElementID>()
     var elementsByID = [String: [ElementID]]()
     var references = [ElementID: [String]]()
     var parents = [ElementID: ElementID]()
@@ -167,6 +169,6 @@ extension SVGBaseContext {
         changed = true
       }
     }
-    return ChangedNodes(nodes: nodes, painting: painting)
+    return ChangedNodes(nodes: nodes, painting: painting, reordered: changes.reordered)
   }
 }
