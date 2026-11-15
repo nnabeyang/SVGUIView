@@ -165,7 +165,7 @@ public class SVGUIView: UIView {
   private var shownLayers: RenderedContainer?
   /// The render nodes of the elements that make the same nodes at every time, of the frame that the view shows,
   /// which the next frame reuses.
-  private var shownNodes = RenderNodeCache()
+  private(set) var shownNodes = RenderNodeCache()
   /// The document at the time of the frame that the view shows, which the next frame compares its animated values
   /// with, so that it isn't rendered if they're the same.
   private var shownStyled: SVGBaseContext?
@@ -1141,9 +1141,11 @@ public class SVGUIView: UIView {
       }
       let reusesNodes = changed.map { $0 != nil } ?? true
       let buildInterval = signposter.beginInterval("Build")
+      // The tree keeps the nodes that the next frame can reuse even where the document hasn't changed since the
+      // layers that the view shows, as in the first frame of continuous changes, after one image.
       let tree = await RenderTreeBuilder(
         base: base, viewPort: rect, scale: scale, reusing: reusesNodes ? previousNodes : RenderNodeCache(),
-        changed: changed??.nodes, resources: resources
+        changed: changed??.nodes ?? [], resources: resources
       ).build(fit: fit)
       signposter.endInterval("Build", buildInterval)
       guard let tree else { return nil }

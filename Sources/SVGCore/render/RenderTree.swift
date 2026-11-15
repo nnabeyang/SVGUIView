@@ -44,6 +44,9 @@ package struct RenderNodeCache: Sendable {
   var nodes = [Key: RenderNode]()
 
   package init() {}
+
+  /// Whether the cache has no nodes.
+  package var isEmpty: Bool { nodes.isEmpty }
 }
 
 /// Collects the nodes that a render tree reuses or makes, while a builder makes it in one task.
