@@ -55,6 +55,11 @@ extension [RenderNode] {
 
 extension ShapeNode {
   fileprivate var paintedBounds: CGRect {
+    localBounds.rect { paintedLocalBounds }.applying(transform)
+  }
+
+  /// What the shape paints in, without its transform.
+  private var paintedLocalBounds: CGRect {
     guard let geometry, let content else { return .null }
     let path = geometry.path.cgPath
     // The frame of text is the bounds of its lines.
@@ -75,13 +80,11 @@ extension ShapeNode {
         strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)
       bounds = bounds.union(stroked.boundingBoxOfPath).union(geometry.frame.insetBy(dx: -stroke.width / 2, dy: -stroke.width / 2))
     }
-    let clipped: CGRect =
-      switch mask {
-      case .none: bounds.clipped(by: clip, nil)
-      case .clipToZero: .null
-      case .mask(let mask): bounds.clipped(by: clip, mask)
-      }
-    return clipped.applying(transform)
+    return switch mask {
+    case .none: bounds.clipped(by: clip, nil)
+    case .clipToZero: .null
+    case .mask(let mask): bounds.clipped(by: clip, mask)
+    }
   }
 }
 

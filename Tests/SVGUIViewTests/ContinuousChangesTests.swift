@@ -145,6 +145,17 @@ struct ContinuousChangesTests {
         },
       ]),
     ContinuousChange(
+      testDescription: "the width of the stroke of a moving shape, which paints past where it painted",
+      document: shapes,
+      steps: ["1", "3", "5", "2"].map { width in
+        {
+          let shape = try element("moving", in: $0)
+          shape.setAttribute("stroke", to: "black")
+          shape.setAttribute("stroke-width", to: width)
+          shape.setAttribute("transform", to: "translate(\(width) 0)")
+        }
+      }),
+    ContinuousChange(
       testDescription: "the character data of a text",
       document: shapes + #"<text id="label" x="1" y="19" font-size="4" fill="black">0</text>"#,
       steps: ["1", "22", "333", ""].map { text in
