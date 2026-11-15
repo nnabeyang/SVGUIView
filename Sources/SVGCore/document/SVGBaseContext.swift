@@ -50,6 +50,8 @@ package struct SVGBaseContext: Sendable {
   var patterns = [String: SVGPatternElement]()
   var filters = [String: SVGFilterElement]()
   private(set) var markers = [String: SVGMarkerElement]()
+  /// What the elements reference, once ``changedNodes(since:by:)`` finds it, which a copy of the context shares.
+  let elementReferences = ElementReferencesCache()
 
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.

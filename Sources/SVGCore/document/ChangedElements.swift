@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// The elements that changes of a document make again, which tell a renderer the render nodes and the painting that
 /// can differ from a rendering of the document before the changes.
@@ -38,6 +39,44 @@ package struct ChangedNodes: Sendable {
   /// The elements whose children changed their order, or that some of them left, which paint other children where
   /// they're painted as one image.
   package let reordered: Set<ElementID>
+}
+
+/// What the elements of a context reference and the IDs that they have, which the context after changes gets from
+/// the context before them by the elements that the changes make again, remove and add.
+struct ElementReferences: Equatable, Sendable {
+  /// The IDs that the elements that reference other elements reference, by the elements.
+  var references = [ElementID: [String]]()
+  /// The IDs of the elements that have one.
+  var names = [ElementID: String]()
+
+  /// Adds an element, or replaces the one of its identity, without its descendants.
+  mutating func add(_ element: any SVGElement) {
+    let id = element.base.elementID
+    let referenced = RestyleScope.references(of: element)
+    references[id] = referenced.isEmpty ? nil : referenced
+    names[id] = element.base.id
+  }
+
+  /// Removes an element, without its descendants.
+  mutating func remove(_ id: ElementID) {
+    references[id] = nil
+    names[id] = nil
+  }
+}
+
+/// The references of the elements of a context, which are found the first time that the render nodes that changes
+/// of the document change are, and which the copies of the context share.
+final class ElementReferencesCache: Sendable {
+  private let value = Mutex<ElementReferences?>(nil)
+
+  /// The references, or `nil` if they haven't been found.
+  var references: ElementReferences? {
+    value.withLock { $0 }
+  }
+
+  func store(_ references: ElementReferences) {
+    value.withLock { $0 = references }
+  }
 }
 
 extension SVGBaseContext {
@@ -112,11 +151,81 @@ extension SVGBaseContext {
   /// An element that references an element whose node changes, such as a `<use>` element or one painted with a
   /// gradient, changes with it, and so does one that references an ID that names other elements after the changes.
   ///
+  /// The nodes are found from the subtrees that the changes make again, and from what the elements of the context
+  /// before the changes reference, with the elements that the changes make again, remove and add, without visiting
+  /// the other elements. The whole tree is visited where the context before the changes hasn't found its references,
+  /// or animations can change what the elements reference.
+  ///
   /// - Parameters:
   ///   - old: The context before the changes, whose renderings the nodes are compared with.
   ///   - changes: The elements that the changes make again.
   package func changedNodes(since old: SVGBaseContext, by changes: ChangedElements) -> ChangedNodes? {
     guard !changes.isEverything, let root else { return nil }
+    guard !isAnimated, !old.isAnimated, let oldReferences = old.elementReferences.references,
+      let tree = Self.treeChanges(from: old.root, to: root)
+    else { return changedNodesInWholeTree(since: old, by: changes) }
+    var references = oldReferences
+    // The IDs that can name other elements after the changes: the ones of the removed and the added elements, and the
+    // ones that the elements made again had and have, where they differ.
+    var renamed = Set<String>()
+    for element in tree.removed.flatMap(\.elements) {
+      if let name = element.base.id { renamed.insert(name) }
+      references.remove(element.base.elementID)
+    }
+    for element in tree.replacements.values {
+      let name = references.names[element.base.elementID]
+      references.add(element)
+      if name != element.base.id { renamed.formUnion([name, element.base.id].compactMap { $0 }) }
+    }
+    for element in tree.added.flatMap(\.elements) {
+      references.add(element)
+      if let name = element.base.id { renamed.insert(name) }
+    }
+    elementReferences.store(references)
+    var nodes = changes.reordered.union(changes.containing)
+    var painting = Set<ElementID>()
+    /// Collects the elements in the subtrees that the changes make again, which are found through their ancestors.
+    func collect(_ element: any SVGElement, isRemade: Bool, isRepainted: Bool) {
+      let id = element.base.elementID
+      let isRemade = isRemade || changes.remade.contains(id)
+      let isRepainted = isRepainted || changes.repainted.contains(id)
+      if isRemade { nodes.insert(id) }
+      if isRepainted { painting.insert(id) }
+      guard isRemade || changes.containing.contains(id) else { return }
+      for child in element.children {
+        collect(child, isRemade: isRemade, isRepainted: isRepainted)
+      }
+    }
+    collect(root, isRemade: false, isRepainted: false)
+    // Marking an element marks its ancestors, since their nodes contain its node, and the elements that reference
+    // them, until nothing more is marked.
+    var named = Set(nodes.compactMap { references.names[$0] })
+    var marked = Set<ElementID>()
+    var changed = true
+    while changed {
+      changed = false
+      for (element, names) in references.references where !marked.contains(element) {
+        guard names.contains(where: { renamed.contains($0) || named.contains($0) }) else { continue }
+        marked.insert(element)
+        painting.insert(element)
+        var cursor = document.cursor(at: element)
+        while let current = cursor {
+          let id = current.element.id
+          nodes.insert(id)
+          if let name = references.names[id] { named.insert(name) }
+          cursor = current.parent
+        }
+        changed = true
+      }
+    }
+    return ChangedNodes(nodes: nodes, painting: painting, reordered: changes.reordered)
+  }
+
+  /// The render nodes of this context that can differ from those of a context before changes, found by visiting every
+  /// element of both contexts, which finds the references of this context too.
+  func changedNodesInWholeTree(since old: SVGBaseContext, by changes: ChangedElements) -> ChangedNodes? {
+    guard !changes.isEverything, let root else { return nil }
+    var found = ElementReferences()
     var nodes = changes.reordered.union(changes.containing)
     var painting = Set<ElementID>()
     var elementsByID = [String: [ElementID]]()
@@ -129,7 +238,10 @@ extension SVGBaseContext {
       if isRemade { nodes.insert(id) }
       if isRepainted { painting.insert(id) }
       if let parent { parents[id] = parent }
-      if let name = element.base.id { elementsByID[name, default: []].append(id) }
+      if let name = element.base.id {
+        elementsByID[name, default: []].append(id)
+        found.names[id] = name
+      }
       let referenced = RestyleScope.references(of: element)
       if !referenced.isEmpty { references[id] = referenced }
       for child in element.children {
@@ -137,6 +249,8 @@ extension SVGBaseContext {
       }
     }
     collect(root, parent: nil, isRemade: false, isRepainted: false)
+    found.references = references
+    elementReferences.store(found)
     // The IDs that name other elements after the changes, such as of a removed element, or one whose `id` changed.
     var oldElementsByID = [String: [ElementID]]()
     func collectIDs(_ element: any SVGElement) {

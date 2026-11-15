@@ -210,7 +210,10 @@ shows playing animations, and then it shows one image again:
   except the ones of the elements that the changes made again, of the elements
   whose children changed, and of the elements that reference them, such as a
   `<use>` element or a shape painted with a gradient, or that reference an ID
-  that names another element after the changes.
+  that names another element after the changes. It finds them from the
+  subtrees that the changes made again, removed and inserted, and from what the
+  elements of the rendering before reference, without visiting the other
+  elements, unless the document has animations.
 
 Finer invalidation is added only when measurements show the need, such as an
 index of the classes and attributes that selectors use.
