@@ -60,7 +60,7 @@ enum VariableSubstitution {
         append(substitution, to: &result)
         segmentStart = parser.position
         // The text after the value is kept apart from it too.
-        if let last = substitution.last, let next = parser.slice(from: segmentStart).first, joins(last, next) {
+        if let last = substitution.last, let next = nextCharacter(&parser), joins(last, next) {
           result += "/**/"
         }
       case .function, .parenthesisBlock, .squareBracketBlock, .curlyBracketBlock:
@@ -113,6 +113,16 @@ enum VariableSubstitution {
   private static func append(_ value: String, to result: inout String) {
     if let last = result.last, let first = value.first, joins(last, first) { result += "/**/" }
     result += value
+  }
+
+  /// The first character of the text after the parser, or `nil` at the end of the text or of the block that the
+  /// parser reads. The parser stays where it is.
+  private static func nextCharacter(_ parser: inout _CSSParser.Parser) -> Character? {
+    let state = parser.state
+    let start = parser.position
+    defer { parser.reset(state: state) }
+    guard case .success = parser.nextIncludingWhitespaceAndComments() else { return nil }
+    return parser.slice(from: start).first
   }
 
   /// Whether two characters next to each other can be in the same token, such as the number and the unit of a
