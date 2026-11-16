@@ -197,9 +197,8 @@ extension UnparsedValue {
   /// value isn't valid after the substitution, which CSS Variables 1 calls invalid at computed-value time.
   func declared<P: StyleProperty>(_: P.Type, customProperties: [String: String]) -> Declared<P.Specified> {
     guard let text = VariableSubstitution.substituted(text, value: { customProperties[$0] }) else { return .unset }
-    // A length of a geometry property that `var()` gives needs a unit, as in Chrome and Firefox, also for a
-    // presentation attribute, which takes a number without one otherwise.
-    if P.self is any GeometryLengthProperty.Type, Self.isNumberWithoutUnit(text) { return .unset }
+    // The value is read as CSS, also for a presentation attribute, so a length of a geometry property that `var()`
+    // gives needs a unit, as in Chrome and Firefox.
     var input = _CSSParser.Parser(input: ParserInput(input: text))
     let declarations = input.parseEntirely { input -> Result<[PropertyDeclaration], ParseError<Never>> in
       CSSDeclarationParser.propertyDeclarations(shorthand ?? P.id.rawValue, input: &input).map { .success($0) }
@@ -217,14 +216,5 @@ extension CascadedValues {
   func declared<P: StyleProperty>(_: P.Type, customProperties: [String: String]) -> Declared<P.Specified>? {
     if let declared = self[P.self] { return declared }
     return unparsed(P.id)?.declared(P.self, customProperties: customProperties)
-  }
-}
-
-extension UnparsedValue {
-  /// Whether the text is one number other than 0, without a unit.
-  fileprivate static func isNumberWithoutUnit(_ text: String) -> Bool {
-    var input = _CSSParser.Parser(input: ParserInput(input: text))
-    guard case .success(.number(let number)) = input.next(), input.isExhausted() else { return false }
-    return number.value != 0
   }
 }
