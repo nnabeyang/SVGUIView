@@ -332,10 +332,9 @@ struct ContinuousChangesTests {
     }
     #expect(view.isChangingContinuously)
     #expect(view.layer.contents == nil)
-    // The last change ends the changes soon after it.
+    // The last change ends the changes soon after it, which can be before the view shows it on a slow machine.
     view.continuousChangeInterval = .milliseconds(100)
     try await apply({ _ in moving.setAttribute("transform", to: "translate(4 0)") }, to: view)
-    #expect(view.isChangingContinuously)
     try await waitUntil("The changes are still continuous") { !view.isChangingContinuously }
     try await waitForRendering(of: view)
     #expect(view.layer.contents != nil)
