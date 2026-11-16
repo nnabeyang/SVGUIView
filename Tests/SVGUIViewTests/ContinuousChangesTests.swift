@@ -200,6 +200,17 @@ struct ContinuousChangesTests {
     }
   }
 
+  @Test("the first frame of continuous changes keeps the nodes that the next frame reuses")
+  func firstFrameKeepsNodes() async throws {
+    let view = try await makeView(Self.shapes)
+    let moving = try Self.element("moving", in: view.document)
+    // The first change is shown in one image, and the second one in the first frame of layers.
+    try await apply({ _ in moving.setAttribute("transform", to: "translate(1 0)") }, to: view)
+    try await apply({ _ in moving.setAttribute("transform", to: "translate(2 0)") }, to: view)
+    #expect(view.isChangingContinuously)
+    #expect(!view.shownNodes.isEmpty)
+  }
+
   @Test("changing the fill of a shape continuously paints only its layer again")
   func fillPaintsOneLayer() async throws {
     let view = try await makeView(Self.shapes)
