@@ -73,6 +73,42 @@ struct LengthParsingTests {
     #expect(try computedStyle(#"<rect id="r" style="--n: 2; stroke-width: calc(var(--n) * 1px)"/>"#).strokeWidth == .pixel(2))
   }
 
+  @Test(
+    "a geometry property with a number without a unit other than 0 is invalid in a style sheet and in the style attribute",
+    arguments: [
+      #"<style>rect { width: 40 }</style><rect id="r"/>"#,
+      #"<rect id="r" style="width: 40"/>"#,
+      #"<rect id="r" style="width: 1e1"/>"#,
+      #"<rect id="r" style="x: 10"/>"#,
+      #"<circle id="r" style="r: 20"/>"#,
+      #"<circle id="r" style="cx: 20"/>"#,
+    ])
+  func unitlessGeometryInCSS(content: String) throws {
+    let style = try computedStyle(content)
+    #expect(style.width == WidthProperty.initial)
+    #expect(style.x == XProperty.initial)
+    #expect(style.r == RProperty.initial)
+    #expect(style.cx == CXProperty.initial)
+  }
+
+  @Test(
+    "a geometry property takes a number without a unit in a presentation attribute, and 0 or a length in CSS",
+    arguments: [
+      (#"<rect id="r" width="40"/>"#, SVGLength.number(40)),
+      (#"<rect id="r" style="width: 0"/>"#, .number(0)),
+      (#"<rect id="r" style="width: 40px"/>"#, .pixel(40)),
+      (#"<rect id="r" style="width: calc(40px)"/>"#, .pixel(40)),
+      (#"<rect id="r" width="30" style="width: 40"/>"#, .number(30)),
+    ])
+  func geometryLengths(content: String, expected: SVGLength) throws {
+    #expect(try computedStyle(content).width == expected)
+  }
+
+  @Test("a property other than the geometry properties takes a number without a unit in CSS")
+  func unitlessStrokeWidth() throws {
+    #expect(try computedStyle(#"<rect id="r" style="stroke-width: 6"/>"#).strokeWidth == .number(6))
+  }
+
   @Test("a list with a number and a unit apart is invalid")
   func invalidLists() throws {
     #expect(try computedStyle(#"<rect id="r" stroke-dasharray="1 px"/>"#).strokeDasharray == [])

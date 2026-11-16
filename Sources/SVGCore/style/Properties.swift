@@ -1214,10 +1214,13 @@ extension GeometryLengthProperty {
   }
 
   /// The length, or `nil` for `auto`. A negative length that the property doesn't allow isn't valid in a style
-  /// sheet, while a presentation attribute keeps it for the element to treat as an error.
+  /// sheet, while a presentation attribute keeps it for the element to treat as an error. A number without a unit
+  /// other than 0 is a length only in a presentation attribute, as SVG 2 says, and not in a style sheet or the
+  /// `style` attribute, as CSS Values says.
   static func parse(_ text: String, origin: DeclarationOrigin) -> SVGLength?? {
     if keyword(text) == "auto" { return .some(nil) }
     if let length = SVGLength(text) {
+      if origin == .css, case .number(let number) = length, number != 0 { return nil }
       if origin == .css, !allowsNegative, length != length.nonNegative { return nil }
       return length
     }

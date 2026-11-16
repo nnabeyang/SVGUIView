@@ -290,14 +290,14 @@ struct StyleTests {
 
   @Test("geometry properties read lengths and auto, and style sheets can't make radii and sizes negative")
   func geometryProperties() throws {
-    #expect(RProperty.parse("5", origin: .css) == .some(.number(5)))
+    #expect(RProperty.parse("5px", origin: .css) == .some(.pixel(5)))
     #expect(RXProperty.parse("auto", origin: .css) == .some(nil))
-    #expect(RProperty.parse("-5", origin: .css) == nil)
+    #expect(RProperty.parse("-5px", origin: .css) == nil)
     #expect(WidthProperty.parse("-1px", origin: .css) == nil)
     // An attribute keeps a negative radius, which the element treats as an error.
     #expect(RProperty.parse("-5", origin: .attribute) == .some(.number(-5)))
     // A position can be negative.
-    #expect(CXProperty.parse("-5", origin: .css) == .some(.number(-5)))
+    #expect(CXProperty.parse("-5px", origin: .css) == .some(.pixel(-5)))
     #expect(CXProperty.parse("red", origin: .css) == nil)
     #expect(CXProperty.accepts(attributeOn: .circle) && CXProperty.accepts(attributeOn: .ellipse))
     #expect(!CXProperty.accepts(attributeOn: .radialGradient) && !CXProperty.accepts(attributeOn: .rect))
