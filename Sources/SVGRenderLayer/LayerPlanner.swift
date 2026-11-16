@@ -25,6 +25,10 @@ package struct LayerPlanner: Sendable {
   let promoted: Set<ElementID>
   /// The elements whose painting changes in other ways, or `nil` if any painting can change.
   let painting: Set<ElementID>?
+  /// The elements whose children change their order, or that some of them leave, which paint other children only
+  /// where they're painted as one image. The layers of their children are painted again only where they paint
+  /// other nodes, which their keys tell.
+  let reordered: Set<ElementID>
   /// The scale of the screen.
   let scale: CGFloat
 
@@ -34,9 +38,13 @@ package struct LayerPlanner: Sendable {
   /// - Parameters:
   ///   - promoted: The elements whose compositing is animated, which get layers of their own.
   ///   - painting: The elements whose painting changes in other ways, or `nil` if any painting can change.
-  package init(promoted: Set<ElementID>, painting: Set<ElementID>? = nil, scale: CGFloat) {
+  ///   - reordered: The elements whose children change their order, or that some of them leave.
+  package init(
+    promoted: Set<ElementID>, painting: Set<ElementID>? = nil, reordered: Set<ElementID> = [], scale: CGFloat
+  ) {
     self.promoted = promoted
     self.painting = painting
+    self.reordered = reordered
     self.scale = scale
   }
 
@@ -51,7 +59,7 @@ package struct LayerPlanner: Sendable {
       transform: fit, restingTransform: fit, view: rect, isFixed: true, isChanging: false,
       key: LayerKey(components: [.index(0), .index(0)]))
     let nodes = tree.root.map { [$0] } ?? []
-    let blends = nodes.contains { node in ([node] + node.descendants).contains { $0.blendMode != .normal } }
+    let blends = nodes.contains { $0.isOrContains { $0.blendMode != .normal } }
     let children =
       blends
       ? painted(nodes, in: context, changes: nodes.contains(where: changes)).map { [PlannedLayer.painted($0)] } ?? []
@@ -166,7 +174,8 @@ package struct LayerPlanner: Sendable {
       // contents. The source of a filter is the element itself without its transform and its opacity, which the
       // container composites, so the nodes of the element don't change the contents by moving.
       let contentChanges =
-        isChanging || node.descendants.contains { $0.id.element != node.id.element && changes($0) }
+        isChanging || reordered.contains(node.id.element)
+        || node.contains { $0.id.element != node.id.element && changes($0) }
       return ContainerLayer(
         id: node.id, transform: node.transform, opacity: node.groupOpacity, clip: nil, mask: nil,
         children: painted([node.withoutCompositing], in: inner, changes: contentChanges).map { [.painted($0)] } ?? [],
@@ -224,10 +233,16 @@ package struct LayerPlanner: Sendable {
     return changes(node)
   }
 
-  /// Whether what a node paints can change with the time: the painting or the compositing of it or of a node in it.
+  /// Whether what a node paints can change with the time: the painting or the compositing of it or of a node in it,
+  /// or the order of the children of one of them.
   private func changes(_ node: RenderNode) -> Bool {
     guard let painting else { return true }
-    return ([node] + node.descendants).contains { painting.contains($0.id.element) || promoted.contains($0.id.element) }
+    // Nearly every frame reorders nothing, and doesn't look up the elements for it.
+    let isReordering = !reordered.isEmpty
+    return node.isOrContains {
+      painting.contains($0.id.element) || promoted.contains($0.id.element)
+        || (isReordering && reordered.contains($0.id.element))
+    }
   }
 
   /// The painted layer of nodes, or `nil` if they paint nothing that can show.
@@ -292,5 +307,22 @@ extension RenderNode {
       case .filtered(let filtered): filtered.source.map { [$0] } ?? []
       }
     return children.flatMap { [$0] + $0.descendants }
+  }
+
+  /// Whether the node or a node in it, at any depth, satisfies a predicate, which a layer asks of every node that it
+  /// paints at every frame, so no array of the nodes is made.
+  func isOrContains(where predicate: (RenderNode) -> Bool) -> Bool {
+    predicate(self) || contains(where: predicate)
+  }
+
+  /// Whether a node in the node, at any depth, satisfies a predicate, as ``descendants`` would contain it.
+  func contains(where predicate: (RenderNode) -> Bool) -> Bool {
+    switch self {
+    case .shape: false
+    case .group(let group): group.children.contains { $0.isOrContains(where: predicate) }
+    case .viewport(let viewport): viewport.content?.children.contains { $0.isOrContains(where: predicate) } ?? false
+    case .use(let use): use.instance?.content?.isOrContains(where: predicate) ?? false
+    case .filtered(let filtered): filtered.source?.isOrContains(where: predicate) ?? false
+    }
   }
 }

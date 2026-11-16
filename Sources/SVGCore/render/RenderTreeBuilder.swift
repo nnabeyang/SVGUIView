@@ -14,6 +14,9 @@ package struct RenderTreeBuilder {
   let scale: CGFloat
   /// The nodes of the render tree of another time that the tree can reuse.
   private let previous: RenderNodeCache
+  /// The elements whose nodes can differ from the nodes of `previous` since the document changed, or `nil` if it
+  /// hasn't, where only the nodes of the elements that animations don't change are reused.
+  private let changed: Set<ElementID>?
   /// The nodes that the tree makes or reuses that the tree of another time can reuse.
   private let reused = RenderNodeCollector()
   /// The elements in masks whose masks close cycles of masks, which they're drawn without.
@@ -47,14 +50,16 @@ package struct RenderTreeBuilder {
   /// - Parameters:
   ///   - previous: The nodes of the render tree of the document at another time, for the same rectangle, scale and
   ///     fit, which the nodes of elements that make the same nodes at every time reuse.
+  ///   - changed: The elements whose nodes can differ from the nodes of `previous` since the document changed, or
+  ///     `nil` if it hasn't. The nodes of the other elements are reused, also in a document without animations.
   ///   - resources: Reads the files that the document references. By default, none is read.
   package init(
     base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache = .init(),
-    resources: ExternalResourceLoader = .none
+    changed: Set<ElementID>? = nil, resources: ExternalResourceLoader = .none
   ) {
     self.init(
-      base: base, viewPort: viewPort, scale: scale, reusing: previous, resources: resources, imageFit: nil,
-      imageViewBox: nil, imageDepth: 0)
+      base: base, viewPort: viewPort, scale: scale, reusing: previous, changed: changed, resources: resources,
+      imageFit: nil, imageViewBox: nil, imageDepth: 0)
   }
 
   /// The builder of a document in another file that a `<use>` element of the document of a builder shows.
@@ -65,20 +70,22 @@ package struct RenderTreeBuilder {
   ///   - chain: The files of the documents that show the document, and of the document last.
   init(external base: SVGBaseContext, of outer: RenderTreeBuilder, resources: ExternalResourceLoader, chain: [URL]) {
     self.init(
-      base: base, viewPort: outer.viewPort, scale: outer.scale, reusing: .init(), resources: resources, imageFit: nil,
+      base: base, viewPort: outer.viewPort, scale: outer.scale, reusing: .init(), changed: nil, resources: resources,
+      imageFit: nil,
       imageViewBox: nil, imageDepth: outer.imageDepth, documents: outer.documents, outer: OuterBuilder(outer),
       documentChain: chain)
   }
 
   private init(
     base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache,
-    resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageViewBox: CGRect?, imageDepth: Int,
+    changed: Set<ElementID>?, resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageViewBox: CGRect?, imageDepth: Int,
     documents: ExternalDocumentCollector = .init(), outer: OuterBuilder? = nil, documentChain: [URL]? = nil
   ) {
     self.base = base
     self.viewPort = viewPort
     self.scale = scale
     self.previous = previous
+    self.changed = changed
     self.resources = resources
     self.imageFit = imageFit
     self.imageViewBox = imageViewBox
@@ -117,9 +124,11 @@ package struct RenderTreeBuilder {
     of element: any SVGDrawableElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
     instance: [ElementID]
   ) async -> RenderNode? {
-    guard let scope = base.restyleScope, !scope.unstable.contains(element.base.elementID),
-      !instance.contains(where: scope.unstable.contains)
-    else {
+    let unstable = base.restyleScope?.unstable
+    func isStable(_ id: ElementID) -> Bool {
+      !(unstable?.contains(id) ?? false) && !(changed?.contains(id) ?? false)
+    }
+    guard unstable != nil || changed != nil, isStable(element.base.elementID), instance.allSatisfy(isStable) else {
       return await makeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
     }
     let key = RenderNodeCache.Key(id: renderID(of: element, instance: instance), mode: mode)
@@ -1035,7 +1044,7 @@ package struct RenderTreeBuilder {
     case .document(let document):
       guard let svg = document.root else { return nil }
       let builder = RenderTreeBuilder(
-        base: document, viewPort: rect, scale: scale, reusing: .init(), resources: .none,
+        base: document, viewPort: rect, scale: scale, reusing: .init(), changed: nil, resources: .none,
         imageFit: preserveAspectRatio, imageViewBox: image.viewBox, imageDepth: imageDepth + 1)
       let context = ResolveContext(
         base: document, viewPort: rect, scale: scale, viewBox: CGRect(origin: .zero, size: rect.size))

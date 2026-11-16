@@ -57,18 +57,17 @@ extension SVGBaseContext {
   ///
   /// - Parameters:
   ///   - changed: The context after the change, without transitions.
-  ///   - elements: The elements whose computed values the change can change.
+  ///   - elements: The elements of the changed context whose computed values the change can change.
   ///   - time: The time of the timeline at which the change is made, in seconds.
-  func transitions(changingTo changed: SVGBaseContext, of elements: Set<ElementID>, at time: Double)
+  func transitions(changingTo changed: SVGBaseContext, of elements: [any SVGElement], at time: Double)
     -> [ElementID: [PropertyID: CSSTransition]]
   {
     var transitions = runningTransitions(at: time)
     // The elements that the change can start transitions of, with the `transition-*` values after the change, and
     // the ones whose running transitions it can change.
     let updated = Set(
-      (changed.root?.elements ?? []).lazy.filter { element in
-        let id = element.base.elementID
-        return elements.contains(id) && (transitions[id] != nil || element.style.startsTransitions)
+      elements.lazy.filter { element in
+        transitions[element.base.elementID] != nil || element.style.startsTransitions
       }.map(\.base.elementID))
     guard !updated.isEmpty else { return transitions }
     let current = at(time: time)

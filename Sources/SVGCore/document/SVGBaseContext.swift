@@ -50,6 +50,8 @@ package struct SVGBaseContext: Sendable {
   var patterns = [String: SVGPatternElement]()
   var filters = [String: SVGFilterElement]()
   private(set) var markers = [String: SVGMarkerElement]()
+  /// What the elements reference, once ``changedNodes(since:by:)`` finds it, which a copy of the context shares.
+  let elementReferences = ElementReferencesCache()
 
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.
@@ -80,29 +82,50 @@ package struct SVGBaseContext: Sendable {
     self.restyleScope = restyleScope ?? (isAnimated ? root.map { RestyleScope(root: $0, animations: animations) } : nil)
     guard let root else { return }
     for content in root.elements {
-      let identifier = content.index
-      contents[identifier] = content
-      switch content {
-      case let content as any SVGDrawableElement:
-        if let id = content.id, contentIdMap[id] == nil {
-          contentIdMap[id] = identifier
-        }
-      case let pserver as any SVGGradientServer:
-        if let id = pserver.id, pservers[id] == nil {
-          pservers[id] = pserver
-        }
-      case let marker as SVGMarkerElement:
-        if let id = marker.id, markers[id] == nil {
-          markers[id] = marker
-        }
-      default:
-        break
-      }
+      contents[content.index] = content
+      addID(of: content)
     }
     root.clip(context: &self)
     root.mask(context: &self)
     root.pattern(context: &self)
     root.filter(context: &self)
+  }
+
+  /// Adds an element to the tables of the elements that IDs name, other than the ones of `clip(context:)`,
+  /// `mask(context:)`, `pattern(context:)` and `filter(context:)`, unless an element before it in document order
+  /// has its ID.
+  ///
+  /// - Parameter names: The IDs whose elements are added, or `nil` for every ID.
+  private mutating func addID(of content: any SVGElement, among names: Set<String>? = nil) {
+    switch content {
+    case let content as any SVGDrawableElement:
+      if let id = content.id, names?.contains(id) ?? true, contentIdMap[id] == nil {
+        contentIdMap[id] = content.index
+      }
+    case let pserver as any SVGGradientServer:
+      if let id = pserver.id, names?.contains(id) ?? true, pservers[id] == nil {
+        pservers[id] = pserver
+      }
+    case let marker as SVGMarkerElement:
+      if let id = marker.id, names?.contains(id) ?? true, markers[id] == nil {
+        markers[id] = marker
+      }
+    default:
+      break
+    }
+  }
+
+  /// The IDs that the tables of the elements that IDs name can have an element by.
+  private static func tableIDs(of element: any SVGElement) -> [String] {
+    var ids = [element.base.id]
+    if let element = element as? any SVGDrawableElement { ids.append(element.id) }
+    if let element = element as? any SVGGradientServer { ids.append(element.id) }
+    if let element = element as? SVGMarkerElement { ids.append(element.id) }
+    if let element = element as? SVGClipPathElement { ids.append(element.id) }
+    if let element = element as? SVGMaskElement { ids.append(element.id) }
+    if let element = element as? SVGPatternElement { ids.append(element.id) }
+    if let element = element as? SVGFilterElement { ids.append(element.id) }
+    return ids.compactMap { $0 }
   }
 
   /// The context of the elements made from a document and its style sheets, with the animations at time zero.
@@ -171,7 +194,9 @@ package struct SVGBaseContext: Sendable {
       animated =
         root.restyled(parent: nil, root: nil, animations: animations, in: restyleScope, replacements: &replacements)
         as? SVGSVGElement
-      return SVGBaseContext(updating: self, root: animated, animations: animations, replacements: replacements)
+      return SVGBaseContext(
+        updating: self, document: document, stylesheet: stylesheet, root: animated, animations: animations,
+        isAnimated: isAnimated, restyleScope: restyleScope, instanceStyles: instanceStyles, replacements: replacements)
     } else {
       // Animations of attributes that aren't properties change the attributes before the cascade, so the elements
       // are made again from the document with the animated attributes.
@@ -194,16 +219,17 @@ package struct SVGBaseContext: Sendable {
   /// - Parameter replacements: The elements that are made again, by the identities of the elements that they
   ///   replace.
   private init(
-    updating context: SVGBaseContext, root: SVGSVGElement?, animations: DocumentAnimations,
+    updating context: SVGBaseContext, document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?,
+    animations: DocumentAnimations, isAnimated: Bool, restyleScope: RestyleScope?, instanceStyles: InstanceStyles,
     replacements: [ObjectIdentifier: any SVGElement]
   ) {
-    document = context.document
-    stylesheet = context.stylesheet
+    self.document = document
+    self.stylesheet = stylesheet
     self.root = root?.outermost
     self.animations = animations
-    isAnimated = context.isAnimated
-    restyleScope = context.restyleScope
-    instanceStyles = context.instanceStyles
+    self.isAnimated = isAnimated
+    self.restyleScope = restyleScope
+    self.instanceStyles = instanceStyles
     func replaced<T>(_ element: T) -> T where T: SVGElement {
       replacements[element.index] as? T ?? element
     }
@@ -219,6 +245,53 @@ package struct SVGBaseContext: Sendable {
     patterns = context.patterns.mapValues(replaced)
     filters = context.filters.mapValues(replaced)
     markers = context.markers.mapValues(replaced)
+  }
+
+  /// The context of a changed document whose elements are those of a context before the changes, with some of them
+  /// made again, removed or added, and that has no animations, which keeps the elements that references find, with
+  /// the replaced ones replaced, and finds again only the ones of the IDs of the removed and the added elements.
+  ///
+  /// - Parameter changes: The elements that replace, remove and add elements of the context.
+  init(
+    changing context: SVGBaseContext, document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?,
+    animations: DocumentAnimations, changes: TreeChanges
+  ) {
+    self.init(
+      updating: context, document: document, stylesheet: stylesheet, root: root, animations: animations,
+      isAnimated: !animations.transitions.isEmpty, restyleScope: nil,
+      instanceStyles: InstanceStyles(document: document, stylesheet: stylesheet), replacements: changes.replacements)
+    guard !changes.removed.isEmpty || !changes.added.isEmpty else { return }
+    // The IDs of the removed and the added elements can name other elements, so the elements that they name are
+    // found again in document order.
+    var names = Set<String>()
+    for element in changes.removed.flatMap(\.elements) {
+      contents[element.index] = nil
+      names.formUnion(Self.tableIDs(of: element))
+    }
+    for element in changes.added.flatMap(\.elements) {
+      contents[element.index] = element
+      names.formUnion(Self.tableIDs(of: element))
+    }
+    guard !names.isEmpty, let root = self.root else { return }
+    contentIdMap = contentIdMap.filter { !names.contains($0.key) }
+    pservers = pservers.filter { !names.contains($0.key) }
+    markers = markers.filter { !names.contains($0.key) }
+    clipPaths = clipPaths.filter { !names.contains($0.key) }
+    masks = masks.filter { !names.contains($0.key) }
+    patterns = patterns.filter { !names.contains($0.key) }
+    filters = filters.filter { !names.contains($0.key) }
+    func visit(_ element: any SVGElement) {
+      addID(of: element, among: names)
+      for child in element.children {
+        visit(child)
+      }
+    }
+    visit(root)
+    // The other tables are filled only where they have no element, so the ones of the other IDs stay.
+    root.clip(context: &self)
+    root.mask(context: &self)
+    root.pattern(context: &self)
+    root.filter(context: &self)
   }
 
   /// The context with the computed values of every element computed again at the given time, which `at(time:)` does

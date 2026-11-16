@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreText
 import Foundation
+import Synchronization
 
 /// The identity of a node of a render tree: the element that it comes from, and the `<use>` elements that show
 /// it, from the outermost one. A renderer matches the nodes of a new render tree with the previous one by it.
@@ -43,6 +44,9 @@ package struct RenderNodeCache: Sendable {
   var nodes = [Key: RenderNode]()
 
   package init() {}
+
+  /// Whether the cache has no nodes.
+  package var isEmpty: Bool { nodes.isEmpty }
 }
 
 /// Collects the nodes that a render tree reuses or makes, while a builder makes it in one task.
@@ -77,10 +81,21 @@ package struct ShapeNode: Sendable {
   package var blendMode = CGBlendMode.normal
   /// Whether the shape paints colors outside sRGB, which a bitmap of a wide gamut shows.
   package let usesWideGamut: Bool
+  /// What the shape paints in its own coordinates, once computed, which the copies of the node share.
+  let localBounds: LocalBounds
 
   package init(
     id: RenderID, transform: CGAffineTransform, geometry: Geometry?, clip: ClipPathEffect?, mask: MaskApplication,
     opacity: CGFloat, content: ShapeContent?, antialiases: Bool = true, blendMode: CGBlendMode = .normal
+  ) {
+    self.init(
+      id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: opacity, content: content,
+      antialiases: antialiases, blendMode: blendMode, localBounds: LocalBounds())
+  }
+
+  init(
+    id: RenderID, transform: CGAffineTransform, geometry: Geometry?, clip: ClipPathEffect?, mask: MaskApplication,
+    opacity: CGFloat, content: ShapeContent?, antialiases: Bool, blendMode: CGBlendMode, localBounds: LocalBounds
   ) {
     self.id = id
     self.transform = transform
@@ -92,6 +107,24 @@ package struct ShapeNode: Sendable {
     self.antialiases = antialiases
     self.blendMode = blendMode
     usesWideGamut = content?.usesWideGamut ?? false
+    self.localBounds = localBounds
+  }
+
+  /// A rectangle that contains what a shape paints in its own coordinates, without its transform, which is computed
+  /// the first time that it's needed.
+  ///
+  /// The layers of every frame need what the shapes paint in, and a frame reuses the nodes of the elements that don't
+  /// change, so a shape with a stroke is outlined only once, and not at every frame.
+  final class LocalBounds: Sendable {
+    private let bounds = Mutex<CGRect?>(nil)
+
+    /// The rectangle, which `compute` computes if it hasn't been.
+    func rect(_ compute: () -> CGRect) -> CGRect {
+      if let bounds = bounds.withLock({ $0 }) { return bounds }
+      let computed = compute()
+      bounds.withLock { $0 = computed }
+      return computed
+    }
   }
 }
 

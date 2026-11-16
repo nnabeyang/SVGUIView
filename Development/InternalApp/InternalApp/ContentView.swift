@@ -2,7 +2,7 @@ import SVGTestSuite
 import SwiftUI
 
 /// Lists the SVG files of the test suite by folder, and opens one to compare how SVGView and a web view
-/// render it.
+/// render it. It also opens the demonstrations of the document API.
 ///
 /// The app is also the host of the snapshot tests, so it loads no SVG file and no web view until one is
 /// opened.
@@ -16,6 +16,7 @@ struct ContentView: View {
         .navigationDestination(for: Folder.self) { FolderView(folder: $0) }
         .navigationDestination(for: Comparison.self) { ComparisonView(comparison: $0) }
         .navigationDestination(for: AnimationControls.self) { AnimationControlView(file: $0.file) }
+        .navigationDestination(for: DragDemo.self) { _ in DragDemoView() }
         .toolbar {
           ToolbarItem(placement: .primaryAction) {
             Button("Open File…") { showingPicker = true }
@@ -95,6 +96,13 @@ private struct FolderView: View {
 
   var body: some View {
     List {
+      if folder == .testSuite {
+        Section("Demos") {
+          NavigationLink(value: DragDemo()) {
+            Label("Drag a Shape", systemImage: "hand.draw")
+          }
+        }
+      }
       if !contents.folders.isEmpty {
         Section("Folders") {
           ForEach(contents.folders, id: \.self) { folder in

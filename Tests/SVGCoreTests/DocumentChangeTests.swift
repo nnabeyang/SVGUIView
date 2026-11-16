@@ -86,7 +86,26 @@ struct DocumentChangeTests {
       #"<style>.a ~ rect { fill: lime }</style><rect width="50" height="50"/>"#
         + #"<rect id="b" width="10" height="10" class="a"/>"#
     ),
+    // The elements that references find are the changed ones.
+    (
+      ##"<linearGradient id="g"><stop id="s" stop-color="red"/></linearGradient>"##
+        + ##"<rect width="50" height="50" fill="url(#g)"/>"##, ("s", "stop-color", "lime"),
+      ##"<linearGradient id="g"><stop id="s" stop-color="lime"/></linearGradient>"##
+        + ##"<rect width="50" height="50" fill="url(#g)"/>"##
+    ),
+    (
+      ##"<clipPath id="c"><rect id="r" width="10" height="10"/></clipPath>"##
+        + ##"<rect width="50" height="50" fill="lime" clip-path="url(#c)"/>"##, ("r", "width", "50"),
+      ##"<clipPath id="c"><rect id="r" width="50" height="10"/></clipPath>"##
+        + ##"<rect width="50" height="50" fill="lime" clip-path="url(#c)"/>"##
+    ),
     // SMIL animations and CSS animations change with the attributes that they come from.
+    (
+      #"<rect id="a" width="10" height="50" fill="lime"><animate id="m" to="100" dur="1s"/></rect>"#,
+      ("m", "attributeName", "width"),
+      #"<rect id="a" width="10" height="50" fill="lime"><animate id="m" attributeName="width" to="100" dur="1s"/>"#
+        + "</rect>"
+    ),
     (
       #"<rect id="a" width="10" height="50" fill="lime"><animate id="m" attributeName="width" to="100" dur="1s"/>"#
         + "</rect>", ("m", "dur", "2s"),
@@ -119,9 +138,46 @@ struct DocumentChangeTests {
     }
     #expect(Set(changed.contentIdMap.keys) == Set(written.contentIdMap.keys))
     #expect(Set(changed.pservers.keys) == Set(written.pservers.keys))
+    // The tables find the elements of the changed tree.
+    #expect(Set(changed.contents.keys) == Set((changed.root?.elements ?? []).map(\.index)))
+    #expect(changed.contents.allSatisfy { $0.key == $0.value.index })
+    func attributes(_ element: any SVGElement) -> [String: String] { element.base.attributes }
+    for name in changed.contentIdMap.keys {
+      #expect(changed[name].map(attributes) == written[name].map(attributes), "\(name)")
+    }
+    #expect(changed.pservers.mapValues(attributes) == written.pservers.mapValues(attributes))
+    #expect(changed.clipPaths.mapValues(attributes) == written.clipPaths.mapValues(attributes))
+    #expect(changed.markers.mapValues(attributes) == written.markers.mapValues(attributes))
     for time in [0, 0.5] {
       #expect(try await pixels(of: changed.at(time: time)) == pixels(of: written.at(time: time)), "at \(time)")
     }
+  }
+
+  @Test("a change keeps the playback of the animations of the elements that it doesn't change")
+  func keepsPlayback() throws {
+    let base = parse(
+      Self.keyframes + #"<g id="g"><rect id="a" width="50" height="50"/></g><rect id="b" width="50" height="50"/>"#)
+    let a = try #require(base.document.element(id: "a"))
+    let b = try #require(base.document.element(id: "b"))
+    // The animation of a descendant of a group starts at the time of the change.
+    let started = base.changingAttributes([a: ["class": "on"]], at: 0.5)
+    #expect(started.animations.playback.keys.map(\.element) == [a])
+    let changed = started.changingAttributes([b: ["fill": "lime"]], at: 0.7)
+    #expect(changed.animations.playback == started.animations.playback)
+  }
+
+  @Test("removing an element leaves out the playback of its animations")
+  func removedPlayback() throws {
+    let base = parse(
+      Self.keyframes + #"<g id="g"><rect id="a" width="50" height="50"/><rect id="b" width="50" height="50"/></g>"#)
+    let g = try #require(base.document.element(id: "g"))
+    let a = try #require(base.document.element(id: "a"))
+    let started = base.changingAttributes([a: ["class": "on"]], at: 0.5)
+    #expect(!started.animations.playback.isEmpty)
+    let tree = try #require(started.document.removing(a)).tree
+    var changes = DocumentChanges()
+    changes.restructured = [g]
+    #expect(started.changing(to: tree, changes: changes, at: 0.7).animations.playback.isEmpty)
   }
 
   @Test("a change copies the changed element and its ancestors, and shares every other element")

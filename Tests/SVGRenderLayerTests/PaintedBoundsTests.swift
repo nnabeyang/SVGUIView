@@ -122,4 +122,20 @@ struct PaintedBoundsTests {
     #expect(painted > 0)
     #expect(outside == 0, "\(outside) pixels outside \(bounds)")
   }
+
+  @Test("a shape without its transform paints where the shape does, without the transform")
+  func boundsWithoutCompositing() async throws {
+    let shape = #"d="M10 50 L50 40 L10 30" fill="none" stroke="black" stroke-width="2" stroke-miterlimit="20""#
+    let root = try #require(try await tree(#"<path transform="translate(5 7)" "# + shape + "/>").root)
+    guard case .viewport(let viewport) = root, let node = viewport.content?.children.first, case .shape = node else {
+      Issue.record("\(root)")
+      return
+    }
+    // The node computes what it paints in before its copy without the transform, which shares it.
+    let expected = try await bounds("<path " + shape + "/>")
+    let moved = expected.applying(CGAffineTransform(translationX: 5, y: 7))
+    #expect(node.paintedBounds == moved)
+    #expect(node.withoutCompositing.paintedBounds == expected)
+    #expect(node.paintedBounds == moved)
+  }
 }
