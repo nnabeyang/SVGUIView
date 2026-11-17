@@ -23,6 +23,52 @@ protocol GeometryContext: SVGLengthContext {
   /// The path that a `<textPath>` lays its characters out along, in the user space of its text, or `nil` if it has
   /// no path data and references no `<path>` or basic shape.
   func path(of textPath: SVGTSpanElement) -> PathMeasure?
+  /// The elements outside text that declare the lines of `text-decoration` that its characters have, which draw
+  /// those lines with their styles and fonts.
+  var textDecorators: TextDecorators { get }
+}
+
+/// The closest elements outside text that declare each line of `text-decoration`, which the lines on the characters
+/// of text are drawn with, where no element of the text declares them.
+struct TextDecorators {
+  /// An element that declares lines, after the ones around it.
+  private final class Declaration: Sendable {
+    let lines: TextDecorationLines
+    let element: any SVGDrawableElement
+    /// The number of elements that declare lines around the element and itself.
+    let depth: Int
+    let previous: Declaration?
+
+    init(lines: TextDecorationLines, element: any SVGDrawableElement, previous: Declaration?) {
+      self.lines = lines
+      self.element = element
+      self.depth = (previous?.depth ?? 0) + 1
+      self.previous = previous
+    }
+  }
+
+  /// The innermost element that declares lines, or `nil` if none does, which most contexts are, so that copying a
+  /// context costs nothing more.
+  private var last: Declaration?
+
+  /// Whether no element declares a line.
+  var isEmpty: Bool { last == nil }
+
+  /// Declares lines by an element in the ones that declare lines before it.
+  mutating func declare(_ lines: TextDecorationLines, by element: any SVGDrawableElement) {
+    last = Declaration(lines: lines, element: element, previous: last)
+  }
+
+  /// The element that declares a line, with how deep it is among the elements that declare lines, which is larger
+  /// for an element in another, or `nil` if no element declares the line.
+  func declaration(of line: TextDecorationLines) -> (element: any SVGDrawableElement, depth: Int)? {
+    var declaration = last
+    while let current = declaration {
+      if current.lines.contains(line) { return (current.element, current.depth) }
+      declaration = current.previous
+    }
+    return nil
+  }
 }
 
 /// What resolving lengths and building geometry reads while a render tree is built: the rendered rectangle and
@@ -38,6 +84,7 @@ struct ResolveContext: GeometryContext {
   let scale: CGFloat
   var viewBox: CGRect
   var style = ComputedStyle.initial
+  var textDecorators = TextDecorators()
 
   var viewBoxSize: CGSize {
     viewBox.size
@@ -69,6 +116,29 @@ struct ResolveContext: GeometryContext {
   func styled(by element: some SVGElement) -> ResolveContext {
     var context = self
     context.style = element.style
+    return context
+  }
+
+  /// The lines of `text-decoration` that an element declares, which are drawn on the text in it with its styles and
+  /// font, or `nil` if it declares none. A declaration with `var()` declares the lines that it has with the custom
+  /// properties of the element substituted.
+  static func textDecorations(declaredBy element: some SVGDrawableElement) -> TextDecorationLines? {
+    let base = element.base
+    // The computed lines have the declared ones, so an element without lines declares none. Text finds the lines that
+    // it and its spans declare itself.
+    guard !base.style.textDecoration.isEmpty, !(element is SVGTextElement),
+      case .value(let lines)? = base.cascaded.declared(
+        TextDecorationProperty.self, customProperties: base.style.customProperties),
+      !lines.isEmpty
+    else { return nil }
+    return lines
+  }
+
+  /// The context without elements that declare lines of `text-decoration`, for content that isn't drawn in the
+  /// descendants of the elements of this context, such as the children of a clip path.
+  func withoutTextDecorators() -> ResolveContext {
+    var context = self
+    context.textDecorators = TextDecorators()
     return context
   }
 

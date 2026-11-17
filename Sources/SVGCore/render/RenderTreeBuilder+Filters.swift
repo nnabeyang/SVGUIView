@@ -34,7 +34,9 @@ extension RenderTreeBuilder {
     let path = await path(of: element, context: elementContext, guard: references)
     var frame = await frame(of: element, context: elementContext, path: path, guard: references)
     // The filter draws the element in a context of its own, with the viewBox and nothing else of the context.
-    let sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
+    var sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
+    // The lines of text-decoration that the element and its ancestors declare are drawn on the text in it.
+    sourceContext.textDecorators = context.textDecorators
     let source = await nodeWithoutFilter(
       of: element, context: sourceContext, mode: .filter(isRoot: true), guard: sourceReferences, instance: instance)
     var transform = await transform(of: element, context: elementContext, frame: frame, guard: references)

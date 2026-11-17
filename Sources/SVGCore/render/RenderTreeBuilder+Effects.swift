@@ -31,6 +31,9 @@ extension RenderTreeBuilder {
       let element = base.clipPaths[id],
       CGContext.bitmapLayout(size: frame.size, scale: scale) != nil
     else { return nil }
+    // The children of the clip path aren't in the elements around the element that it clips, so the lines of
+    // text-decoration that those declare aren't on the text in it.
+    let context = context.withoutTextDecorators()
     var shapes = [ClipShape]()
     for child in element.children {
       guard !Task.isCancelled else { break }

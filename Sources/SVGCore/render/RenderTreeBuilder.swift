@@ -153,6 +153,21 @@ package struct RenderTreeBuilder {
     // pool between elements.
     await Task.yield()
     guard element.base.passesConditions else { return nil }
+    // The lines of text-decoration that the element declares are drawn on the text in it with its styles. The
+    // context is copied only for an element that declares lines, as copying it for every element costs.
+    if let lines = ResolveContext.textDecorations(declaredBy: element) {
+      var context = context
+      context.textDecorators.declare(lines, by: element)
+      return await makeNode(of: element, declaring: context, mode: mode, guard: references, instance: instance)
+    }
+    return await makeNode(of: element, declaring: context, mode: mode, guard: references, instance: instance)
+  }
+
+  /// The node of an element in a context with the lines of text-decoration that it declares.
+  private func makeNode(
+    of element: any SVGDrawableElement, declaring context: ResolveContext, mode: DrawMode,
+    guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> RenderNode? {
     switch element {
     case let svg as SVGSVGElement:
       if svg.display == CSSDisplay.none { return nil }
@@ -218,9 +233,11 @@ package struct RenderTreeBuilder {
   ) async -> RenderNode {
     let context = context.styled(by: element)
     let references = beginsLevel(mode) ? references.beginning(.all) : references
-    // Text is laid out apart from its outline only when it has spans, or glyphs that the fonts draw in their colors.
+    // Text is laid out apart from its outline only when it has spans, glyphs that the fonts draw in their colors, or
+    // lines that an element around it declares.
     if let text = element as? SVGTextElement,
-      !text.children.isEmpty || text.mayHaveColorGlyphs,
+      !text.children.isEmpty || text.mayHaveColorGlyphs
+        || (!context.textDecorators.isEmpty && !text.style.textDecoration.isEmpty),
       let spans = text.spans(in: context),
       spans.contains(where: { $0.element !== text || !$0.colorGlyphs.isEmpty })
     {
@@ -381,7 +398,12 @@ package struct RenderTreeBuilder {
             .vector(fill: fill, stroke: nil, fillRule: element.pathFillRule),
           ] : [.vector(fill: fill, stroke: stroke, fillRule: element.pathFillRule)]
       }
-      let id = renderID(of: element, instance: instance)
+      // The lines that an element around the text declares are a copy of its own in the text, which the instance
+      // chain tells apart from the node of the element, as it does the copies of markers.
+      let id =
+        span.isAroundText
+        ? RenderID(element: element.base.elementID, instance: instance + [text.base.elementID])
+        : renderID(of: element, instance: instance)
       for (part, content) in contents.enumerated() {
         children.append(
           (
