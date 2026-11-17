@@ -39,4 +39,26 @@ extension CGContext {
     guard !overflow else { return nil }
     return (pixelWidth, pixelHeight, bytesPerRow)
   }
+
+  /// The rectangle that a bitmap of a rectangle in points covers: the rectangle, with its width and height rounded up
+  /// to whole pixels at the scale, or the rectangle if it has no pixel.
+  ///
+  /// An image of the bitmap that's drawn into this rectangle, or that clips to it as a mask, is copied pixel for
+  /// pixel rather than scaled a little. A bitmap of the size of this rectangle has the same pixels.
+  package static func bitmapRect(of rect: CGRect, scale: CGFloat) -> CGRect {
+    guard let (width, height, _) = bitmapLayout(size: rect.size, scale: scale) else { return rect }
+    return bitmapRect(at: rect.origin, width: width, height: height, scale: scale)
+  }
+
+  /// The rectangle at a point that a bitmap of a width and a height in pixels covers at a scale. A bitmap of the size
+  /// of the rectangle has the same pixels.
+  package static func bitmapRect(at origin: CGPoint, width: Int, height: Int, scale: CGFloat) -> CGRect {
+    /// The length of the pixels, which a bitmap of the length rounds up to the same pixels.
+    func length(_ pixels: Int) -> CGFloat {
+      var length = CGFloat(pixels) / scale
+      while (length * scale).rounded(.up) > CGFloat(pixels) { length = length.nextDown }
+      return length
+    }
+    return CGRect(x: origin.x, y: origin.y, width: length(width), height: length(height))
+  }
 }

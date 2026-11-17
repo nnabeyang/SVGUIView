@@ -52,9 +52,7 @@ extension CGPainter {
   /// The images of the filter are drawn into this rectangle, so that they're copied pixel for pixel rather than
   /// scaled a little.
   package func bitmapRect(of filtered: FilteredNode) -> CGRect {
-    let rect = filtered.effectRect
-    guard let (width, height, _) = CGContext.bitmapLayout(size: rect.size, scale: scale) else { return rect }
-    return CGRect(x: rect.minX, y: rect.minY, width: CGFloat(width) / scale, height: CGFloat(height) / scale)
+    CGContext.bitmapRect(of: filtered.effectRect, scale: scale)
   }
 
   /// The element without its filter, painted into a bitmap of the filter region in the color space of
