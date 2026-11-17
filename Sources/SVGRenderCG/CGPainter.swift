@@ -436,27 +436,67 @@ package struct CGPainter {
   /// transform, so that its edges are as sharp as they are without the enlargement. Elsewhere it has the scale of the
   /// painter, but no more than `maximumBitmapOversampling` times as fine as the pixels of `target`, so that a much
   /// reduced user space doesn't make a bitmap much larger than what it clips. An enlarged bitmap covers only the part
-  /// of `extent` that can show in `target`, on the grid of the pixels of the whole one, so that it has no more pixels
-  /// than `target` shows.
+  /// of `extent` that can show in `target`, so that it has no more pixels than `target` shows.
+  ///
+  /// The rectangle is the one that the pixels of the bitmap cover, so that the bitmap clips its rectangle pixel for
+  /// pixel: a bitmap scaled to `extent` would move its edges inward. Each pixel of `target` in the rectangle has the
+  /// same whole number of pixels of the bitmap, and where `target` doesn't turn or stretch the user space, the
+  /// rectangle is on the pixels of `target`, so that the bitmap isn't resampled between the two grids, which would
+  /// blur its edges. The rectangle can go past `extent` by less than a pixel of `target`.
   private func bitmapExtent(of extent: CGRect, in target: CGContext) -> (extent: CGRect, scale: CGFloat) {
     let ctm = target.ctm
     let targetScale = max(hypot(ctm.a, ctm.b), hypot(ctm.c, ctm.d))
-    // A scale that differs from the painter's by rounding, such as of the fit of the document, keeps the bitmap of
-    // the painter's scale.
-    guard targetScale.isFinite, targetScale > scale * 1.001 else {
-      guard targetScale.isFinite, targetScale > 0 else { return (extent, scale) }
-      return (extent, min(scale, targetScale * Self.maximumBitmapOversampling))
+    guard targetScale.isFinite, targetScale > 0 else { return (CGContext.bitmapRect(of: extent, scale: scale), scale) }
+    // A scale that differs from the painter's by rounding, such as of the fit of the document, isn't an enlargement.
+    let isEnlarged = targetScale > scale * 1.001
+    var covered = extent
+    if isEnlarged {
+      covered = extent.intersection(target.boundingBoxOfClipPath)
+      guard !covered.isNull, !covered.isEmpty else { return (.null, targetScale) }
     }
-    let visible = extent.intersection(target.boundingBoxOfClipPath)
-    guard !visible.isNull, !visible.isEmpty else { return (.null, targetScale) }
-    func edge(_ value: CGFloat, from origin: CGFloat, _ rule: FloatingPointRoundingRule) -> CGFloat {
-      origin + ((value - origin) * targetScale).rounded(rule) / targetScale
+    let oversampling =
+      isEnlarged
+      ? 1 : max(1, Int((min(scale, targetScale * Self.maximumBitmapOversampling) / targetScale + 1e-6).rounded(.down)))
+    let bitmapScale = targetScale * CGFloat(oversampling)
+    let (origin, width, height) =
+      Self.pixels(of: covered, on: ctm, scale: targetScale)
+      ?? Self.pixels(of: covered, from: extent.origin, scale: targetScale)
+    guard width > 0, height > 0 else { return (.null, targetScale) }
+    return (
+      CGContext.bitmapRect(at: origin, width: width * oversampling, height: height * oversampling, scale: bitmapScale),
+      bitmapScale
+    )
+  }
+
+  /// The origin in the user space and the numbers of the whole pixels of a transform that cover a rectangle, or `nil`
+  /// if the transform turns or stretches the user space, whose pixels aren't on its axes.
+  private static func pixels(of rect: CGRect, on ctm: CGAffineTransform, scale: CGFloat) -> (CGPoint, Int, Int)? {
+    let tolerance = 1e-6
+    guard abs(ctm.b) <= tolerance * scale, abs(ctm.c) <= tolerance * scale,
+      abs(abs(ctm.a) - abs(ctm.d)) <= tolerance * scale
+    else { return nil }
+    let device = rect.applying(ctm)
+    let minX = (device.minX + tolerance).rounded(.down)
+    let minY = (device.minY + tolerance).rounded(.down)
+    let maxX = (device.maxX - tolerance).rounded(.up)
+    let maxY = (device.maxY - tolerance).rounded(.up)
+    guard let width = Int(exactly: maxX - minX), let height = Int(exactly: maxY - minY) else { return nil }
+    let user = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY).applying(ctm.inverted())
+    return (user.origin, width, height)
+  }
+
+  /// The origin and the numbers of the whole pixels at a scale that cover a rectangle, on the grid of the pixels from
+  /// a point.
+  private static func pixels(of rect: CGRect, from origin: CGPoint, scale: CGFloat) -> (CGPoint, Int, Int) {
+    func pixel(_ value: CGFloat, from origin: CGFloat, _ rule: FloatingPointRoundingRule) -> CGFloat {
+      ((value - origin) * scale).rounded(rule)
     }
-    let minX = edge(visible.minX, from: extent.minX, .down)
-    let minY = edge(visible.minY, from: extent.minY, .down)
-    let maxX = min(edge(visible.maxX, from: extent.minX, .up), extent.maxX)
-    let maxY = min(edge(visible.maxY, from: extent.minY, .up), extent.maxY)
-    return (CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY), targetScale)
+    let left = pixel(rect.minX, from: origin.x, .down)
+    let top = pixel(rect.minY, from: origin.y, .down)
+    let right = pixel(rect.maxX, from: origin.x, .up)
+    let bottom = pixel(rect.maxY, from: origin.y, .up)
+    let point = CGPoint(x: origin.x + left / scale, y: origin.y + top / scale)
+    return (point, Int(exactly: right - left) ?? 0, Int(exactly: bottom - top) ?? 0)
   }
 
   /// The bitmap of `extent` at `scale`, whose alpha is the luminance of the mask, or `nil` if it can't be made.
