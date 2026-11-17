@@ -167,6 +167,13 @@ final class SVGTextElement: ShapeGeometry {
       return chain
     }
     var spans = [TextSpan]()
+    // The lines that elements outside the text declare are drawn under the ones of the text and its spans, the lines
+    // of the outer elements first, without the effects of the spans, which those elements apply around the text.
+    let outside = lines.decorators.indices.dropFirst(owners.count)
+    for decorator in outside {
+      guard let under = lines.under[decorator] else { continue }
+      spans.append(TextSpan(element: lines.decorators[decorator], path: under, frame: .null, isAroundText: true))
+    }
     for owner in owners.indices where glyphs.contains(owner) || lines.under[owner] != nil {
       let path = CGMutablePath()
       if glyphs.contains(owner) {
@@ -181,6 +188,10 @@ final class SVGTextElement: ShapeGeometry {
       }
       spans.append(span)
     }
+    for decorator in outside {
+      guard let through = lines.through[decorator] else { continue }
+      spans.append(TextSpan(element: lines.decorators[decorator], path: through, frame: .null, isAroundText: true))
+    }
     for owner in owners.indices {
       guard let through = lines.through[owner] else { continue }
       spans.append(TextSpan(element: owners[owner], path: through, frame: .null, spans: spansAround(owner)))
@@ -192,16 +203,18 @@ final class SVGTextElement: ShapeGeometry {
   /// text, in the user space.
   ///
   /// A line decorates the characters of the element that declares it and of its descendants, and it's drawn with
-  /// the styles and the font of that element, or of the text if an element around the text declares it.
+  /// the styles and the font of that element, which can be an element around the text, as Chrome draws it. Such an
+  /// element follows the owners in the decorators, from the outermost one.
   ///
   /// The glyphs of an element next to each other on a horizontal baseline have one line, and each other glyph, such as
   /// one on a path or a rotated one, has a piece of the line of its own.
   private func decorationLines(
     of layout: TextLayout, content: TextContent, context: any GeometryContext
-  ) -> (under: [Int: CGMutablePath], through: [Int: CGMutablePath]) {
+  ) -> (under: [Int: CGMutablePath], through: [Int: CGMutablePath], decorators: [any SVGDrawableElement]) {
     var under = [Int: CGMutablePath]()
     var through = [Int: CGMutablePath]()
     let owners = owners(of: content)
+    let decorators = owners + outsideDecorators(context: context)
     let isVertical = style.writingMode != .horizontalTB
     // The glyphs that have one line, with their first glyph and their advance in the coordinates of the line.
     var segments = [(glyph: PlacedGlyph, advance: CGFloat)]()
@@ -222,8 +235,8 @@ final class SVGTextElement: ShapeGeometry {
     for (glyph, advance) in segments {
       for line in [TextDecorationLines.underline, .overline, .lineThrough]
       where owners[glyph.owner].style.textDecoration.contains(line) {
-        let decorator = decorator(of: line, for: glyph.owner, content: content)
-        guard let font = Self.font(of: owners[decorator].style, context: context) else { continue }
+        let decorator = decorator(of: line, for: glyph.owner, content: content, decorators: decorators, context: context)
+        guard let font = Self.font(of: decorators[decorator].style, context: context) else { continue }
         var thickness = CTFontGetUnderlineThickness(font)
         let center: CGFloat
         switch line {
@@ -254,7 +267,7 @@ final class SVGTextElement: ShapeGeometry {
         }
       }
     }
-    return (under, through)
+    return (under, through, decorators)
   }
 
   /// The position of the line through text above the baseline, and its thickness, from the OS/2 table of a font,
@@ -338,10 +351,14 @@ final class SVGTextElement: ShapeGeometry {
     }
   }
 
-  /// The element that draws a line of `text-decoration` on the characters of an element: the closest element of
-  /// the text, from the element to the text, that declares the line, or the text itself. A declaration with `var()`
-  /// declares the lines that it has with the custom properties of its element substituted.
-  private func decorator(of line: TextDecorationLines, for owner: Int, content: TextContent) -> Int {
+  /// The element that draws a line of `text-decoration` on the characters of an element, as an index of the
+  /// decorators: the closest element of the text, from the element to the text, that declares the line, or the
+  /// closest element around the text that declares it, or the text itself. A declaration with `var()` declares the
+  /// lines that it has with the custom properties of its element substituted.
+  private func decorator(
+    of line: TextDecorationLines, for owner: Int, content: TextContent, decorators: [any SVGDrawableElement],
+    context: any GeometryContext
+  ) -> Int {
     var element: Int? = owner
     let owners = owners(of: content)
     while let current = element {
@@ -352,7 +369,24 @@ final class SVGTextElement: ShapeGeometry {
       }
       element = content.parents[current]
     }
+    if let outside = context.textDecorators.declaration(of: line)?.element,
+      let index = decorators.indices.dropFirst(owners.count).first(where: { decorators[$0] === outside })
+    {
+      return index
+    }
     return 0
+  }
+
+  /// The elements around the text that declare lines of `text-decoration` on its characters, from the outermost one.
+  private func outsideDecorators(context: any GeometryContext) -> [any SVGDrawableElement] {
+    var declarations = [(element: any SVGDrawableElement, depth: Int)]()
+    for line in [TextDecorationLines.underline, .overline, .lineThrough] {
+      guard let declaration = context.textDecorators.declaration(of: line),
+        !declarations.contains(where: { $0.element === declaration.element })
+      else { continue }
+      declarations.append(declaration)
+    }
+    return declarations.sorted { $0.depth < $1.depth }.map(\.element)
   }
 
   /// The characters of text as one line, each in the font of its element and spaced by its `letter-spacing` and
@@ -582,6 +616,8 @@ struct TextSpan {
   var spans: [any SVGDrawableElement] = []
   /// The glyphs that the fonts draw in their colors, such as emoji, which are drawn after the other glyphs.
   var colorGlyphs: [ColorGlyph] = []
+  /// Whether the element is around the text, which declares the lines of `text-decoration` of the shape.
+  var isAroundText = false
 }
 
 /// The characters of text and its spans, and the elements that they belong to.

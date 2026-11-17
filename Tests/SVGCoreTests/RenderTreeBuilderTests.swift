@@ -1347,17 +1347,83 @@ struct RenderTreeBuilderTests {
     #expect(try bounds(of: decorated).minX <= bounds(of: plain).minX)
   }
 
-  @Test("a line declared around text is drawn with the paints of the text, under the glyphs of its tspans")
+  @Test("a line declared around text is drawn with the paints of the element that declares it, under the glyphs")
   func decorationAroundText() async throws {
     let tree = try await renderTree(
       #"<g text-decoration="underline" fill="red"><text x="2" y="10" font-size="4" fill="lime">a"#
         + #"<tspan fill="blue">bcd</tspan></text></g>"#)
     let shapes = shapes(of: try children(of: tree))
+    try #require(shapes.count == 3)
+    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1]])
+    // The underline goes under the glyphs of the text and of the tspan.
+    #expect(try bounds(of: shapes[0]).minX <= bounds(of: shapes[1]).minX + 0.5)
+    #expect(try bounds(of: shapes[0]).maxX >= bounds(of: shapes[2]).maxX - 0.5)
+    #expect(try bounds(of: shapes[0]).minY > bounds(of: shapes[2]).maxY - 1)
+    // The shape of the line is a copy in the text, which doesn't take the identity of the node of the group.
+    let group = try group(try children(of: tree).first)
+    #expect(shapes[0].id.element == group.id.element)
+    #expect(shapes[0].id != group.id)
+  }
+
+  @Test("lines declared by elements around each other are drawn with the paints of each one, the outer one first")
+  func nestedDecorationsAroundText() async throws {
+    let tree = try await renderTree(
+      #"<g text-decoration="underline" fill="red"><g text-decoration="overline line-through" fill="blue">"#
+        + #"<text x="2" y="10" font-size="4" fill="lime">ab</text></g></g>"#)
+    let shapes = shapes(of: try children(of: tree))
+    try #require(shapes.count == 4)
+    // The underline, the overline, the glyphs, and the line through them.
+    #expect(
+      shapes.map { fillColor(of: $0)?.components ?? [] } == [[1, 0, 0, 1], [0, 0, 1, 1], [0, 1, 0, 1], [0, 0, 1, 1]])
+    #expect(try bounds(of: shapes[1]).minY < bounds(of: shapes[2]).minY + 1)
+  }
+
+  @Test("the line that an element around text declares has the thickness of the font of that element")
+  func decorationAroundTextFont() async throws {
+    func underline(_ size: Int) async throws -> CGRect {
+      let tree = try await renderTree(
+        #"<g text-decoration="underline" fill="red" font-size="\#(size)"><text x="2" y="10" font-size="4">a</text></g>"#)
+      let line = try #require(shapes(of: try children(of: tree)).first)
+      return try bounds(of: line)
+    }
+    #expect(try await underline(16).height > underline(4).height * 2)
+  }
+
+  @Test("a use element that declares a line draws it with its paints on the text that it shows")
+  func decorationOfUse() async throws {
+    let tree = try await renderTree(
+      ##"<defs><text id="t" x="2" y="10" font-size="4">a</text></defs>"##
+        + ##"<use href="#t" text-decoration="underline" fill="red"/>"##)
+    let node = try #require(try children(of: tree).last)
+    let instance = try #require(try use(node).instance?.content)
+    let shapes = shapes(of: [instance])
     try #require(shapes.count == 2)
-    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[0, 1, 0, 1], [0, 0, 1, 1]])
-    // The underline of the text goes under the glyphs of the tspan too.
-    #expect(try bounds(of: shapes[0]).maxX >= bounds(of: shapes[1]).maxX - 0.5)
-    #expect(try bounds(of: shapes[0]).maxY > bounds(of: shapes[1]).maxY + 0.2)
+    #expect(fillColor(of: shapes[0])?.components == [1, 0, 0, 1])
+  }
+
+  @Test("the line that a filtered element declares is drawn on the text in it")
+  func decorationOfFilteredGroup() async throws {
+    let tree = try await renderTree(
+      ##"<filter id="f"><feOffset dx="1"/></filter>"##
+        + ##"<g filter="url(#f)" text-decoration="underline" fill="red"><text x="2" y="10" font-size="4">a</text></g>"##)
+    let filtered = try #require(try children(of: tree).last?.filtered, "The group isn't filtered")
+    let shapes = shapes(of: [try #require(filtered.source)])
+    try #require(shapes.count == 2)
+    #expect(fillColor(of: shapes[0])?.components == [1, 0, 0, 1])
+  }
+
+  @Test("the lines that the elements around an element declare aren't on the text of its clip path")
+  func decorationOfClippedGroup() async throws {
+    let clipPath = ##"<clipPath id="c" text-decoration="underline"><text x="2" y="10" font-size="4">a</text></clipPath>"##
+    let plain = try await renderTree(clipPath + ##"<rect width="20" height="20" clip-path="url(#c)"/>"##)
+    // The group's font would make the underline thicker.
+    let decorated = try await renderTree(
+      clipPath + ##"<g text-decoration="underline" font-size="16"><rect width="20" height="20" clip-path="url(#c)"/></g>"##)
+    func clipBounds(_ tree: RenderTree) throws -> CGRect {
+      let rect = try #require(shapes(of: try children(of: tree)).last)
+      return try #require(rect.clip).shapes.reduce(CGRect.null) { $0.union($1.path.cgPath.boundingBoxOfPath) }
+    }
+    #expect(try clipBounds(decorated) == clipBounds(plain))
   }
 
   @Test(

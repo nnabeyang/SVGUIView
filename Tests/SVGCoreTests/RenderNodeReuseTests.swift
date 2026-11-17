@@ -17,12 +17,16 @@ private func unstable(in base: SVGBaseContext) -> Set<String> {
 }
 
 /// The render tree of a document at a time, rendered into 100 by 100.
-private func tree(of base: SVGBaseContext, reusing previous: RenderNodeCache = .init()) async throws -> RenderTree {
+private func tree(
+  of base: SVGBaseContext, reusing previous: RenderNodeCache = .init(), changed: Set<ElementID>? = nil
+) async throws -> RenderTree {
   let fit = ContentFit(
     preserveAspectRatio: PreserveAspectRatio(xAlign: .mid, yAlign: .mid, option: .meet))
   return try #require(
-    await RenderTreeBuilder(base: base, viewPort: CGRect(x: 0, y: 0, width: 100, height: 100), scale: 1, reusing: previous)
-      .build(fit: fit))
+    await RenderTreeBuilder(
+      base: base, viewPort: CGRect(x: 0, y: 0, width: 100, height: 100), scale: 1, reusing: previous, changed: changed
+    )
+    .build(fit: fit))
 }
 
 /// The colors that the shapes of a node fill, in order.
@@ -87,5 +91,41 @@ struct RenderNodeReuseTests {
     #expect(fills(of: second.root) == fills(of: fresh.root))
     #expect(fills(of: second.root) != fills(of: first.root))
     #expect(!second.reusableNodes.nodes.isEmpty)
+  }
+
+  @Test(
+    "the line that an element around text declares changes with the paint of the element",
+    arguments: [
+      #"<g fill="red" text-decoration="underline"><set attributeName="fill" to="lime" begin="0.5s"/>"#,
+      #"<g fill="red" text-decoration="underline" style="animation: k 1s linear">"#,
+    ])
+  func decorationAroundText(group: String) async throws {
+    let base = parse(
+      Self.keyframes + group + #"<text x="10" y="50" font-size="20" fill="blue">a</text></g>"#
+        + #"<rect width="10" height="10"/>"#)
+    let first = try await tree(of: base.at(time: 0))
+    let second = try await tree(of: base.at(time: 0.7), reusing: first.reusableNodes)
+    let fresh = try await tree(of: base.at(time: 0.7))
+    #expect(fills(of: second.root) == fills(of: fresh.root))
+    #expect(fills(of: second.root) != fills(of: first.root))
+  }
+
+  @Test("the line that an element around text declares changes with a change of the paint of the element")
+  func changedDecorationAroundText() async throws {
+    let base = parse(
+      #"<g id="g" fill="red" text-decoration="underline"><text x="10" y="50" font-size="20" fill="blue">a</text></g>"#
+        + #"<rect width="10" height="10"/>"#)
+    let first = try await tree(of: base, changed: [])
+    let g = try #require(base.document.element(id: "g"))
+    let changed = base.changingAttributes([g: ["fill": "lime"]])
+    var changes = DocumentChanges()
+    changes.attributes = [g]
+    changes.paintingAttributes = [g]
+    let nodes = try #require(changed.changedNodes(since: base, by: changed.changedElements(by: changes)))
+    let second = try await tree(of: changed, reusing: first.reusableNodes, changed: nodes.nodes)
+    let fresh = try await tree(of: changed)
+    #expect(!first.reusableNodes.nodes.isEmpty)
+    #expect(fills(of: second.root) == fills(of: fresh.root))
+    #expect(fills(of: second.root) != fills(of: first.root))
   }
 }
