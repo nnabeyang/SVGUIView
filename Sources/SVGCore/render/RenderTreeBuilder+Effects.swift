@@ -32,8 +32,8 @@ extension RenderTreeBuilder {
       CGContext.bitmapLayout(size: frame.size, scale: scale) != nil
     else { return nil }
     // The children of the clip path aren't in the elements around the element that it clips, so the lines of
-    // text-decoration that those declare aren't on the text in it.
-    let context = context.withoutTextDecorators()
+    // text-decoration on the text in it are the ones that the elements around the clip path declare.
+    let context = context.with(textDecorators: textDecorators(around: element))
     var shapes = [ClipShape]()
     for child in element.children {
       guard !Task.isCancelled else { break }
@@ -201,9 +201,11 @@ extension RenderTreeBuilder {
     // The content is drawn in a context of its own, with the viewBox of the context, or the bounding box of the
     // masked element as 100% in its units. References in it continue the ones of the masked element, so that a
     // cycle of masks or patterns stops there.
-    let contentContext = ResolveContext(
+    var contentContext = ResolveContext(
       base: base, viewPort: viewPort, scale: scale,
       viewBox: contentUnits == .objectBoundingBox ? CGRect(x: 0, y: 0, width: 1, height: 1) : context.viewBox)
+    // The lines of text-decoration on the text in it are the ones that the elements around the mask declare.
+    contentContext.textDecorators = textDecorators(around: element)
     var contents = [RenderNode]()
     for child in element.children {
       guard !Task.isCancelled else { break }
@@ -225,6 +227,16 @@ extension RenderTreeBuilder {
     return MaskEffect(
       frame: frame, region: region, contentUnits: contentUnits,
       colorInterpolation: element.colorInterpolation ?? .sRGB, contents: contents)
+  }
+
+  /// The elements that declare lines of `text-decoration` around a clip path, a mask, a pattern or a marker, which
+  /// the text in its content draws the lines of.
+  func textDecorators(around element: some SVGElement) -> TextDecorators {
+    textDecorators(around: element.base.elementID)
+  }
+
+  func textDecorators(around element: ElementID) -> TextDecorators {
+    base.effectTextDecorators.decorators(around: element, in: base.root)
   }
 
   // MARK: - Patterns
@@ -281,7 +293,10 @@ extension RenderTreeBuilder {
     }
     // The content is drawn in a context of its own, which shares the references of patterns. Other references have
     // a level only for an element drawn as the root.
-    let tileContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: viewBox)
+    var tileContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: viewBox)
+    // The lines of text-decoration on the text in it are the ones that the elements around the pattern with the
+    // children declare.
+    tileContext.textDecorators = textDecorators(around: pattern.childrenOwner)
     var tileReferences = ReferenceGuard()
     tileReferences.patterns = references.patterns
     if mode == .root || mode == .filter(isRoot: true) {
