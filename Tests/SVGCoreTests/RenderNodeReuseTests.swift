@@ -33,8 +33,12 @@ private func tree(
 private func fills(of node: RenderNode?) -> [String] {
   switch node {
   case .shape(let shape):
-    if case .vector(.color(let color)?, _, _)? = shape.content { return ["\(color.components ?? [])"] }
-    return []
+    switch shape.content {
+    case .vector(.color(let color)?, _, _)?: return ["\(color.components ?? [])"]
+    // The content of a pattern counts as the fills of the shape that it fills.
+    case .vector(.pattern(let pattern?)?, _, _)?: return pattern.content.flatMap(fills)
+    default: return []
+    }
   case .group(let group): return group.children.flatMap(fills)
   case .viewport(let viewport): return (viewport.content?.children ?? []).flatMap(fills)
   case .use(let use): return fills(of: use.instance?.content)
@@ -125,6 +129,25 @@ struct RenderNodeReuseTests {
     let second = try await tree(of: changed, reusing: first.reusableNodes, changed: nodes.nodes)
     let fresh = try await tree(of: changed)
     #expect(!first.reusableNodes.nodes.isEmpty)
+    #expect(fills(of: second.root) == fills(of: fresh.root))
+    #expect(fills(of: second.root) != fills(of: first.root))
+  }
+
+  @Test("the line that an element around a pattern declares changes with a change of the paint of the element")
+  func changedDecorationAroundPattern() async throws {
+    let base = parse(
+      #"<g id="g" fill="red" text-decoration="underline"><pattern id="p" width="100" height="100" "#
+        + #"patternUnits="userSpaceOnUse"><text x="10" y="50" font-size="20" fill="blue">a</text></pattern></g>"#
+        + #"<rect width="100" height="100" fill="url(#p)"/>"#)
+    let first = try await tree(of: base, changed: [])
+    let g = try #require(base.document.element(id: "g"))
+    let changed = base.changingAttributes([g: ["fill": "lime"]])
+    var changes = DocumentChanges()
+    changes.attributes = [g]
+    changes.paintingAttributes = [g]
+    let nodes = try #require(changed.changedNodes(since: base, by: changed.changedElements(by: changes)))
+    let second = try await tree(of: changed, reusing: first.reusableNodes, changed: nodes.nodes)
+    let fresh = try await tree(of: changed)
     #expect(fills(of: second.root) == fills(of: fresh.root))
     #expect(fills(of: second.root) != fills(of: first.root))
   }

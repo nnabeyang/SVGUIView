@@ -134,11 +134,12 @@ struct ResolveContext: GeometryContext {
     return lines
   }
 
-  /// The context without elements that declare lines of `text-decoration`, for content that isn't drawn in the
-  /// descendants of the elements of this context, such as the children of a clip path.
-  func withoutTextDecorators() -> ResolveContext {
+  /// The context with other elements that declare lines of `text-decoration`, for content that isn't drawn in the
+  /// descendants of the elements of this context, such as the children of a clip path, which the elements around
+  /// the clip path declare lines on.
+  func with(textDecorators: TextDecorators) -> ResolveContext {
     var context = self
-    context.textDecorators = TextDecorators()
+    context.textDecorators = textDecorators
     return context
   }
 

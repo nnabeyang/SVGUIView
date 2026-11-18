@@ -1426,6 +1426,76 @@ struct RenderTreeBuilderTests {
     #expect(try clipBounds(decorated) == clipBounds(plain))
   }
 
+  /// The shapes of the content of the pattern that fills the last child of the root element.
+  private func patternShapes(_ content: String) async throws -> [ShapeNode] {
+    let tree = try await renderTree(content)
+    let paint = try #require(
+      try shape(try children(of: tree).last).content?.vector?.fill?.pattern, "The last child isn't filled with a pattern")
+    return shapes(of: try #require(paint).content)
+  }
+
+  @Test("the line that an element around a pattern declares is drawn with its paints on the text in the pattern")
+  func decorationAroundPattern() async throws {
+    let shapes = try await patternShapes(
+      ##"<g fill="red" text-decoration="underline"><pattern id="p" width="20" height="20" patternUnits="userSpaceOnUse">"##
+        + ##"<text x="2" y="10" font-size="4" fill="blue">a</text></pattern></g>"##
+        + ##"<rect width="20" height="20" fill="url(#p)"/>"##)
+    try #require(shapes.count == 2)
+    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[1, 0, 0, 1], [0, 0, 1, 1]])
+  }
+
+  @Test("a pattern that uses the children of another one draws the lines that the elements around that one declare")
+  func decorationAroundReferencedPattern() async throws {
+    let shapes = try await patternShapes(
+      ##"<g fill="red" text-decoration="underline"><pattern id="p" width="20" height="20" patternUnits="userSpaceOnUse">"##
+        + ##"<text x="2" y="10" font-size="4" fill="blue">a</text></pattern></g>"##
+        + ##"<g fill="lime" text-decoration="overline"><pattern id="q" href="#p"/></g>"##
+        + ##"<rect width="20" height="20" fill="url(#q)"/>"##)
+    try #require(shapes.count == 2)
+    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[1, 0, 0, 1], [0, 0, 1, 1]])
+  }
+
+  @Test("the line that an element around a mask declares is drawn with its paints on the text in the mask")
+  func decorationAroundMask() async throws {
+    let mask = try await lastMask(
+      ##"<g fill="white" text-decoration="underline"><mask id="m">"##
+        + ##"<text x="2" y="10" font-size="4" fill="gray">a</text></mask></g>"##
+        + ##"<rect width="20" height="20" mask="url(#m)"/>"##)
+    let shapes = shapes(of: mask.contents)
+    try #require(shapes.count == 2)
+    #expect(fillColor(of: shapes[0])?.components == [1, 1, 1, 1])
+  }
+
+  @Test("the line that an element around a marker declares is drawn with its paints on the text in the marker")
+  func decorationAroundMarker() async throws {
+    let tree = try await renderTree(
+      ##"<g fill="red" text-decoration="underline"><marker id="k" markerWidth="20" markerHeight="20" "##
+        + ##"markerUnits="userSpaceOnUse"><text x="2" y="10" font-size="4" fill="blue">a</text></marker></g>"##
+        + ##"<path d="M0 0L1 0" stroke="black" marker-start="url(#k)"/>"##)
+    let group = try group(try children(of: tree).last)
+    let marker = try #require(group.children.last?.viewport, "The path has no marker")
+    let shapes = shapes(of: try #require(marker.content).children)
+    try #require(shapes.count == 2)
+    #expect(shapes.map { fillColor(of: $0)?.components ?? [] } == [[1, 0, 0, 1], [0, 0, 1, 1]])
+  }
+
+  @Test("the line that an element around a clip path declares is in the shapes of the text in the clip path")
+  func decorationAroundClipPath() async throws {
+    func clipBounds(_ group: String) async throws -> CGRect {
+      let tree = try await renderTree(
+        group + ##"<clipPath id="c"><text x="2" y="10" font-size="4">a</text></clipPath></g>"##
+          + ##"<rect width="20" height="20" clip-path="url(#c)"/>"##)
+      let rect = try #require(shapes(of: try children(of: tree)).last)
+      return try #require(rect.clip).shapes.reduce(CGRect.null) { $0.union($1.path.cgPath.boundingBoxOfPath) }
+    }
+    let plain = try await clipBounds("<g>")
+    let decorated = try await clipBounds(##"<g text-decoration="underline" font-size="4">"##)
+    // The line has the thickness of the font of the element that declares it.
+    let thick = try await clipBounds(##"<g text-decoration="underline" font-size="16">"##)
+    #expect(decorated.maxY > plain.maxY)
+    #expect(thick.maxY > decorated.maxY)
+  }
+
   @Test(
     "a line declared with var() is drawn with the paints of the element that declares it",
     arguments: [

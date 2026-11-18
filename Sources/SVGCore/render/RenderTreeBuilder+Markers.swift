@@ -70,10 +70,11 @@ extension RenderTreeBuilder {
     let viewBoxTransform =
       viewBox.map { (marker.preserveAspectRatio ?? PreserveAspectRatio()).getTransform(viewBox: $0, size: size) }
       ?? .identity
+    // The lines of text-decoration on the text in it are the ones that the elements around the marker declare.
     let contentContext = ResolveContext(
       base: base, viewPort: viewPort, scale: self.scale,
       viewBox: viewBox ?? CGRect(origin: .zero, size: size)
-    ).styled(by: marker)
+    ).styled(by: marker).with(textDecorators: textDecorators(around: marker))
     // The reference point is in the coordinates of the content, and is put at the vertex.
     let reference = CGPoint(
       x: marker.refX?.value(context: contentContext, mode: .width) ?? 0,

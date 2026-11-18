@@ -52,6 +52,9 @@ package struct SVGBaseContext: Sendable {
   private(set) var markers = [String: SVGMarkerElement]()
   /// What the elements reference, once ``changedNodes(since:by:)`` finds it, which a copy of the context shares.
   let elementReferences = ElementReferencesCache()
+  /// The elements that declare lines of `text-decoration` around the clip paths, masks, patterns and markers, once
+  /// their content is built, which a copy of the context shares.
+  let effectTextDecorators = EffectTextDecoratorsCache()
 
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.

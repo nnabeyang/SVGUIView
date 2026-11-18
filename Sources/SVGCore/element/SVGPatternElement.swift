@@ -28,6 +28,9 @@ final class SVGPatternElement: SVGDrawableElement {
   }
 
   let children: [any SVGElement]
+  /// The pattern whose children ``children`` are, which is another pattern that this one references where it has no
+  /// children of its own.
+  let childrenOwner: ElementID
   let patternUnits: SVGUnitType?
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
@@ -37,6 +40,7 @@ final class SVGPatternElement: SVGDrawableElement {
   init(base: SVGBaseElement, contents children: [any SVGElement]) {
     self.base = base
     self.children = children
+    childrenOwner = base.elementID
     let attributes = base.attributes
     colorInterpolation = base.style.colorInterpolation
     x = SVGLength(attributes["x"])
@@ -68,6 +72,7 @@ final class SVGPatternElement: SVGDrawableElement {
     viewBox = lhs.viewBox ?? rhs.viewBox
     parentId = rhs.parentId
     children = lhs.knownChildren.isEmpty ? rhs.children : lhs.children
+    childrenOwner = lhs.knownChildren.isEmpty ? rhs.childrenOwner : lhs.childrenOwner
   }
 
   static func parseViewBox(_ value: String?) -> SVGElementRect? {
