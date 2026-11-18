@@ -176,13 +176,39 @@ struct ContinuousChangesTests {
     }
   }
 
-  /// The contents of the layers that the view shows, by their identities.
-  private func layerContents(of view: SVGUIView) -> Set<ObjectIdentifier> {
-    func contents(of layer: CALayer) -> [ObjectIdentifier] {
-      (layer.contents.map { [ObjectIdentifier($0 as AnyObject)] } ?? [])
-        + (layer.sublayers ?? []).flatMap(contents(of:))
+  /// The contents of layers, which are kept alive, so that a new content made at the address of one that was seen
+  /// isn't counted as the same content.
+  private struct LayerContents: Equatable {
+    private var objects = [ObjectIdentifier: AnyObject]()
+
+    init(_ objects: [AnyObject]) {
+      for object in objects {
+        self.objects[ObjectIdentifier(object)] = object
+      }
     }
-    return Set(contents(of: view.layer))
+
+    var count: Int { objects.count }
+
+    /// The number of the contents that aren't in `other`.
+    func count(notIn other: LayerContents) -> Int {
+      objects.keys.filter { other.objects[$0] == nil }.count
+    }
+
+    mutating func formUnion(_ other: LayerContents) {
+      objects.merge(other.objects) { old, _ in old }
+    }
+
+    static func == (lhs: LayerContents, rhs: LayerContents) -> Bool {
+      Set(lhs.objects.keys) == Set(rhs.objects.keys)
+    }
+  }
+
+  /// The contents of the layers that the view shows.
+  private func layerContents(of view: SVGUIView) -> LayerContents {
+    func contents(of layer: CALayer) -> [AnyObject] {
+      (layer.contents.map { [$0 as AnyObject] } ?? []) + (layer.sublayers ?? []).flatMap(contents(of:))
+    }
+    return LayerContents(contents(of: view.layer))
   }
 
   @Test("moving a shape continuously moves its layer, and paints no layer again")
@@ -220,8 +246,8 @@ struct ContinuousChangesTests {
     let contents = layerContents(of: view)
     try await apply({ _ in moving.setAttribute("fill", to: "blue") }, to: view)
     // The layer of the shape has new contents, and every other layer keeps its contents.
-    #expect(layerContents(of: view).subtracting(contents).count == 1)
-    #expect(contents.subtracting(layerContents(of: view)).count == 1)
+    #expect(layerContents(of: view).count(notIn: contents) == 1)
+    #expect(contents.count(notIn: layerContents(of: view)) == 1)
     #expect(try await differenceFromSnapshot(of: view) <= 1)
   }
 
@@ -259,7 +285,7 @@ struct ContinuousChangesTests {
       try await apply(toggle, to: view)
       // A new shape is painted into a layer of its own, and the layers around it keep their contents.
       let contents = layerContents(of: view)
-      #expect(contents.subtracting(shown).count == (inserted == nil ? 0 : 1), "step \(step)")
+      #expect(contents.count(notIn: shown) == (inserted == nil ? 0 : 1), "step \(step)")
       #expect(try await differenceFromSnapshot(of: view) <= 1, "step \(step)")
       shown.formUnion(contents)
     }
@@ -282,8 +308,8 @@ struct ContinuousChangesTests {
       // The moved shape is painted again, as an inserted one is, since it can inherit from another parent, and the
       // layers around it keep their contents wherever it is.
       let shown = layerContents(of: view)
-      #expect(shown.subtracting(contents).count == 1, "step \(step)")
-      #expect(contents.subtracting(shown).count == 1, "step \(step)")
+      #expect(shown.count(notIn: contents) == 1, "step \(step)")
+      #expect(contents.count(notIn: shown) == 1, "step \(step)")
       #expect(try await differenceFromSnapshot(of: view) <= 1, "step \(step)")
       contents = shown
     }
@@ -303,8 +329,8 @@ struct ContinuousChangesTests {
       let shown = layerContents(of: view)
       // The text has a layer of its own, apart from the shapes.
       #expect(shown.count > 1, "value \(value)")
-      #expect(shown.subtracting(contents).count == 1, "value \(value)")
-      #expect(contents.subtracting(shown).count == 1, "value \(value)")
+      #expect(shown.count(notIn: contents) == 1, "value \(value)")
+      #expect(contents.count(notIn: shown) == 1, "value \(value)")
       #expect(try await differenceFromSnapshot(of: view) <= 1, "value \(value)")
       contents = shown
     }
