@@ -288,6 +288,23 @@ struct StyleTests {
       ImageRendering.allCases.filter { !$0.interpolates } == [.optimizeSpeed, .crispEdges, .pixelated])
   }
 
+  @Test("pointer-events is a keyword of SVG 2, case-sensitive in attributes, which is inherited and is auto initially")
+  func pointerEvents() throws {
+    #expect(PointerEventsProperty.parse("visibleFill", origin: .attribute) == .visibleFill)
+    #expect(PointerEventsProperty.parse("bounding-box", origin: .attribute) == .boundingBox)
+    #expect(PointerEventsProperty.parse("visiblefill", origin: .attribute) == nil)
+    #expect(PointerEventsProperty.parse("invalid", origin: .attribute) == nil)
+    let declared = try #require(declared(PointerEventsProperty.self, css: "NONE"))
+    let parent = style([PropertyDeclaration(PointerEventsProperty.self, declared)])
+    #expect(parent.pointerEvents == PointerEvents.none)
+    #expect(style([], parent: parent).pointerEvents == PointerEvents.none)
+    #expect(ComputedStyle.initial.pointerEvents == .auto)
+    // The values that need the element to be visible, and that target its painted fill or stroke only.
+    #expect(PointerEvents.allCases.filter(\.needsVisibility) == [.auto, .visiblePainted, .visibleFill, .visibleStroke, .visible])
+    #expect(PointerEvents.allCases.filter { $0.targetsFill(painted: true) && !$0.targetsFill(painted: false) } == [.auto, .visiblePainted, .painted])
+    #expect(PointerEvents.allCases.filter { $0.targetsStroke(painted: false) } == [.visibleStroke, .visible, .stroke, .all])
+  }
+
   @Test("geometry properties read lengths and auto, and style sheets can't make radii and sizes negative")
   func geometryProperties() throws {
     #expect(RProperty.parse("5px", origin: .css) == .some(.pixel(5)))
