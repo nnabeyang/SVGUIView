@@ -118,6 +118,11 @@ public class SVGUIView: UIView {
   /// Counts the contexts of the document, which the changes of the document and of its animations make, so that a
   /// rendering that started before the latest one is followed by one that shows it.
   private var contextGeneration = 0
+  /// The render tree for hit testing, with what it's built for, which the hit tests share until the document, the
+  /// view or the time changes.
+  private var hitTesting: (key: HitTestingKey, tree: Task<RenderTree?, Never>)?
+  /// Counts the render trees that hit testing builds, which tests follow.
+  private(set) var hitTestingTreeCount = 0
   /// The context that the latest rendering that started shows.
   private var renderedContextGeneration = 0
   /// What the latest rendering that started depends on besides the context of the document.
@@ -1250,6 +1255,70 @@ extension SVGUIView: DocumentHost {
     applyDocumentChanges()
     guard let context = baseContext.endingSMILAnimation(element, at: displayedTime.seconds) else { return }
     animationsDidChange(context)
+  }
+
+  func hits(at point: CGPoint, tolerance: CGFloat) async -> [ElementID] {
+    applyDocumentChanges()
+    let rect = bounds
+    let key = HitTestingKey(
+      context: contextGeneration, document: documentGeneration, size: rect.size, scale: displayScale,
+      contentMode: contentMode, time: displayedTime, externalResources: configuration.externalResources)
+    let task: Task<RenderTree?, Never>
+    if let hitTesting, hitTesting.key == key {
+      task = hitTesting.tree
+    } else {
+      hitTestingTreeCount += 1
+      let base = baseContext
+      let scale = displayScale
+      let time = displayedTime
+      let fit = ContentFit(contentMode)
+      let resources = resourceLoader
+      task = Task {
+        await Self.hitTestingTree(base: base, size: rect.size, scale: scale, time: time, fit: fit, resources: resources)
+      }
+      hitTesting = (key, task)
+    }
+    guard let tree = await task.value else {
+      // A tree that wasn't built is built again for the next hit test.
+      if hitTesting?.key == key { hitTesting = nil }
+      return []
+    }
+    // The document is rendered into the bounds of the view.
+    return await Self.hits(in: tree, at: CGPoint(x: point.x - rect.minX, y: point.y - rect.minY), tolerance: tolerance)
+  }
+
+  /// What a render tree for hit testing is built for.
+  private struct HitTestingKey: Equatable {
+    let context: Int
+    let document: Int
+    let size: CGSize
+    let scale: CGFloat
+    let contentMode: UIView.ContentMode
+    let time: Duration
+    let externalResources: ExternalResources
+  }
+
+  /// The render tree of a document at a time for hit testing, in a rectangle of a size at its origin, built off the
+  /// main actor as a rendering is, or `nil` if building it is cancelled.
+  @concurrent
+  private static func hitTestingTree(
+    base: SVGBaseContext, size: CGSize, scale: CGFloat, time: Duration, fit: ContentFit,
+    resources: ExternalResourceLoader
+  ) async -> RenderTree? {
+    let resolved =
+      base.needsExternalStyleSheets ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
+    guard !Task.isCancelled else { return nil }
+    var builder = RenderTreeBuilder(
+      base: resolved.at(time: time.seconds), viewPort: CGRect(origin: .zero, size: size), scale: scale,
+      resources: resources)
+    builder.collectsHitAreas = true
+    return await builder.build(fit: fit)
+  }
+
+  /// The elements at a point of a render tree for hit testing, found off the main actor.
+  @concurrent
+  private static func hits(in tree: RenderTree, at point: CGPoint, tolerance: CGFloat) async -> [ElementID] {
+    tree.hits(at: point, tolerance: tolerance)
   }
 
   func geometry(of element: ElementID, includesStroke: Bool, includesPath: Bool) async -> ElementGeometry? {

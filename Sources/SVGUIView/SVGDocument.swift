@@ -152,6 +152,65 @@ public final class SVGDocument {
     return Element(document: self, id: id)
   }
 
+  /// The frontmost element at a point of the view that shows the document,
+  /// as the DOM's `elementFromPoint(_:_:)` finds it, or `nil` if there is
+  /// none.
+  ///
+  /// ```swift
+  /// let point = touch.location(in: svgView)
+  /// if let shape = await svgView.document.element(at: point, tolerance: 8) {
+  ///   select(shape)
+  /// }
+  /// ```
+  ///
+  /// ``elements(at:tolerance:)`` describes where an element is hit.
+  ///
+  /// - Parameters:
+  ///   - point: The point, in the coordinates of the view.
+  ///   - tolerance: How far from an element the point can be, in points of
+  ///     the view, so that a finger can pick a thin line or a small shape.
+  public func element(at point: CGPoint, tolerance: CGFloat = 0) async -> Element? {
+    await elements(at: point, tolerance: tolerance).first
+  }
+
+  /// The elements at a point of the view that shows the document, from the
+  /// front, or an empty array if the view doesn't show the document.
+  ///
+  /// The elements are the shapes, the text and its `tspan` elements, the
+  /// images and the `use` elements that are hit at the point, each once, as
+  /// SVG 2 hit-tests them for pointer events. Their ancestors, such as `g`
+  /// elements and the root `svg` element, aren't in the array, and
+  /// ``Element/parent`` finds them. An element is hit:
+  ///
+  /// - Where its `pointer-events` property targets it. By default, it's hit
+  ///   where its fill and its stroke paint, while it's visible: over its fill
+  ///   if the fill isn't `none`, and over its stroke, with its dashes, caps
+  ///   and joins, if the stroke isn't `none`. Other values hit it over its
+  ///   fill or its stroke whatever their paints, also while it's hidden, over
+  ///   its bounding box, or never.
+  /// - Over the cells of its glyphs, for text, and over its rectangle, for an
+  ///   image.
+  /// - Where its clip paths and the ones of its ancestors don't clip it out.
+  ///   Its opacity, its filter and its mask don't change where it's hit, and
+  ///   the markers of a shape aren't hit, as in browsers.
+  /// - As the `use` element that shows it, for an element in the content of
+  ///   `use` elements.
+  ///
+  /// An element with `display: none`, or in one, isn't hit. The elements are
+  /// the ones of the document with every change made so far, at the time
+  /// that the view displays. The view keeps what it finds for hit testing
+  /// until the document, its size, its content mode or the time changes, so
+  /// hit-testing points one after another doesn't find it again.
+  ///
+  /// - Parameters:
+  ///   - point: The point, in the coordinates of the view.
+  ///   - tolerance: How far from an element the point can be, in points of
+  ///     the view.
+  public func elements(at point: CGPoint, tolerance: CGFloat = 0) async -> [Element] {
+    guard let host else { return [] }
+    return await host.hits(at: point, tolerance: tolerance).map { Element(document: self, id: $0) }
+  }
+
   /// Takes the tree of the document and what changed in it that the view hasn't rendered yet.
   func takeChanges() -> (tree: DocumentTree, changes: DocumentChanges) {
     defer { changes = DocumentChanges() }
@@ -379,6 +438,8 @@ protocol DocumentHost: AnyObject {
   /// The geometry of an element of the document with its changes, at the time that the view displays and in the
   /// coordinates of the view, or `nil` if it has none or the task is cancelled.
   func geometry(of element: ElementID, includesStroke: Bool, includesPath: Bool) async -> ElementGeometry?
+  /// The elements at a point of the view, from the front.
+  func hits(at point: CGPoint, tolerance: CGFloat) async -> [ElementID]
 }
 
 extension SVGDocument {

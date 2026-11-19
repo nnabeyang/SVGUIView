@@ -83,6 +83,8 @@ package struct ShapeNode: Sendable {
   package let usesWideGamut: Bool
   /// What the shape paints in its own coordinates, once computed, which the copies of the node share.
   let localBounds: LocalBounds
+  /// Where the shape is hit, which only a tree built for hit testing has.
+  package var hitArea: HitArea?
 
   package init(
     id: RenderID, transform: CGAffineTransform, geometry: Geometry?, clip: ClipPathEffect?, mask: MaskApplication,

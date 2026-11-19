@@ -706,14 +706,21 @@ struct TextLayout {
           measure: measure, transform: transform, start: distance - halfAdvance, y: y, textScale: textScale) : nil)
   }
 
-  /// The bounds of the glyphs of the elements as high as the fonts of the elements, which are larger than the bounds
-  /// of their outlines.
-  func frame(of owners: Set<Int>? = nil) -> CGRect {
+  /// The cells of the glyphs of the owners, or of every glyph: the advance of each glyph by the ascent and the
+  /// descent of its font, where each glyph is placed, as SVG 2 hit-tests text.
+  func cells(of owners: Set<Int>? = nil) -> CGMutablePath {
     let boxes = CGMutablePath()
     for glyph in glyphs where owners?.contains(glyph.owner) ?? true {
       let (ascent, descent) = metrics[glyph.owner] ?? (0, 0)
       glyph.add(CGRect(x: 0, y: -descent, width: glyph.advance, height: ascent + descent), to: boxes)
     }
+    return boxes
+  }
+
+  /// The bounds of the glyphs of the elements as high as the fonts of the elements, which are larger than the bounds
+  /// of their outlines.
+  func frame(of owners: Set<Int>? = nil) -> CGRect {
+    let boxes = cells(of: owners)
     if boxes.isEmpty { return glyphs.isEmpty && (owners?.contains(0) ?? true) ? emptyFrame : .null }
     return boxes.boundingBoxOfPath
   }
