@@ -616,6 +616,18 @@ enum ImageRenderingProperty: StyleProperty {
   }
 }
 
+/// Where an element is the target of pointer events, and of hit testing.
+enum PointerEventsProperty: StyleProperty {
+  static let id = PropertyID.pointerEvents
+  static let isInherited = true
+  static let initial = PointerEvents.auto
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.pointerEvents }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> PointerEvents? {
+    keyword(text, origin: origin)
+  }
+}
+
 /// How an element blends with what's behind it. It isn't a presentation attribute.
 enum MixBlendModeProperty: StyleProperty {
   static let id = PropertyID.mixBlendMode

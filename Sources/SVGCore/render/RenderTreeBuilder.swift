@@ -42,6 +42,9 @@ package struct RenderTreeBuilder {
   private let imageViewBox: CGRect?
   /// How many SVG images the document is in, which limits the images in images.
   let imageDepth: Int
+  /// Whether the shapes have the areas where they're hit, which a tree for hit testing needs, and the trees that are
+  /// painted don't.
+  package var collectsHitAreas = false
 
   /// The deepest SVG image in SVG images that is drawn. Each image is a document of its own, so the limit keeps
   /// images that show themselves again and again from making too many.
@@ -74,6 +77,7 @@ package struct RenderTreeBuilder {
       imageFit: nil,
       imageViewBox: nil, imageDepth: outer.imageDepth, documents: outer.documents, outer: OuterBuilder(outer),
       documentChain: chain)
+    collectsHitAreas = outer.collectsHitAreas
   }
 
   private init(
@@ -238,7 +242,7 @@ package struct RenderTreeBuilder {
     if let text = element as? SVGTextElement,
       !text.children.isEmpty || text.mayHaveColorGlyphs
         || (!context.textDecorators.isEmpty && !text.style.textDecoration.isEmpty),
-      let spans = text.spans(in: context),
+      let spans = text.spans(in: context, includesCells: collectsHitAreas),
       spans.contains(where: { $0.element !== text || !$0.colorGlyphs.isEmpty })
     {
       return await textNode(
@@ -295,20 +299,31 @@ package struct RenderTreeBuilder {
     // `shape-rendering` applies to shapes, and not to text or images.
     let antialiases =
       element is SVGTextElement || element is SVGImageElement ? true : element.style.shapeRendering.antialiases
-    guard !markers.isEmpty || parts != nil else {
-      return .shape(
-        ShapeNode(
-          id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: opacity(of: element, mode: mode),
-          content: content, antialiases: antialiases, blendMode: blendMode(of: element, mode: mode)))
+    // Text is hit on the cells of its glyphs.
+    let hitArea = path.flatMap { path in
+      collectsHitAreas
+        ? hitArea(
+          of: element, fill: (element as? SVGTextElement)?.cells(in: context) ?? path, stroked: path,
+          frame: geometry?.frame ?? path.boundingBoxOfPath, isCells: element is SVGTextElement, context: context)
+        : nil
     }
-    // The shape and the markers are drawn in the paint order, with the effects of the shape.
+    guard !markers.isEmpty || parts != nil else {
+      var node = ShapeNode(
+        id: id, transform: transform, geometry: geometry, clip: clip, mask: mask, opacity: opacity(of: element, mode: mode),
+        content: content, antialiases: antialiases, blendMode: blendMode(of: element, mode: mode))
+      node.hitArea = hitArea
+      return .shape(node)
+    }
+    // The shape and the markers are drawn in the paint order, with the effects of the shape. The first shape is hit
+    // where the element is, and the markers aren't hit, as browsers hit-test them.
     var shapeCount = 0
     func shape(_ content: ShapeContent?) -> RenderNode {
       defer { shapeCount += 1 }
-      return .shape(
-        ShapeNode(
-          id: partID(id, part: shapeCount), transform: .identity, geometry: geometry, clip: nil, mask: .none,
-          opacity: 1, content: content, antialiases: antialiases))
+      var node = ShapeNode(
+        id: partID(id, part: shapeCount), transform: .identity, geometry: geometry, clip: nil, mask: .none,
+        opacity: 1, content: content, antialiases: antialiases)
+      node.hitArea = shapeCount == 0 ? hitArea : nil
+      return .shape(node)
     }
     var children = [RenderNode]()
     for layer in order.layers {
@@ -404,15 +419,20 @@ package struct RenderTreeBuilder {
         span.isAroundText
         ? RenderID(element: element.base.elementID, instance: instance + [text.base.elementID])
         : renderID(of: element, instance: instance)
+      // A span is hit on the cells of its glyphs, and the lines that an element around the text declares aren't hit
+      // apart from the text.
+      let hitArea =
+        collectsHitAreas && !span.isAroundText
+        ? hitArea(
+          of: element, fill: span.cells ?? span.path, stroked: span.path, frame: span.frame, isCells: true,
+          context: context) : nil
       for (part, content) in contents.enumerated() {
-        children.append(
-          (
-            .shape(
-              ShapeNode(
-                id: partID(id, part: part), transform: .identity,
-                geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
-                content: content)), span.spans
-          ))
+        var node = ShapeNode(
+          id: partID(id, part: part), transform: .identity,
+          geometry: Geometry(path: RenderPath(span.path), frame: frame), clip: nil, mask: .none, opacity: 1,
+          content: content)
+        node.hitArea = part == 0 ? hitArea : nil
+        children.append((.shape(node), span.spans))
       }
       // The glyphs that the fonts draw in their colors are drawn after the other glyphs, without the paints of the
       // element: a fill that isn't `none` draws them with its opacity, as browsers draw them.
@@ -1119,5 +1139,39 @@ package struct RenderTreeBuilder {
       cap: style.strokeLinecap,
       join: style.strokeLinejoin,
       miterLimit: style.strokeMiterlimit)
+  }
+
+  /// Where an element is hit, in a context styled by the element: its fill, and its stroke with its dashes, caps and
+  /// joins, also where its paints are `none` or it's hidden, which `pointer-events` can target.
+  ///
+  /// - Parameters:
+  ///   - fill: The area of the fill, which is the cells of the glyphs of text.
+  ///   - stroked: The path that the stroke follows.
+  ///   - isCells: Whether the fill is the cells of glyphs, where both the fill and the stroke are hit.
+  private func hitArea(
+    of element: any SVGDrawableElement, fill: CGPath, stroked: CGPath, frame: CGRect, isCells: Bool,
+    context: ResolveContext
+  ) -> HitArea {
+    let style = element.style
+    let width = style.strokeWidth.value(context: context, mode: .other)
+    var stroke: RenderPath?
+    if width > 0, !isCells {
+      var outline = stroked
+      let dashes = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
+      if dashes.contains(where: { $0 > 0 }) {
+        outline = outline.copy(
+          dashingWithPhase: style.strokeDashoffset.value(context: context, mode: .other), lengths: dashes)
+      }
+      stroke = RenderPath(
+        outline.copy(
+          strokingWithWidth: width, lineCap: style.strokeLinecap, lineJoin: style.strokeLinejoin,
+          miterLimit: style.strokeMiterlimit))
+    }
+    let fillsPainted = if case .none = style.fill { element is SVGImageElement } else { true }
+    let strokesPainted = if case .none = style.stroke { false } else { true }
+    return HitArea(
+      pointerEvents: style.pointerEvents, isVisible: style.visibility == .visible, fillsPainted: fillsPainted,
+      strokesPainted: strokesPainted, fill: RenderPath(fill), fillRule: isCells ? .fill : element.pathFillRule,
+      stroke: stroke, bounds: frame, isCells: isCells)
   }
 }

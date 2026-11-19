@@ -119,6 +119,49 @@ enum ShapeRendering: String, CaseIterable, Sendable {
   }
 }
 
+/// Where an element is the target of pointer events, as SVG 2 defines `pointer-events` for SVG elements.
+package enum PointerEvents: String, CaseIterable, Sendable {
+  /// The same as `visiblePainted`.
+  case auto
+  /// Over the bounding box of the element.
+  case boundingBox = "bounding-box"
+  case visiblePainted
+  case visibleFill
+  case visibleStroke
+  case visible
+  case painted
+  case fill
+  case stroke
+  case all
+  case none
+
+  /// Whether the element is a target only where `visibility` is `visible`.
+  var needsVisibility: Bool {
+    switch self {
+    case .auto, .visiblePainted, .visibleFill, .visibleStroke, .visible: true
+    case .boundingBox, .painted, .fill, .stroke, .all, .none: false
+    }
+  }
+
+  /// Whether the element is a target over its fill, where `painted` is whether its fill isn't `none`.
+  func targetsFill(painted: Bool) -> Bool {
+    switch self {
+    case .auto, .visiblePainted, .painted: painted
+    case .visibleFill, .visible, .fill, .all: true
+    case .boundingBox, .visibleStroke, .stroke, .none: false
+    }
+  }
+
+  /// Whether the element is a target over its stroke, where `painted` is whether its stroke isn't `none`.
+  func targetsStroke(painted: Bool) -> Bool {
+    switch self {
+    case .auto, .visiblePainted, .painted: painted
+    case .visibleStroke, .visible, .stroke, .all: true
+    case .boundingBox, .visibleFill, .fill, .none: false
+    }
+  }
+}
+
 /// How a bitmap image is scaled: the values of SVG 1.1 and of CSS Images.
 enum ImageRendering: String, CaseIterable, Sendable {
   case auto

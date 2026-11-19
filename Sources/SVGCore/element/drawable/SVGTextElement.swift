@@ -149,7 +149,9 @@ final class SVGTextElement: ShapeGeometry {
   /// Each element that has glyphs or draws lines of `text-decoration` has a shape of its glyphs, and its underlines
   /// and overlines, which are drawn under the glyphs of the elements after it. Its lines through the text come after
   /// all the glyphs.
-  func spans(in context: any GeometryContext) -> [TextSpan]? {
+  ///
+  /// - Parameter includesCells: Whether to find the cells of the glyphs of each span, which hit testing needs.
+  func spans(in context: any GeometryContext, includesCells: Bool = false) -> [TextSpan]? {
     guard let (layout, content) = layout(context: context) else { return nil }
     let owners = owners(of: content)
     let glyphs = Set(layout.glyphs.map(\.owner)).union(layout.glyphs.isEmpty ? [0] : [])
@@ -185,6 +187,9 @@ final class SVGTextElement: ShapeGeometry {
       var span = TextSpan(element: owners[owner], path: path, frame: layout.frame(of: [owner]), spans: spansAround(owner))
       if mayHaveColorGlyphs {
         span.colorGlyphs = layout.colorGlyphs(of: owner)
+      }
+      if includesCells {
+        span.cells = layout.cells(of: [owner])
       }
       spans.append(span)
     }
@@ -565,6 +570,12 @@ final class SVGTextElement: ShapeGeometry {
     layout(context: context)?.layout.frame() ?? .zero
   }
 
+  /// The cells of the glyphs of the text and its `<tspan>` descendants, where SVG 2 hit-tests text, or `nil` if it
+  /// can't be laid out.
+  func cells(in context: any GeometryContext) -> CGPath? {
+    layout(context: context)?.layout.cells()
+  }
+
   /// The outlines of the glyphs of the text and its `<tspan>` descendants, and the lines of their `text-decoration`.
   func path(in context: any GeometryContext) -> CGPath? {
     guard let (layout, content) = layout(context: context) else { return nil }
@@ -618,6 +629,8 @@ struct TextSpan {
   var colorGlyphs: [ColorGlyph] = []
   /// Whether the element is around the text, which declares the lines of `text-decoration` of the shape.
   var isAroundText = false
+  /// The cells of the glyphs, if they were asked for.
+  var cells: CGPath?
 }
 
 /// The characters of text and its spans, and the elements that they belong to.

@@ -1,6 +1,6 @@
 # Changing a Document
 
-Find the elements of the document that a view displays, change their attributes, classes and styles, insert and remove elements, and read their shapes from Swift.
+Find the elements of the document that a view displays, change their attributes, classes and styles, insert and remove elements, read their shapes, and find the elements at a point from Swift.
 
 ## Overview
 
@@ -160,6 +160,41 @@ element, such as a `<mask>`. As SVG 2 has it, an element that isn't rendered,
 such as one in a `<defs>` element or with `display: none`, has the geometry
 that it would have if it were rendered. The geometry depends on the size and
 the content mode of the view, so read it again when they change.
+
+### Finding the element at a point
+
+``SVGDocument/element(at:tolerance:)`` finds the frontmost element at a point
+of the view, as the DOM's `elementFromPoint()` does, and
+``SVGDocument/elements(at:tolerance:)`` finds every element there from the
+front, such as to pick the shape under the one that a finger selected. A
+tolerance in points of the view lets a finger pick a thin line or a small
+shape near the point.
+
+```swift
+let point = touch.location(in: svgView)
+guard let shape = await svgView.document.element(at: point, tolerance: 8)
+else { return }
+// Outline the shape that the finger picked.
+if let box = await shape.boundingBox(includingStroke: true),
+  let transform = await shape.transformToView() {
+  selectionLayer.path = CGPath(rect: box, transform: [transform])
+}
+```
+
+As SVG 2 hit-tests the targets of pointer events, an element is hit where its
+fill and its stroke paint, while it's visible, and its `pointer-events`
+property chooses other areas: `all` hits a shape over its fill and its stroke
+whatever they paint, and `none` makes an element, such as a decoration over
+the shapes, never hit, so that the shapes under it are. Text is hit over the
+cells of its glyphs, as the `text` or the `tspan` element of the glyph, and
+the content of a `<use>` element as the `<use>` element. Clip paths limit where
+an element is hit, while its opacity, its filter and its mask don't, and the
+markers of a shape aren't hit, as in browsers.
+
+```swift
+// Selection handles drawn in the document don't hide the shapes under them.
+handles.style.setProperty("pointer-events", to: "none")
+```
 
 ### Showing the changes
 
