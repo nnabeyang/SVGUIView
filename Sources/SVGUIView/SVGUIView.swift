@@ -1252,6 +1252,38 @@ extension SVGUIView: DocumentHost {
     animationsDidChange(context)
   }
 
+  func geometry(of element: ElementID, includesStroke: Bool, includesPath: Bool) async -> ElementGeometry? {
+    applyDocumentChanges()
+    let rect = bounds
+    let document = documentGeneration
+    let found = await Self.geometry(
+      of: element, base: baseContext, size: rect.size, scale: displayScale, time: displayedTime,
+      fit: ContentFit(contentMode), resources: resourceLoader, includesStroke: includesStroke,
+      includesPath: includesPath)
+    adoptStyleSheets(of: found.resolved, ofDocument: document)
+    // The document is rendered into the bounds of the view.
+    return found.geometry?.concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+  }
+
+  /// The geometry of an element of a document at a time, in a rectangle of a size at its origin, found off the main
+  /// actor as a rendering is, with the context that has the style sheets in other files that it read, if it read
+  /// any.
+  @concurrent
+  private static func geometry(
+    of element: ElementID, base: SVGBaseContext, size: CGSize, scale: CGFloat, time: Duration, fit: ContentFit,
+    resources: ExternalResourceLoader, includesStroke: Bool, includesPath: Bool
+  ) async -> (geometry: ElementGeometry?, resolved: SVGBaseContext?) {
+    let resolved =
+      base.needsExternalStyleSheets ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
+    guard !Task.isCancelled else { return (nil, nil) }
+    let builder = RenderTreeBuilder(
+      base: resolved.at(time: time.seconds), viewPort: CGRect(origin: .zero, size: size), scale: scale,
+      resources: resources)
+    let geometry = await builder.geometry(
+      of: element, fit: fit, includesStroke: includesStroke, includesPath: includesPath)
+    return (geometry, base.needsExternalStyleSheets ? resolved : nil)
+  }
+
   /// Shows the document with animations that play in another way, and runs the clock while they change.
   private func animationsDidChange(_ context: SVGBaseContext) {
     baseContext = context

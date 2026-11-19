@@ -1,3 +1,4 @@
+import CoreGraphics
 import SVGCore
 
 /// The document that a view displays, which an app reads and changes from Swift.
@@ -375,6 +376,9 @@ protocol DocumentHost: AnyObject {
   func beginSMILAnimation(_ element: ElementID)
   /// Ends the SMIL animation of an animation element at the time of the timeline that the view displays.
   func endSMILAnimation(_ element: ElementID)
+  /// The geometry of an element of the document with its changes, at the time that the view displays and in the
+  /// coordinates of the view, or `nil` if it has none or the task is cancelled.
+  func geometry(of element: ElementID, includesStroke: Bool, includesPath: Bool) async -> ElementGeometry?
 }
 
 extension SVGDocument {
@@ -607,6 +611,68 @@ extension SVGDocument.Element {
   /// The declarations of the element's `style` attribute.
   public var style: SVGDocument.Style {
     SVGDocument.Style(element: self)
+  }
+
+  /// The bounding box of the element in its user space, as the DOM's
+  /// `getBBox()` finds it, or `nil` if it has none.
+  ///
+  /// The user space of the element is the coordinates that its own
+  /// `transform` applies to, and those of the content of an `svg` element.
+  /// ``transformToView()`` moves the box into the coordinates of the view:
+  ///
+  /// ```swift
+  /// if let box = await shape.boundingBox(),
+  ///   let transform = await shape.transformToView() {
+  ///   selectionLayer.path = CGPath(rect: box, transform: [transform])
+  /// }
+  /// ```
+  ///
+  /// The box is the one of the document with every change made to it so far,
+  /// at the time that the view displays. It includes the fill of the element,
+  /// or of the elements in it, and with `includingStroke` their strokes
+  /// without their dashes, as SVG 2 defines the object and stroke bounding
+  /// boxes. The box of a container is the union of the boxes of the elements
+  /// that it renders, each with its transform, and is zero for a container
+  /// that renders none. An element that isn't rendered, such as one in a
+  /// `defs` element or with `display: none`, has the box that it would have if
+  /// it were rendered.
+  ///
+  /// It's `nil` for an element that the view doesn't show, because it isn't
+  /// in the document's tree or the view no longer shows the document, for an
+  /// element that isn't a graphics element, such as a `mask` or a `pattern`,
+  /// and for a `tspan` element. The geometry is found off the main actor, as
+  /// a rendering is, so it's also `nil` if the task is cancelled.
+  ///
+  /// - Parameter includingStroke: Whether the box includes the strokes.
+  public func boundingBox(includingStroke: Bool = false) async -> CGRect? {
+    let geometry = await document.host?.geometry(of: id, includesStroke: includingStroke, includesPath: false)
+    return includingStroke ? geometry?.strokeBoundingBox : geometry?.boundingBox
+  }
+
+  /// The shape of the element in its user space, or `nil` if it has none.
+  ///
+  /// The shape is the one that the element is filled with: the path of a
+  /// `path` element or of a basic shape, such as a `rect` with its rounded
+  /// corners, the outlines of the glyphs of a `text` element, the rectangle
+  /// of an `image` element, and the shape of the element that a `use`
+  /// element references, moved by its `x` and `y`. Containers, such as `g`
+  /// and `svg` elements, have no shape. It's in the coordinates of
+  /// ``boundingBox(includingStroke:)``, and it's `nil` in the same cases.
+  public func path() async -> CGPath? {
+    await document.host?.geometry(of: id, includesStroke: false, includesPath: true)?.path?.cgPath
+  }
+
+  /// The transform from the user space of the element to the coordinates of
+  /// the view that shows it, as the DOM's `getScreenCTM()` finds it for the
+  /// view, or `nil` if the view doesn't show the element.
+  ///
+  /// It includes the element's own `transform`, the transforms of its
+  /// ancestors, the view boxes of the `svg` elements that it's in, and how
+  /// the view places the document with its `contentMode`, so it changes with
+  /// the size and the content mode of the view. It's `nil` in the cases that
+  /// ``boundingBox(includingStroke:)`` is.
+  public func transformToView() async -> CGAffineTransform? {
+    await document.host?.geometry(of: id, includesStroke: false, includesPath: false)?.transformToViewPort
   }
 }
 

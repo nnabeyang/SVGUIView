@@ -854,7 +854,7 @@ package struct RenderTreeBuilder {
   /// The size of the root element in the view. Without a view box, it's the box that ``SVGSVGElement/getViewBox(size:)``
   /// finds, whose percentages and viewport units are of the view, since its content is in that box: resolving them in
   /// the content would make them a part of themselves.
-  private func rootSize(of svg: SVGSVGElement, context: ResolveContext) -> (width: CGFloat, height: CGFloat) {
+  func rootSize(of svg: SVGSVGElement, context: ResolveContext) -> (width: CGFloat, height: CGFloat) {
     if svg.viewBox == nil {
       let box = svg.getViewBox(size: viewPort.size)
       return (box.width, box.height)

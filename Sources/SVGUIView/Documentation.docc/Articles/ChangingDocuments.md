@@ -1,6 +1,6 @@
 # Changing a Document
 
-Find the elements of the document that a view displays, change their attributes, classes and styles, and insert and remove elements from Swift.
+Find the elements of the document that a view displays, change their attributes, classes and styles, insert and remove elements, and read their shapes from Swift.
 
 ## Overview
 
@@ -126,6 +126,40 @@ the view new data, so change attributes or classes to change a few elements.
 The change starts the transitions of the values that it changes, and the
 animations that it starts start at the time of the change. A style sheet that
 reads files with `@import` reads them again at the next rendering.
+
+### Reading the shapes of elements
+
+An app that edits a document draws over the view, such as the frame and the
+handles of the shape that a finger selected. Three methods read what it needs,
+as the DOM's `getBBox()` and `getScreenCTM()` do:
+
+- ``SVGDocument/Element/boundingBox(includingStroke:)`` reads the bounding box
+  of an element in its user space, with or without its stroke.
+- ``SVGDocument/Element/path()`` reads its shape, such as the path of a
+  `<path>` element or the rounded rectangle of a `<rect>`, in the same
+  coordinates.
+- ``SVGDocument/Element/transformToView()`` reads the transform from those
+  coordinates to the coordinates of the view, with the transforms of the
+  element and its ancestors, the view boxes, and how the view places the
+  document with its `contentMode`.
+
+```swift
+guard let box = await shape.boundingBox(includingStroke: true),
+  let transform = await shape.transformToView()
+else { return }
+// A layer over the view outlines the shape.
+selectionLayer.path = CGPath(rect: box, transform: [transform])
+```
+
+The methods read the document with every change made so far, at the time that
+the view displays, without waiting for a rendering, so they read a shape
+that was moved just before. They find the geometry off the main actor, as a
+rendering does, and return `nil` for an element that the view doesn't show,
+such as one that was removed, and for an element that isn't a graphics
+element, such as a `<mask>`. As SVG 2 has it, an element that isn't rendered,
+such as one in a `<defs>` element or with `display: none`, has the geometry
+that it would have if it were rendered. The geometry depends on the size and
+the content mode of the view, so read it again when they change.
 
 ### Showing the changes
 
