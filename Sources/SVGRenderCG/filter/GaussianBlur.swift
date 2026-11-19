@@ -6,6 +6,21 @@ import SVGCore
 extension GaussianBlurPrimitive {
   private static let maxKernelSize: UInt32 = 100
 
+  /// The largest standard deviation in pixels whose boxes aren't clamped to `maxKernelSize`.
+  package static let largestUnclampedDeviation = (CGFloat(maxKernelSize) + 0.49) * 4 / (3 * sqrt(2 * .pi))
+
+  /// The largest standard deviation in the user space of the blurs of the primitives of a filter, or 0 if it has
+  /// none.
+  package static func largestDeviation(of steps: [FilterStep]) -> CGFloat {
+    steps.reduce(0) { largest, step in
+      guard case .gaussianBlur(let blur) = step.primitive else { return largest }
+      switch blur.standardDeviation {
+      case .iso(let deviation): return max(largest, deviation)
+      case .hetero(let x, let y): return max(largest, x, y)
+      }
+    }
+  }
+
   /// The size of the three boxes that approximate a Gaussian blur of a standard deviation in pixels, as the
   /// specification computes it. Where the size is even, the specification uses two boxes of the size that are offset by
   /// half a pixel and a centered box one pixel larger.

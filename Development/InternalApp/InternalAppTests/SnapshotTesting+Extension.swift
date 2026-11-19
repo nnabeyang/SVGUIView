@@ -19,6 +19,14 @@ import UIKit
 /// directory exists, and otherwise from the `SVGSnapshotReferences` bundle. New reference images, and all of
 /// them when `SNAPSHOT_TESTING_RECORD` is `all`, are written next to the test file. When a comparison fails,
 /// swift-snapshot-testing attaches the reference, the rendered image and their difference to the test result.
+/// How long the tests wait for a rendering.
+///
+/// The tests check what a rendering draws, not how fast; the benchmarks measure that. Many renderings run in parallel
+/// in the Debug configuration, and the filters of a document that a view of the size of the screen enlarges run at
+/// the pixels of the screen, which take a few seconds each, so the timeout is much longer than the default and only
+/// catches a rendering that never ends.
+let renderingPatience: Duration = .seconds(180)
+
 @MainActor
 func assertSVGSnapshot(
   of file: SVGFile,
@@ -36,10 +44,8 @@ func assertSVGSnapshot(
 
   let view = try #require(SVGUIView(contentsOf: file.url), "Couldn't read \(file.url.lastPathComponent)", sourceLocation: sourceLocation)
   view.contentMode = .scaleAspectFit
-  // The tests check what a rendering draws, not how fast. On CI, many renderings run in parallel and can be
-  // slow, so the timeout is longer than the default and only catches a rendering that never ends.
   view.configuration = SVGUIViewConfiguration(
-    timeoutDuration: .seconds(60), externalResources: NetworkCopies.resources)
+    timeoutDuration: renderingPatience, externalResources: NetworkCopies.resources)
   view.frame = CGRect(origin: .zero, size: atIntrinsicSize ? view.intrinsicContentSize : UIScreen.main.bounds.size)
   view.layoutIfNeeded()
   // The resources of the network are read from their copies in the test suite.

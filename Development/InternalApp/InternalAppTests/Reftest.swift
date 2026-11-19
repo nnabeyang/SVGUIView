@@ -292,7 +292,7 @@ private func screenshot(of url: URL, sourceLocation: SourceLocation) async -> Sc
   // The document is placed at the top left at its size, as a page places it, instead of being scaled to the view.
   view.contentMode = .topLeft
   view.configuration = SVGUIViewConfiguration(
-    timeoutDuration: .seconds(60), externalResources: .folder(TestSuite.bundle.bundleURL))
+    timeoutDuration: renderingPatience, externalResources: .folder(TestSuite.bundle.bundleURL))
   view.frame = CGRect(x: 0, y: 0, width: Screenshot.width, height: Screenshot.height)
   view.layoutIfNeeded()
   do {

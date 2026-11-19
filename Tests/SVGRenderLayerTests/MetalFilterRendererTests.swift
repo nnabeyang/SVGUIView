@@ -214,7 +214,7 @@ struct MetalFilterRendererTests {
 
   @Test(
     "a layer of an element whose filter changes runs the filter on the GPU where it gives the results of the CPU",
-    arguments: [(changingBlur, true), (changingBoxes, false)])
+    arguments: [(changingBlur, true), (changingBoxes, false), (enlargedChangingBlur, true)])
   func filterLayers(content: String, runsOnGPU: Bool) async throws {
     // Without a GPU, both run the filters on the CPU.
     _ = try #require(renderer)
@@ -234,6 +234,99 @@ struct MetalFilterRendererTests {
 
 @Suite("Running filters on the CPU")
 struct FilterPaintingTests {
+  @Test(
+    "the bitmaps of a filter are as fine as the pixels in an enlarged space, and no more than four times as fine in a reduced one",
+    arguments: [
+      // The scale of the painter, and one that differs from it by rounding.
+      (CGAffineTransform(scaleX: 3, y: 3), 3.0),
+      (CGAffineTransform(scaleX: 3.006, y: 3.006), 3.006),
+      (CGAffineTransform(scaleX: 3.0004, y: -3.0004), 3.0),
+      // Enlarged, along the axis that is enlarged more, and turned.
+      (CGAffineTransform(scaleX: 12, y: 12), 12),
+      (CGAffineTransform(scaleX: 3, y: 30), 30),
+      (CGAffineTransform(rotationAngle: .pi / 4).scaledBy(x: 12, y: 12), 12),
+      // Reduced a little, and much.
+      (CGAffineTransform(scaleX: 1.25, y: 1.25), 3),
+      (CGAffineTransform(scaleX: 0.12, y: 0.12), 0.48),
+      // No pixels.
+      (CGAffineTransform(scaleX: 0, y: 0), 3),
+    ] as [(CGAffineTransform, Double)])
+  func bitmapScale(ctm: CGAffineTransform, expected: Double) {
+    #expect(abs(CGPainter(scale: 3).bitmapScale(for: ctm) - expected) < 1e-9)
+  }
+
+  @Test("a much reduced element with a filter has bitmaps of the size that the pixels need")
+  func reducedFilter() async throws {
+    let nodes = try await filteredNodes(
+      #"<filter id="f"><feOffset dx="0"/></filter>"#
+        + #"<rect transform="scale(0.04)" width="1000" height="1000" filter="url(#f)"/>"#, scale: 3)
+    let filtered = try #require(nodes.first)
+    let (painter, _) = CGPainter(scale: 3).filterPainting(
+      of: filtered, ctm: CGAffineTransform(scaleX: 3, y: 3), showing: nil)
+    #expect(abs(painter.scale - 0.48) < 1e-9)
+    // The filter region of 1200 by 1200 is 576 pixels across, rather than 3600 at the scale of the painter.
+    let source = try #require(await painter.sourceImage(of: filtered))
+    #expect(source.width == 576 && source.height == 576)
+  }
+
+  @Test(
+    "a filter runs at a scale where its blurs aren't clamped, but no lower than the scale of the painter",
+    arguments: [
+      // At 6 pixels in a unit, a standard deviation of 5 is 30 pixels, which isn't clamped.
+      ("5", 6.0),
+      // 10 would be 60 pixels, so the scale is lowered until it isn't clamped.
+      ("10", GaussianBlurPrimitive.largestUnclampedDeviation / 10),
+      // 30 is clamped even at the scale of the painter, which the scale isn't lowered below.
+      ("30", 3),
+      ("2 30", 3),
+    ] as [(String, Double)])
+  func unclampedBlur(deviation: String, expected: Double) async throws {
+    let filtered = try #require(
+      try await filteredNodes(
+        #"<filter id="f"><feGaussianBlur stdDeviation="\#(deviation)"/></filter>"#
+          + #"<rect width="10" height="10" filter="url(#f)"/>"#, scale: 3
+      ).first)
+    let ctm = CGAffineTransform(scaleX: 6, y: 6)
+    let painter = CGPainter(scale: 3).filterPainting(of: filtered, ctm: ctm, showing: nil).painter
+    #expect(abs(painter.scale - expected) < 1e-9)
+  }
+
+  @Test("the bitmaps of a filter of a large region in an enlarged space have no more pixels than WebKit allows")
+  func limitedFilterArea() async throws {
+    // A tile takes pixels from anywhere in the region, which isn't limited to what shows.
+    let nodes = try await filteredNodes(
+      #"<filter id="f"><feTile/></filter>"#
+        + #"<rect transform="scale(100)" width="100" height="100" filter="url(#f)"/>"#, scale: 3)
+    let filtered = try #require(nodes.first)
+    let ctm = CGAffineTransform(scaleX: 3, y: 3)
+    let (painter, limited) = CGPainter(scale: 3).filterPainting(of: filtered, ctm: ctm, showing: nil)
+    // The region of 120 by 120 would be 36,000 pixels across at the pixels of the device.
+    #expect(limited.effectRect.width == 120)
+    #expect(abs(limited.effectRect.width * painter.scale - 4096) < 1e-6)
+    // A region that fits is as fine as the pixels.
+    let small = try #require(
+      try await filteredNodes(
+        #"<filter id="f"><feTile/></filter>"#
+          + #"<rect transform="scale(10)" width="1" height="1" filter="url(#f)"/>"#, scale: 3
+      ).first)
+    #expect(CGPainter(scale: 3).filterPainting(of: small, ctm: ctm, showing: nil).painter.scale == 30)
+  }
+
+  @Test("a blur in an enlarged user space is as sharp as the same blur drawn at its size")
+  func enlargedBlur() async throws {
+    // The row through the middle of the square.
+    func alpha(_ content: String) async throws -> [Int] { try await renderedAlpha(content)[50] }
+    let enlarged = try await alpha(
+      #"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="10" height="10">"#
+        + #"<feGaussianBlur stdDeviation="0.4"/></filter>"#
+        + #"<rect transform="scale(10)" x="3" y="3" width="4" height="4" filter="url(#f)"/>"#)
+    let drawn = try await alpha(
+      #"<filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">"#
+        + #"<feGaussianBlur stdDeviation="4"/></filter>"#
+        + #"<rect x="30" y="30" width="40" height="40" filter="url(#f)"/>"#)
+    #expect(zip(enlarged, drawn).allSatisfy { abs($0 - $1) <= 2 }, "\(enlarged) \(drawn)")
+  }
+
   @Test("primitives copy their results pixel for pixel in a region off the pixels, and clip them to the region")
   func resultsOnPixels() async throws {
     let painter = CGPainter(scale: 1)
@@ -261,6 +354,15 @@ private let changingBlur = ##"""
   </filter>
   <rect width="20" height="20"/>
   <rect x="40" y="40" width="20" height="20" fill="#c06030" filter="url(#p)"/>
+  """##
+
+/// A rectangle, and a rectangle with a filter whose blur by Gaussian kernels changes, in a user space enlarged 4
+/// times, where the filter runs at the scale of the pixels of the layer.
+private let enlargedChangingBlur = ##"""
+  <filter id="p"><feGaussianBlur stdDeviation="0.25"><animate attributeName="stdDeviation" to="0.5" dur="1s"/>
+  </feGaussianBlur></filter>
+  <rect width="20" height="20"/>
+  <rect transform="scale(4)" x="10" y="10" width="5" height="5" fill="#c06030" filter="url(#p)"/>
   """##
 
 /// A rectangle, and a rectangle with a filter whose blur, by different standard deviations, blurs a direction with

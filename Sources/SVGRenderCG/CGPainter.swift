@@ -445,10 +445,10 @@ package struct CGPainter {
   /// blur its edges. The rectangle can go past `extent` by less than a pixel of `target`.
   private func bitmapExtent(of extent: CGRect, in target: CGContext) -> (extent: CGRect, scale: CGFloat) {
     let ctm = target.ctm
-    let targetScale = max(hypot(ctm.a, ctm.b), hypot(ctm.c, ctm.d))
-    guard targetScale.isFinite, targetScale > 0 else { return (CGContext.bitmapRect(of: extent, scale: scale), scale) }
-    // A scale that differs from the painter's by rounding, such as of the fit of the document, isn't an enlargement.
-    let isEnlarged = targetScale > scale * 1.001
+    guard let targetScale = Self.pixelScale(of: ctm) else {
+      return (CGContext.bitmapRect(of: extent, scale: scale), scale)
+    }
+    let isEnlarged = isEnlargement(targetScale)
     var covered = extent
     if isEnlarged {
       covered = extent.intersection(target.boundingBoxOfClipPath)
@@ -470,6 +470,33 @@ package struct CGPainter {
 
   /// The origin in the user space and the numbers of the whole pixels of a transform that cover a rectangle, or `nil`
   /// if the transform turns or stretches the user space, whose pixels aren't on its axes.
+  /// The pixels of the device in a unit of a space whose transform to the device is `ctm`, along the axis that it
+  /// enlarges more, or `nil` if it has none.
+  static func pixelScale(of ctm: CGAffineTransform) -> CGFloat? {
+    let scale = max(hypot(ctm.a, ctm.b), hypot(ctm.c, ctm.d))
+    return scale.isFinite && scale > 0 ? scale : nil
+  }
+
+  /// Whether a space with `pixelScale` pixels of the device in a unit is enlarged from the scale of the painter.
+  ///
+  /// A scale that differs from the painter's by rounding, such as of the fit of the document, isn't an enlargement.
+  private func isEnlargement(_ pixelScale: CGFloat) -> Bool {
+    pixelScale > scale * 1.001
+  }
+
+  /// The pixels in a unit of the bitmap of a filter or of the tile of a pattern in a space whose transform to the
+  /// device is `ctm`.
+  ///
+  /// The bitmap is as fine as the pixels of the device where the space is enlarged, such as by a viewBox or a
+  /// transform, so that what it draws is as sharp as it is without the enlargement. Elsewhere it has the scale of the
+  /// painter, but no more than `maximumBitmapOversampling` times as fine as the pixels of the device, so that a much
+  /// reduced space doesn't make a bitmap much larger than what it draws. Unlike the bitmap of a clip path or a mask,
+  /// its pixels aren't a whole number of times as fine as the pixels of the device, as its origin isn't on them.
+  package func bitmapScale(for ctm: CGAffineTransform) -> CGFloat {
+    guard let pixelScale = Self.pixelScale(of: ctm) else { return scale }
+    return isEnlargement(pixelScale) ? pixelScale : min(scale, pixelScale * Self.maximumBitmapOversampling)
+  }
+
   private static func pixels(of rect: CGRect, on ctm: CGAffineTransform, scale: CGFloat) -> (CGPoint, Int, Int)? {
     let tolerance = 1e-6
     guard abs(ctm.b) <= tolerance * scale, abs(ctm.c) <= tolerance * scale,
@@ -529,15 +556,18 @@ package struct CGPainter {
 
   /// Fills a path with a pattern.
   private func paint(_ pattern: PatternPaint, path: CGPath, into graphics: CGContext) async {
-    guard let tile = CGContext.bitmap(size: pattern.tileSize, scale: scale, space: pattern.colorInterpolation.colorSpace)
+    let tileScale = tileScale(of: pattern, path: path, in: graphics)
+    guard
+      let tile = CGContext.bitmap(size: pattern.tileSize, scale: tileScale, space: pattern.colorInterpolation.colorSpace)
     else { return }
-    tile.concatenate(pattern.transform.scaledBy(x: scale, y: scale).scale)
+    tile.concatenate(pattern.transform.scaledBy(x: tileScale, y: tileScale).scale)
     pattern.viewBoxTransform.map { tile.concatenate($0) }
+    let painter = CGPainter(scale: tileScale)
     for node in pattern.content {
       if Task.isCancelled { break }
       await Task.yield()
       tile.saveGState()
-      await paint(node, into: tile)
+      await painter.paint(node, into: tile)
       tile.restoreGState()
     }
     guard let tileImage = tile.makeImage() else { return }
@@ -579,6 +609,21 @@ package struct CGPainter {
     graphics.setFillColorSpace(patternSpace)
     graphics.setFillPattern(cgPattern, colorComponents: &alpha)
     graphics.drawPath(using: .fill)
+  }
+
+  /// The pixels in a unit of the tile of a pattern that fills a path, from `bitmapScale(for:)`.
+  ///
+  /// Where the space is enlarged, a tile larger than what the path shows of `graphics` is no finer than the pixels
+  /// that show, but no coarser than at the scale of the painter, so that a large tile in a much enlarged space can
+  /// still be made.
+  private func tileScale(of pattern: PatternPaint, path: CGPath, in graphics: CGContext) -> CGFloat {
+    let tileScale = bitmapScale(for: graphics.ctm)
+    let side = max(pattern.tileSize.width, pattern.tileSize.height)
+    guard tileScale > scale, side > 0 else { return tileScale }
+    let visible = graphics.boundingBoxOfClipPath.intersection(path.boundingBoxOfPath)
+    guard !visible.isNull else { return scale }
+    let pixels = visible.applying(graphics.ctm)
+    return min(tileScale, max(scale, max(pixels.width, pixels.height) / side))
   }
 
   /// The most cells of a pattern that are drawn one by one.
