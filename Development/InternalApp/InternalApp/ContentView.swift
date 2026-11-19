@@ -17,6 +17,7 @@ struct ContentView: View {
         .navigationDestination(for: Comparison.self) { ComparisonView(comparison: $0) }
         .navigationDestination(for: AnimationControls.self) { AnimationControlView(file: $0.file) }
         .navigationDestination(for: DragDemo.self) { _ in DragDemoView() }
+        .navigationDestination(for: HitTestDemo.self) { _ in HitTestDemoView() }
         .toolbar {
           ToolbarItem(placement: .primaryAction) {
             Button("Open File…") { showingPicker = true }
@@ -100,6 +101,9 @@ private struct FolderView: View {
         Section("Demos") {
           NavigationLink(value: DragDemo()) {
             Label("Drag a Shape", systemImage: "hand.draw")
+          }
+          NavigationLink(value: HitTestDemo()) {
+            Label("Hit Testing", systemImage: "hand.tap")
           }
         }
       }
