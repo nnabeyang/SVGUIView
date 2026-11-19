@@ -32,7 +32,7 @@ struct GPUFilterTests {
     // A view whose animations don't play shows one image, and the filters of layers run on the GPU.
     view.showsStillFramesInLayers = true
     view.configuration = SVGUIViewConfiguration(
-      timeoutDuration: .seconds(60), animation: .paused, externalResources: .folder(TestSuite.bundle.bundleURL))
+      timeoutDuration: renderingPatience, animation: .paused, externalResources: .folder(TestSuite.bundle.bundleURL))
     view.layoutIfNeeded()
     view.layer.displayIfNeeded()
     while let task = view.renderingTask {

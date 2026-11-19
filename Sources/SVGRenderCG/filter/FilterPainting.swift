@@ -6,18 +6,59 @@ import SVGCore
 extension CGPainter {
   /// Paints an element with its filter, whose region is limited to what shows of the context.
   func paint(_ filtered: FilteredNode, into cgContext: CGContext) async {
-    let filtered = visiblePart(of: filtered, in: cgContext)
-    guard let source = await sourceImage(of: filtered), let result = await filterResult(of: filtered, source: source)
+    let (painter, filtered) = filterPainting(
+      of: filtered, ctm: cgContext.ctm, showing: cgContext.boundingBoxOfClipPath)
+    guard let source = await painter.sourceImage(of: filtered),
+      let result = await painter.filterResult(of: filtered, source: source)
     else { return }
-    await draw(result, of: filtered, into: cgContext)
+    await painter.draw(result, of: filtered, into: cgContext)
   }
 
-  /// The element with its filter region limited to what shows of a context that its result is drawn into, so that
-  /// the bitmaps of a huge region, or of one far away that a transform brings into the context, can be made.
-  package func visiblePart(of filtered: FilteredNode, in cgContext: CGContext) -> FilteredNode {
-    guard filtered.transform.isInvertible else { return filtered }
-    let visible = cgContext.boundingBoxOfClipPath.applying(filtered.transform.inverted())
-    return filtered.limited(toVisible: visible, scale: scale)
+  /// The largest number of pixels of a bitmap of a filter, as in WebKit.
+  static let maximumFilterArea: CGFloat = 4096 * 4096
+  /// The longest side of a bitmap of a filter in pixels, as in WebKit.
+  static let maximumFilterSide: CGFloat = 16384
+
+  /// The painter of the bitmaps of a filter whose result is drawn into a context whose transform is `ctm`, and the
+  /// element with its filter region limited to what shows of the context.
+  ///
+  /// The painter has the scale that `bitmapScale(for:)` gives the user space of the element, made smaller where it
+  /// would clamp the boxes of a blur, which would then blur less, as Skia blurs a large standard deviation at a
+  /// lower scale, and where the bitmaps would have more than `maximumFilterArea` pixels or a side longer than
+  /// `maximumFilterSide`, as WebKit and Firefox do, so that a filter of a large region in an enlarged space doesn't
+  /// take much longer than the pixels it shows. The values of the primitives, such as their offsets and their standard deviations, are in pixels at the
+  /// scale of the painter, so the filter runs at that scale as a whole.
+  ///
+  /// - Parameter showing: The rectangle of the context that shows, in its coordinates, or `nil` if the filter region
+  ///   isn't limited.
+  package func filterPainting(
+    of filtered: FilteredNode, ctm: CGAffineTransform, showing visible: CGRect?
+  ) -> (painter: CGPainter, filtered: FilteredNode) {
+    var bitmapScale = bitmapScale(for: filtered.transform.concatenating(ctm))
+    // A blur whose boxes would be clamped at the scale blurs less than it does at the scale of the painter, so the
+    // filter runs at a scale where they aren't, but no lower than the scale of the painter.
+    let deviation = GaussianBlurPrimitive.largestDeviation(of: filtered.primitives)
+    if deviation * bitmapScale > GaussianBlurPrimitive.largestUnclampedDeviation {
+      bitmapScale = max(min(bitmapScale, scale), GaussianBlurPrimitive.largestUnclampedDeviation / deviation)
+    }
+    let painter = CGPainter(scale: bitmapScale)
+    let limited = painter.visiblePart(of: filtered, showing: visible)
+    let width = limited.effectRect.width * painter.scale
+    let height = limited.effectRect.height * painter.scale
+    guard width > 0, height > 0, width.isFinite, height.isFinite else { return (painter, limited) }
+    let reduction = min(
+      (Self.maximumFilterArea / (width * height)).squareRoot(), Self.maximumFilterSide / max(width, height), 1)
+    guard reduction < 1 else { return (painter, limited) }
+    let reduced = CGPainter(scale: painter.scale * reduction)
+    return (reduced, reduced.visiblePart(of: filtered, showing: visible))
+  }
+
+  /// The element with its filter region limited to a rectangle that shows of a context that its result is drawn
+  /// into, so that the bitmaps of a huge region, or of one far away that a transform brings into the context, can be
+  /// made.
+  private func visiblePart(of filtered: FilteredNode, showing visible: CGRect?) -> FilteredNode {
+    guard let visible, filtered.transform.isInvertible else { return filtered }
+    return filtered.limited(toVisible: visible.applying(filtered.transform.inverted()), scale: scale)
   }
 
   /// Draws the result of a filter into its filter region with the transform of the element, clipped by its clip path,

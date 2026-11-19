@@ -228,24 +228,40 @@ extension PaintedLayer {
 
   /// Whether the layer paints only an element with a filter, which the renderer runs on the GPU.
   fileprivate func runsFilterOnGPU(scale: CGFloat) -> Bool {
-    filtered.map { MetalFilterRenderer.supports($0, scale: scale) } ?? false
+    guard let filtered else { return false }
+    let (painter, visible) = CGPainter(scale: scale).filterPainting(
+      of: filtered, ctm: pixelTransform, showing: shownRect)
+    return MetalFilterRenderer.supports(visible, scale: painter.scale)
+  }
+
+  /// The rectangle of the bounds that the contents show, which the view clips.
+  private var shownRect: CGRect {
+    view.map { bounds.intersection($0) } ?? bounds
+  }
+
+  /// The pixels of the contents of the bounds at the raster scale.
+  private var pixelSize: CGSize {
+    CGSize(width: pixels(bounds.width, rasterScale.width), height: pixels(bounds.height, rasterScale.height))
+  }
+
+  /// The transform from the coordinates of the bounds to the pixels of the contents, whose first row is the top of
+  /// the image, as in the contents of a layer.
+  private var pixelTransform: CGAffineTransform {
+    let size = pixelSize
+    return CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)
+      .concatenating(CGAffineTransform(size.width / bounds.width, 0, 0, -size.height / bounds.height, 0, size.height))
   }
 
   /// What the nodes paint, as an image of the bounds at the raster scale.
   ///
   /// The filter of a layer that paints only an element with a filter runs on the GPU when `filters` runs it.
   fileprivate func painted(scale: CGFloat, wideGamut: Bool, filters: MetalFilterRenderer?) async -> PaintedContents {
-    let size = CGSize(
-      width: pixels(bounds.width, rasterScale.width), height: pixels(bounds.height, rasterScale.height))
     // A bitmap that can't be made, such as one too large, shows nothing, as an element whose filter, mask, clip
     // path or pattern can't be allocated is left out of a rendering into one bitmap.
-    guard let graphics = CGContext.bitmap(size: size, scale: 1, space: .rendering(wideGamut: wideGamut)) else {
+    guard let graphics = CGContext.bitmap(size: pixelSize, scale: 1, space: .rendering(wideGamut: wideGamut)) else {
       return PaintedContents(image: nil, bounds: bounds, rasterScale: rasterScale, key: key)
     }
-    // The first row of the bitmap is the top of the image, as in the contents of a layer.
-    graphics.concatenate(
-      CGAffineTransform(size.width / bounds.width, 0, 0, -size.height / bounds.height, 0, size.height))
-    graphics.translateBy(x: -bounds.minX, y: -bounds.minY)
+    graphics.concatenate(pixelTransform)
     // A rendering into one bitmap ends at the edges of the view, which cut what crosses them, and Core Graphics
     // rasterizes a diagonal line that an edge cuts differently from one that it doesn't.
     if let view {
@@ -253,9 +269,10 @@ extension PaintedLayer {
     }
     let painter = CGPainter(scale: scale)
     if let filters, let filtered {
-      let visible = painter.visiblePart(of: filtered, in: graphics)
-      if let result = await filters.filterImage(of: visible, painter: painter) {
-        await painter.draw(result, of: visible, into: graphics)
+      // The filter runs at the scale that it has on the CPU, as `CGPainter` paints it.
+      let (filterPainter, visible) = painter.filterPainting(of: filtered, ctm: graphics.ctm, showing: shownRect)
+      if let result = await filters.filterImage(of: visible, painter: filterPainter) {
+        await filterPainter.draw(result, of: visible, into: graphics)
         return PaintedContents(
           image: graphics.makeImage(), bounds: bounds, rasterScale: rasterScale, key: key, filteredOnGPU: true)
       }

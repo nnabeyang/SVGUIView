@@ -142,8 +142,8 @@ struct SVGUIViewTests {
     return components
   }
 
-  @Test("an element whose filter is too large to allocate is not drawn, and the other elements are")
-  func filterTooLargeToAllocate() async throws {
+  @Test("an element with a filter in a hugely reduced user space is drawn, as the bitmaps of the filter are as fine as the pixels need")
+  func filterInHugelyReducedSpace() async throws {
     let view = makeView(
       #"""
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -161,7 +161,7 @@ struct SVGUIViewTests {
     let scale = Int(UIScreen.main.scale)
     let filtered = try pixel(of: image, x: 5 * scale, y: 10 * scale)
     let other = try pixel(of: image, x: 15 * scale, y: 10 * scale)
-    #expect(filtered == [0, 0, 0, 0])
+    #expect(filtered == [255, 0, 0, 255])
     #expect(other == [0, 255, 0, 255])
   }
 
@@ -489,7 +489,8 @@ struct SVGUIViewTests {
       </svg>
       """#)
     view.contentMode = .scaleAspectFit
-    view.frame.size = CGSize(width: 400, height: 400)
+    // The view is as large as the document, so that the filter runs at the scale of the screen.
+    view.frame.size = CGSize(width: 100, height: 100)
     for _ in 0..<2 { _ = try await view.takeSnapshot() }
     // The footprint of the process does not show the leak in the simulator, so count what malloc hands out.
     let renderings = 100
@@ -498,7 +499,7 @@ struct SVGUIViewTests {
     }
     // A leak keeps at least one bitmap of the view, which is smaller than the filter region, per rendering, in every
     // round. The allocations of the other tests can make a round grow by more than a few bitmaps, but not every one.
-    let pixels = (400 * UIScreen.main.scale).rounded(.up)
+    let pixels = (100 * UIScreen.main.scale).rounded(.up)
     let bitmap = Int(pixels * pixels) * 4
     #expect(
       growth < bitmap * renderings / 4,
@@ -530,7 +531,7 @@ struct SVGUIViewTests {
     }
     // Keeping the bitmap of each rendering until the timeout keeps all of them, in every round. The allocations of
     // the other tests can make a round grow by more than a few bitmaps, but not every one.
-    let pixels = (400 * UIScreen.main.scale).rounded(.up)
+    let pixels = (100 * UIScreen.main.scale).rounded(.up)
     let bitmap = Int(pixels * pixels) * 4
     #expect(
       growth < bitmap * renderings / 4,
