@@ -1,3 +1,4 @@
+import Accelerate
 import CoreGraphics
 import Foundation
 import SVGRenderCG
@@ -167,5 +168,47 @@ struct GaussianBlurTests {
     // direction without the last would blur it about a fifth less.
     #expect(abs(spread(of: alpha[60]) - 10) < 0.5)
     #expect(abs(spread(of: alpha.map { $0[60] }) - 12) < 0.6)
+  }
+
+  @Test(
+    "a large tent blurs as vImage's tent does, for images narrower and wider than a band",
+    arguments: [(129, 3, 40), (129, 64, 31), (157, 157, 93), (199, 200, 120)])
+  func largeTent(size: Int, width: Int, height: Int) throws {
+    // Rows with spare bytes at their ends, of pixels that vary much from one to the next, with transparent ones.
+    let rowBytes = width * 4 + 12
+    var state: UInt32 = 12345
+    var pixels = (0..<(rowBytes * height)).map { _ in
+      state = state &* 1_103_515_245 &+ 12345
+      return UInt8(truncatingIfNeeded: state >> 16)
+    }
+    for index in stride(from: 0, to: pixels.count, by: 28) { pixels[index..<min(index + 4, pixels.count)] = [0, 0, 0, 0] }
+    var expected = [UInt8](repeating: 0, count: pixels.count)
+    var blurred = [UInt8](repeating: 0, count: pixels.count)
+    pixels.withUnsafeMutableBytes { pixels in
+      var source = vImage_Buffer(
+        data: pixels.baseAddress, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: rowBytes)
+      expected.withUnsafeMutableBytes { expected in
+        var destination = vImage_Buffer(
+          data: expected.baseAddress, height: vImagePixelCount(height), width: vImagePixelCount(width),
+          rowBytes: rowBytes)
+        _ = vImageTentConvolve_ARGB8888(
+          &source, &destination, nil, 0, 0, UInt32(size), UInt32(size), [0, 0, 0, 0],
+          vImage_Flags(kvImageBackgroundColorFill))
+      }
+      blurred.withUnsafeMutableBytes { blurred in
+        let destination = vImage_Buffer(
+          data: blurred.baseAddress, height: vImagePixelCount(height), width: vImagePixelCount(width),
+          rowBytes: rowBytes)
+        GaussianBlurPrimitive.tentConvolve(source, into: destination, size: size)
+      }
+    }
+    // The spare bytes aren't pixels.
+    let differences = (0..<height).flatMap { y in
+      (0..<(width * 4)).compactMap { x in
+        expected[y * rowBytes + x] == blurred[y * rowBytes + x] ? nil : (x / 4, y)
+      }
+    }
+    #expect(differences.isEmpty, "\(differences.count) components differ, first at \(differences.first.map { "\($0)" } ?? "")")
+    #expect(size > GaussianBlurPrimitive.largestFastTentSize)
   }
 }

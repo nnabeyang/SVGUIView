@@ -150,7 +150,8 @@ extension GaussianBlurPrimitive {
   ///
   /// Two boxes of an even size that are offset by half a pixel to each side make a centered tent of twice the size
   /// less one, so an even size blurs with the tent and the centered box one pixel larger, which vImage, and MPS on the
-  /// GPU, have.
+  /// GPU, have. A tent larger than vImage convolves fast is convolved by `tentConvolve(_:into:size:)`, with the same
+  /// results.
   private func applyAccelerated(srcBuffer: inout vImage_Buffer, destBuffer: inout vImage_Buffer, kernelSize: UInt32) -> Bool {
     let passes: [(isTent: Bool, size: UInt32)] =
       kernelSize.isMultiple(of: 2)
@@ -171,7 +172,11 @@ extension GaussianBlurPrimitive {
     for (index, pass) in passes.enumerated() {
       // Each pass blurs the result of the one before.
       if index > 0 { swap(&srcBuffer, &destBuffer) }
-      _ = convolve(pass, tmpBuffer: tmpBuffer, flags: vImage_Flags(kvImageBackgroundColorFill))
+      if pass.isTent, pass.size > Self.largestFastTentSize {
+        Self.tentConvolve(srcBuffer, into: destBuffer, size: Int(pass.size))
+      } else {
+        _ = convolve(pass, tmpBuffer: tmpBuffer, flags: vImage_Flags(kvImageBackgroundColorFill))
+      }
     }
     return true
   }
