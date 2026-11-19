@@ -59,6 +59,9 @@ struct ChangesWhileRenderingTests {
     let view = SVGUIView(
       frame: CGRect(x: 0, y: 0, width: 20, height: 20), data: Data(Self.heldDocument.utf8),
       baseURL: URL(filePath: "/held/doc.svg"))
+    // A rendering that times out keeps the image of the view and leaves its layer needing display, which nothing
+    // displays in a view that isn't in a window, so a rendering held up by a slow CI machine mustn't time out.
+    view.configuration = SVGUIViewConfiguration(timeoutDuration: patience)
     // The changes of the tests are rendered into one image, not as continuous changes.
     view.continuousChangeInterval = .zero
     view.layer.displayIfNeeded()
