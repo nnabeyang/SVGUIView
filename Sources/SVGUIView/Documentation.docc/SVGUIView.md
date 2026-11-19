@@ -209,7 +209,8 @@ changes their attributes, classes and styles. The view shows the changes at its
 next rendering, and a change starts the CSS transitions of the values that it
 changes. The document also controls the CSS animations, and begins and ends
 the SMIL animations, such as the ones that would begin with a click in a
-browser. See <doc:ChangingDocuments>.
+browser, and reads the bounding boxes and the shapes of the elements in the
+coordinates of the view. See <doc:ChangingDocuments>.
 
 ```swift
 svgView.document.element(id: "play")?.classList.add("active")
