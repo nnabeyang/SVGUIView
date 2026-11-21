@@ -22,6 +22,9 @@ final class DocumentElement: Sendable {
   let name: SVGElementName
   /// The local name as written, which type selectors match.
   let localName: String
+  /// The URI of the namespace of an element that isn't in the SVG namespace, which is empty for one in no namespace,
+  /// or `nil` for an element of the SVG namespace, so that the element is written back in its namespace.
+  let namespace: String?
   /// The attributes, with the `href` of the XLink namespace as `href` and other prefixed attributes left out, and
   /// with the values that SMIL animations give them.
   let attributes: [String: String]
@@ -43,13 +46,14 @@ final class DocumentElement: Sendable {
   /// - Parameter writtenAttributes: The attributes without the values of SMIL animations, which are `attributes`
   ///   where it's `nil`.
   init(
-    id: ElementID, name: SVGElementName, localName: String, attributes: [String: String],
+    id: ElementID, name: SVGElementName, localName: String, namespace: String? = nil, attributes: [String: String],
     writtenAttributes: [String: String]? = nil, texts: [String], children: [DocumentElement]
   ) {
     precondition(texts.count == children.count + 1)
     self.id = id
     self.name = name
     self.localName = localName
+    self.namespace = namespace
     self.attributes = attributes
     storedWrittenAttributes = writtenAttributes
     self.texts = texts
@@ -73,7 +77,8 @@ final class DocumentElement: Sendable {
     var children = children
     children[index] = children[index].replacingDescendant(at: path.dropFirst(), with: replacement)
     return DocumentElement(
-      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      id: id, name: name, localName: localName, namespace: namespace, attributes: attributes,
+      writtenAttributes: storedWrittenAttributes,
       texts: texts, children: children)
   }
 
@@ -85,14 +90,16 @@ final class DocumentElement: Sendable {
     var texts = texts
     texts.insert("", at: index + 1)
     return DocumentElement(
-      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      id: id, name: name, localName: localName, namespace: namespace, attributes: attributes,
+      writtenAttributes: storedWrittenAttributes,
       texts: texts, children: children)
   }
 
   /// The element with character data in place of its children and its character data.
   func replacingChildren(withText text: String) -> DocumentElement {
     DocumentElement(
-      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      id: id, name: name, localName: localName, namespace: namespace, attributes: attributes,
+      writtenAttributes: storedWrittenAttributes,
       texts: [text], children: [])
   }
 
@@ -103,7 +110,8 @@ final class DocumentElement: Sendable {
     var texts = texts
     texts[index] += texts.remove(at: index + 1)
     return DocumentElement(
-      id: id, name: name, localName: localName, attributes: attributes, writtenAttributes: storedWrittenAttributes,
+      id: id, name: name, localName: localName, namespace: namespace, attributes: attributes,
+      writtenAttributes: storedWrittenAttributes,
       texts: texts, children: children)
   }
 }
@@ -176,7 +184,8 @@ package struct DocumentTree: Sendable {
       root = root.replacingDescendant(
         at: path[...],
         with: DocumentElement(
-          id: id, name: element.name, localName: element.localName, attributes: attributes,
+          id: id, name: element.name, localName: element.localName, namespace: element.namespace,
+          attributes: attributes,
           writtenAttributes: isAnimated ? element.writtenAttributes : nil, texts: element.texts,
           children: element.children))
     }

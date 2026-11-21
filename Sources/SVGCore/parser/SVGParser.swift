@@ -91,13 +91,19 @@ package final class SVGParser: NSObject {
     let id: ElementID
     let name: SVGElementName
     let localName: String
+    /// The namespace of an element that isn't in the SVG namespace, or `nil`.
+    let namespace: String?
     let attributes: [String: String]
     var children: [DocumentElement] = []
     /// The character data so far before each child and after the last one, which only `<text>`, `<tspan>`,
-    /// `<textPath>`, `<a>` and `<style>` keep. An `<a>` uses it only in text.
+    /// `<textPath>`, `<a>`, `<style>`, `<title>` and `<desc>` keep. An `<a>` uses it only in text, and `<title>` and
+    /// `<desc>` keep it so that it's written back.
     var texts = [""]
 
-    var keepsText: Bool { name == .text || name == .tspan || name == .textPath || name == .a || name == .style }
+    var keepsText: Bool {
+      name == .text || name == .tspan || name == .textPath || name == .a || name == .style
+        || (namespace == nil && (localName == "title" || localName == "desc"))
+    }
   }
 
   /// The style sheets of the document, in the order that they cascade in.
@@ -155,12 +161,16 @@ extension SVGParser: XMLParserDelegate {
   }
 
   package func parser(_: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
-    let name = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
+    let isSVG = SVGXmlNameSpace(rawValue: namespaceURI ?? "") == .svg
+    let name = isSVG ? (SVGElementName(rawValue: elementName) ?? .unknown) : .unknown
     // The character data after this child goes after it.
     if !stack.isEmpty {
       stack[stack.count - 1].texts.append("")
     }
-    stack.append(OpenElement(id: ElementID(rawValue: elementCount), name: name, localName: elementName, attributes: attributeDict))
+    stack.append(
+      OpenElement(
+        id: ElementID(rawValue: elementCount), name: name, localName: elementName,
+        namespace: isSVG ? nil : (namespaceURI ?? ""), attributes: attributeDict))
     elementCount += 1
   }
 
@@ -221,7 +231,8 @@ extension SVGParser: XMLParserDelegate {
       styleSources.sheets.append(StyleSheetSources.Sheet(css: open.texts.joined()))
     }
     let element = DocumentElement(
-      id: open.id, name: open.name, localName: open.localName, attributes: filter(attributes: open.attributes),
+      id: open.id, name: open.name, localName: open.localName, namespace: open.namespace,
+      attributes: filter(attributes: open.attributes),
       texts: open.texts, children: open.children)
     if stack.isEmpty {
       root = element

@@ -232,6 +232,29 @@ start at the time of the change, as in a browser, while the animations that
 the elements keep running play on. Removing an animation and adding it again
 starts it again.
 
+### Saving a document
+
+``SVGDocument/svgData()`` writes the document with every change made so far
+as SVG, which an app saves to a file or shares, and which a view shows again as
+it shows the document now.
+
+```swift
+// Shares the drawing as an SVG file, such as to the Files app.
+ShareLink(
+  item: Drawing(data: view.document.svgData()),
+  preview: SharePreview("Drawing.svg"))
+```
+
+It writes the elements of the document with their attributes as written,
+the style sheets of `<style>` elements, and the text of `<text>`, `<title>` and
+`<desc>` elements. An element of another namespace, such as the content of a
+`<foreignObject>`, keeps its namespace. What parsing left out isn't written:
+comments, the document type declaration, and the attributes of other
+namespaces, such as the ones that an editor adds. The values that SMIL
+animations give attributes aren't written, while the animation elements are.
+A reference to another file, such as the `href` of an `<image>`, is written as
+it is, so a relative one refers to a file next to where the document is saved.
+
 ### Starting transitions
 
 A change starts CSS transitions of the properties whose values it changes, as

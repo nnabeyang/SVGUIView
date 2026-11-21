@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import SVGCore
 
 /// The document that a view displays, which an app reads and changes from Swift.
@@ -46,6 +47,28 @@ public final class SVGDocument {
   init(tree: DocumentTree) {
     self.tree = tree
     nextElementID = (tree.largestElementID ?? -1) + 1
+  }
+
+  /// The document as SVG data, with every change made to it so far, which an
+  /// app saves or shares as an SVG file.
+  ///
+  /// The data is UTF-8 XML of the elements in the document's tree, with their
+  /// attributes as written, and the character data of the `style`, `text`,
+  /// `tspan`, `textPath`, `a`, `title` and `desc` elements. The values that
+  /// SMIL animations give attributes aren't written, but their animation
+  /// elements are. An element of another namespace, such as the content of a
+  /// `foreignObject`, is written in its namespace. An `xlink:href` is written
+  /// as the `href` of SVG 2.
+  ///
+  /// It doesn't keep what parsing the document left out: comments, processing
+  /// instructions, the document type declaration, the attributes of other
+  /// namespaces, such as the ones that editors add, and the character data of
+  /// the other elements. The elements that were created and not inserted, or
+  /// removed, aren't written. References to other files, such as the `href`
+  /// of an `image`, are written as they are, so a relative one refers to a
+  /// file next to where the data is saved.
+  public func svgData() -> Data {
+    tree.xmlData()
   }
 
   /// The root `svg` element, or `nil` if the document has no element.
