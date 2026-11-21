@@ -189,6 +189,10 @@ extension RenderTreeBuilder {
     }
     for child in filter.knownChildren {
       guard let child = child as? (any SVGFilterPrimitiveElement) else { continue }
+      // A filter can have many primitives, so the building stops between them when it's cancelled, and lets other
+      // tasks run on this thread of the cooperative thread pool, as it does between elements.
+      guard !Task.isCancelled else { break }
+      await Task.yield()
       // The attributes that the primitive doesn't have come from the union of the subregions of its inputs, or from
       // the filter region for a primitive without inputs, one with a standard input and a `feTile`.
       let inputSubregions = Self.inputs(of: child).map(inputSubregion)
