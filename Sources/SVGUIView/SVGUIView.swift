@@ -129,9 +129,17 @@ public class SVGUIView: UIView {
   private var contextGeneration = 0
   /// The render tree for hit testing, with what it's built for, which the hit tests share until the document, the
   /// view or the time changes.
-  private var hitTesting: (key: HitTestingKey, tree: Task<RenderTree?, Never>)?
+  private var hitTesting: (key: HitTestingKey, tree: Task<RenderTree?, Never>, context: SVGBaseContext)?
   /// Counts the render trees that hit testing builds, which tests follow.
   private(set) var hitTestingTreeCount = 0
+  /// The nodes of the latest render tree for hit testing, with what it was built for and the context that it was built
+  /// from, which the next tree reuses where the changes of the document since leave them as they are.
+  private var hitTestingNodes: (inputs: HitTestingInputs, context: SVGBaseContext, nodes: RenderNodeCache)?
+  /// The elements that the changes of the document made again since the context of the latest render tree for hit
+  /// testing.
+  private var hitTestingChanges = ChangedElements()
+  /// Counts the render trees for hit testing that reuse the nodes of the tree before, which tests follow.
+  private(set) var reusingHitTestingTreeCount = 0
   /// The context that the latest rendering that started shows.
   private var renderedContextGeneration = 0
   /// What the latest rendering that started depends on besides the context of the document.
@@ -509,7 +517,12 @@ public class SVGUIView: UIView {
       to: tree, changes: changes, at: displayedTime.seconds,
       startsTransitions: configuration.animation != .none && !isHeldByReduceMotion)
     // A rendering in progress can show layers of a context before the changes, which the next rendering reuses.
-    changeLog.append((contextGeneration, baseContext.changedElements(by: changes)))
+    let changedElements = baseContext.changedElements(by: changes)
+    changeLog.append((contextGeneration, changedElements))
+    // The changes are kept for the next render tree for hit testing only after a hit test has built one.
+    if hitTesting != nil {
+      hitTestingChanges.formUnion(changedElements)
+    }
     noteChange(changes)
     // Changes can make the animations last longer, after the clock stopped at their end.
     updatePlayback()
@@ -1404,9 +1417,10 @@ extension SVGUIView: DocumentHost {
   func hits(at point: CGPoint, tolerance: CGFloat) async -> [ElementID] {
     applyDocumentChanges()
     let rect = bounds
-    let key = HitTestingKey(
-      context: contextGeneration, document: documentGeneration, size: rect.size, scale: displayScale,
-      contentMode: contentMode, time: displayedTime, externalResources: configuration.externalResources)
+    let inputs = HitTestingInputs(
+      document: documentGeneration, size: rect.size, scale: displayScale, contentMode: contentMode,
+      externalResources: configuration.externalResources)
+    let key = HitTestingKey(inputs: inputs, context: contextGeneration, time: displayedTime)
     let task: Task<RenderTree?, Never>
     if let hitTesting, hitTesting.key == key {
       task = hitTesting.tree
@@ -1417,43 +1431,70 @@ extension SVGUIView: DocumentHost {
       let time = displayedTime
       let fit = ContentFit(contentMode)
       let resources = resourceLoader
+      // The tree reuses the nodes of the tree before for the same view and document, where the changes since leave
+      // them as they are.
+      let previous = hitTestingNodes.flatMap { $0.inputs == inputs ? $0 : nil }
+      let reused = previous.map { (context: $0.context, nodes: $0.nodes, changes: hitTestingChanges) }
+      if reused != nil { reusingHitTestingTreeCount += 1 }
+      hitTestingChanges = ChangedElements()
+      hitTestingNodes = nil
       task = Task {
-        await Self.hitTestingTree(base: base, size: rect.size, scale: scale, time: time, fit: fit, resources: resources)
+        await Self.hitTestingTree(
+          base: base, size: rect.size, scale: scale, time: time, fit: fit, resources: resources, reusing: reused)
       }
-      hitTesting = (key, task)
+      hitTesting = (key, task, base)
     }
     guard let tree = await task.value else {
       // A tree that wasn't built is built again for the next hit test.
       if hitTesting?.key == key { hitTesting = nil }
       return []
     }
+    // The nodes are kept once the tree is built, unless a newer tree started meanwhile.
+    if let hitTesting, hitTesting.key == key {
+      hitTestingNodes = (inputs, hitTesting.context, tree.reusableNodes)
+    }
     // The document is rendered into the bounds of the view.
     return await Self.hits(in: tree, at: CGPoint(x: point.x - rect.minX, y: point.y - rect.minY), tolerance: tolerance)
   }
 
-  /// What a render tree for hit testing is built for.
-  private struct HitTestingKey: Equatable {
-    let context: Int
+  /// What the render trees for hit testing are built for besides the document and the time, whose trees can reuse
+  /// the nodes of one another.
+  private struct HitTestingInputs: Equatable {
     let document: Int
     let size: CGSize
     let scale: CGFloat
     let contentMode: UIView.ContentMode
-    let time: Duration
     let externalResources: ExternalResources
+  }
+
+  /// What a render tree for hit testing is built for.
+  private struct HitTestingKey: Equatable {
+    let inputs: HitTestingInputs
+    let context: Int
+    let time: Duration
   }
 
   /// The render tree of a document at a time for hit testing, in a rectangle of a size at its origin, built off the
   /// main actor as a rendering is, or `nil` if building it is cancelled.
+  ///
+  /// - Parameter reused: The context of the tree before, its nodes, and the elements that the changes of the document
+  ///   made again since, or `nil` to build every node.
   @concurrent
   private static func hitTestingTree(
     base: SVGBaseContext, size: CGSize, scale: CGFloat, time: Duration, fit: ContentFit,
-    resources: ExternalResourceLoader
+    resources: ExternalResourceLoader,
+    reusing reused: (context: SVGBaseContext, nodes: RenderNodeCache, changes: ChangedElements)?
   ) async -> RenderTree? {
     let resolved =
       base.needsExternalStyleSheets ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
     guard !Task.isCancelled else { return nil }
+    let styled = resolved.at(time: time.seconds)
+    // The nodes that the changes can make differently are made again, and every one where they can make every one.
+    let changed = reused.flatMap { styled.changedNodes(since: $0.context, by: $0.changes) }
+    // The tree keeps its nodes for the next one, so a tree that reuses none is built with no changed nodes.
     var builder = RenderTreeBuilder(
-      base: resolved.at(time: time.seconds), viewPort: CGRect(origin: .zero, size: size), scale: scale,
+      base: styled, viewPort: CGRect(origin: .zero, size: size), scale: scale,
+      reusing: changed != nil ? reused?.nodes ?? RenderNodeCache() : RenderNodeCache(), changed: changed?.nodes ?? [],
       resources: resources)
     builder.collectsHitAreas = true
     return await builder.build(fit: fit)
