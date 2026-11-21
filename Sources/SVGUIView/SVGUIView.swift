@@ -1185,8 +1185,9 @@ public class SVGUIView: UIView {
     }
     let rendered = await withRenderingTimeout(timeoutDuration) {
       () async -> Result<(snapshot: SVGDocument.ElementSnapshot?, resolved: SVGBaseContext?), SVGRenderingError>? in
-      // The tree is built as `makeImage` builds it. Building it in a function that both call adds a few percent to
-      // the instructions of rendering a small document into an image.
+      // The style sheets and the computed values are found as `makeImage` finds them. Doing it in a function that both
+      // call adds a few percent to the instructions of rendering a small document into an image. Only the nodes of
+      // the element and of its ancestors are made, so that the time doesn't grow with the rest of the document.
       let rect = CGRect(origin: .zero, size: size)
       let styleSheets =
         base.needsExternalStyleSheets
@@ -1194,7 +1195,7 @@ public class SVGUIView: UIView {
       guard !Task.isCancelled else { return nil }
       let builder = RenderTreeBuilder(
         base: styleSheets.at(time: time.seconds), viewPort: rect, scale: scale, resources: resources)
-      guard let tree = await builder.build(fit: fit) else { return nil }
+      guard let tree = await builder.build(along: element, fit: fit) else { return nil }
       let resolved = base.needsExternalStyleSheets ? styleSheets : nil
       guard let (node, transform) = tree.subtree(of: element) else { return .success((nil, resolved)) }
       // A huge filter region is painted only where the view shows it, as the rendering of the view limits it. The

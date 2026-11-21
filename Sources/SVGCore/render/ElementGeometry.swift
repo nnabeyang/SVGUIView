@@ -140,7 +140,7 @@ extension RenderTreeBuilder {
   }
 
   /// The elements from the root to the element of the identifier, or `nil` if the tree has no such element.
-  private static func chain(to id: ElementID, from element: any SVGElement) -> [any SVGElement]? {
+  static func chain(to id: ElementID, from element: any SVGElement) -> [any SVGElement]? {
     if element.base.elementID == id { return [element] }
     for child in element.children {
       if let chain = chain(to: id, from: child) {
