@@ -232,6 +232,48 @@ start at the time of the change, as in a browser, while the animations that
 the elements keep running play on. Removing an animation and adding it again
 starts it again.
 
+### Dragging an element
+
+The view renders a change off the main thread and shows it a frame or more
+after the app makes it, so a shape that follows a finger through the document
+trails behind it. An app that edits shapes moves a stand-in layer instead,
+which follows the finger in the same frame, and lets the document catch up.
+
+``SVGDocument/Element/takeSnapshot(scale:)`` renders an element and its
+descendants into an image for the stand-in, with the frame in the coordinates
+of the view where the view shows it. Hide the element while the stand-in is
+shown, and change the document as the finger moves:
+
+```swift
+// When the drag begins.
+guard let snapshot = try await shape.takeSnapshot() else { return }
+standIn.contents = snapshot.image
+standIn.frame = snapshot.frame
+svgView.layer.addSublayer(standIn)
+shape.setAttribute("visibility", to: "hidden")
+
+// As the finger moves.
+standIn.position = position
+shape.setAttribute("transform", to: "translate(\(x) \(y))")
+```
+
+The image has the element's own transform, clip path, mask, opacity and filter,
+and the transforms of its ancestors, but not the opacities, clip paths, masks
+and filters of its ancestors, or the other elements, so that the stand-in is
+the element alone.
+
+When the drag ends, show the element again, and remove the stand-in when
+``SVGUIView/SVGUIView/waitUntilDisplayed()`` returns. It returns when the view
+has put a rendering of the changes made until then into its layer, so the
+stand-in goes in the same Core Animation transaction as the element comes,
+and neither a gap nor both of them show:
+
+```swift
+shape.removeAttribute("visibility")
+await svgView.waitUntilDisplayed()
+standIn.removeFromSuperlayer()
+```
+
 ### Saving a document
 
 ``SVGDocument/svgData()`` writes the document with every change made so far
