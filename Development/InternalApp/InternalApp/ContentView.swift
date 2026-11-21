@@ -18,6 +18,7 @@ struct ContentView: View {
         .navigationDestination(for: AnimationControls.self) { AnimationControlView(file: $0.file) }
         .navigationDestination(for: DragDemo.self) { _ in DragDemoView() }
         .navigationDestination(for: HitTestDemo.self) { _ in HitTestDemoView() }
+        .navigationDestination(for: DrawDemo.self) { _ in DrawDemoView() }
         .toolbar {
           ToolbarItem(placement: .primaryAction) {
             Button("Open File…") { showingPicker = true }
@@ -104,6 +105,9 @@ private struct FolderView: View {
           }
           NavigationLink(value: HitTestDemo()) {
             Label("Hit Testing", systemImage: "hand.tap")
+          }
+          NavigationLink(value: DrawDemo()) {
+            Label("Draw and Share", systemImage: "scribble")
           }
         }
       }
