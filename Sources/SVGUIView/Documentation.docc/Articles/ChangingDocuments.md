@@ -143,6 +143,10 @@ as the DOM's `getBBox()` and `getScreenCTM()` do:
   element and its ancestors, the view boxes, and how the view places the
   document with its `contentMode`.
 
+A `<tspan>` element has the box of the cells of its glyphs and the outlines of
+its glyphs, as a `<text>` element does, in the coordinates of its `<text>`
+element.
+
 ```swift
 guard let box = await shape.boundingBox(includingStroke: true),
   let transform = await shape.transformToView()

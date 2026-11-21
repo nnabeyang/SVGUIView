@@ -48,9 +48,18 @@ extension RenderTreeBuilder {
     var toViewPort =
       width > 0 && height > 0 ? fit.transform(size: CGSize(width: width, height: height), in: viewPort.size) : .identity
     let references = ReferenceGuard()
+    // The text that a `<tspan>` or `<textPath>` element is in, which lays out its characters, in its own context.
+    var text: (element: SVGTextElement, context: ResolveContext)?
     for ancestor in chain.dropLast() {
       context = context.styled(by: ancestor)
       switch ancestor {
+      case let ancestor as SVGTextElement:
+        // The spans of a text are in its user space, and have no transform of their own.
+        let path = await self.path(of: ancestor, context: context, guard: references)
+        let frame = await self.frame(of: ancestor, context: context, path: path, guard: references)
+        toViewPort = await transform(of: ancestor, context: context, frame: frame, guard: references)
+          .concatenating(toViewPort)
+        text = (ancestor, context)
       case let svg as SVGSVGElement:
         let (local, inner) = await placement(of: svg, context: context, guard: references)
         toViewPort = local.concatenating(toViewPort)
@@ -81,6 +90,14 @@ extension RenderTreeBuilder {
       strokeBoundingBox =
         includesStroke
         ? await frame(of: svg.children, context: inner, includesStroke: true, guard: references) ?? .zero : nil
+    case let span as SVGTSpanElement:
+      // A span has the bounds and the shape of its characters, in the user space of its text.
+      let geometry = text.flatMap { $0.element.spanGeometry(of: span.base.elementID, in: $0.context) }
+      boundingBox = geometry?.frame ?? .zero
+      // The cells of the glyphs hold their outlines, so the stroke adds nothing to the bounds, as it adds nothing to
+      // the bounds of a text.
+      strokeBoundingBox = includesStroke ? boundingBox : nil
+      path = geometry?.path
     case let symbol as SVGSymbolElement:
       boundingBox = await frame(of: symbol.children, context: context, guard: references) ?? .zero
       strokeBoundingBox =
@@ -113,11 +130,11 @@ extension RenderTreeBuilder {
     return (viewBoxTransform.concatenating(translation).concatenating(transform), layout?.context ?? context)
   }
 
-  /// Whether an element is a graphics element of SVG 2 that SVGUIView finds the geometry of. The ones that aren't,
-  /// such as `<mask>` and `<pattern>`, have no bounding box. The geometry of the spans of a text isn't found yet.
+  /// Whether an element is a graphics element of SVG 2, or a text content element, that SVGUIView finds the geometry
+  /// of. The ones that aren't, such as `<mask>` and `<pattern>`, have no bounding box.
   private static func hasGeometry(_ element: any SVGDrawableElement) -> Bool {
     switch element {
-    case is SVGMaskElement, is SVGPatternElement, is SVGFilterElement, is SVGTSpanElement: false
+    case is SVGMaskElement, is SVGPatternElement, is SVGFilterElement: false
     default: true
     }
   }

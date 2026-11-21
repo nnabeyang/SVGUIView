@@ -698,11 +698,17 @@ extension SVGDocument.Element {
   /// `defs` element or with `display: none`, has the box that it would have if
   /// it were rendered.
   ///
+  /// The box of a `tspan` or `textPath` element, or of an `a` element in
+  /// text, is the union of the cells of the glyphs of its characters and of
+  /// the elements in it, as the box of a `text` element is, in the user space
+  /// of its `text` element. Its stroke adds nothing to the box. It's zero for
+  /// one that lays out no characters, such as one with `display: none`.
+  ///
   /// It's `nil` for an element that the view doesn't show, because it isn't
-  /// in the document's tree or the view no longer shows the document, for an
-  /// element that isn't a graphics element, such as a `mask` or a `pattern`,
-  /// and for a `tspan` element. The geometry is found off the main actor, as
-  /// a rendering is, so it's also `nil` if the task is cancelled.
+  /// in the document's tree or the view no longer shows the document, and for
+  /// an element that isn't a graphics element, such as a `mask` or a
+  /// `pattern`. The geometry is found off the main actor, as a rendering is,
+  /// so it's also `nil` if the task is cancelled.
   ///
   /// - Parameter includingStroke: Whether the box includes the strokes.
   public func boundingBox(includingStroke: Bool = false) async -> CGRect? {
@@ -716,8 +722,10 @@ extension SVGDocument.Element {
   /// `path` element or of a basic shape, such as a `rect` with its rounded
   /// corners, the outlines of the glyphs of a `text` element, the rectangle
   /// of an `image` element, and the shape of the element that a `use`
-  /// element references, moved by its `x` and `y`. Containers, such as `g`
-  /// and `svg` elements, have no shape. It's in the coordinates of
+  /// element references, moved by its `x` and `y`. A `tspan` or `textPath`
+  /// element has the outlines of the glyphs of its characters and of the
+  /// elements in it, in the user space of its `text` element. Containers, such
+  /// as `g` and `svg` elements, have no shape. It's in the coordinates of
   /// ``boundingBox(includingStroke:)``, and it's `nil` in the same cases.
   public func path() async -> CGPath? {
     await document.host?.geometry(of: id, includesStroke: false, includesPath: true)?.path?.cgPath
@@ -730,7 +738,8 @@ extension SVGDocument.Element {
   /// It includes the element's own `transform`, the transforms of its
   /// ancestors, the view boxes of the `svg` elements that it's in, and how
   /// the view places the document with its `contentMode`, so it changes with
-  /// the size and the content mode of the view. It's `nil` in the cases that
+  /// the size and the content mode of the view. A `tspan` or `textPath`
+  /// element has the transform of its `text` element. It's `nil` in the cases that
   /// ``boundingBox(includingStroke:)`` is.
   public func transformToView() async -> CGAffineTransform? {
     await document.host?.geometry(of: id, includesStroke: false, includesPath: false)?.transformToViewPort

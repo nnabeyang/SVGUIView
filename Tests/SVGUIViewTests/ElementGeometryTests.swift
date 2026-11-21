@@ -139,6 +139,61 @@ struct ElementGeometryTests {
     #expect(box.maxY > 50)
   }
 
+  @Test("a span has the box and the shape of its glyphs, in the user space of its text")
+  func spans() async throws {
+    let view = view(
+      #"<text id="t" x="10" y="50" font-size="20" transform="translate(5 0)">"#
+        + #"<tspan id="a">Ab<tspan id="inner">c</tspan></tspan><tspan id="b">De</tspan><tspan id="empty"/></text>"#)
+    let text = try element("t", in: view)
+    let a = try element("a", in: view)
+    let inner = try element("inner", in: view)
+    let b = try element("b", in: view)
+    let textBox = try #require(await text.boundingBox())
+    let aBox = try #require(await a.boundingBox())
+    let bBox = try #require(await b.boundingBox())
+    let innerBox = try #require(await inner.boundingBox())
+    // The spans split the line of the text, and the outer span holds the inner one.
+    #expect(textBox.contains(aBox) && textBox.contains(bBox))
+    #expect(abs(aBox.maxX - bBox.minX) < 1e-6)
+    #expect(isClose(aBox.union(bBox), textBox))
+    #expect(aBox.contains(innerBox) && abs(innerBox.maxX - aBox.maxX) < 1e-6)
+    // The shape is the outlines of the glyphs, in the box.
+    let path = try #require(await a.path())
+    #expect(aBox.contains(path.boundingBoxOfPath))
+    // The stroke adds nothing, as it adds nothing to the box of the text.
+    #expect(isClose(await a.boundingBox(includingStroke: true), aBox))
+    // The spans are in the user space of the text, with its transform.
+    #expect(isClose(await a.transformToView(), try #require(await text.transformToView())))
+    #expect(isClose(await a.transformToView(), CGAffineTransform(translationX: 5, y: 0)))
+    // A span without characters has an empty box, and no shape.
+    let empty = try element("empty", in: view)
+    #expect(await empty.boundingBox() == .zero)
+    #expect(await empty.path() == nil)
+  }
+
+  @Test("a span that holds all the characters of its text has the box and the shape of the text")
+  func wholeSpan() async throws {
+    let view = view(#"<text id="t" x="10" y="50" font-size="20"><tspan id="s">Hello</tspan></text>"#)
+    let text = try element("t", in: view)
+    let span = try element("s", in: view)
+    #expect(isClose(await span.boundingBox(), try #require(await text.boundingBox())))
+    let spanPath = try #require(await span.path())
+    let textPath = try #require(await text.path())
+    #expect(isClose(spanPath.boundingBoxOfPath, textPath.boundingBoxOfPath))
+  }
+
+  @Test("the characters of a textPath element are laid out along its path, with a box around them")
+  func textPath() async throws {
+    let view = view(
+      #"<path id="curve" d="M 10 80 Q 100 0 190 80" fill="none"/>"#
+        + ##"<text font-size="16"><textPath id="p" href="#curve">Along a curve</textPath></text>"##)
+    let span = try element("p", in: view)
+    let box = try #require(await span.boundingBox())
+    let path = try #require(await span.path())
+    #expect(box.width > 50 && box.height > 10)
+    #expect(box.contains(path.boundingBoxOfPath))
+  }
+
   @Test(
     "the transform to the view places the document as the content mode does",
     arguments: [
