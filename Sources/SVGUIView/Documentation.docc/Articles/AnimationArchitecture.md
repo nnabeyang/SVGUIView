@@ -453,8 +453,9 @@ or stop playing.
 
 ### Playback with layers
 
-While the animations play, the view renders into a tree of `CALayer` objects
-under its layer. The tree is built so that the common animations don't repaint
+While the animations play, and while the document changes continuously (see
+<doc:#Invalidation>), the view renders into a tree of `CALayer` objects under
+its layer. The tree is built so that the common animations don't repaint
 anything:
 
 - An element gets its own layer when its `transform` or `opacity` is
@@ -478,8 +479,11 @@ anything:
   layer by `SVGRenderCG`. A document without animations becomes a single layer.
 - A change of `transform` or `opacity` only sets the layer's property. Nothing
   is repainted, the same way browsers run such animations on the compositor.
-- Any other change paints again only the layers that contain the changed
-  elements. See <doc:#Invalidation>.
+- Any other change that an animation makes, or that the continuous changes of
+  the document make, paints again only the layers that contain the changed
+  elements. A single change of the document isn't rendered in layers: the view
+  renders it into one image, as a still view shows its document. See
+  <doc:#Invalidation>.
 - The pixels of the contents of a layer lie on the pixels of the screen as the
   layer is without the transforms that animations change. A layer that doesn't
   move shows the same pixels as a still image. Where an animation rotates a
