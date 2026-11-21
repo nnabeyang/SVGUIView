@@ -260,9 +260,11 @@ struct RenderTreeBuilderTests {
     #"<image x="5" y="5" width="10" height="10" href="\#(data)" "# + attributes + "/>"
   }
 
-  /// The data URL of an SVG image whose view box is 2 by 1 at 1, 1, with the content.
-  private func svgImageURL(_ content: String = #"<rect x="1" y="1" width="2" height="1"/>"#) -> String {
-    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 2 1">"# + content + "</svg>"
+  /// The data URL of an SVG image whose view box is 2 by 1 at 1, 1, with the content, and more attributes of its root.
+  private func svgImageURL(
+    _ content: String = #"<rect x="1" y="1" width="2" height="1"/>"#, root attributes: String = ""
+  ) -> String {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 2 1" "# + attributes + ">" + content + "</svg>"
     return "data:image/svg+xml;base64," + Data(svg.utf8).base64EncodedString()
   }
 
@@ -285,6 +287,35 @@ struct RenderTreeBuilderTests {
     #expect(abs(corner.x - rect.minX) < 1e-9 && abs(corner.y - rect.minY) < 1e-9, "\(corner)")
     #expect(content.overflowClip == nil)
     #expect(shapes(of: content.children).count == 1)
+  }
+
+  /// Attributes of the root of an SVG image of 2 by 1, which don't change where it's placed: its
+  /// `preserveAspectRatio` is ignored, and a width and a height in the ratio of its view box give the same ratio.
+  private static let svgImageRoots = [
+    #"preserveAspectRatio="xMinYMin""#, #"preserveAspectRatio="none""#, #"preserveAspectRatio="xMaxYMax slice""#,
+    #"width="40" height="20""#, #"width="40" height="20" preserveAspectRatio="xMinYMax meet""#,
+  ]
+
+  /// The placements of an SVG image with each attribute of its root.
+  private static let svgImageRootPlacements: [(String, String, CGRect, CGRect?)] = svgImageRoots.flatMap { root in
+    imagePlacements.map { (root, $0.0, $0.1, $0.2) }
+  }
+
+  @Test(
+    "the preserveAspectRatio of the root of an SVG image is ignored, and the image element places its view box",
+    arguments: svgImageRootPlacements)
+  func svgImageRootIgnored(root: String, attributes: String, rect: CGRect, clip: CGRect?) async throws {
+    let image = try imagePaint(of: try await renderTree(svgImage(svgImageURL(root: root), attributes)))
+    #expect(image.rect == rect)
+    #expect(image.clip == clip)
+    let viewport = try #require(image.content.document?.viewport, "The image isn't a document")
+    let content = try #require(viewport.content)
+    // The view box fills the rectangle where the image is drawn, from corner to corner.
+    let transform = content.viewBoxTransform.concatenating(viewport.translation)
+    let start = CGPoint(x: 1, y: 1).applying(transform)
+    let end = CGPoint(x: 3, y: 2).applying(transform)
+    #expect(abs(start.x - rect.minX) < 1e-9 && abs(start.y - rect.minY) < 1e-9, "\(start)")
+    #expect(abs(end.x - rect.maxX) < 1e-9 && abs(end.y - rect.maxY) < 1e-9, "\(end)")
   }
 
   /// SVG images of the same document of 2 by 1: gzipped, and without a media type.
