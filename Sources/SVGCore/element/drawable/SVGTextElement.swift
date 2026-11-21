@@ -592,6 +592,42 @@ final class SVGTextElement: ShapeGeometry {
     return path
   }
 
+  /// The shape and the bounds of a `<tspan>` or `<textPath>` element of the text, in the user space of the text: the
+  /// outlines of the glyphs of its characters and of its descendants, with the lines of `text-decoration` that they
+  /// declare, and the union of the cells of those glyphs, as SVG 2 has the bounding box of a text content element.
+  /// It's `nil` if the text isn't drawn, or if the element isn't one whose characters are laid out, such as one with
+  /// `display: none`.
+  func spanGeometry(of span: ElementID, in context: any GeometryContext) -> (path: CGPath?, frame: CGRect)? {
+    guard let (layout, content) = layout(context: context),
+      let index = content.owners.firstIndex(where: { $0?.base.elementID == span })
+    else { return nil }
+    // The span and the spans in it.
+    let spans = Set(
+      content.owners.indices.filter { owner in
+        var current: Int? = owner
+        while let candidate = current {
+          if candidate == index { return true }
+          current = content.parents[candidate]
+        }
+        return false
+      })
+    let frame = layout.frame(of: spans)
+    guard !frame.isNull else { return (nil, .zero) }
+    let path = CGMutablePath()
+    path.addPath(layout.path(of: spans))
+    let owners = owners(of: content)
+    if spans.contains(where: { !owners[$0].style.textDecoration.isEmpty }) {
+      let lines = decorationLines(of: layout, content: content, context: context)
+      for (owner, line) in lines.under where spans.contains(owner) {
+        path.addPath(line)
+      }
+      for (owner, line) in lines.through where spans.contains(owner) {
+        path.addPath(line)
+      }
+    }
+    return (path, frame)
+  }
+
   /// The outlines of the glyphs of the text and its `<tspan>` descendants, each glyph apart, and then the lines of
   /// their `text-decoration` as one path, which a clip path fills one by one with its clip rule, so that glyphs over
   /// each other don't cut holes in each other.
