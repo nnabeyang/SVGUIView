@@ -52,6 +52,17 @@ struct PatternTileScaleTests {
     #expect(alpha.joined().allSatisfy { $0 == 255 })
   }
 
+  @Test("the cells of a tile that isn't a whole number of pixels touch without gaps", arguments: [1, 2] as [CGFloat])
+  func fractionalTile(scale: CGFloat) async throws {
+    let alpha = try await renderedAlpha(
+      #"<pattern id="p" patternUnits="userSpaceOnUse" width="7.25" height="7.25">"#
+        + #"<rect width="7.25" height="7.25"/></pattern>"#
+        + #"<rect width="100" height="100" fill="url(#p)"/>"#, scale: scale)
+    // The tile is black, and covers the whole document.
+    let gaps = alpha.joined().filter { $0 != 255 }.count
+    #expect(gaps == 0, "\(gaps) pixels aren't black")
+  }
+
   /// Transforms of a pattern, and the scales of the rectangle that it fills, where a cell of the tile of 1000 by 1000
   /// is much larger than what shows of it: up to 1,000,000 pixels across.
   private static let largeCells: [(String, Int)] = [

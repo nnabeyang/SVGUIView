@@ -560,7 +560,13 @@ package struct CGPainter {
     guard
       let tile = CGContext.bitmap(size: pattern.tileSize, scale: tileScale, space: pattern.colorInterpolation.colorSpace)
     else { return }
-    tile.concatenate(pattern.transform.scaledBy(x: tileScale, y: tileScale).scale)
+    // The content fills the pixels of the tile, which are rounded up, so that no row or column at its edges is only
+    // partly painted, as the cells show the whole image at the size of the tile.
+    let patternScale = pattern.transform.scale
+    tile.concatenate(
+      CGAffineTransform(
+        scaleX: patternScale.a * CGFloat(tile.width) / pattern.tileSize.width,
+        y: patternScale.d * CGFloat(tile.height) / pattern.tileSize.height))
     pattern.viewBoxTransform.map { tile.concatenate($0) }
     let painter = CGPainter(scale: tileScale)
     for node in pattern.content {
