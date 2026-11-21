@@ -51,4 +51,24 @@ struct PatternTileScaleTests {
     // The tile is black, and covers the whole rectangle.
     #expect(alpha.joined().allSatisfy { $0 == 255 })
   }
+
+  /// Transforms of a pattern, and the scales of the rectangle that it fills, where a cell of the tile of 1000 by 1000
+  /// is much larger than what shows of it: up to 1,000,000 pixels across.
+  private static let largeCells: [(String, Int)] = [
+    ("", 1000), (#"patternTransform="rotate(90)""#, 50), (#"patternTransform="rotate(90)""#, 1000),
+    (#"patternTransform="rotate(30)""#, 50), (#"patternTransform="scale(-1 1)""#, 1000),
+    (#"patternTransform="scale(1 -1)""#, 50),
+  ]
+
+  @Test("a cell much larger than what shows is drawn, rotated, flipped or not", arguments: largeCells)
+  func largeCell(patternTransform: String, scale: Int) async throws {
+    let alpha = try await renderedAlpha(
+      #"<pattern id="p" patternUnits="userSpaceOnUse" width="1000" height="1000" \#(patternTransform)>"#
+        + #"<rect x="-1000" y="-1000" width="3000" height="3000"/></pattern>"#
+        + #"<rect transform="scale(\#(scale))" width="\#(100 / scale + 1)" height="\#(100 / scale + 1)" "#
+        + #"fill="url(#p)"/>"#)
+    // The tile is black, and covers the whole document.
+    let transparent = alpha.joined().filter { $0 != 255 }.count
+    #expect(transparent == 0, "\(transparent) pixels aren't black")
+  }
 }
