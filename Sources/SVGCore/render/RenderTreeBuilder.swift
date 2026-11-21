@@ -157,36 +157,26 @@ package struct RenderTreeBuilder {
     // pool between elements.
     await Task.yield()
     guard element.base.passesConditions else { return nil }
-    // The lines of text-decoration that the element declares are drawn on the text in it with its styles. The
-    // context is copied only for an element that declares lines, as copying it for every element costs.
-    if let lines = ResolveContext.textDecorations(declaredBy: element) {
-      var context = context
-      context.textDecorators.declare(lines, by: element)
-      return await makeNode(of: element, declaring: context, mode: mode, guard: references, instance: instance)
-    }
-    return await makeNode(of: element, declaring: context, mode: mode, guard: references, instance: instance)
-  }
-
-  /// The node of an element in a context with the lines of text-decoration that it declares.
-  private func makeNode(
-    of element: any SVGDrawableElement, declaring context: ResolveContext, mode: DrawMode,
-    guard references: ReferenceGuard, instance: [ElementID]
-  ) async -> RenderNode? {
+    // The lines of text-decoration that an element declares are drawn on the text in it with its styles, so only the
+    // elements that can hold text declare them in the context of their content, and of the source of their filter.
     switch element {
     case let svg as SVGSVGElement:
       if svg.display == CSSDisplay.none { return nil }
+      let context = declaringTextDecorations(of: svg, in: context)
       if case .filtered(let node) = await filtering(of: svg, context: context, guard: references, instance: instance) {
         return node
       }
       return await viewportNode(of: svg, context: context, mode: mode, guard: references, instance: instance)
     case let group as SVGGroupElement:
       if group.display == CSSDisplay.none { return nil }
+      let context = declaringTextDecorations(of: group, in: context)
       if case .filtered(let node) = await filtering(of: group, context: context, guard: references, instance: instance) {
         return node
       }
       return await groupNode(of: group, context: context, mode: mode, guard: references, instance: instance)
     case let use as SVGUseElement:
       if use.display == CSSDisplay.none { return nil }
+      let context = declaringTextDecorations(of: use, in: context)
       let references = beginsLevel(mode) ? references.beginning(.all) : references
       if case .filtered(let node) = await filtering(of: use, context: context, guard: references, instance: instance) {
         return node
@@ -201,6 +191,17 @@ package struct RenderTreeBuilder {
       }
       return await shapeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
     }
+  }
+
+  /// The context with the lines of text-decoration that an element declares, or the context itself if it declares
+  /// none, which is copied only for an element that declares lines.
+  private func declaringTextDecorations(of element: some SVGDrawableElement, in context: ResolveContext)
+    -> ResolveContext
+  {
+    guard let lines = ResolveContext.textDecorations(declaredBy: element) else { return context }
+    var context = context
+    context.textDecorators.declare(lines, by: element)
+    return context
   }
 
   private func beginsLevel(_ mode: DrawMode) -> Bool {
