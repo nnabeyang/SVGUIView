@@ -261,22 +261,33 @@ struct SVGUIViewTests {
     let start = clock.now
     // The tasks run on the main actor, as the views do, and wait for their renderings at the same time.
     let snapshots = views.map { view in
-      Task { () -> SVGRenderingError? in
+      Task { () -> (SVGRenderingError?, Duration) in
         do throws(SVGRenderingError) {
           _ = try await view.takeSnapshot()
-          return nil
+          return (nil, clock.now - start)
         } catch {
-          return error
+          return (error, clock.now - start)
         }
       }
     }
+    var returned = [Duration]()
     for snapshot in snapshots {
-      #expect(await snapshot.value == .timedOut)
+      let (error, time) = await snapshot.value
+      #expect(error == .timedOut)
+      returned.append(time)
     }
     let elapsed = clock.now - start
     // Before the timeout ran above the priority of renderings, the renderings ran to the end, which took about 20
     // times the timeout. A slow CI machine can take more than twice the timeout to stop them, so allow 4 times.
-    #expect(elapsed < timeout * 4, "The renderings returned after \(elapsed) with a timeout of \(timeout)")
+    // When it fails, the times show whether the timeout came late, the first rendering returning late, or the
+    // renderings took long to stop, the last one returning long after the first.
+    let times = returned.sorted()
+    #expect(
+      elapsed < timeout * 4,
+      """
+      The renderings returned after \(elapsed) with a timeout of \(timeout): \(views.count) views, the first \
+      returning after \(times.first ?? .zero) and the last after \(times.last ?? .zero)
+      """)
   }
 
   @Test("cancelling the task that waits for a snapshot stops the rendering in the middle", .timeLimit(.minutes(1)))
