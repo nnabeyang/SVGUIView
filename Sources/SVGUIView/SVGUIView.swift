@@ -44,8 +44,9 @@ public class SVGUIView: UIView {
     didSet {
       oldValue.host = nil
       document.host = self
-      // The animations of the document that the view no longer shows don't finish.
+      // The animations of the document that the view no longer shows don't finish, and its changes aren't shown.
       resumeWaiters { _ in true }
+      resumeDisplayWaiters(all: true)
     }
   }
   /// The elements whose transform or opacity can change, which get layers of their own.
@@ -57,6 +58,14 @@ public class SVGUIView: UIView {
   private(set) var finishWaiters = [(token: Int, id: CSSAnimationID, continuation: CheckedContinuation<Void, Never>)]()
   /// The token of the next task that waits for a CSS animation.
   private var nextFinishWaiterToken = 0
+  /// The tasks that wait until the view shows the contexts of their counts, which ``waitUntilDisplayed()`` adds, with
+  /// the tokens that the cancellations of the tasks find them by.
+  private(set) var displayWaiters = [(token: Int, generation: Int, continuation: CheckedContinuation<Void, Never>)]()
+  /// The token of the next task that waits until the view shows the changes of its document.
+  private var nextDisplayWaiterToken = 0
+  /// The count of the context that the latest rendering that finished rendered, which the view shows, or keeps the
+  /// image before if the rendering failed.
+  private var shownContextGeneration = 0
   /// Whether the changes of the document are applied soon for the tasks that wait for the CSS animations.
   private var appliesChangesForWaiters = false
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
@@ -661,8 +670,11 @@ public class SVGUIView: UIView {
   private func finishRendering(ofRendering generation: Int, show: @MainActor (SVGUIView) -> Void) {
     guard generation == renderingGeneration else { return }
     isRendering = false
+    // The context of the latest rendering that started is the one of this rendering.
+    let context = renderedContextGeneration
     show(self)
     shownRenderingGeneration = generation
+    shownContextGeneration = max(shownContextGeneration, context)
     if needsRendering {
       needsRendering = false
       needsFrame = false
@@ -671,6 +683,7 @@ public class SVGUIView: UIView {
       needsFrame = false
       startRendering(reusesLayers: true)
     }
+    resumeDisplayWaiters()
   }
 
   /// Renders the frame at the time that the view displays, after the rendering in progress if there is one.
@@ -692,6 +705,9 @@ public class SVGUIView: UIView {
     // The rendering holds the view weakly, so without this it would go on until the timeout.
     renderingTask?.cancel()
     for waiter in finishWaiters {
+      waiter.continuation.resume()
+    }
+    for waiter in displayWaiters {
       waiter.continuation.resume()
     }
   }
@@ -974,6 +990,74 @@ public class SVGUIView: UIView {
     try await snapshot(rect: rect, at: time, scale: scale)
   }
 
+  /// Waits until the view shows the changes made to its document so far.
+  ///
+  /// The view renders the changes of its ``document`` off the main actor,
+  /// and shows the rendering a frame or more after a change. This returns
+  /// when the view has put a rendering of every change made before the call
+  /// into its layer, so that an app can replace a layer of its own with what
+  /// the view shows, such as a stand-in that a finger dragged ahead of the
+  /// document, in the same Core Animation transaction:
+  ///
+  /// ```swift
+  /// shape.removeAttribute("visibility")
+  /// await svgView.waitUntilDisplayed()
+  /// standIn.removeFromSuperlayer()
+  /// ```
+  ///
+  /// It returns at once if the view already shows the changes. It also
+  /// returns, without the changes shown, if rendering them fails, such as when
+  /// it takes longer than ``SVGUIViewConfiguration/timeoutDuration`` and the
+  /// view keeps the image before, if new ``data`` replaces the document, if
+  /// the view is released, or if the task is cancelled. A view only renders
+  /// while it's displayed, so for a view that isn't in a window, this waits
+  /// until it is.
+  public func waitUntilDisplayed() async {
+    applyDocumentChanges()
+    let target = contextGeneration
+    guard shownContextGeneration < target, hasRenderingToShow else { return }
+    let token = nextDisplayWaiterToken
+    nextDisplayWaiterToken += 1
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        // A task that is cancelled before it waits doesn't wait.
+        guard !Task.isCancelled else { return continuation.resume() }
+        displayWaiters.append((token, target, continuation))
+      }
+    } onCancel: { [weak self] in
+      // The handler can run on any thread, and runs before the task waits if it's cancelled already, so the waiter is
+      // resumed on the main actor, after it's added.
+      Task { @MainActor in self?.resumeDisplayWaiter(token) }
+    }
+  }
+
+  /// Whether a rendering is in progress, or the layer is to be displayed, which starts one.
+  private var hasRenderingToShow: Bool {
+    isRendering || layer.needsDisplay()
+  }
+
+  /// Lets the task go on that waits until the view shows the changes with a token, if it still waits.
+  private func resumeDisplayWaiter(_ token: Int) {
+    guard let index = displayWaiters.firstIndex(where: { $0.token == token }) else { return }
+    displayWaiters.remove(at: index).continuation.resume()
+  }
+
+  /// Lets the tasks go on that wait for contexts that the view shows, or all of them if the view renders nothing more,
+  /// such as when a change that a task waits for makes no rendering, or `all` is `true`.
+  private func resumeDisplayWaiters(all: Bool = false) {
+    guard !displayWaiters.isEmpty else { return }
+    let all = all || !hasRenderingToShow
+    var waiting = [(token: Int, generation: Int, continuation: CheckedContinuation<Void, Never>)]()
+    for waiter in displayWaiters {
+      if all || waiter.generation <= shownContextGeneration {
+        waiter.continuation.resume()
+      } else {
+        waiting.append(waiter)
+      }
+    }
+    displayWaiters = waiting
+  }
+
   /// Renders the document with every change into an image of the rectangle at the scale, for the snapshots.
   ///
   /// - Parameter wideGamut: Whether the image shows colors outside sRGB, or `nil` to show them as the screen of the
@@ -1084,6 +1168,65 @@ public class SVGUIView: UIView {
       // Making the image copies the bitmap, which can fail as allocating it can.
       guard let image = graphics.makeImage() else { return .failure(.allocationFailed) }
       return .success(RenderedImage(image: image, resolved: base.needsExternalStyleSheets ? resolved : nil))
+    }
+    return rendered.flatMap { $0 }
+  }
+
+  /// Renders an element and its descendants into an image of what they paint, in the coordinates of a rectangle of a
+  /// size at its origin, or `nil` for an element that the document doesn't render or that paints nothing.
+  @concurrent
+  private static func makeElementImage(
+    of element: ElementID, size: CGSize, scale: CGFloat, wideGamut: Bool, base: SVGBaseContext, time: Duration,
+    fit: ContentFit, resources: ExternalResourceLoader, timeoutDuration: Duration
+  ) async -> Result<(snapshot: SVGDocument.ElementSnapshot?, resolved: SVGBaseContext?), SVGRenderingError> {
+    guard base.root != nil else { return .failure(.missingRootElement) }
+    guard (size.width * scale).rounded(.up) > 0, (size.height * scale).rounded(.up) > 0 else {
+      return .failure(.zeroSizedRect)
+    }
+    let rendered = await withRenderingTimeout(timeoutDuration) {
+      () async -> Result<(snapshot: SVGDocument.ElementSnapshot?, resolved: SVGBaseContext?), SVGRenderingError>? in
+      // The tree is built as `makeImage` builds it. Building it in a function that both call adds a few percent to
+      // the instructions of rendering a small document into an image.
+      let rect = CGRect(origin: .zero, size: size)
+      let styleSheets =
+        base.needsExternalStyleSheets
+        ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
+      guard !Task.isCancelled else { return nil }
+      let builder = RenderTreeBuilder(
+        base: styleSheets.at(time: time.seconds), viewPort: rect, scale: scale, resources: resources)
+      guard let tree = await builder.build(fit: fit) else { return nil }
+      let resolved = base.needsExternalStyleSheets ? styleSheets : nil
+      guard let (node, transform) = tree.subtree(of: element) else { return .success((nil, resolved)) }
+      // A huge filter region is painted only where the view shows it, as the rendering of the view limits it. The
+      // shapes aren't limited, since the image is for moving the element, which can bring them into the view.
+      let view = transform.isInvertible ? rect.applying(transform.inverted()) : nil
+      let painted = node.paintedBounds(filtersWithin: view).applying(transform)
+      guard !painted.isNull, !painted.isEmpty, painted.width.isFinite, painted.height.isFinite else {
+        return .success((nil, resolved))
+      }
+      // The image covers whole pixels of the view, with a margin for the antialiased edges.
+      let margin: CGFloat = 2
+      let minX = (painted.minX * scale).rounded(.down) - margin
+      let minY = (painted.minY * scale).rounded(.down) - margin
+      let pixelRect = CGRect(
+        x: minX, y: minY, width: (painted.maxX * scale).rounded(.up) + margin - minX,
+        height: (painted.maxY * scale).rounded(.up) + margin - minY)
+      let space = CGColorSpace.rendering(wideGamut: wideGamut && node.usesWideGamut)
+      // The bitmap is made in pixels, so that its size is the one of the rectangle, without rounding.
+      guard let graphics = CGContext.bitmap(size: pixelRect.size, scale: 1, space: space) else {
+        return .failure(.allocationFailed)
+      }
+      graphics.concatenate(CGAffineTransform(1, 0, 0, -1, 0, CGFloat(graphics.height)))
+      graphics.translateBy(x: -pixelRect.minX, y: -pixelRect.minY)
+      graphics.scaleBy(x: scale, y: scale)
+      graphics.concatenate(transform)
+      await CGPainter(scale: scale).paint([node], into: graphics)
+      guard !Task.isCancelled else { return nil }
+      guard let image = graphics.makeImage() else { return .failure(.allocationFailed) }
+      let frame = CGRect(
+        x: pixelRect.minX / scale, y: pixelRect.minY / scale, width: pixelRect.width / scale,
+        height: pixelRect.height / scale)
+      return .success((SVGDocument.ElementSnapshot(image: image, frame: frame), resolved))
     }
     return rendered.flatMap { $0 }
   }
@@ -1319,6 +1462,22 @@ extension SVGUIView: DocumentHost {
   @concurrent
   private static func hits(in tree: RenderTree, at point: CGPoint, tolerance: CGFloat) async -> [ElementID] {
     tree.hits(at: point, tolerance: tolerance)
+  }
+
+  func snapshot(of element: ElementID, scale: CGFloat?) async throws(SVGRenderingError) -> SVGDocument.ElementSnapshot? {
+    applyDocumentChanges()
+    let rect = bounds
+    let document = documentGeneration
+    let rendered = try await Self.makeElementImage(
+      of: element, size: rect.size, scale: scale ?? displayScale, wideGamut: displaysWideGamut, base: baseContext,
+      time: displayedTime, fit: ContentFit(contentMode), resources: resourceLoader,
+      timeoutDuration: configuration.timeoutDuration
+    ).get()
+    adoptStyleSheets(of: rendered.resolved, ofDocument: document)
+    // The document is rendered into the bounds of the view.
+    return rendered.snapshot.map {
+      SVGDocument.ElementSnapshot(image: $0.image, frame: $0.frame.offsetBy(dx: rect.minX, dy: rect.minY))
+    }
   }
 
   func geometry(of element: ElementID, includesStroke: Bool, includesPath: Bool) async -> ElementGeometry? {

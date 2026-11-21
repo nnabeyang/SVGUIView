@@ -461,6 +461,10 @@ protocol DocumentHost: AnyObject {
   /// The geometry of an element of the document with its changes, at the time that the view displays and in the
   /// coordinates of the view, or `nil` if it has none or the task is cancelled.
   func geometry(of element: ElementID, includesStroke: Bool, includesPath: Bool) async -> ElementGeometry?
+  /// An image of an element of the document with its changes and its descendants, at the time that the view
+  /// displays and in the coordinates of the view, or `nil` if the view doesn't render the element or it paints
+  /// nothing.
+  func snapshot(of element: ElementID, scale: CGFloat?) async throws(SVGRenderingError) -> SVGDocument.ElementSnapshot?
   /// The elements at a point of the view, from the front.
   func hits(at point: CGPoint, tolerance: CGFloat) async -> [ElementID]
 }
@@ -766,6 +770,66 @@ extension SVGDocument.Element {
   /// ``boundingBox(includingStroke:)`` is.
   public func transformToView() async -> CGAffineTransform? {
     await document.host?.geometry(of: id, includesStroke: false, includesPath: false)?.transformToViewPort
+  }
+
+  /// Renders the element and its descendants into an image, as the view
+  /// shows them at the time that it displays, and tells where the view
+  /// shows the image.
+  ///
+  /// The image is for a stand-in that an app moves instead of the element,
+  /// such as while a finger drags it, since the view shows a change of its
+  /// document a frame or more after the app makes it:
+  ///
+  /// ```swift
+  /// if let snapshot = try await shape.takeSnapshot() {
+  ///   standIn.contents = snapshot.image
+  ///   standIn.frame = snapshot.frame
+  ///   svgView.layer.addSublayer(standIn)
+  ///   shape.setAttribute("visibility", to: "hidden")
+  /// }
+  /// ```
+  ///
+  /// The image has the element's own `transform`, clip path, mask, opacity
+  /// and filter, and its descendants. It has the transforms of the
+  /// ancestors, the view boxes of the `svg` elements that the element is in,
+  /// and how the view places the document with its `contentMode`, but not
+  /// the opacities, clip paths, masks and filters of the ancestors, the
+  /// clips of the `svg` elements around it, or the other elements, so that
+  /// the stand-in is the element alone. The changes that the view hasn't
+  /// rendered yet are in the image.
+  ///
+  /// The image covers what the element paints, out to whole pixels of the
+  /// view with a margin for the antialiased edges, also where it's outside
+  /// the view, and a filter region only where the view shows it. The image
+  /// is transparent where the element doesn't paint.
+  ///
+  /// It's `nil` for an element that the view doesn't render, because it
+  /// isn't in the document's tree, it's in a `defs` element or has
+  /// `display: none`, it isn't a graphics element, or the view no longer
+  /// shows the document, and for an element that paints nothing, such as one
+  /// with `visibility: hidden`.
+  ///
+  /// - Parameter scale: The number of pixels in a point of the image. Pass
+  ///   `nil` to use the scale of the view's screen.
+  /// - Returns: The image and where the view shows it, or `nil`.
+  /// - Throws: The errors that ``SVGUIView/takeSnapshot(rect:at:scale:)``
+  ///   throws.
+  public func takeSnapshot(scale: CGFloat? = nil) async throws(SVGRenderingError) -> SVGDocument.ElementSnapshot? {
+    guard let host = document.host else { return nil }
+    return try await host.snapshot(of: id, scale: scale)
+  }
+}
+
+extension SVGDocument {
+  /// An image of an element and its descendants, and where the view shows
+  /// it, which ``Element/takeSnapshot(scale:)`` renders.
+  public struct ElementSnapshot: Sendable {
+    /// The image, whose width and height in pixels are those of the frame
+    /// times the scale that it's rendered at.
+    public let image: CGImage
+    /// The rectangle in the coordinates of the view that the image covers,
+    /// whose edges lie on the pixels of the view at the scale.
+    public let frame: CGRect
   }
 }
 
