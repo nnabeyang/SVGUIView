@@ -259,8 +259,8 @@ private final class HitTestCanvas: UIView {
     }
   }
 
-  /// The bounding box of an element in the coordinates of the view, or of its nearest ancestor that has one, such
-  /// as the `text` element of a `tspan` element, and the element that it's of.
+  /// The bounding box of an element in the coordinates of the view, or of its nearest ancestor that has one, and the
+  /// element that it's of.
   private static func outline(
     of element: SVGDocument.Element
   ) async -> (path: CGPath, element: SVGDocument.Element)? {
