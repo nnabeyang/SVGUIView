@@ -1088,6 +1088,65 @@ public class SVGUIView: UIView {
     return rendered.flatMap { $0 }
   }
 
+  /// Renders an element and its descendants into an image of what they paint, in the coordinates of a rectangle of a
+  /// size at its origin, or `nil` for an element that the document doesn't render or that paints nothing.
+  @concurrent
+  private static func makeElementImage(
+    of element: ElementID, size: CGSize, scale: CGFloat, wideGamut: Bool, base: SVGBaseContext, time: Duration,
+    fit: ContentFit, resources: ExternalResourceLoader, timeoutDuration: Duration
+  ) async -> Result<(snapshot: SVGDocument.ElementSnapshot?, resolved: SVGBaseContext?), SVGRenderingError> {
+    guard base.root != nil else { return .failure(.missingRootElement) }
+    guard (size.width * scale).rounded(.up) > 0, (size.height * scale).rounded(.up) > 0 else {
+      return .failure(.zeroSizedRect)
+    }
+    let rendered = await withRenderingTimeout(timeoutDuration) {
+      () async -> Result<(snapshot: SVGDocument.ElementSnapshot?, resolved: SVGBaseContext?), SVGRenderingError>? in
+      // The tree is built as `makeImage` builds it. Building it in a function that both call adds a few percent to
+      // the instructions of rendering a small document into an image.
+      let rect = CGRect(origin: .zero, size: size)
+      let styleSheets =
+        base.needsExternalStyleSheets
+        ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
+      guard !Task.isCancelled else { return nil }
+      let builder = RenderTreeBuilder(
+        base: styleSheets.at(time: time.seconds), viewPort: rect, scale: scale, resources: resources)
+      guard let tree = await builder.build(fit: fit) else { return nil }
+      let resolved = base.needsExternalStyleSheets ? styleSheets : nil
+      guard let (node, transform) = tree.subtree(of: element) else { return .success((nil, resolved)) }
+      // A huge filter region is painted only where the view shows it, as the rendering of the view limits it. The
+      // shapes aren't limited, since the image is for moving the element, which can bring them into the view.
+      let view = transform.isInvertible ? rect.applying(transform.inverted()) : nil
+      let painted = node.paintedBounds(filtersWithin: view).applying(transform)
+      guard !painted.isNull, !painted.isEmpty, painted.width.isFinite, painted.height.isFinite else {
+        return .success((nil, resolved))
+      }
+      // The image covers whole pixels of the view, with a margin for the antialiased edges.
+      let margin: CGFloat = 2
+      let minX = (painted.minX * scale).rounded(.down) - margin
+      let minY = (painted.minY * scale).rounded(.down) - margin
+      let pixelRect = CGRect(
+        x: minX, y: minY, width: (painted.maxX * scale).rounded(.up) + margin - minX,
+        height: (painted.maxY * scale).rounded(.up) + margin - minY)
+      let space = CGColorSpace.rendering(wideGamut: wideGamut && node.usesWideGamut)
+      // The bitmap is made in pixels, so that its size is the one of the rectangle, without rounding.
+      guard let graphics = CGContext.bitmap(size: pixelRect.size, scale: 1, space: space) else {
+        return .failure(.allocationFailed)
+      }
+      graphics.concatenate(CGAffineTransform(1, 0, 0, -1, 0, CGFloat(graphics.height)))
+      graphics.translateBy(x: -pixelRect.minX, y: -pixelRect.minY)
+      graphics.scaleBy(x: scale, y: scale)
+      graphics.concatenate(transform)
+      await CGPainter(scale: scale).paint([node], into: graphics)
+      guard !Task.isCancelled else { return nil }
+      guard let image = graphics.makeImage() else { return .failure(.allocationFailed) }
+      let frame = CGRect(
+        x: pixelRect.minX / scale, y: pixelRect.minY / scale, width: pixelRect.width / scale,
+        height: pixelRect.height / scale)
+      return .success((SVGDocument.ElementSnapshot(image: image, frame: frame), resolved))
+    }
+    return rendered.flatMap { $0 }
+  }
+
   /// The image of a rendering, and the context with the style sheets in other files that it read, or `nil` if it
   /// read none.
   private struct RenderedImage: Sendable {
@@ -1319,6 +1378,22 @@ extension SVGUIView: DocumentHost {
   @concurrent
   private static func hits(in tree: RenderTree, at point: CGPoint, tolerance: CGFloat) async -> [ElementID] {
     tree.hits(at: point, tolerance: tolerance)
+  }
+
+  func snapshot(of element: ElementID, scale: CGFloat?) async throws(SVGRenderingError) -> SVGDocument.ElementSnapshot? {
+    applyDocumentChanges()
+    let rect = bounds
+    let document = documentGeneration
+    let rendered = try await Self.makeElementImage(
+      of: element, size: rect.size, scale: scale ?? displayScale, wideGamut: displaysWideGamut, base: baseContext,
+      time: displayedTime, fit: ContentFit(contentMode), resources: resourceLoader,
+      timeoutDuration: configuration.timeoutDuration
+    ).get()
+    adoptStyleSheets(of: rendered.resolved, ofDocument: document)
+    // The document is rendered into the bounds of the view.
+    return rendered.snapshot.map {
+      SVGDocument.ElementSnapshot(image: $0.image, frame: $0.frame.offsetBy(dx: rect.minX, dy: rect.minY))
+    }
   }
 
   func geometry(of element: ElementID, includesStroke: Bool, includesPath: Bool) async -> ElementGeometry? {

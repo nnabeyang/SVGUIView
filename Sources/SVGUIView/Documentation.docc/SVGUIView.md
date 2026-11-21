@@ -235,6 +235,7 @@ of those rules and for the features that SVGUIView doesn't support.
 - <doc:ChangingDocuments>
 - ``SVGDocument``
 - ``SVGDocument/Element``
+- ``SVGDocument/ElementSnapshot``
 - ``SVGDocument/Animation``
 
 ### Configuring rendering
