@@ -283,20 +283,32 @@ private func description(of fuzziness: Reftest.Fuzziness) -> String {
 
 /// The rendering of a file in a view of 800 × 600 points at a scale of 1, which shows the document at its size as
 /// a page does, or `nil` after recording why it couldn't be rendered.
+///
+/// A file with scripts, or that waits with the class `reftest-wait`, runs its scripts with ``WPTScriptRunner``
+/// first, and is rendered at the time of its animations that they leave. Its animations don't advance by themselves.
 @MainActor
 private func screenshot(of url: URL, sourceLocation: SourceLocation) async -> Screenshot? {
   guard let view = SVGUIView(contentsOf: url) else {
     Issue.record("Couldn't read \(url.lastPathComponent)", sourceLocation: sourceLocation)
     return nil
   }
+  let scripts = WPTScripts(url: url) ?? WPTScripts()
   // The document is placed at the top left at its size, as a page places it, instead of being scaled to the view.
   view.contentMode = .topLeft
   view.configuration = SVGUIViewConfiguration(
-    timeoutDuration: renderingPatience, externalResources: .folder(TestSuite.bundle.bundleURL))
+    timeoutDuration: renderingPatience, animation: scripts.isEmpty ? .play : .paused,
+    externalResources: .folder(TestSuite.bundle.bundleURL))
   view.frame = CGRect(x: 0, y: 0, width: Screenshot.width, height: Screenshot.height)
   view.layoutIfNeeded()
+  if !scripts.isEmpty {
+    let runner = WPTScriptRunner(view: view, url: url)
+    await runner.run(scripts, url: url)
+    for error in runner.errors {
+      Issue.record("\(url.lastPathComponent): \(error)", sourceLocation: sourceLocation)
+    }
+  }
   do {
-    guard let image = try await view.takeSnapshot(scale: 1).cgImage else {
+    guard let image = try await view.takeSnapshot(at: scripts.isEmpty ? .zero : view.currentTime, scale: 1).cgImage else {
       Issue.record("Rendering \(url.lastPathComponent) gave no image", sourceLocation: sourceLocation)
       return nil
     }
