@@ -182,6 +182,13 @@ enum ImageRendering: String, CaseIterable, Sendable {
   }
 }
 
+/// Whether a bitmap image is drawn in the orientation that its metadata, such as the EXIF orientation of a photo,
+/// gives: the values of `image-orientation` in CSS Images 3.
+enum ImageOrientation: String, CaseIterable, Sendable {
+  case fromImage = "from-image"
+  case none
+}
+
 /// The order in which a shape or text paints its fill, its stroke and its markers.
 struct PaintOrder: Equatable, Sendable {
   enum Layer: Sendable {

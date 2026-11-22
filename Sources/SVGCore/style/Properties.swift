@@ -616,6 +616,23 @@ enum ImageRenderingProperty: StyleProperty {
   }
 }
 
+/// Whether a bitmap image is drawn in the orientation that its metadata gives, as CSS Images 3 defines it. It isn't a
+/// presentation attribute, and its legacy values of an angle and `flip` aren't accepted, as no browser accepts them.
+enum ImageOrientationProperty: StyleProperty {
+  static let id = PropertyID.imageOrientation
+  static let isInherited = true
+  static let initial = ImageOrientation.fromImage
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.imageOrientation }
+
+  static func accepts(attributeOn _: SVGElementName) -> Bool {
+    false
+  }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> ImageOrientation? {
+    keyword(text, origin: origin)
+  }
+}
+
 /// Where an element is the target of pointer events, and of hit testing.
 enum PointerEventsProperty: StyleProperty {
   static let id = PropertyID.pointerEvents

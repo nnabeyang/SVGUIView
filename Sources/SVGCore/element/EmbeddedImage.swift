@@ -70,11 +70,16 @@ enum EmbeddedImage {
     return fragment.isEmpty ? nil : fragment.removingPercentEncoding ?? fragment
   }
 
-  /// The image of the data, or `nil` if the data isn't an image.
-  static func decodedImage(of data: Data) -> CGImage? {
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil)
+  /// The image of the data, with the orientation that its metadata gives, such as the EXIF orientation of a photo,
+  /// or `nil` if the data isn't an image. The pixels are as they're stored, and the orientation is `.up` if the image
+  /// has none.
+  static func decodedImage(of data: Data) -> (image: CGImage, orientation: CGImagePropertyOrientation)? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
     else { return nil }
-    return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+    let value = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value
+    return (image, value.flatMap(CGImagePropertyOrientation.init(rawValue:)) ?? .up)
   }
 
   /// The data of the SVG image that the data is, gzipped or not, or `nil` if it doesn't start like an XML document.

@@ -58,7 +58,7 @@ extension FillPaint {
 extension ImageContent {
   fileprivate var usesWideGamut: Bool {
     switch self {
-    case .bitmap(let image): image.colorSpace?.isWideGamutRGB ?? false
+    case .bitmap(let image, _): image.colorSpace?.isWideGamutRGB ?? false
     case .document(let node): node.usesWideGamut
     }
   }

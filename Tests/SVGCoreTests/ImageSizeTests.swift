@@ -31,8 +31,8 @@ private func images(in content: String) async throws -> [(frame: CGRect, image: 
   return found
 }
 
-/// A data URL of a PNG of a size.
-private func pngURL(width: Int, height: Int) throws -> String {
+/// A data URL of a PNG of a size, with an orientation in its metadata if it's given.
+private func pngURL(width: Int, height: Int, orientation: CGImagePropertyOrientation? = nil) throws -> String {
   let context = try #require(
     CGContext(
       data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
@@ -40,7 +40,8 @@ private func pngURL(width: Int, height: Int) throws -> String {
   let image = try #require(context.makeImage())
   let data = NSMutableData()
   let destination = try #require(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil))
-  CGImageDestinationAddImage(destination, image, nil)
+  let properties = orientation.map { [kCGImagePropertyOrientation: $0.rawValue] as CFDictionary }
+  CGImageDestinationAddImage(destination, image, properties)
   #expect(CGImageDestinationFinalize(destination))
   return "data:image/png;base64," + (data as Data).base64EncodedString()
 }
@@ -82,6 +83,30 @@ struct ImageSizeTests {
         CGRect(x: 8, y: 8, width: 64, height: 32), CGRect(x: 0, y: 0, width: 32, height: 16),
         CGRect(x: 0, y: 0, width: 20, height: 10), CGRect(x: 0, y: 0, width: 10, height: 10),
       ])
+  }
+
+  @Test(
+    "a bitmap has the size of its pixels turned by its orientation, and the size of its pixels with none",
+    arguments: [
+      (.up, CGSize(width: 64, height: 32)), (.upMirrored, CGSize(width: 64, height: 32)),
+      (.down, CGSize(width: 64, height: 32)), (.downMirrored, CGSize(width: 64, height: 32)),
+      (.leftMirrored, CGSize(width: 32, height: 64)), (.right, CGSize(width: 32, height: 64)),
+      (.rightMirrored, CGSize(width: 32, height: 64)), (.left, CGSize(width: 32, height: 64)),
+    ] as [(CGImagePropertyOrientation, CGSize)])
+  func orientedBitmap(orientation: CGImagePropertyOrientation, expected: CGSize) async throws {
+    let png = try pngURL(width: 64, height: 32, orientation: orientation)
+    let found = try await images(
+      in: #"<image href="\#(png)"/><image href="\#(png)" width="16"/>"#
+        + #"<image href="\#(png)" style="image-orientation: none"/>"#
+        + #"<g style="image-orientation: none"><image href="\#(png)"/></g>"#
+        + #"<image href="\#(png)" image-orientation="none"/>"#)
+    #expect(
+      found.map(\.frame.size) == [
+        expected, CGSize(width: 16, height: 16 * expected.height / expected.width), CGSize(width: 64, height: 32),
+        CGSize(width: 64, height: 32), expected,
+      ])
+    // The image is placed in its rectangle by the size turned by its orientation.
+    #expect(found[1].image == CGRect(origin: .zero, size: found[1].frame.size))
   }
 
   @Test("an SVG image has the size of its root's absolute width and height, and the ratio of its view box")

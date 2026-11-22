@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreText
 import Foundation
+import ImageIO
 import Synchronization
 
 /// The identity of a node of a render tree: the element that it comes from, and the `<use>` elements that show
@@ -165,7 +166,8 @@ package struct ColorGlyph: @unchecked Sendable {
 /// An image placed in the rectangle of its element by its `preserveAspectRatio`.
 package struct ImagePaint: Sendable {
   package let content: ImageContent
-  /// Where the image is drawn, in the coordinates of its element: the bitmap, or the view box of the SVG image.
+  /// Where the image is drawn, in the coordinates of its element: the bitmap turned by its orientation, or the view
+  /// box of the SVG image.
   package let rect: CGRect
   /// The rectangle of the element, which clips the image where its overflow is hidden and the image overflows it,
   /// or `nil` if nothing clips it.
@@ -177,8 +179,9 @@ package struct ImagePaint: Sendable {
 
 /// What an image is drawn from.
 package enum ImageContent: Sendable {
-  /// A bitmap, which is drawn in the rectangle of its paint.
-  case bitmap(CGImage)
+  /// A bitmap, which is drawn in the rectangle of its paint, turned by its orientation: the one that its metadata
+  /// gives, or `.up` where `image-orientation` is `none`.
+  case bitmap(CGImage, orientation: CGImagePropertyOrientation)
   /// The node of the root element of an SVG image, which places the image in the rectangle of its element.
   case document(RenderNode)
 }
