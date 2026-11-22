@@ -6,6 +6,11 @@ extension SnapshotTests {
   @MainActor
   @Suite
   struct SVGUIViewWPTTests {
+    @Test(arguments: Reftest.all(in: "svg", "animations"))
+    func animations(_ test: Reftest) async throws {
+      try await assertSVGReftest(test)
+    }
+
     @Test(arguments: Reftest.all(in: "svg", "coordinate-systems"))
     func coordinateSystems(_ test: Reftest) async throws {
       try await assertSVGReftest(test)
