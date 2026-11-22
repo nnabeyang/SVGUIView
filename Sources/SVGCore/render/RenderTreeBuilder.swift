@@ -45,6 +45,9 @@ package struct RenderTreeBuilder {
   /// Whether the shapes have the areas where they're hit, which a tree for hit testing needs, and the trees that are
   /// painted don't.
   package var collectsHitAreas = false
+  /// The elements from the root to an element, whose children that aren't on the way to it the tree leaves out, so
+  /// that a tree of one element doesn't make the nodes of the rest of the document, or `nil` for every element.
+  private var along: (chain: Set<ElementID>, target: ElementID)?
 
   /// The deepest SVG image in SVG images that is drawn. Each image is a document of its own, so the limit keeps
   /// images that show themselves again and again from making too many.
@@ -115,6 +118,31 @@ package struct RenderTreeBuilder {
     let root = await node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
     guard !Task.isCancelled else { return nil }
     return RenderTree(rootTransforms: transforms, root: root, reusableNodes: reused.cache)
+  }
+
+  /// The render tree of an element and its descendants, and of its ancestors without their other children, in which
+  /// `RenderTree.subtree(of:)` finds the node of the element as it finds it in the tree of the whole document, or a
+  /// tree without nodes if the document has no such element, or `nil` if building it is cancelled.
+  ///
+  /// The nodes are made in the contexts that `build(fit:)` makes them in, so that the element is painted as the
+  /// whole document paints it.
+  package func build(along element: ElementID, fit: ContentFit) async -> RenderTree? {
+    guard let svg = base.root, let chain = Self.chain(to: element, from: svg) else {
+      return RenderTree(rootTransforms: [], root: nil)
+    }
+    var builder = self
+    builder.along = (Set(chain.map(\.base.elementID)), element)
+    return await builder.build(fit: fit)
+  }
+
+  /// Whether a tree leaves out a child of an element, which isn't on the way to the element of the tree.
+  ///
+  /// Only the children of the ancestors of the element in the document are left out, and not the children of the
+  /// same elements that a `<use>` element shows.
+  private func leavesOut(_ child: some SVGElement, of parent: some SVGElement, instance: [ElementID]) -> Bool {
+    guard let along, instance.isEmpty else { return false }
+    let id = parent.base.elementID
+    return id != along.target && along.chain.contains(id) && !along.chain.contains(child.base.elementID)
   }
 
   // MARK: - Nodes
@@ -545,7 +573,9 @@ package struct RenderTreeBuilder {
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
     for child in renderedChildren(of: group) {
-      guard let child = child as? (any SVGDrawableElement) else { continue }
+      guard let child = child as? (any SVGDrawableElement), !leavesOut(child, of: group, instance: instance) else {
+        continue
+      }
       if let node = await node(of: child, context: context, mode: childMode, guard: references, instance: instance) {
         children.append(node)
       }
@@ -622,7 +652,9 @@ package struct RenderTreeBuilder {
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     var children = [RenderNode]()
     for child in svg.children {
-      guard let child = child as? (any SVGDrawableElement) else { continue }
+      guard let child = child as? (any SVGDrawableElement), !leavesOut(child, of: svg, instance: instance) else {
+        continue
+      }
       if let node = await node(of: child, context: inner, mode: childMode, guard: references, instance: instance) {
         children.append(node)
       }
