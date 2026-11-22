@@ -236,6 +236,25 @@ final class WPTScriptRunner {
     define("begin", begin)
     let end: @convention(block) (Int) -> Void = { [unowned self] h in element(h)?.endElement() }
     define("end", end)
+    let create: @convention(block) (String) -> Any = { [unowned self] name in
+      handle(of: document().createElement(name))
+    }
+    define("create", create)
+    let insert: @convention(block) (Int, Int, Int) -> Void = { [unowned self] parent, child, reference in
+      guard let parent = element(parent), let child = element(child) else { return }
+      do {
+        if let reference = element(reference) {
+          try parent.insert(child, before: reference)
+        } else {
+          try parent.append(child)
+        }
+      } catch {
+        throwError("HierarchyRequestError: \(error)")
+      }
+    }
+    define("insert", insert)
+    let remove: @convention(block) (Int) -> Void = { [unowned self] h in element(h)?.remove() }
+    define("remove", remove)
     let setCurrentTime: @convention(block) (Double) -> Void = { [unowned self] seconds in
       view.seek(to: .milliseconds(Int64((seconds * 1000).rounded())))
     }
@@ -366,6 +385,20 @@ final class WPTScriptRunner {
         get parentNode() { return wrap(N.parent(this.handle)); }
         get parentElement() { return this.parentNode; }
         get children() { return N.children(this.handle).map(wrap); }
+        appendChild(child) {
+          N.insert(this.handle, child.handle, 0);
+          return child;
+        }
+        insertBefore(child, reference) {
+          N.insert(this.handle, child.handle, reference ? reference.handle : 0);
+          return child;
+        }
+        removeChild(child) {
+          if (child.parentNode !== this) throw new Error("NotFoundError: not a child");
+          N.remove(child.handle);
+          return child;
+        }
+        remove() { N.remove(this.handle); }
         querySelector(selector) { return wrap(N.query(this.handle, String(selector))[0]); }
         querySelectorAll(selector) { return N.query(this.handle, String(selector)).map(wrap); }
         getElementsByTagName(name) { return this.querySelectorAll(name); }
@@ -392,6 +425,13 @@ final class WPTScriptRunner {
         querySelector(selector) { return wrap(N.query(0, String(selector))[0]); },
         querySelectorAll(selector) { return N.query(0, String(selector)).map(wrap); },
         getElementsByTagName(name) { return this.querySelectorAll(name); },
+        createElementNS(namespace, name) {
+          if (namespace !== "http://www.w3.org/2000/svg") {
+            throw new Error("NotSupportedError: only SVG elements can be created");
+          }
+          name = String(name);
+          return wrap(N.create(name.includes(":") ? name.slice(name.indexOf(":") + 1) : name));
+        },
         fonts: { get ready() { return Promise.resolve(document.fonts); } },
         readyState: "complete",
         addEventListener() {},

@@ -134,6 +134,51 @@ struct WPTScriptTests {
     #expect(try await middle(of: view) == [0, 128, 0])
   }
 
+  @Test("elements are created, inserted, removed and inserted again through the API of the document")
+  func treeChanges() async throws {
+    let (view, runner) = try await run(
+      """
+      <g id="layer"/>
+      <script><![CDATA[
+        const svg = "http://www.w3.org/2000/svg";
+        const layer = document.getElementById("layer");
+        const green = document.createElementNS(svg, "rect");
+        green.setAttribute("id", "green");
+        green.setAttribute("width", "100");
+        green.setAttribute("height", "100");
+        green.setAttribute("fill", "green");
+        const circle = document.createElementNS(svg, "svg:circle");
+        circle.setAttribute("id", "circle");
+        layer.appendChild(green);
+        layer.insertBefore(circle, green);
+        const root = document.documentElement;
+        root.setAttribute("data-order", Array.from(layer.children).map((e) => e.id).join(","));
+        let threw = false;
+        try {
+          document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+        } catch (error) {
+          threw = true;
+        }
+        root.setAttribute("data-threw", String(threw));
+        requestAnimationFrame(() => {
+          green.remove();
+          layer.removeChild(circle);
+          root.setAttribute("data-removed", String(layer.children.length));
+          requestAnimationFrame(() => {
+            layer.appendChild(green);
+            takeScreenshot();
+          });
+        });
+      ]]></script>
+      """, rootAttributes: #"class="reftest-wait""#)
+    #expect(runner.errors.isEmpty, "\(runner.errors)")
+    let root = try #require(view.document.rootElement)
+    #expect(root.attribute("data-order") == "circle,green")
+    #expect(root.attribute("data-threw") == "true")
+    #expect(root.attribute("data-removed") == "0")
+    #expect(try await middle(of: view) == [0, 128, 0])
+  }
+
   @Test("errors of the scripts, and a root element that never stops waiting, are recorded")
   func errors() async throws {
     let (_, thrown) = try await run("<script>notAFunction();</script>")
