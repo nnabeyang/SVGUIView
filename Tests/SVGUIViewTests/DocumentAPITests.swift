@@ -67,6 +67,20 @@ struct DocumentAPITests {
     }
   }
 
+  @Test("selectors find elements whose names have uppercase letters by the names as written")
+  func findsElementsWithUppercaseLetters() throws {
+    let document = document(
+      #"""
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <clipPath id="clip"><rect id="r"/></clipPath>
+        <linearGradient id="gradient"/>
+      </svg>
+      """#)
+    #expect(try document.querySelectorAll("clipPath, linearGradient").map { $0.attribute("id") } == ["clip", "gradient"])
+    #expect(try document.querySelector("clipPath > rect")?.attribute("id") == "r")
+    #expect(try document.querySelector("clippath") == nil)
+  }
+
   // MARK: - Changing elements
 
   @Test("an app reads the attributes that it sets and removes at once")

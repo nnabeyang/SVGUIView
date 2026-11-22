@@ -80,6 +80,25 @@ struct CascadeTests {
     #expect(fill(rect.base.cascaded) == (applies ? "blue" : "red"))
   }
 
+  @Test("type selectors of names with uppercase letters apply to the elements in style sheets")
+  func typeSelectorsWithUppercaseLetters() throws {
+    let svg = #"""
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <style>
+          clipPath rect { fill: blue }
+          linearGradient > rect { fill: green }
+          clippath circle, CLIPPATH circle { fill: blue }
+        </style>
+        <clipPath><rect id="r"/><circle id="c" fill="red"/></clipPath>
+        <linearGradient><rect id="g"/></linearGradient>
+      </svg>
+      """#
+    let base = SVGParser.parse(data: Data(svg.utf8))
+    #expect(fill(try #require(base["r"]).base.cascaded) == "blue")
+    #expect(fill(try #require(base["g"]).base.cascaded) == "green")
+    #expect(fill(try #require(base["c"]).base.cascaded) == "red")
+  }
+
   @Test("of equal declarations, the later one comes later")
   func sortKeepsOrderOfEqualDeclarations() {
     let specificity = Specificity(idSelectors: 0, classLikeSelectors: 0, elementSelectors: 1)

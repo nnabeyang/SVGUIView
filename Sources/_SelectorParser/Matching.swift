@@ -37,9 +37,12 @@ public enum SubjectOrPseudoElement: Equatable {
   case no
 }
 
+/// Whether the name of an element is the name of a type selector.
+///
+/// The names are compared as written, because an SVG document is an XML document, which has no HTML element whose
+/// name is compared in lowercase (Selectors 4).
 func matchesLocalName<E: Element>(element: E, localName: LocalName<E.Impl>) -> Bool {
-  let name = selectName(element: element, localName: localName.lowerName, localNameLower: localName.lowerName)
-  return element.hasLocalName(name)
+  element.hasLocalName(localName.name)
 }
 
 package func compoundMatchesFeaturelessHost<Impl: SelectorImpl>(
