@@ -155,28 +155,40 @@ package final class SVGSVGElement: SVGDrawableElement, SVGLengthContext {
   }
 
   /// The size and the ratio that the element has as the root of an SVG image: its `width` and `height` where they're
-  /// absolute lengths, and the ratio of its view box, or of its size where it has no view box.
+  /// absolute lengths, and the ratio of its size where both are, or of its view box otherwise, as SVG 2 defines the
+  /// natural aspect ratio of an SVG image.
   ///
   /// - Parameter viewBox: The view box that replaces the element's, which the `<view>` element that the fragment of
   ///   the URL of an image names gives, or `nil`.
   func intrinsicSize(viewBox: CGRect?) -> IntrinsicSize {
-    func absolute(_ length: SVGLength?, mode: SVGLengthMode) -> CGFloat? {
-      guard let length, !length.dependsOnViewport else { return nil }
-      let value = length.value(context: self, mode: mode)
-      return value >= 0 ? value : nil
-    }
     let width = absolute(self.width, mode: .width)
     let height = absolute(self.height, mode: .height)
     let viewBox = viewBox ?? self.viewBox?.toCGRect()
     let ratio: CGFloat? =
-      if let viewBox, viewBox.width > 0, viewBox.height > 0 {
-        viewBox.width / viewBox.height
-      } else if let width, let height, width > 0, height > 0 {
+      if let width, let height, width > 0, height > 0 {
         width / height
+      } else if let viewBox, viewBox.width > 0, viewBox.height > 0 {
+        viewBox.width / viewBox.height
       } else {
         nil
       }
     return IntrinsicSize(width: width, height: height, ratio: ratio)
+  }
+
+  /// The `width` and the `height` of the element where both are absolute lengths with an area, which give an SVG
+  /// image whose root it is its natural aspect ratio, or `nil`.
+  var naturalSize: CGSize? {
+    guard let width = absolute(width, mode: .width), let height = absolute(height, mode: .height), width > 0,
+      height > 0
+    else { return nil }
+    return CGSize(width: width, height: height)
+  }
+
+  /// The value of a length that doesn't depend on the viewport, such as one that isn't a percentage, or `nil`.
+  private func absolute(_ length: SVGLength?, mode: SVGLengthMode) -> CGFloat? {
+    guard let length, !length.dependsOnViewport else { return nil }
+    let value = length.value(context: self, mode: mode)
+    return value >= 0 ? value : nil
   }
 
   /// The width and the height of the element as the outermost `svg` element, with the lengths resolved by a closure.
