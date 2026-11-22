@@ -33,6 +33,19 @@ struct MatchingTests {
     #expect(!matchesSelector(element: rect, css: "circle"))
   }
 
+  @Test(
+    "type selectors compare names with uppercase letters as written, as in an XML document",
+    arguments: [
+      ("clipPath", "clipPath", true), ("clipPath", "clippath", false), ("clipPath", "CLIPPATH", false),
+      ("linearGradient", "linearGradient", true), ("textPath", "textPath", true),
+      ("feGaussianBlur", "feGaussianBlur", true), ("feGaussianBlur", "fegaussianblur", false),
+      ("rect", "RECT", false),
+    ])
+  func matchTypeSelectorCase(localName: String, css: String, matches: Bool) {
+    let element = ElementCursor(root: documentElement(0, localName))
+    #expect(matchesSelector(element: element, css: css) == matches)
+  }
+
   @Test("match class selector")
   func matchClassSelector() {
     let rect = ElementCursor(root: documentElement(0, "rect", ["class": "foo"]))
