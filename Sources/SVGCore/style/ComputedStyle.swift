@@ -28,6 +28,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case paintOrder = "paint-order"
   case shapeRendering = "shape-rendering"
   case imageRendering = "image-rendering"
+  case imageOrientation = "image-orientation"
   case pointerEvents = "pointer-events"
   case clipRule = "clip-rule"
   case textAnchor = "text-anchor"
@@ -118,6 +119,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .paintOrder: visitor.visit(PaintOrderProperty.self)
     case .shapeRendering: visitor.visit(ShapeRenderingProperty.self)
     case .imageRendering: visitor.visit(ImageRenderingProperty.self)
+    case .imageOrientation: visitor.visit(ImageOrientationProperty.self)
     case .pointerEvents: visitor.visit(PointerEventsProperty.self)
     case .clipRule: visitor.visit(ClipRuleProperty.self)
     case .textAnchor: visitor.visit(TextAnchorProperty.self)
@@ -215,6 +217,7 @@ struct ComputedStyle: Sendable, Equatable {
   var paintOrder: PaintOrder
   var shapeRendering: ShapeRendering
   var imageRendering = ImageRendering.auto
+  var imageOrientation = ImageOrientation.fromImage
   var pointerEvents = PointerEvents.auto
   var clipRule: FillRule
   var textAnchor: TextAnchor

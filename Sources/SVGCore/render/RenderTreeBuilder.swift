@@ -1098,11 +1098,14 @@ package struct RenderTreeBuilder {
       }
     return await imagePaint(
       image: image, preserveAspectRatio: element.preserveAspectRatio, clips: clips,
-      interpolates: element.style.imageRendering.interpolates, in: rect)
+      interpolates: element.style.imageRendering.interpolates, orientation: element.style.imageOrientation, in: rect)
   }
 
   /// An image of data, a bitmap or an SVG image, placed in a rectangle by its `preserveAspectRatio`, or `nil` if the
   /// data isn't an image.
+  ///
+  /// A bitmap is drawn in the orientation that its metadata gives, whatever `image-orientation` is, as Chrome and
+  /// Firefox draw the image of a `feImage`.
   ///
   /// - Parameters:
   ///   - clips: Whether the rectangle clips the image where it overflows the rectangle.
@@ -1112,20 +1115,25 @@ package struct RenderTreeBuilder {
   ) async -> ImagePaint? {
     guard let image = loadImage(data: data, fragment: nil) else { return nil }
     return await imagePaint(
-      image: image, preserveAspectRatio: preserveAspectRatio, clips: clips, interpolates: interpolates, in: rect)
+      image: image, preserveAspectRatio: preserveAspectRatio, clips: clips, interpolates: interpolates,
+      orientation: .fromImage, in: rect)
   }
 
   /// An image, a bitmap or an SVG image, placed in a rectangle by its `preserveAspectRatio`, or `nil` if an SVG image
   /// has no view box with an area.
+  ///
+  /// - Parameter orientation: Whether a bitmap is drawn in the orientation that its metadata gives.
   private func imagePaint(
-    image: LoadedImage, preserveAspectRatio: PreserveAspectRatio, clips: Bool, interpolates: Bool, in rect: CGRect
+    image: LoadedImage, preserveAspectRatio: PreserveAspectRatio, clips: Bool, interpolates: Bool,
+    orientation: ImageOrientation, in rect: CGRect
   ) async -> ImagePaint? {
     let content: ImageContent
     let viewBox: CGRect
     switch image.content {
-    case .bitmap(let bitmap):
-      content = .bitmap(bitmap)
-      viewBox = CGRect(x: 0, y: 0, width: bitmap.width, height: bitmap.height)
+    case .bitmap(let bitmap, let imageOrientation):
+      let turn = orientation == .fromImage ? imageOrientation : .up
+      content = .bitmap(bitmap, orientation: turn)
+      viewBox = CGRect(origin: .zero, size: LoadedImage.size(of: bitmap, in: turn))
     case .document(let document):
       guard let svg = document.root else { return nil }
       let builder = RenderTreeBuilder(

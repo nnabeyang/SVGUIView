@@ -288,6 +288,21 @@ struct StyleTests {
       ImageRendering.allCases.filter { !$0.interpolates } == [.optimizeSpeed, .crispEdges, .pixelated])
   }
 
+  @Test("image-orientation is from-image or none, which is inherited, from-image initially, and not an attribute")
+  func imageOrientation() throws {
+    #expect(ImageOrientationProperty.parse("none", origin: .css) == ImageOrientation.none)
+    #expect(ImageOrientationProperty.parse("from-image", origin: .css) == .fromImage)
+    for legacy in ["90deg", "0deg", "flip", "90deg flip"] {
+      #expect(ImageOrientationProperty.parse(legacy, origin: .css) == nil, "\(legacy)")
+    }
+    let declared = try #require(declared(ImageOrientationProperty.self, css: "NONE"))
+    let parent = style([PropertyDeclaration(ImageOrientationProperty.self, declared)])
+    #expect(parent.imageOrientation == ImageOrientation.none)
+    #expect(style([], parent: parent).imageOrientation == ImageOrientation.none)
+    #expect(ComputedStyle.initial.imageOrientation == .fromImage)
+    #expect(!ImageOrientationProperty.accepts(attributeOn: .image))
+  }
+
   @Test("pointer-events is a keyword of SVG 2, case-sensitive in attributes, which is inherited and is auto initially")
   func pointerEvents() throws {
     #expect(PointerEventsProperty.parse("visibleFill", origin: .attribute) == .visibleFill)

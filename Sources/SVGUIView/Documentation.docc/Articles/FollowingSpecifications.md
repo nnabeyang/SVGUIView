@@ -150,6 +150,13 @@ browsers don't:
 - Selectors don't see the values that SMIL animations give attributes, except
   that class selectors see the class that an animation of `class` gives. A
   SMIL animation of the `style` attribute changes nothing.
+- A bitmap image, such as a photo, is drawn in the orientation that its EXIF
+  metadata gives, as `image-orientation: from-image`, the initial value,
+  describes. With `image-orientation: none`, it's drawn as its pixels are
+  stored, in the size of those pixels, even where its metadata turns it by 90
+  degrees. The legacy values of an angle and `flip` aren't accepted, as no
+  browser accepts them, and a `<feImage>` always draws its image in the
+  orientation of its metadata, as Chrome and Firefox do.
 
 A view pauses its animations while it isn't on the screen, and resumes them
 where they stopped. To keep them in step with the clock, seek to the time with

@@ -5,7 +5,8 @@ import ImageIO
 /// An image that an `<image>` or `<feImage>` element shows, read and decoded once for a builder.
 struct LoadedImage {
   enum Content {
-    case bitmap(CGImage)
+    /// A bitmap, with its pixels as they're stored, and the orientation that its metadata gives.
+    case bitmap(CGImage, orientation: CGImagePropertyOrientation)
     /// An SVG image: a document of its own, without animations, at time zero.
     case document(SVGBaseContext)
   }
@@ -65,16 +66,29 @@ final class LoadedImageCollector {
 extension LoadedImage {
   /// The size and the ratio of the image.
   ///
-  /// A bitmap has the size of its pixels. An SVG image has the intrinsic size of its root element, with the view box
-  /// that the fragment of its URL gives.
-  var intrinsicSize: IntrinsicSize {
+  /// A bitmap has the size of its pixels, turned by its orientation if it's drawn in it. An SVG image has the
+  /// intrinsic size of its root element, with the view box that the fragment of its URL gives.
+  ///
+  /// - Parameter orientation: Whether a bitmap is drawn in the orientation that its metadata gives.
+  func intrinsicSize(orientation: ImageOrientation) -> IntrinsicSize {
     switch content {
-    case .bitmap(let image):
-      let width = CGFloat(image.width)
-      let height = CGFloat(image.height)
-      return IntrinsicSize(width: width, height: height, ratio: height > 0 ? width / height : nil)
+    case .bitmap(let image, let imageOrientation):
+      let size = Self.size(of: image, in: orientation == .fromImage ? imageOrientation : .up)
+      return IntrinsicSize(
+        width: size.width, height: size.height, ratio: size.height > 0 ? size.width / size.height : nil)
     case .document(let document):
       return document.root?.intrinsicSize(viewBox: viewBox) ?? IntrinsicSize()
+    }
+  }
+
+  /// The size of a bitmap drawn in an orientation: the size of its pixels, with the width and the height swapped
+  /// for an orientation that turns it by 90 degrees.
+  static func size(of image: CGImage, in orientation: CGImagePropertyOrientation) -> CGSize {
+    let width = CGFloat(image.width)
+    let height = CGFloat(image.height)
+    switch orientation {
+    case .left, .leftMirrored, .right, .rightMirrored: return CGSize(width: height, height: width)
+    default: return CGSize(width: width, height: height)
     }
   }
 }
@@ -104,8 +118,8 @@ extension RenderTreeBuilder {
   ///
   /// - Parameter fragment: The fragment of the URL of the image, which names a `<view>` of an SVG image.
   func loadImage(data: Data, fragment: String?) -> LoadedImage? {
-    if let image = EmbeddedImage.decodedImage(of: data), image.width > 0, image.height > 0 {
-      return LoadedImage(content: .bitmap(image), viewBox: nil)
+    if let (image, orientation) = EmbeddedImage.decodedImage(of: data), image.width > 0, image.height > 0 {
+      return LoadedImage(content: .bitmap(image, orientation: orientation), viewBox: nil)
     }
     guard imageDepth < Self.maxImageDepth, let data = EmbeddedImage.svgData(of: data) else { return nil }
     let document = SVGParser.parse(data: data, languages: base.document.languages)
@@ -135,7 +149,8 @@ extension RenderTreeBuilder {
     if let width, let height {
       size = CGSize(width: width, height: height)
     } else {
-      let intrinsic = await loadedImage(of: element)?.intrinsicSize ?? IntrinsicSize()
+      let image = await loadedImage(of: element)
+      let intrinsic = image?.intrinsicSize(orientation: element.style.imageOrientation) ?? IntrinsicSize()
       size = intrinsic.resolved(width: width, height: height)
     }
     guard size.width > 0, size.height > 0 else { return nil }
