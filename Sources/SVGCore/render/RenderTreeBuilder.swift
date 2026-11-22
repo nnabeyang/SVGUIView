@@ -688,10 +688,20 @@ package struct RenderTreeBuilder {
   ) -> (translation: CGAffineTransform, layout: ViewportLayout?) {
     if isRoot, let imageFit {
       let viewBox = viewBoxOfImage(svg)
+      let natural = naturalBoxOfImage(svg)
       guard viewBox.width > 0, viewBox.height > 0, viewPort.width > 0, viewPort.height > 0 else {
         return (.identity, nil)
       }
-      let transform = imageFit.getTransform(viewBox: viewBox, size: viewPort.size)
+      // The `preserveAspectRatio` of the `<image>` element places the box of the natural aspect ratio in its
+      // rectangle, which is the viewport of the image, and the view box is stretched to it, as the `preserveAspectRatio`
+      // of the root element is ignored.
+      let stretch =
+        natural == viewBox
+        ? CGAffineTransform.identity
+        : CGAffineTransform(translationX: -viewBox.minX, y: -viewBox.minY)
+          .concatenating(
+            CGAffineTransform(scaleX: natural.width / viewBox.width, y: natural.height / viewBox.height))
+      let transform = stretch.concatenating(imageFit.getTransform(viewBox: natural, size: viewPort.size))
       let rect = CGRect(origin: .zero, size: viewPort.size).applying(transform.inverted())
       return (
         CGAffineTransform(translationX: viewPort.minX, y: viewPort.minY),
@@ -1127,8 +1137,9 @@ package struct RenderTreeBuilder {
         let node = await builder.node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
       else { return nil }
       content = .document(node)
-      viewBox = builder.viewBoxOfImage(svg)
-      guard viewBox.width > 0, viewBox.height > 0 else { return nil }
+      // The image is placed by its natural aspect ratio, with its view box stretched to it.
+      guard builder.viewBoxOfImage(svg).width > 0, builder.viewBoxOfImage(svg).height > 0 else { return nil }
+      viewBox = builder.naturalBoxOfImage(svg)
     }
     let placed = viewBox.applying(preserveAspectRatio.getTransform(viewBox: viewBox, size: rect.size))
       .offsetBy(dx: rect.minX, dy: rect.minY)
@@ -1141,6 +1152,18 @@ package struct RenderTreeBuilder {
   /// rectangle of the `<image>` element.
   private func viewBoxOfImage(_ svg: SVGSVGElement) -> CGRect {
     imageViewBox ?? svg.getViewBox(size: viewPort.size)
+  }
+
+  /// The box of the natural aspect ratio of an SVG image, which the `preserveAspectRatio` of the `<image>` element
+  /// places in its rectangle: the box of the `width` and the `height` of the root element where both are absolute
+  /// lengths and their ratio differs from that of the view box, and the view box otherwise, as SVG 2 defines the
+  /// natural aspect ratio.
+  private func naturalBoxOfImage(_ svg: SVGSVGElement) -> CGRect {
+    let viewBox = viewBoxOfImage(svg)
+    guard let size = svg.naturalSize, viewBox.width > 0, viewBox.height > 0,
+      abs(size.width / size.height - viewBox.width / viewBox.height) > 1e-9 * (viewBox.width / viewBox.height)
+    else { return viewBox }
+    return CGRect(origin: .zero, size: size)
   }
 
   /// The stroke of an element, or `nil` if it paints none.
