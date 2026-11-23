@@ -29,7 +29,7 @@ final class SVGTSpanElement: SVGDrawableElement {
   /// The ID of the `<path>` or the basic shape that a `<textPath>` lays its characters out along, or `nil` if it
   /// references none.
   var pathID: String? {
-    fragmentID(of: base.attributes["href"])
+    fragmentID(of: base.attributes.href)
   }
 
   /// The path data of the `path` attribute of a `<textPath>` up to its first error, which it lays its characters out

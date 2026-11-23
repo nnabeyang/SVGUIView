@@ -303,7 +303,7 @@ struct MatchingTests {
     #expect(Set(visit(ElementCursor(root: Self.languagesAndLinks))) == expected)
   }
 
-  @Test("style sheets match xml:lang and xlink:href of a document, and changes of lang and href")
+  @Test("style sheets match xml:lang and xlink:href of a document, and changes of lang and xlink:href")
   func languagesAndLinksInDocument() throws {
     let svg =
       #"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100">"#
@@ -318,7 +318,7 @@ struct MatchingTests {
     #expect(try #require(element("s", in: base)).style.stroke == Paint("green"))
     let g = try #require(base.document.element(id: "g"))
     let a = try #require(base.document.element(id: "a"))
-    let changed = base.changingAttributes([g: ["xml:lang": "en"], a: ["href": nil]])
+    let changed = base.changingAttributes([g: ["xml:lang": "en"], a: ["xlink:href": nil]])
     #expect(try #require(element("r", in: changed)).style.fill != Paint("blue"))
     #expect(try #require(element("s", in: changed)).style.stroke != Paint("green"))
   }

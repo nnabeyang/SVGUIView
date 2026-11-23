@@ -45,7 +45,7 @@ final class SVGFeImageElement: SVGElement, SVGFilterPrimitiveElement {
     result = attributes["result"]
 
     // An href can be a data URL of megabytes, which is read without copying it more than once.
-    let href = EmbeddedImage.trimmed(attributes["href", default: ""])
+    let href = EmbeddedImage.trimmed(attributes.href ?? "")
     if href.isEmpty {
       source = nil
     } else if href.hasPrefix("#") {

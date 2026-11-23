@@ -78,7 +78,7 @@ struct DocumentExportTests {
         + #"<set attributeName="width" to="9"/></rect></svg>"#)
   }
 
-  @Test("an element of another namespace is written in its namespace, and xlink:href as href")
+  @Test("an element of another namespace is written in its namespace, and xlink:href as it is")
   func namespaces() throws {
     let view = view(
       #"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" "#
@@ -87,9 +87,27 @@ struct DocumentExportTests {
         + #"<svg xmlns="http://www.w3.org/2000/svg"/></div></foreignObject><other xmlns=""/></svg>"#)
     #expect(
       try written(view)
-        == ##"<svg xmlns="http://www.w3.org/2000/svg" xml:lang="en"><use href="#r"/><foreignObject>"##
+        == #"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:lang="en">"#
+        + ##"<use xlink:href="#r"/><foreignObject>"##
         + #"<div xmlns="http://www.w3.org/1999/xhtml"><svg xmlns="http://www.w3.org/2000/svg"/></div>"#
         + #"</foreignObject><other xmlns=""/></svg>"#)
+  }
+
+  @Test("href and xlink:href are written as separate attributes, and parsed back as they were")
+  func hrefAndXLinkHref() throws {
+    let view = view(
+      #"<svg xmlns="http://www.w3.org/2000/svg" xmlns:l="http://www.w3.org/1999/xlink">"#
+        + ##"<rect id="a"/><use id="u" href="#a" l:href="#b"/></svg>"##)
+    let written = try written(view)
+    #expect(
+      written
+        == #"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">"#
+        + ##"<rect id="a"/><use href="#a" id="u" xlink:href="#b"/></svg>"##)
+    let parsed = self.view(written)
+    #expect(try self.written(parsed) == written)
+    // A document without an attribute of the XLink namespace doesn't declare it.
+    try #require(parsed.document.element(id: "u")).removeAttribute("xlink:href")
+    #expect(try !self.written(parsed).contains("xmlns:xlink"))
   }
 
   @Test("the white space that xml:space keeps is written as it is")

@@ -6,26 +6,37 @@ extension DocumentTree {
   ///
   /// The attributes are the ones as written, without the values of SMIL animations, in the order of their names, so
   /// that the same document is always written the same way. The root declares the SVG namespace, and an element of
-  /// another namespace declares its namespace where it differs from its parent's. An `href` of the XLink namespace is
-  /// written as the `href` of SVG 2. Nothing is added between the elements, so that the character data, and the
-  /// white space that `xml:space` keeps, are written as they are.
+  /// another namespace declares its namespace where it differs from its parent's. An attribute of the XLink namespace,
+  /// such as `xlink:href`, is written as it is, and the root declares the XLink namespace if the document has one.
+  /// Nothing is added between the elements, so that the character data, and the white space that `xml:space` keeps,
+  /// are written as they are.
   package func xmlData() -> Data {
     var xml = #"<?xml version="1.0" encoding="UTF-8"?>"# + "\n"
     if let root {
-      Self.write(root, parentNamespace: nil, isRoot: true, into: &xml)
+      Self.write(root, parentNamespace: nil, isRoot: true, declaresXLink: Self.hasXLinkAttribute(root), into: &xml)
     }
     return Data(xml.utf8)
   }
 
   private static let svgNamespace = "http://www.w3.org/2000/svg"
 
+  /// Whether the element or one of its descendants has an attribute of the XLink namespace, which the root then
+  /// declares.
+  private static func hasXLinkAttribute(_ element: DocumentElement) -> Bool {
+    element.writtenAttributes.keys.contains { $0.hasPrefix("xlink:") } || element.children.contains(where: hasXLinkAttribute)
+  }
+
   private static func write(
-    _ element: DocumentElement, parentNamespace: String?, isRoot: Bool, into xml: inout String
+    _ element: DocumentElement, parentNamespace: String?, isRoot: Bool, declaresXLink: Bool = false,
+    into xml: inout String
   ) {
     let namespace = element.namespace ?? svgNamespace
     xml += "<" + element.localName
     if isRoot || namespace != (parentNamespace ?? svgNamespace) {
       xml += #" xmlns=""# + escapedAttribute(namespace) + #"""#
+    }
+    if declaresXLink {
+      xml += #" xmlns:xlink="http://www.w3.org/1999/xlink""#
     }
     for (name, value) in element.writtenAttributes.sorted(by: { $0.key < $1.key }) {
       xml += " " + name + #"=""# + escapedAttribute(value) + #"""#

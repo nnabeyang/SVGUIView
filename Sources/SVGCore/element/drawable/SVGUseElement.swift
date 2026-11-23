@@ -33,8 +33,8 @@ final class SVGUseElement: SVGDrawableElement {
     y = base.style.y
     width = attributes["width"].flatMap { SVGLength(property: $0, isNonNegative: true) }
     height = attributes["height"].flatMap { SVGLength(property: $0, isNonNegative: true) }
-    parentId = fragmentID(of: attributes["href"])
-    externalHref = Self.externalHref(attributes["href"])
+    parentId = fragmentID(of: attributes.href)
+    externalHref = Self.externalHref(attributes.href)
   }
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {

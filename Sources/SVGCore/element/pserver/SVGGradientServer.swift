@@ -93,7 +93,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
     x2 = SVGLength(attributes["x2"])
     y2 = SVGLength(attributes["y2"])
 
-    parentId = fragmentID(of: attributes["href"])
+    parentId = fragmentID(of: attributes.href)
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
     gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
@@ -193,7 +193,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     fr = SVGLength(attributes["fr"])
     r = SVGLength(attributes["r"])
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
-    parentId = fragmentID(of: attributes["href"])
+    parentId = fragmentID(of: attributes.href)
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
     gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
 
