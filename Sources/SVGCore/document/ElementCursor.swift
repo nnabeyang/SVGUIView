@@ -133,8 +133,8 @@ extension ElementCursor: Element {
       let range = range.lowercased()
       return language == range || language.hasPrefix(range + "-")
     case .link, .anyLink:
-      // Every link is unvisited, as there is no history. `xlink:href` is `href` once it's parsed.
-      return element.name == .a && element.writtenAttributes["href"] != nil
+      // Every link is unvisited, as there is no history. An `xlink:href` makes a link too.
+      return element.name == .a && element.writtenAttributes.href != nil
     default:
       return false
     }

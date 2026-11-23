@@ -58,7 +58,7 @@ public final class SVGDocument {
   /// SMIL animations give attributes aren't written, but their animation
   /// elements are. An element of another namespace, such as the content of a
   /// `foreignObject`, is written in its namespace. An `xlink:href` is written
-  /// as the `href` of SVG 2.
+  /// as it is, and the root declares the XLink namespace for it.
   ///
   /// It doesn't keep what parsing the document left out: comments, processing
   /// instructions, the document type declaration, the attributes of other
@@ -277,12 +277,11 @@ public final class SVGDocument {
   }
 
   fileprivate func attribute(_ name: String, of id: ElementID) -> String? {
-    tree(containing: id)?.attributes(of: id)?[Self.attributeName(name)]
+    tree(containing: id)?.attributes(of: id)?[name]
   }
 
   /// Sets or removes an attribute, unless it already has the value.
   fileprivate func setAttribute(_ name: String, to value: String?, of id: ElementID) {
-    let name = Self.attributeName(name)
     switch location(of: id) {
     case .connected:
       guard let attributes = tree.attributes(of: id), attributes[name] != value else { return }
@@ -429,11 +428,6 @@ public final class SVGDocument {
       return removed
     }
   }
-
-  /// The name of an attribute as the document keeps it, which keeps `href` of the XLink namespace as `href`.
-  private static func attributeName(_ name: String) -> String {
-    name == "xlink:href" ? "href" : name
-  }
 }
 
 /// The view that shows a document, which keeps how the animations of the document play.
@@ -529,7 +523,8 @@ extension SVGDocument.Element {
   /// have the attribute.
   ///
   /// - Parameter name: The name of the attribute, without a namespace. The
-  ///   `href` of the XLink namespace can also be named `xlink:href`.
+  ///   `href` of the XLink namespace is named `xlink:href`, which is a
+  ///   separate attribute from `href`.
   public func attribute(_ name: String) -> String? {
     document.attribute(name, of: id)
   }
@@ -538,7 +533,8 @@ extension SVGDocument.Element {
   ///
   /// - Parameters:
   ///   - name: The name of the attribute, without a namespace. The `href` of
-  ///     the XLink namespace can also be named `xlink:href`.
+  ///     the XLink namespace is named `xlink:href`, which is a separate
+  ///     attribute from `href`. An element that has both uses `href`.
   ///   - value: The value, as it would be written in the document.
   public func setAttribute(_ name: String, to value: String) {
     document.setAttribute(name, to: value, of: id)
@@ -547,7 +543,9 @@ extension SVGDocument.Element {
   /// Removes an attribute.
   ///
   /// - Parameter name: The name of the attribute, without a namespace. The
-  ///   `href` of the XLink namespace can also be named `xlink:href`.
+  ///   `href` of the XLink namespace is named `xlink:href`, which is a
+  ///   separate attribute from `href`, so removing `href` makes an element that
+  ///   has both use its `xlink:href`.
   public func removeAttribute(_ name: String) {
     document.setAttribute(name, to: nil, of: id)
   }

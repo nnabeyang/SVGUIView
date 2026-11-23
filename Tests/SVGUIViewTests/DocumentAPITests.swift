@@ -94,11 +94,15 @@ struct DocumentAPITests {
     #expect(document.element(id: "r")?.attribute("fill") == "lime")
     rect.removeAttribute("fill")
     #expect(rect.attribute("fill") == nil)
-    // The `href` of the XLink namespace is `href`.
+    // The `href` of the XLink namespace is a separate attribute from `href`.
     let use = try #require(document.element(id: "u"))
-    #expect(use.attribute("xlink:href") == "#r")
+    #expect(use.attribute("xlink:href") == nil)
     use.setAttribute("xlink:href", to: "#s")
-    #expect(use.attribute("href") == "#s")
+    #expect(use.attribute("href") == "#r")
+    #expect(use.attribute("xlink:href") == "#s")
+    use.removeAttribute("href")
+    #expect(use.attribute("href") == nil)
+    #expect(use.attribute("xlink:href") == "#s")
     // A new ID finds the element.
     rect.setAttribute("id", to: "s")
     #expect(document.element(id: "s") == rect)

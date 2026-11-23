@@ -53,7 +53,7 @@ final class SVGPatternElement: SVGDrawableElement {
     patternContentUnits = SVGUnitType(rawValue: attributes["patternContentUnits", default: ""])
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
     viewBox = Self.parseViewBox(attributes["viewBox"])
-    parentId = fragmentID(of: attributes["href"])
+    parentId = fragmentID(of: attributes.href)
   }
 
   /// The pattern `lhs` with the attributes and the children of the pattern `rhs` that it references where it has

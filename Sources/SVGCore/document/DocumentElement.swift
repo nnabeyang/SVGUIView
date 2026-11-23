@@ -9,6 +9,15 @@ package struct ElementID: Hashable, Sendable {
   package let rawValue: Int
 }
 
+extension [String: String] {
+  /// The URL of `href`, or of the `href` of the XLink namespace where the element has no `href`, as SVG 2 uses them.
+  ///
+  /// The two are separate attributes, and an `href`, even an empty one, wins over an `xlink:href`.
+  var href: String? {
+    self["href"] ?? self["xlink:href"]
+  }
+}
+
 /// An element of a parsed document, with its attributes and children as written.
 ///
 /// Elements are immutable and don't know their parents, so a document is a persistent tree: a change makes a new
@@ -25,8 +34,8 @@ final class DocumentElement: Sendable {
   /// The URI of the namespace of an element that isn't in the SVG namespace, which is empty for one in no namespace,
   /// or `nil` for an element of the SVG namespace, so that the element is written back in its namespace.
   let namespace: String?
-  /// The attributes, with the `href` of the XLink namespace as `href` and other prefixed attributes left out, and
-  /// with the values that SMIL animations give them.
+  /// The attributes, with the `href` of the XLink namespace as `xlink:href`, `xml:space` and `xml:lang`, and other
+  /// prefixed attributes left out, and with the values that SMIL animations give them.
   let attributes: [String: String]
   /// The attributes without the values that SMIL animations give them, as the document has them. SMIL animations
   /// change the animated values, not the attributes, so selectors other than class selectors and the `style`

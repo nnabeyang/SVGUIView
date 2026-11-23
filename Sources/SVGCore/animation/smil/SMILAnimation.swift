@@ -129,11 +129,11 @@ extension SMILAnimation {
     if kind == .animateMotion {
       attributeName = nil
     } else {
-      // An attribute in the XLink namespace is written with its prefix, as the parser keeps `href`.
-      guard var name = attributes["attributeName"]?.trimmingCharacters(in: .whitespaces), !name.isEmpty else {
+      // An attribute in the XLink namespace is written with its prefix, as the parser keeps `xlink:href`, which is a
+      // separate attribute from `href`.
+      guard let name = attributes["attributeName"]?.trimmingCharacters(in: .whitespaces), !name.isEmpty else {
         return nil
       }
-      if name == "xlink:href" { name = "href" }
       attributeName = name
     }
 
@@ -224,7 +224,7 @@ extension SMILAnimation {
     fill = attributes["fill"].flatMap(Fill.init(rawValue:)) ?? .remove
     motionPath =
       kind == .animateMotion
-      ? element.children.first { $0.name == .mpath }.flatMap { $0.attributes["href"].flatMap(Self.fragment) } : nil
+      ? element.children.first { $0.name == .mpath }.flatMap { $0.attributes.href.flatMap(Self.fragment) } : nil
   }
 
   /// The values of a `values` list, separated by semicolons, without the empty ones.
@@ -285,7 +285,7 @@ extension SMILAnimation {
       for child in element.children {
         if child.name.isAnimation {
           let target: DocumentElement?
-          if let href = child.attributes["href"] {
+          if let href = child.attributes.href {
             target = fragment(href).flatMap { elements[$0] }
           } else {
             target = element

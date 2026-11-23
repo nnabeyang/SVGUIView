@@ -36,7 +36,7 @@ final class SVGImageElement: ShapeGeometry {
   init(base: SVGBaseElement, text _: String, attributes: [String: String]) {
     self.base = base
     // An href can be a data URL of megabytes, which is read without copying it more than once.
-    let href = EmbeddedImage.trimmed(attributes["href", default: ""])
+    let href = EmbeddedImage.trimmed(attributes.href ?? "")
     if href.isEmpty || href.hasPrefix("#") {
       source = nil
       fragment = nil
