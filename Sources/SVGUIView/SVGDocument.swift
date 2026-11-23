@@ -461,6 +461,9 @@ protocol DocumentHost: AnyObject {
   func snapshot(of element: ElementID, scale: CGFloat?) async throws(SVGRenderingError) -> SVGDocument.ElementSnapshot?
   /// The elements at a point of the view, from the front.
   func hits(at point: CGPoint, tolerance: CGFloat) async -> [ElementID]
+  /// The computed value of a property of an element of the document with its changes as text, at the time that the
+  /// view displays, or `nil` if the document has no such element or the property isn't known.
+  func computedValue(of property: String, for element: ElementID) -> String?
 }
 
 extension SVGDocument {
@@ -697,6 +700,13 @@ extension SVGDocument.Element {
   /// The declarations of the element's `style` attribute.
   public var style: SVGDocument.Style {
     SVGDocument.Style(element: self)
+  }
+
+  /// The computed values of the element's properties, with the style sheets,
+  /// the presentation attributes, the `style` attribute and inheritance
+  /// applied, as the DOM's `getComputedStyle()` gives them.
+  public var computedStyle: SVGDocument.ComputedStyle {
+    SVGDocument.ComputedStyle(element: self)
   }
 
   /// The bounding box of the element in its user space, as the DOM's
@@ -967,6 +977,49 @@ extension SVGDocument.Style {
 
   private var declarations: StyleDeclarations {
     StyleDeclarations(element.attribute("style") ?? "")
+  }
+}
+
+extension SVGDocument {
+  /// The computed values of an element's properties, as the DOM's
+  /// `getComputedStyle()` gives them.
+  ///
+  /// A computed value is the value that the element has after its style
+  /// sheets, presentation attributes, `style` attribute and inheritance are
+  /// applied, such as the `fill` that an element gets from a rule of a
+  /// `style` element or from its parent. The values are the ones at the time
+  /// that the view displays, with the animations at that time, and a change
+  /// of the document is visible at once.
+  ///
+  /// The values are written as browsers write them: colors as `rgb()` or
+  /// `rgba()`, with `currentcolor` resolved, absolute lengths and lengths in
+  /// `em` in pixels, and numbers with at most six significant digits, such as
+  /// `rgb(255, 0, 0)`, `2px` and `0.5`. A percentage stays a percentage,
+  /// since it's resolved where it's used.
+  ///
+  /// Style sheets in other files apply once the view has read them, which it
+  /// does when it renders the document. For a document that no view shows,
+  /// the values are the ones without the animations and without the style
+  /// sheets in other files.
+  public struct ComputedStyle: Sendable {
+    let element: Element
+  }
+}
+
+@MainActor
+extension SVGDocument.ComputedStyle {
+  /// The computed value of a property, or `nil` if the element isn't in the
+  /// document's tree or SVGUIView doesn't know the property.
+  ///
+  /// - Parameter name: The name of the property, such as `fill`, or of a
+  ///   custom property, such as `--size`.
+  public func property(_ name: String) -> String? {
+    let document = element.document
+    guard element.isConnected else { return nil }
+    if let host = document.host {
+      return host.computedValue(of: name, for: element.id)
+    }
+    return document.tree.computedValue(of: name, for: element.id)
   }
 }
 

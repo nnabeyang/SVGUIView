@@ -129,6 +129,36 @@ The change starts the transitions of the values that it changes, and the
 animations that it starts start at the time of the change. A style sheet that
 reads files with `@import` reads them again at the next rendering.
 
+### Reading computed values
+
+An inspector of an editing app shows the values that a selected element is
+drawn with, such as its fill and the width of its stroke, wherever they come
+from. ``SVGDocument/Element/computedStyle`` reads them, as the DOM's
+`getComputedStyle()` does: the values after the style sheets, the
+presentation attributes, the `style` attribute and inheritance are applied.
+
+```swift
+let fill = rect.computedStyle.property("fill")  // "rgb(255, 0, 0)"
+let width = rect.computedStyle.property("stroke-width")  // "2px"
+```
+
+The values are written as browsers write them, so an app can show them as it
+shows the values of a browser:
+
+- Colors are `rgb()` or `rgba()`, with `currentcolor` resolved to the color
+  that it is.
+- Absolute lengths and lengths in `em` are in pixels. A percentage stays a
+  percentage, since it's resolved where it's used, such as against the
+  viewport of a `width`.
+- Numbers have at most six significant digits, such as `0.707107`.
+- A `transform` is the `matrix()` of its functions.
+
+The values are the ones at the time that the view displays, with its
+animations then, and a change of the document is visible at once. Style
+sheets in other files apply once the view has read them, which it does when
+it renders the document. An element that isn't in the document's tree, and a
+property that SVGUIView doesn't support, such as `line-height`, have no value.
+
 ### Reading the shapes of elements
 
 An app that edits a document draws over the view, such as the frame and the

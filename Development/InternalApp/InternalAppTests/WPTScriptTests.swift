@@ -118,6 +118,20 @@ struct WPTScriptTests {
     #expect(rect.style.priority("fill") == .important)
   }
 
+  @Test("getComputedStyle reads the computed values of an element, from its style sheets and presentation attributes")
+  func computedStyle() async throws {
+    let (view, runner) = try await run(
+      """
+      <style>#r { stroke-width: 2 }</style>
+      <script>
+        const style = getComputedStyle(document.getElementById("r"));
+        document.documentElement.setAttribute("data-values", [style.fill, style.getPropertyValue("stroke-width"), style.strokeOpacity].join(" "));
+      </script>
+      """)
+    #expect(runner.errors.isEmpty, "\(runner.errors)")
+    #expect(view.document.rootElement?.attribute("data-values") == "rgb(255, 0, 0) 2px 1")
+  }
+
   @Test("setCurrentTime moves the time of the animations, which beginElement begins at")
   func time() async throws {
     let (view, runner) = try await run(

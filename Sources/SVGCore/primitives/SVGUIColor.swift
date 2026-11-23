@@ -342,8 +342,9 @@ struct SVGHexColor: SVGUIColor {
 }
 
 extension SVGHexColor: CustomStringConvertible {
+  /// The color as it's written, with its hexadecimal digits.
   var description: String {
-    "#\(value)"
+    "#\(hex)"
   }
 }
 

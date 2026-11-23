@@ -1414,6 +1414,11 @@ extension SVGUIView: DocumentHost {
     animationsDidChange(context)
   }
 
+  func computedValue(of property: String, for element: ElementID) -> String? {
+    applyDocumentChanges()
+    return baseContext.at(time: displayedTime.seconds).computedValue(of: property, for: element)
+  }
+
   func hits(at point: CGPoint, tolerance: CGFloat) async -> [ElementID] {
     applyDocumentChanges()
     let rect = bounds
