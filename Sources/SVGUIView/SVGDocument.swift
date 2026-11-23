@@ -397,6 +397,41 @@ public final class SVGDocument {
     }
   }
 
+  fileprivate func svgData(of id: ElementID) -> Data {
+    tree(containing: id)?.xmlData(of: id) ?? Data()
+  }
+
+  /// Inserts the elements of SVG data among the children of an element, before one of them or after the last one,
+  /// and gives their identifiers.
+  fileprivate func insert(svgData data: Data, into parent: ElementID, before reference: ElementID?)
+    throws(SVGDataError) -> [ElementID]
+  {
+    if let reference, tree(containing: parent)?.parent(of: reference) != parent {
+      throw SVGDataError(reason: .referenceNotChild)
+    }
+    guard
+      let parsed = SVGParser.parseFragment(data: data, firstIdentifier: nextElementID, languages: tree.languages)
+    else { throw SVGDataError(reason: .notWellFormed) }
+    if let largest = parsed.largestElementID {
+      nextElementID = max(nextElementID, largest + 1)
+    }
+    var inserted = [ElementID]()
+    for child in parsed.childTreesOfRoot {
+      guard let id = child.rootElement else { continue }
+      // The element is one that isn't in the tree, which is inserted as an element that the app created is.
+      detached[id] = child
+      do {
+        try insert(id, into: parent, before: reference)
+      } catch {
+        // The parent and the reference were checked, and the elements are new, so they can be inserted.
+        detached[id] = nil
+        continue
+      }
+      inserted.append(id)
+    }
+    return inserted
+  }
+
   /// Removes an element from its parent, with its descendants, and keeps it as an element that isn't in the tree.
   /// The root element and an element without a parent stay where they are.
   fileprivate func remove(_ id: ElementID) {
@@ -514,6 +549,22 @@ extension SVGDocument {
     }
 
     /// Why the element can't be inserted.
+    public let reason: Reason
+  }
+
+  /// The error of SVG data that can't be inserted into a document.
+  public struct SVGDataError: Error, Equatable, Sendable {
+    /// Why the data can't be inserted.
+    public enum Reason: Equatable, Sendable {
+      /// The data is neither an SVG document nor SVG elements that are
+      /// well-formed XML.
+      case notWellFormed
+      /// The element to insert before isn't a child of the parent, or is an
+      /// element of another document.
+      case referenceNotChild
+    }
+
+    /// Why the data can't be inserted.
     public let reason: Reason
   }
 }
@@ -637,6 +688,102 @@ extension SVGDocument.Element {
       throw SVGDocument.HierarchyError(reason: .differentDocument)
     }
     try document.insert(child.id, into: id, before: reference?.id)
+  }
+
+  /// Inserts the elements of SVG data after the last child of this element,
+  /// as pasting does, and returns them.
+  ///
+  /// ``insert(svgData:before:)`` describes the data.
+  ///
+  /// - Parameter svgData: An SVG document, such as one that ``svgData()``
+  ///   writes, or SVG elements.
+  /// - Returns: The inserted elements, in order.
+  /// - Throws: ``SVGDocument/SVGDataError`` if the data isn't well-formed
+  ///   XML. The document doesn't change then.
+  @discardableResult
+  public func append(svgData: Data) throws(SVGDocument.SVGDataError) -> [SVGDocument.Element] {
+    try insert(svgData: svgData, before: nil)
+  }
+
+  /// Inserts the elements of SVG data before a child of this element, as
+  /// pasting does, and returns them.
+  ///
+  /// The data is either an SVG document whose root is an `svg` element, such
+  /// as one that ``svgData()`` writes, whose children are inserted, or SVG
+  /// elements written one after another, such as `<rect/><circle/>`, which
+  /// are inserted. The elements don't have to declare the SVG namespace, or
+  /// the XLink namespace for an `xlink:href`.
+  ///
+  /// ```swift
+  /// if let data = UIPasteboard.general.data(forPasteboardType: UTType.svg.identifier) {
+  ///   let pasted = try layer.append(svgData: data)
+  ///   select(pasted)
+  /// }
+  /// ```
+  ///
+  /// The elements are inserted as ``insert(_:before:)`` inserts elements
+  /// that ``SVGDocument/createElement(_:)`` created, with their attributes
+  /// and character data as the data has them. An `id` that the document
+  /// already has is kept, as the DOM's `insertAdjacentHTML()` keeps it, so a
+  /// reference, such as a `fill` of `url(#gradient)`, finds the first
+  /// element with the `id` in document order; change the `id` attributes of
+  /// the inserted elements to keep them apart. A `style` element among them
+  /// applies its rules to the whole document. The white space between the
+  /// elements isn't inserted, and nothing else that parsing a document
+  /// leaves out is.
+  ///
+  /// - Parameters:
+  ///   - svgData: An SVG document or SVG elements.
+  ///   - reference: The child of this element to insert the elements before,
+  ///     or `nil` to insert them after the last child.
+  /// - Returns: The inserted elements, in order.
+  /// - Throws: ``SVGDocument/SVGDataError`` if the data isn't well-formed
+  ///   XML, or if `reference` isn't a child of this element. The document
+  ///   doesn't change then.
+  @discardableResult
+  public func insert(svgData: Data, before reference: SVGDocument.Element?)
+    throws(SVGDocument.SVGDataError) -> [SVGDocument.Element]
+  {
+    guard reference.map({ $0.document === document }) ?? true else {
+      throw SVGDocument.SVGDataError(reason: .referenceNotChild)
+    }
+    return try document.insert(svgData: svgData, into: id, before: reference?.id).map {
+      SVGDocument.Element(document: document, id: $0)
+    }
+  }
+
+  /// The element and its descendants as an SVG document that renders them
+  /// alone, as UTF-8 XML, as copying them does.
+  ///
+  /// The document has the elements that they reference, so that it renders
+  /// them as this document does, when it's saved as a file or inserted into
+  /// another document with ``append(svgData:)``:
+  ///
+  /// ```swift
+  /// UIPasteboard.general.setData(shape.svgData(), forPasteboardType: UTType.svg.identifier)
+  /// ```
+  ///
+  /// The root of the document is an `svg` element with the `width`,
+  /// `height`, `viewBox` and `preserveAspectRatio` of the root element of
+  /// this document, so that another app places the element in the same
+  /// viewport. Its children are a `defs` element with the referenced
+  /// elements, if there are any, and then the element. The referenced
+  /// elements are the ones that a `url()` in an attribute, such as a `fill`
+  /// of `url(#gradient)` or a `clip-path` in the `style` attribute, or an
+  /// `href` or `xlink:href`, such as the one of a `use` element or of a
+  /// gradient that inherits another one, refers to, also from the referenced
+  /// elements. They're written with their descendants, in document order,
+  /// and the elements that the element is in, or that it has, aren't written
+  /// again.
+  ///
+  /// The element is written as ``SVGDocument/svgData()`` writes it: with its
+  /// attributes as written, and in the user space of its parent, without the
+  /// transforms of its ancestors. The rules of the style sheets aren't
+  /// written, so the values that they give apply only where the same rules
+  /// do. The root element is written as ``SVGDocument/svgData()`` writes the
+  /// document.
+  public func svgData() -> Data {
+    document.svgData(of: id)
   }
 
   /// Removes the element from its parent, with its descendants, as the DOM's

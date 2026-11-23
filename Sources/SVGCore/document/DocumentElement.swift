@@ -379,6 +379,11 @@ package struct DocumentTree: Sendable {
     root?.id
   }
 
+  /// A document for each child of the root, with the child as its root, in the order of the children.
+  package var childTreesOfRoot: [DocumentTree] {
+    (root?.children ?? []).map { DocumentTree(root: $0, languages: languages) }
+  }
+
   /// The local name of an element as written, or `nil` if the document has no such element.
   package func localName(of id: ElementID) -> String? {
     cursor(at: id)?.element.localName
