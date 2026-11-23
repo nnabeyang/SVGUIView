@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreText
 import Foundation
 import Testing
 import UIKit
@@ -135,9 +136,25 @@ struct TextLayoutTests {
     #expect(last.start == rendered.end)
   }
 
-  @Test("the characters of a ligature have the geometry of the ligature, and a caret can go between them")
+  /// A font family that the system has and that draws "fi" as a ligature, which the fonts of a simulator don't
+  /// always have.
+  nonisolated private static let ligatureFamily: String? = {
+    ["Hoefler Text", "Baskerville", "Palatino", "Didot", "Georgia", "Times New Roman", "Helvetica Neue"].first {
+      family in
+      let font = CTFontCreateWithName(family as CFString, 40, nil)
+      guard (CTFontCopyFamilyName(font) as String) == family else { return false }
+      let line = CTLineCreateWithAttributedString(
+        NSAttributedString(string: "fi", attributes: [.font: font]) as CFAttributedString)
+      return CTLineGetGlyphCount(line) == 1
+    }
+  }()
+
+  @Test(
+    "the characters of a ligature have the geometry of the ligature, and a caret can go between them",
+    .enabled(if: ligatureFamily != nil, "No font of the system draws a ligature of fi"))
   func ligature() async throws {
-    let view = view(##"<text id="t" x="10" y="50" font-family="Hoefler Text">fia</text>"##)
+    let family = try #require(Self.ligatureFamily)
+    let view = view(##"<text id="t" x="10" y="50" font-family="\##(family)">fia</text>"##)
     let layout = try await layout("t", in: view)
     let f = layout.characters[0]
     let i = layout.characters[1]
