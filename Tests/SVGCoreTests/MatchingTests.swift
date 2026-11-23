@@ -241,7 +241,9 @@ struct MatchingTests {
       (":root", [0]), ("rect:first-child", [2]), (":last-child", [0, 4, 6]), ("g > :nth-child(2)", [3]),
       ("g > :nth-child(odd)", [2, 4]), ("g > :nth-last-child(1)", [4]), ("rect:nth-of-type(2)", [4]),
       ("rect:last-of-type", [4]), ("circle:only-of-type", [3]), ("g :only-child", []), ("g:empty", [5]),
-      ("text:empty", []),
+      ("text:empty", []), ("g > :nth-child(1 of rect)", [2]), ("g > :nth-child(2 of rect)", [4]),
+      ("g > :nth-last-child(1 of rect)", [4]), ("g > :nth-child(odd of [x])", [2]), ("circle:nth-child(1 of rect)", []),
+      (":nth-child(1 of .p, circle)", [2]), (":nth-child(2 of .p, circle)", [3]), (":nth-of-type(1 of rect)", []),
     ] as [(String, Set<Int>)])
   func structuralPseudoClasses(css: String, expected: Set<Int>) {
     #expect(Self.matches(css) == expected)

@@ -353,11 +353,19 @@ public func matchesSimpleSelector<E: Element>(
   case .empty:
     value = element.isEmpty
   case .nth(let data):
-    value = matchesNth(element: element, data: data)
+    value = matchesNth(element: element, data: data) { !data.ty.isOfType || $0.isSameType(as: element) }
+  case .nthOf(let data):
+    // Only the siblings that match the selectors count, and an element that doesn't match them matches nothing.
+    func matchesSelectors(_ sibling: E) -> Bool {
+      matchesNested(
+        list: data.selectors, element: sibling, context: context, inNegation: context.shared.inNegation)
+    }
+    value = matchesSelectors(element) && matchesNth(element: element, data: data.nthData, counts: matchesSelectors)
   case .negation(let list):
-    value = !matchesNested(list: list, element: element, context: context, inNegation: true)
+    value = !matchesNested(list: list.slice, element: element, context: context, inNegation: true)
   case .is(let list), .where(let list):
-    value = matchesNested(list: list, element: element, context: context, inNegation: context.shared.inNegation)
+    value = matchesNested(
+      list: list.slice, element: element, context: context, inNegation: context.shared.inNegation)
   case .nonTSPseudoClass(let pseudoClass):
     // The element decides the pseudo-classes that it can, such as `:lang()`, and others, such as the ones of user
     // actions, match no element.
@@ -370,9 +378,10 @@ public func matchesSimpleSelector<E: Element>(
   return .from(value)
 }
 
-/// Whether an element matches any selector of a list in a selector, such as the argument of `:not()` or `:is()`.
+/// Whether an element matches any selector of a list in a selector, such as the argument of `:not()`, `:is()` or the
+/// selectors after `of` of `:nth-child()`.
 private func matchesNested<E: Element>(
-  list: SelectorList<E.Impl>,
+  list: some Sequence<Selector<E.Impl>>,
   element: E,
   context: LocalMatchingContext<E.Impl>,
   inNegation: Bool
@@ -380,19 +389,22 @@ private func matchesNested<E: Element>(
   var nested = context.shared
   nested.nestingLevel += 1
   nested.inNegation = inNegation
-  return list.slice.contains { selector in
+  return list.contains { selector in
     matchesSelectorKleene(selector: selector, offset: 0, element: element, context: &nested).toBool(unknown: false)
   }
 }
 
-/// Whether the position of an element among its siblings, or among the siblings of its type, matches `An+B`.
-private func matchesNth<E: Element>(element: E, data: NthSelectorData) -> Bool {
+/// Whether the position of an element among its siblings, among the siblings of its type, or among the siblings that
+/// match the selectors after `of`, matches `An+B`.
+///
+/// - Parameter counts: Whether a sibling counts, which is every sibling for `:nth-child()` without `of`.
+private func matchesNth<E: Element>(element: E, data: NthSelectorData, counts: (E) -> Bool) -> Bool {
   // The siblings that count, before or after the element.
   func count(from element: E, next: (E) -> E?) -> Int32 {
     var count: Int32 = 0
     var sibling = next(element)
     while let current = sibling {
-      if !data.ty.isOfType || current.isSameType(as: element) {
+      if counts(current) {
         count += 1
       }
       sibling = next(current)

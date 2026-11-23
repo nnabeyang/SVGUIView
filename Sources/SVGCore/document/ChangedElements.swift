@@ -92,18 +92,27 @@ extension SVGBaseContext {
   ) -> ChangedElements {
     var elements = ChangedElements()
     elements.isEverything = changes.stylesheets
-    /// Makes an element again with its descendants, and its later siblings where sibling combinators can match them
-    /// in another way.
+    /// Makes an element again with its descendants, its later siblings where sibling combinators can match them in
+    /// another way, and all its siblings where `:nth-child()` and `:nth-last-child()` with selectors after `of` can
+    /// count them in another way.
     func change(_ start: ElementCursor, repaints: Bool) {
       var cursor = start
       elements.remade.insert(cursor.element.id)
       if repaints { elements.repainted.insert(cursor.element.id) }
-      if stylesheet.hasSiblingCombinators {
+      if stylesheet.hasSiblingCombinators || stylesheet.hasNthOfSelectors {
         var sibling = cursor.nextSibling
         while let current = sibling {
           elements.remade.insert(current.element.id)
           if repaints { elements.repainted.insert(current.element.id) }
           sibling = current.nextSibling
+        }
+      }
+      if stylesheet.hasNthOfSelectors {
+        var sibling = cursor.prevSibling
+        while let current = sibling {
+          elements.remade.insert(current.element.id)
+          if repaints { elements.repainted.insert(current.element.id) }
+          sibling = current.prevSibling
         }
       }
       while let parent = cursor.parent, elements.containing.insert(parent.element.id).inserted {
