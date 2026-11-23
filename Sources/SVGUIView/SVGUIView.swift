@@ -1567,6 +1567,34 @@ extension SVGUIView: DocumentHost {
     return (geometry, base.needsExternalStyleSheets ? resolved : nil)
   }
 
+  func characterGeometry(of element: ElementID) async -> (text: [Character], characters: [CharacterGeometry?])? {
+    applyDocumentChanges()
+    let document = documentGeneration
+    let found = await Self.characterGeometry(
+      of: element, base: baseContext, size: bounds.size, scale: displayScale, time: displayedTime,
+      resources: resourceLoader)
+    adoptStyleSheets(of: found.resolved, ofDocument: document)
+    return found.geometry
+  }
+
+  /// The characters of text of a document at a time and where they are, found off the main actor as a rendering is,
+  /// with the context that has the style sheets in other files that it read, if it read any.
+  @concurrent
+  private static func characterGeometry(
+    of element: ElementID, base: SVGBaseContext, size: CGSize, scale: CGFloat, time: Duration,
+    resources: ExternalResourceLoader
+  ) async -> (geometry: (text: [Character], characters: [CharacterGeometry?])?, resolved: SVGBaseContext?) {
+    let resolved =
+      base.needsExternalStyleSheets ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
+    guard !Task.isCancelled else { return (nil, nil) }
+    let builder = RenderTreeBuilder(
+      base: resolved.at(time: time.seconds), viewPort: CGRect(origin: .zero, size: size), scale: scale,
+      resources: resources)
+    let geometry = builder.characterGeometry(of: element)
+    guard !Task.isCancelled else { return (nil, nil) }
+    return (geometry, base.needsExternalStyleSheets ? resolved : nil)
+  }
+
   /// Shows the document with animations that play in another way, and runs the clock while they change.
   private func animationsDidChange(_ context: SVGBaseContext) {
     baseContext = context

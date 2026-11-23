@@ -197,6 +197,40 @@ such as one in a `<defs>` element or with `display: none`, has the geometry
 that it would have if it were rendered. The geometry depends on the size and
 the content mode of the view, so read it again when they change.
 
+### Editing text
+
+An app that edits text, such as text that a person adds to a picture, puts a
+caret between its characters and selects them. ``SVGDocument/Element/textLayout()``
+reads where the characters of a `<text>` element, or of a `<tspan>` in it, are,
+as the DOM's `getStartPositionOfChar()`, `getExtentOfChar()` and
+`getCharNumAtPosition()` find them:
+
+```swift
+// Puts the caret where a finger tapped the text.
+if let layout = await text.textLayout(),
+  var transform = await text.transformToView() {
+  let point = touch.location(in: svgView).applying(transform.inverted())
+  caret = layout.insertionIndex(closestTo: point)
+  caretLayer.path = layout.caretPath(at: caret)?.copy(using: &transform)
+}
+```
+
+The layout has the characters that the text renders and, for each of them,
+where it starts and ends on the baseline, the box of its cell and its angle, in
+the user space of the text. ``SVGDocument/TextLayout/characterIndex(at:)``
+finds the character at a point, and
+``SVGDocument/TextLayout/insertionIndex(closestTo:)`` the position between
+characters that's closest to it, which can be between the characters of a
+ligature.
+
+The characters are the ones after the white space is processed, and each
+`Character` of Swift is one, so an emoji is one character. With
+`white-space: pre`, or `xml:space="preserve"`, the white space stays as it is,
+so the characters of a `<text>` element without spans are the ones of its
+``SVGDocument/Element/textContent``, and the positions between them are the
+ones of the string that the app changes. The layout is found off the main
+actor, as a rendering is, so read it again after changing the text.
+
 ### Measuring shapes
 
 An app places things along a shape, or lets a finger slide along it, with
