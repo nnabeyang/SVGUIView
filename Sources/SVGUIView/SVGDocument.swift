@@ -464,6 +464,9 @@ protocol DocumentHost: AnyObject {
   /// The computed value of a property of an element of the document with its changes as text, at the time that the
   /// view displays, or `nil` if the document has no such element or the property isn't known.
   func computedValue(of property: String, for element: ElementID) -> String?
+  /// The path of a shape of the document with its changes measured along its length, in its user space and at the
+  /// time that the view displays, or `nil` if the document has no such element or it isn't a shape.
+  func pathMeasure(of element: ElementID) -> PathMeasure?
 }
 
 extension SVGDocument {
@@ -780,6 +783,64 @@ extension SVGDocument.Element {
     await document.host?.geometry(of: id, includesStroke: false, includesPath: false)?.transformToViewPort
   }
 
+  /// The length of the shape, as the DOM's `getTotalLength()` finds it, or
+  /// `nil` if the element isn't a shape or the view doesn't show it.
+  ///
+  /// The shapes are `path` elements and the basic shapes: `rect`, `circle`,
+  /// `ellipse`, `line`, `polyline` and `polygon`. The length is the one of
+  /// the shape in its user space, which is the space of ``path()``, at the
+  /// time that the view displays and with every change made to the document
+  /// so far. Its percentages are resolved with the size of the view, so it's
+  /// `nil` for an element that the view doesn't show, because it isn't in the
+  /// document's tree or no view shows the document.
+  ///
+  /// The `pathLength` attribute of the shape doesn't change the length, as
+  /// it doesn't change the length that the DOM finds. A shape that isn't
+  /// rendered, such as one in a `defs` element or with `display: none`, has
+  /// the length that it would have if it were rendered, and a shape without
+  /// a path, such as a `circle` element whose radius is zero, has a length of
+  /// zero.
+  ///
+  /// The curves are measured as text on a path and motion along a path
+  /// measure them, as many short lines along the curves that the view draws,
+  /// so the length of a curve differs a little from its exact length, such
+  /// as by about 0.01% for a circle.
+  public func totalLength() -> CGFloat? {
+    document.host?.pathMeasure(of: id).map { CGFloat($0.length) }
+  }
+
+  /// The point of the shape at a length along it from its start, and the
+  /// direction that the shape goes in there, as the DOM's
+  /// `getPointAtLength()` finds the point, or `nil` if the shape has no path.
+  ///
+  /// The point is in the user space of the shape, the space of ``path()``,
+  /// and its length is measured as ``totalLength()`` measures the shape. A
+  /// length less than zero is the start, and a length greater than
+  /// ``totalLength()`` is the end. A basic shape starts and goes as SVG 2
+  /// specifies its path: a `circle` element starts at the right of its
+  /// center and goes clockwise, for example, and a `rect` element starts at
+  /// its top left corner, after its rounded corner if it has one.
+  ///
+  /// To place a mark along a shape:
+  ///
+  /// ```swift
+  /// if let length = shape.totalLength(),
+  ///   let point = shape.point(atLength: length / 2) {
+  ///   mark.setAttribute(
+  ///     "transform",
+  ///     to: "translate(\(point.location.x) \(point.location.y)) rotate(\(point.angle * 180 / .pi))")
+  /// }
+  /// ```
+  ///
+  /// It's `nil` in the cases that ``totalLength()`` is, and for a shape
+  /// without a path.
+  ///
+  /// - Parameter length: The length along the shape from its start.
+  public func point(atLength length: CGFloat) -> SVGDocument.PathPoint? {
+    guard let found = document.host?.pathMeasure(of: id)?.point(atDistance: Double(length)) else { return nil }
+    return SVGDocument.PathPoint(location: found.point, angle: CGFloat(found.angle * .pi / 180))
+  }
+
   /// Renders the element and its descendants into an image, as the view
   /// shows them at the time that it displays, and tells where the view
   /// shows the image.
@@ -1020,6 +1081,23 @@ extension SVGDocument.ComputedStyle {
       return host.computedValue(of: name, for: element.id)
     }
     return document.tree.computedValue(of: name, for: element.id)
+  }
+}
+
+extension SVGDocument {
+  /// A point along a shape, and the direction that the shape goes in there.
+  public struct PathPoint: Equatable, Sendable {
+    /// The point, in the user space of the shape.
+    public let location: CGPoint
+    /// The angle of the direction that the shape goes in at the point, in
+    /// radians from the x-axis toward the y-axis of the user space, as
+    /// `CGAffineTransform(rotationAngle:)` turns.
+    ///
+    /// The shape is measured as many short lines, and the direction is the
+    /// one of the line that the point is on. At a corner, it's the direction
+    /// of the line before the corner, and at the start, of the line after the
+    /// start.
+    public let angle: CGFloat
   }
 }
 

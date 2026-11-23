@@ -222,6 +222,14 @@ final class WPTScriptRunner {
       element(h)?.computedStyle.property(name) ?? ""
     }
     define("computed", computed)
+    let totalLength: @convention(block) (Int) -> Any = { [unowned self] h in
+      (element(h)?.totalLength()).map { Double($0) as Any } ?? NSNull()
+    }
+    define("totalLength", totalLength)
+    let pointAtLength: @convention(block) (Int, Double) -> Any = { [unowned self] h, length in
+      (element(h)?.point(atLength: length)).map { [Double($0.location.x), Double($0.location.y)] as Any } ?? NSNull()
+    }
+    define("pointAtLength", pointAtLength)
     let styleSet: @convention(block) (Int, String, String, String) -> Void = { [unowned self] h, name, value, priority in
       element(h)?.style.setProperty(name, to: value, priority: priority == "important" ? .important : .normal)
     }
@@ -396,6 +404,17 @@ final class WPTScriptRunner {
           const qualifiedName = qualified(namespace, String(name));
           N.removeAttr(this.handle, qualifiedName);
           changedImage(this, qualifiedName);
+        }
+        // The length and the points of a shape, as SVGGeometryElement gives them.
+        getTotalLength() {
+          const length = N.totalLength(this.handle);
+          if (length === null) throw new Error("InvalidStateError: the element has no path");
+          return length;
+        }
+        getPointAtLength(distance) {
+          const point = N.pointAtLength(this.handle, Number(distance));
+          if (point === null) throw new Error("InvalidStateError: the element has no path");
+          return { x: point[0], y: point[1] };
         }
         get parentNode() { return wrap(N.parent(this.handle)); }
         get parentElement() { return this.parentNode; }
