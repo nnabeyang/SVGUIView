@@ -502,6 +502,10 @@ protocol DocumentHost: AnyObject {
   /// The path of a shape of the document with its changes measured along its length, in its user space and at the
   /// time that the view displays, or `nil` if the document has no such element or it isn't a shape.
   func pathMeasure(of element: ElementID) -> PathMeasure?
+  /// The characters that text or a span of text of the document with its changes renders, and where each of them is
+  /// in the user space of the text, at the time that the view displays, or `nil` if the document has no such element,
+  /// it isn't text or a span of text, or the task is cancelled.
+  func characterGeometry(of element: ElementID) async -> (text: [Character], characters: [CharacterGeometry?])?
 }
 
 extension SVGDocument {
@@ -930,6 +934,52 @@ extension SVGDocument.Element {
     await document.host?.geometry(of: id, includesStroke: false, includesPath: false)?.transformToViewPort
   }
 
+  /// Where the characters of text are, which an app needs to edit the
+  /// text, such as to put a caret between them, or `nil` if the element
+  /// isn't text or the view doesn't show it.
+  ///
+  /// ```swift
+  /// // Puts the caret where a finger tapped the text.
+  /// if let layout = await text.textLayout(),
+  ///   var transform = await text.transformToView() {
+  ///   let point = touch.location(in: svgView).applying(transform.inverted())
+  ///   caret = layout.insertionIndex(closestTo: point)
+  ///   // A layer over the view, as large as the view, draws the caret.
+  ///   caretLayer.path = layout.caretPath(at: caret)?.copy(using: &transform)
+  /// }
+  /// ```
+  ///
+  /// The element is a `text` element, or a `tspan` or `textPath` element or
+  /// an `a` element in text, which has the characters of its own and of the
+  /// elements in it. The characters are the ones that the text renders: its
+  /// character data after its white space is processed, as the `white-space`
+  /// property and `xml:space` have it, without the characters of the elements
+  /// with `display: none`. Each `Character` of Swift is a character, so an
+  /// emoji or a letter with combining marks is one character, while the SVG
+  /// DOM counts UTF-16 code units. With `white-space: pre`, the characters are
+  /// the ones of ``textContent`` of a `text` element without spans, so their
+  /// indices are the ones of the text that the app changes.
+  ///
+  /// The geometry is in the user space of the text, as ``boundingBox(includingStroke:)``
+  /// and ``path()`` have it for the element, at the time that the view
+  /// displays and with every change made to the document so far. It's found
+  /// off the main actor, as a rendering is, so read it again after the text
+  /// changes. It's `nil` for an element that isn't in the document's tree,
+  /// for one that no view shows, and if the task is cancelled.
+  public func textLayout() async -> SVGDocument.TextLayout? {
+    guard let found = await document.host?.characterGeometry(of: id) else { return nil }
+    var characters = [SVGDocument.CharacterGeometry]()
+    for geometry in found.characters {
+      if let geometry {
+        characters.append(SVGDocument.CharacterGeometry(geometry))
+      } else {
+        // A character that isn't rendered is where the character before it ends, with no size.
+        characters.append(SVGDocument.CharacterGeometry(notRenderedAfter: characters.last))
+      }
+    }
+    return SVGDocument.TextLayout(text: String(found.text), characters: characters)
+  }
+
   /// The length of the shape, as the DOM's `getTotalLength()` finds it, or
   /// `nil` if the element isn't a shape or the view doesn't show it.
   ///
@@ -1232,6 +1282,179 @@ extension SVGDocument.ComputedStyle {
 }
 
 extension SVGDocument {
+  /// The characters that text renders and where they are, which
+  /// ``Element/textLayout()`` reads.
+  public struct TextLayout: Sendable {
+    /// The characters that the text renders, after its white space is
+    /// processed.
+    public let text: String
+    /// Where each character of ``text`` is, in the same order.
+    public let characters: [CharacterGeometry]
+
+    /// The index of the character whose cell has a point, as the DOM's
+    /// `getCharNumAtPosition()` finds it, or `nil` if there is none.
+    ///
+    /// The cell of a character is its advance along the line by the ascent
+    /// and the descent of its font, turned with the character. Where cells
+    /// overlap, the character that's rendered later, over the others, has
+    /// the point. A character of a ligature has the cell of the ligature, and
+    /// the first character of the ligature is found.
+    ///
+    /// - Parameter point: The point, in the user space of the text.
+    public func characterIndex(at point: CGPoint) -> Int? {
+      guard let found = characters.indices.last(where: { characters[$0].contains(point) }) else { return nil }
+      return cluster(of: found).lowerBound
+    }
+
+    /// The position between the characters that's closest to a point, from
+    /// 0 before the first character to the number of characters after the
+    /// last one, where an app puts a caret.
+    ///
+    /// The position is before or after the character whose cell has the
+    /// point, or whose cell is the closest to the point, whichever of its
+    /// start and its end is closer. The characters of a ligature divide it
+    /// equally, so that the caret can go between them. It's 0 for text without
+    /// rendered characters.
+    ///
+    /// - Parameter point: The point, in the user space of the text.
+    public func insertionIndex(closestTo point: CGPoint) -> Int {
+      let found =
+        characters.indices.last(where: { characters[$0].contains(point) })
+        ?? characters.indices.filter { characters[$0].isRendered }.min(by: {
+          characters[$0].distance(to: point) < characters[$1].distance(to: point)
+        })
+      guard let found else { return 0 }
+      let range = cluster(of: found)
+      let character = characters[found]
+      let dx = character.end.x - character.start.x
+      let dy = character.end.y - character.start.y
+      let squared = dx * dx + dy * dy
+      let progress =
+        squared > 0
+        ? min(max(((point.x - character.start.x) * dx + (point.y - character.start.y) * dy) / squared, 0), 1) : 0
+      return range.lowerBound + Int((progress * CGFloat(range.count)).rounded())
+    }
+
+    /// A line across the text at a position between the characters, as tall
+    /// as their cells, where an app draws a caret, or `nil` for text without
+    /// rendered characters.
+    ///
+    /// The line is at the start of the character after the position, or at
+    /// the end of the last character, in the user space of the text.
+    ///
+    /// - Parameter index: The position, from 0 before the first character to
+    ///   the number of characters after the last one.
+    public func caretPath(at index: Int) -> CGPath? {
+      let index = min(max(index, 0), characters.count)
+      let rendered = characters.indices.filter { characters[$0].isRendered }
+      let after = index < characters.count && characters[index].isRendered ? index : nil
+      guard let at = after ?? rendered.last(where: { $0 < index }) ?? rendered.first else { return nil }
+      let character = characters[at]
+      let range = cluster(of: at)
+      // A position in a ligature is a part of the way through it.
+      let progress: CGFloat =
+        if index > range.lowerBound, index < range.upperBound {
+          CGFloat(index - range.lowerBound) / CGFloat(range.count)
+        } else {
+          index <= at ? 0 : 1
+        }
+      let base = CGPoint(
+        x: character.start.x + (character.end.x - character.start.x) * progress,
+        y: character.start.y + (character.end.y - character.start.y) * progress)
+      let path = CGMutablePath()
+      path.move(to: CGPoint(x: base.x + character.ascent.x, y: base.y + character.ascent.y))
+      path.addLine(to: CGPoint(x: base.x + character.descent.x, y: base.y + character.descent.y))
+      return path
+    }
+
+    /// The characters of the typographic character that a character is in,
+    /// such as the characters of a ligature, which have the same geometry.
+    private func cluster(of index: Int) -> Range<Int> {
+      var lower = index
+      while lower > 0, characters[lower - 1].isRendered, characters[lower - 1] == characters[index] { lower -= 1 }
+      var upper = index + 1
+      while upper < characters.count, characters[upper] == characters[index] { upper += 1 }
+      return lower..<upper
+    }
+  }
+
+  /// Where a character of text is, in the user space of the text, as the
+  /// SVG DOM finds it for the typographic character of the character.
+  ///
+  /// A character in a ligature has the geometry of the ligature, as the
+  /// other characters of the ligature have.
+  public struct CharacterGeometry: Equatable, Sendable {
+    /// The point on the baseline where the character starts, as the DOM's
+    /// `getStartPositionOfChar()` finds it: the left end of the character in
+    /// left-to-right text, its right end in right-to-left text, and its top in
+    /// vertical text.
+    public let start: CGPoint
+    /// The point on the baseline where the character ends, after its
+    /// advance, as the DOM's `getEndPositionOfChar()` finds it.
+    public let end: CGPoint
+    /// The bounding box of the cell of the character, as the DOM's
+    /// `getExtentOfChar()` finds it: its advance along the line by the ascent
+    /// and the descent of its font, turned with the character.
+    public let extent: CGRect
+    /// The angle of the direction that the character advances in, in
+    /// radians, as the DOM's `getRotationOfChar()` finds it in degrees. It
+    /// has the `rotate` of the character and the direction of a path that
+    /// it's on, and is a quarter turn for a character that's turned with a
+    /// vertical line, and zero for one that stands upright in it.
+    public let angle: CGFloat
+    /// Whether the character is rendered. A character in a `textPath`
+    /// element whose middle isn't on the path isn't, and it's where the
+    /// character before it ends, with no size.
+    public let isRendered: Bool
+    /// The corners of the cell, in order around it.
+    let corners: [CGPoint]
+    /// How far the top and the bottom of the cell are from the baseline.
+    let ascent: CGPoint
+    let descent: CGPoint
+
+    /// A character that isn't rendered, where another one ends.
+    init(notRenderedAfter previous: CharacterGeometry?) {
+      let point = previous?.end ?? .zero
+      start = point
+      end = point
+      extent = CGRect(origin: point, size: .zero)
+      angle = previous?.angle ?? 0
+      isRendered = false
+      corners = []
+      ascent = .zero
+      descent = .zero
+    }
+
+    init(_ geometry: SVGCore.CharacterGeometry) {
+      let path = CGMutablePath()
+      path.addLines(between: geometry.corners)
+      start = geometry.start
+      end = geometry.end
+      extent = path.boundingBoxOfPath
+      angle = geometry.angle
+      isRendered = true
+      corners = geometry.corners
+      ascent = geometry.ascent
+      descent = geometry.descent
+    }
+
+    /// Whether the cell has a point.
+    func contains(_ point: CGPoint) -> Bool {
+      guard isRendered, corners.count == 4 else { return false }
+      let path = CGMutablePath()
+      path.addLines(between: corners)
+      path.closeSubpath()
+      return path.contains(point)
+    }
+
+    /// How far a point is from the bounding box of the cell.
+    func distance(to point: CGPoint) -> CGFloat {
+      let dx = max(extent.minX - point.x, 0, point.x - extent.maxX)
+      let dy = max(extent.minY - point.y, 0, point.y - extent.maxY)
+      return (dx * dx + dy * dy).squareRoot()
+    }
+  }
+
   /// A point along a shape, and the direction that the shape goes in there.
   public struct PathPoint: Equatable, Sendable {
     /// The point, in the user space of the shape.

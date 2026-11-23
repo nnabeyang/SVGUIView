@@ -97,10 +97,31 @@ struct TextLine {
   let spacings: [CGFloat]
 }
 
+/// Where a typographic character of text is, in the user space, as the SVG DOM finds it.
+package struct CharacterGeometry: Sendable, Equatable {
+  /// The point on the baseline where the character starts, which is its right end in right-to-left text.
+  package let start: CGPoint
+  /// The point on the baseline where the character ends, after its advance.
+  package let end: CGPoint
+  /// The corners of the cell of the character, as high as the ascent and the descent of its font, in order around it.
+  package let corners: [CGPoint]
+  /// The angle of the direction of the advance of the character, or of its outline where it stands upright in
+  /// vertical text, in radians.
+  package let angle: CGFloat
+  /// How far the top of the cell is from the baseline, across the line, which a caret goes up to.
+  package let ascent: CGPoint
+  /// How far the bottom of the cell is from the baseline, across the line, which a caret goes down to.
+  package let descent: CGPoint
+}
+
 /// A glyph of text and where it's drawn.
 struct PlacedGlyph {
   /// The element of the character of the glyph, as an index into the elements of the text.
   var owner = 0
+  /// The first character of the glyph, as an index into the characters of the text.
+  var character = 0
+  /// Whether the glyph is in a right-to-left run, where its character starts at its right end.
+  var isRightToLeft = false
   var font: CTFont? = nil
   var glyph = CGGlyph()
   /// The transform from the coordinates of the line, with the origin at the origin of the glyph, to the user space.
@@ -247,6 +268,11 @@ struct TextLayout {
   private let metrics: [Int: (ascent: CGFloat, descent: CGFloat)]
   /// The bounds of text without glyphs, at the current text position.
   private let emptyFrame: CGRect
+  /// The characters whose glyphs aren't placed, because their middles aren't on their paths. The other characters
+  /// without glyphs are in the glyphs of the characters before them, such as in a ligature.
+  private let unplacedCharacters: Set<Int>
+  /// How far across the line the glyphs of each element are drawn from the current text position, in the user space.
+  private let baselineOffsets: [CGFloat]
 
   /// - Parameters:
   ///   - characters: The characters, with their white space processed and their positions.
@@ -344,6 +370,7 @@ struct TextLayout {
       }
     }
     self.metrics = metrics
+    self.baselineOffsets = baselineOffsets
     emptyFrame = CGRect(x: 0, y: baselineOffsets.first ?? 0, width: 0, height: 0)
     // The position of each character in the line, in the user space, which is the start of its glyphs: their left
     // end, or their right end in a right-to-left run, as SVG 2 has the advances of right-to-left characters go left.
@@ -460,6 +487,7 @@ struct TextLayout {
     where index + 1 == lineGlyphs.count || lineGlyphs[index + 1].character != glyph.character {
       lastGlyphs.insert(index)
     }
+    var unplacedCharacters = Set<Int>()
     glyphs = lineGlyphs.enumerated().compactMap { index, glyph in
       let character = characters[glyph.character]
       let chunk = chunkOfCharacter[glyph.character]
@@ -524,7 +552,10 @@ struct TextLayout {
             let onPath = Self.place(
               at: middle, on: path, advance: glyph.inlineAdvance, stretch: stretch, frame: frame.concatenating(toPath),
               outline: outline?.concatenating(toPath), textScale: textScale)
-          else { return nil }
+          else {
+            unplacedCharacters.insert(glyph.character)
+            return nil
+          }
           placed = onPath
         } else {
           placed = PlacedGlyph(
@@ -538,7 +569,10 @@ struct TextLayout {
           let onPath = Self.place(
             at: middle, on: path, advance: glyph.advance, stretch: stretch, transform: local, y: ys[glyph.character],
             textScale: textScale)
-        else { return nil }
+        else {
+          unplacedCharacters.insert(glyph.character)
+          return nil
+        }
         placed = onPath
       } else {
         placed = PlacedGlyph(
@@ -547,10 +581,13 @@ struct TextLayout {
           advance: glyph.advance + addedSpace, isStraight: character.rotate == nil)
       }
       placed.owner = character.owner
+      placed.character = glyph.character
+      placed.isRightToLeft = glyph.isRightToLeft
       placed.font = glyph.font
       placed.glyph = glyph.glyph
       return placed
     }
+    self.unplacedCharacters = unplacedCharacters
   }
 
   /// A glyph of the line for `textLength`: its character, and where it starts along the line and its advance, in the
@@ -704,6 +741,74 @@ struct TextLayout {
       warp: path.stretches
         ? GlyphWarp(
           measure: measure, transform: transform, start: distance - halfAdvance, y: y, textScale: textScale) : nil)
+  }
+
+  /// The geometry of each character of the text, as the SVG DOM finds it for the typographic character of the
+  /// character, or `nil` for a character that isn't rendered, such as one whose glyph's middle isn't on its path.
+  ///
+  /// A character in a typographic character with others, such as the characters of a ligature, has the geometry of
+  /// the typographic character.
+  ///
+  /// - Parameter count: The number of characters of the text.
+  func characterGeometry(count: Int) -> [CharacterGeometry?] {
+    var glyphsOfCharacters = [[PlacedGlyph]](repeating: [], count: count)
+    for glyph in glyphs where glyphsOfCharacters.indices.contains(glyph.character) {
+      glyphsOfCharacters[glyph.character].append(glyph)
+    }
+    var result = [CharacterGeometry?](repeating: nil, count: count)
+    for index in 0..<count {
+      let placed = glyphsOfCharacters[index]
+      guard let first = placed.first, let last = placed.last else {
+        // A character without glyphs of its own is in the typographic character before it, unless its glyphs
+        // aren't placed.
+        if !unplacedCharacters.contains(index), index > 0 {
+          result[index] = result[index - 1]
+        }
+        continue
+      }
+      let (ascent, descent) = metrics[first.owner] ?? (0, 0)
+      func point(_ glyph: PlacedGlyph, _ x: CGFloat, _ y: CGFloat) -> CGPoint {
+        let point = CGPoint(x: x, y: y)
+        return glyph.warp?.point(point) ?? point.applying(glyph.transform)
+      }
+      // The direction of the line at the glyph, and of the outline of a glyph that stands upright.
+      func direction(of transform: CGAffineTransform) -> CGPoint {
+        if let warp = first.warp {
+          let from = warp.point(.zero)
+          let to = warp.point(CGPoint(x: max(first.advance, 1), y: 0))
+          return CGPoint(x: to.x - from.x, y: to.y - from.y)
+        }
+        return CGPoint(x: transform.a, y: transform.b)
+      }
+      let line = direction(of: first.transform)
+      let length = (line.x * line.x + line.y * line.y).squareRoot()
+      // The baselines move the glyphs across the line from the current text position, which the characters are
+      // aligned at.
+      let offset = baselineOffsets.indices.contains(first.owner) ? baselineOffsets[first.owner] : 0
+      let shift =
+        length > 0 ? CGPoint(x: -line.y / length * offset, y: line.x / length * offset) : .zero
+      func aligned(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x - shift.x, y: point.y - shift.y)
+      }
+      // The glyphs are in the order of the line, so the first one is at the left of a right-to-left run.
+      let (leading, trailing) = first.isRightToLeft ? (last, first) : (first, last)
+      let start = aligned(point(leading, leading.isRightToLeft ? leading.advance : 0, 0))
+      let end = aligned(point(trailing, trailing.isRightToLeft ? 0 : trailing.advance, 0))
+      let corners = [
+        point(first, 0, -descent), point(last, last.advance, -descent), point(last, last.advance, ascent),
+        point(first, 0, ascent),
+      ]
+      let axis = direction(of: first.outline ?? first.transform)
+      // The caret goes from the bottom to the top of the cell, across the line from the start of the character.
+      let origin = aligned(point(first, 0, 0))
+      let top = point(first, 0, ascent)
+      let bottom = point(first, 0, -descent)
+      result[index] = CharacterGeometry(
+        start: start, end: end, corners: corners, angle: atan2(axis.y, axis.x),
+        ascent: CGPoint(x: top.x - origin.x, y: top.y - origin.y),
+        descent: CGPoint(x: bottom.x - origin.x, y: bottom.y - origin.y))
+    }
+    return result
   }
 
   /// The cells of the glyphs of the owners, or of every glyph: the advance of each glyph by the ascent and the

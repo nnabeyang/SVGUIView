@@ -237,6 +237,8 @@ of those rules and for the features that SVGUIView doesn't support.
 - ``SVGDocument/Element``
 - ``SVGDocument/ElementSnapshot``
 - ``SVGDocument/PathPoint``
+- ``SVGDocument/TextLayout``
+- ``SVGDocument/CharacterGeometry``
 - ``SVGDocument/Animation``
 
 ### Configuring rendering

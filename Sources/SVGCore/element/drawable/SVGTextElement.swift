@@ -628,6 +628,34 @@ final class SVGTextElement: ShapeGeometry {
     return (path, frame)
   }
 
+  /// The characters that the text or one of its spans renders, with their white space processed, and where each of
+  /// them is in the user space of the text, or `nil` for a character that isn't rendered, or `nil` if the text has no
+  /// such span.
+  ///
+  /// The characters of a span are its own and the ones of the spans in it. A span with `display: none` has none.
+  ///
+  /// - Parameter span: A `<tspan>` or `<textPath>` element of the text, or `nil` for the text itself.
+  func characterGeometry(
+    of span: ElementID?, in context: any GeometryContext
+  ) -> (text: [Character], characters: [CharacterGeometry?])? {
+    let (content, paths) = renderedContent(in: context)
+    let range: Range<Int>
+    if let span {
+      guard let index = content.owners.firstIndex(where: { $0?.base.elementID == span }) else {
+        return ([], [])
+      }
+      range = content.ranges[index]
+    } else {
+      range = content.characters.indices
+    }
+    let text = content.characters[range].map(\.character)
+    guard let layout = layout(of: content, paths: paths, context: context) else {
+      return (text, Array(repeating: nil, count: text.count))
+    }
+    let geometry = layout.characterGeometry(count: content.characters.count)
+    return (text, Array(geometry[range]))
+  }
+
   /// The outlines of the glyphs of the text and its `<tspan>` descendants, each glyph apart, and then the lines of
   /// their `text-decoration` as one path, which a clip path fills one by one with its clip rule, so that glyphs over
   /// each other don't cut holes in each other.
