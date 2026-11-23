@@ -197,6 +197,41 @@ such as one in a `<defs>` element or with `display: none`, has the geometry
 that it would have if it were rendered. The geometry depends on the size and
 the content mode of the view, so read it again when they change.
 
+### Measuring shapes
+
+An app places things along a shape, or lets a finger slide along it, with
+two methods that measure a `<path>` element or a basic shape, such as a
+`<circle>`, as the DOM's `getTotalLength()` and `getPointAtLength()` do:
+
+- ``SVGDocument/Element/totalLength()`` reads the length of the shape.
+- ``SVGDocument/Element/point(atLength:)`` reads the point at a length along
+  the shape from its start, and the angle of the direction that the shape
+  goes in there.
+
+```swift
+// Places a mark at the middle of a path, turned along it.
+if let length = path.totalLength(),
+  let point = path.point(atLength: length / 2) {
+  mark.setAttribute(
+    "transform",
+    to: "translate(\(point.location.x) \(point.location.y)) rotate(\(point.angle * 180 / .pi))")
+}
+```
+
+The points are in the user space of the shape, as the shapes that
+``SVGDocument/Element/path()`` reads are. The `pathLength` attribute of the
+shape doesn't change the lengths, as it doesn't in the DOM. A basic shape
+starts and goes as SVG 2 specifies its path: a `<circle>` starts at the right
+of its center and goes clockwise. The curves are measured as text on a path
+and motion along a path measure them, as many short lines, so the length of
+a curve differs a little from its exact length.
+
+Unlike the methods that read the geometry, the two methods return at once.
+They measure the shape on the main actor, with every change made so far, at
+the time that the view displays. Its percentages are resolved with the size
+of the view, so they return `nil` for an element that the view doesn't show,
+and for an element that isn't a `<path>` element or a basic shape.
+
 ### Finding the element at a point
 
 ``SVGDocument/element(at:tolerance:)`` finds the frontmost element at a point

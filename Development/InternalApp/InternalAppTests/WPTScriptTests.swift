@@ -132,6 +132,23 @@ struct WPTScriptTests {
     #expect(view.document.rootElement?.attribute("data-values") == "rgb(255, 0, 0) 2px 1")
   }
 
+  @Test("getTotalLength and getPointAtLength measure a shape, and throw for an element without a path")
+  func pathLength() async throws {
+    let (view, runner) = try await run(
+      """
+      <path id="p" d="M 10 10 H 40 V 50" pathLength="1"/>
+      <script>
+        const path = document.getElementById("p");
+        const point = path.getPointAtLength(40);
+        let thrown = "none";
+        try { document.documentElement.getPointAtLength(0); } catch (error) { thrown = "thrown"; }
+        document.documentElement.setAttribute("data-values", [path.getTotalLength(), point.x, point.y, thrown].join(" "));
+      </script>
+      """)
+    #expect(runner.errors.isEmpty, "\(runner.errors)")
+    #expect(view.document.rootElement?.attribute("data-values") == "70 40 20 thrown")
+  }
+
   @Test("setCurrentTime moves the time of the animations, which beginElement begins at")
   func time() async throws {
     let (view, runner) = try await run(

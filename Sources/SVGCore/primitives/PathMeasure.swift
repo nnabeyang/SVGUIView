@@ -5,7 +5,7 @@ import Foundation
 /// `<animateMotion>` moves an element along a path.
 ///
 /// A moveto in the middle of the path jumps to its point without adding to the distance.
-struct PathMeasure: Sendable {
+package struct PathMeasure: Sendable {
   /// A line of the flattened path.
   private struct Segment: Sendable {
     let start: CGPoint
@@ -26,7 +26,7 @@ struct PathMeasure: Sendable {
   private(set) var isClosed = false
 
   /// The length of the path.
-  var length: Double { segments.last?.distance ?? 0 }
+  package var length: Double { segments.last?.distance ?? 0 }
 
   /// The number of lines that each curve is divided into.
   private static let curveSteps = 64
@@ -142,7 +142,7 @@ struct PathMeasure: Sendable {
 
   /// The point at a distance along the path, which is clamped to the path, and the angle in degrees of the
   /// direction that the path goes in there, or `nil` for path data without a moveto.
-  func point(atDistance distance: Double) -> (point: CGPoint, angle: Double)? {
+  package func point(atDistance distance: Double) -> (point: CGPoint, angle: Double)? {
     guard start != nil else { return nil }
     return point(onPathAt: min(max(distance, 0), length))
   }
