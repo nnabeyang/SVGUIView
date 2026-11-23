@@ -364,6 +364,44 @@ animations give attributes aren't written, while the animation elements are.
 A reference to another file, such as the `href` of an `<image>`, is written as
 it is, so a relative one refers to a file next to where the document is saved.
 
+### Copying and pasting elements
+
+``SVGDocument/Element/svgData()`` writes an element and its descendants as an
+SVG document that renders them alone, which an app puts on the pasteboard.
+``SVGDocument/Element/append(svgData:)`` and
+``SVGDocument/Element/insert(svgData:before:)`` insert the elements of SVG
+data into a document, which an app takes from the pasteboard:
+
+```swift
+// Copies the selected shape.
+UIPasteboard.general.setData(shape.svgData(), forPasteboardType: UTType.svg.identifier)
+
+// Pastes it into a layer, in this document or in another one.
+if let data = UIPasteboard.general.data(forPasteboardType: UTType.svg.identifier) {
+  let pasted = try layer.append(svgData: data)
+  select(pasted)
+}
+```
+
+The written document has the elements that the element references, such as
+the gradient of its `fill`, its clip path or the element that a `<use>` shows,
+in a `<defs>` element, so that it renders the same in another document or in
+another app. Its root has the size and the view box of the root element. The
+element is in the user space of its parent: the transforms of its ancestors
+aren't written, nor the rules of the style sheets, which apply only where the
+same rules do.
+
+Pasting the data inserts the `<defs>` element and the element. The data can
+also be SVG elements written one after another, without namespace
+declarations, such as `<rect width="10" height="10"/><circle r="5"/>`. The
+identifiers of the inserted elements are kept as they are, also where the
+document already has them, as the DOM keeps them: a reference finds the first
+element with the identifier in document order, so pasting the same element
+twice renders the same, and an app that wants the copies apart changes their
+`id` attributes. A `<style>` element that the data has applies its rules to the
+whole document. Data that isn't well-formed XML throws
+``SVGDocument/SVGDataError`` and changes nothing.
+
 ### Starting transitions
 
 A change starts CSS transitions of the properties whose values it changes, as

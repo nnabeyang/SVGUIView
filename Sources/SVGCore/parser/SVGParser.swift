@@ -111,6 +111,8 @@ package final class SVGParser: NSObject {
   private var stack = [OpenElement]()
   private var root: DocumentElement?
   private var elementCount = 0
+  /// Whether the errors of the XML are logged, which they aren't for data that's tried in more than one way.
+  private var logsErrors = true
   /// The namespaces that each prefix is bound to, innermost last, or `nil` for a namespace other than SVG and XLink.
   private var nameSpaces = [String: [SVGXmlNameSpace?]]()
 
@@ -129,6 +131,36 @@ package final class SVGParser: NSObject {
     parser.parse()
     return SVGBaseContext(
       document: DocumentTree(root: root, languages: languages), stylesheet: styleSources.stylesheet)
+  }
+
+  /// Parses SVG data to insert into a document: the children of the root of an SVG document whose root is an `svg`
+  /// element, or else elements that are written one after another, which are parsed as the children of an `svg`
+  /// element that declares the SVG and XLink namespaces. Returns `nil` for data that's neither.
+  ///
+  /// - Parameters:
+  ///   - firstIdentifier: The raw value of the identifier of the first element, which the elements are numbered
+  ///     from, so that they don't have the identifiers of the elements of the document.
+  ///   - languages: The languages of the user, in the order of preference, which `systemLanguage` matches.
+  /// - Returns: A tree whose root is the `svg` element, whose children are the elements to insert.
+  package static func parseFragment(data: Data, firstIdentifier: Int, languages: [String]) -> DocumentTree? {
+    func parse(_ data: Data) -> DocumentTree? {
+      let parser = SVGParser()
+      parser.elementCount = firstIdentifier
+      parser.logsErrors = false
+      let xml = XMLParser(data: data)
+      xml.shouldProcessNamespaces = true
+      xml.shouldReportNamespacePrefixes = true
+      xml.delegate = parser
+      guard xml.parse(), let root = parser.root else { return nil }
+      return DocumentTree(root: root, languages: languages)
+    }
+    if let tree = parse(data), let root = tree.root, root.name == .svg {
+      return tree
+    }
+    let wrapped =
+      Data(#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">"#.utf8) + data
+      + Data("</svg>".utf8)
+    return parse(wrapped)
   }
 
   private func parse(data: Data, languages: [String]) -> SVGBaseContext {
@@ -248,6 +280,7 @@ extension SVGParser: XMLParserDelegate {
   }
 
   package func parser(_: XMLParser, parseErrorOccurred parseError: any Error) {
+    guard logsErrors else { return }
     Self.logger.error("\(parseError.localizedDescription)")
   }
 }

@@ -18,6 +18,115 @@ extension DocumentTree {
     return Data(xml.utf8)
   }
 
+  /// An element and its descendants as an SVG document that renders them alone, as UTF-8 XML, or `nil` if the document
+  /// has no such element.
+  ///
+  /// The root of the written document is an `svg` element with the `width`, `height`, `viewBox` and
+  /// `preserveAspectRatio` of the root of this document, if it's an `svg` element. Its children are a `<defs>` element
+  /// with the elements that the element and its descendants reference, if they reference any, and then the element.
+  /// The references are the fragment identifiers of `url()` in the attributes, such as a `fill` or a `style`, and of
+  /// `href` and `xlink:href`, found again in the referenced elements. A referenced element is written with its
+  /// descendants, unless it's the element, one of its descendants or ancestors, or in another referenced element, and
+  /// the referenced elements are in document order. The root element of the document is written as ``xmlData()``
+  /// writes it, when it's an `svg` element. The attributes are written as ``xmlData()`` writes them.
+  package func xmlData(of id: ElementID) -> Data? {
+    guard let root, let element = cursor(at: id)?.element else { return nil }
+    if element === root, root.name == .svg {
+      return xmlData()
+    }
+    // The first element of each identifier in document order, which a reference finds.
+    var identified = [String: DocumentElement]()
+    func identify(_ element: DocumentElement) {
+      if let value = element.writtenAttributes["id"], identified[value] == nil {
+        identified[value] = element
+      }
+      element.children.forEach(identify)
+    }
+    identify(root)
+    var referenced = Set<ElementID>()
+    var pending = [element]
+    while let next = pending.popLast() {
+      for target in Self.references(in: next) {
+        guard let found = identified[target], !referenced.contains(found.id),
+          !isElement(found.id, inSubtreeOf: id), !isElement(id, inSubtreeOf: found.id)
+        else { continue }
+        referenced.insert(found.id)
+        pending.append(found)
+      }
+    }
+    // The outermost referenced elements, in document order.
+    var definitions = [DocumentElement]()
+    func collect(_ element: DocumentElement) {
+      if referenced.contains(element.id) {
+        definitions.append(element)
+        return
+      }
+      element.children.forEach(collect)
+    }
+    collect(root)
+    var xml = #"<?xml version="1.0" encoding="UTF-8"?>"# + "\n"
+    xml += #"<svg xmlns=""# + Self.svgNamespace + #"""#
+    if Self.hasXLinkAttribute(element) || definitions.contains(where: Self.hasXLinkAttribute) {
+      xml += #" xmlns:xlink="http://www.w3.org/1999/xlink""#
+    }
+    if root.name == .svg {
+      for name in ["height", "preserveAspectRatio", "viewBox", "width"] {
+        guard let value = root.writtenAttributes[name] else { continue }
+        xml += " " + name + #"=""# + Self.escapedAttribute(value) + #"""#
+      }
+    }
+    xml += ">"
+    if !definitions.isEmpty {
+      xml += "<defs>"
+      for definition in definitions {
+        Self.write(definition, parentNamespace: Self.svgNamespace, isRoot: false, into: &xml)
+      }
+      xml += "</defs>"
+    }
+    Self.write(element, parentNamespace: Self.svgNamespace, isRoot: false, into: &xml)
+    xml += "</svg>"
+    return Data(xml.utf8)
+  }
+
+  /// The fragment identifiers that an element and its descendants reference with `url()` in their attributes and
+  /// with `href` and `xlink:href`.
+  private static func references(in element: DocumentElement) -> [String] {
+    var found = [String]()
+    func visit(_ element: DocumentElement) {
+      for (name, value) in element.writtenAttributes {
+        if name == "href" || name == "xlink:href" {
+          let trimmed = value.trimmingCharacters(in: .whitespaces)
+          if trimmed.hasPrefix("#"), trimmed.count > 1 {
+            found.append(String(trimmed.dropFirst()))
+          }
+        }
+        found += urlFragments(in: value)
+      }
+      element.children.forEach(visit)
+    }
+    visit(element)
+    return found
+  }
+
+  /// The fragment identifiers of the `url()` in a value, quoted or not.
+  private static func urlFragments(in value: String) -> [String] {
+    var found = [String]()
+    var rest = value[...]
+    while let start = rest.range(of: "url(", options: .caseInsensitive) {
+      rest = rest[start.upperBound...].drop { $0.isWhitespace }
+      if let quote = rest.first, quote == "\"" || quote == "'" {
+        rest = rest.dropFirst()
+      }
+      guard rest.first == "#" else { continue }
+      let identifier = rest.dropFirst().prefix { !"\"')".contains($0) && !$0.isWhitespace }
+      if !identifier.isEmpty {
+        found.append(String(identifier))
+      }
+      rest = rest.dropFirst(identifier.count + 1)
+    }
+    return found
+  }
+
   private static let svgNamespace = "http://www.w3.org/2000/svg"
 
   /// Whether the element or one of its descendants has an attribute of the XLink namespace, which the root then
