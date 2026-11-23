@@ -56,6 +56,8 @@ struct DocumentAPITests {
     #expect(try document.querySelectorAll(".a, circle").map { $0.attribute("id") } == ["g", "c1", "c2"])
     #expect(try document.querySelector("circle")?.attribute("id") == "c1")
     #expect(try document.querySelector("line") == nil)
+    #expect(try document.querySelectorAll(":nth-child(odd of .a)").map { $0.attribute("id") } == ["g"])
+    #expect(try document.querySelectorAll(":nth-last-child(1 of .a)").map { $0.attribute("id") } == ["c2"])
     let g = try #require(document.element(id: "g"))
     #expect(try g.querySelectorAll("circle").map { $0.attribute("id") } == ["c1"])
     #expect(try g.querySelector(".a") == nil)

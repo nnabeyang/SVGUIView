@@ -43,7 +43,7 @@ extension SelectorParser: _SelectorParser.Parser {
   }
 
   func parseNthChildOf() -> Bool {
-    false
+    true
   }
 
   func parseIsAndWhere() -> Bool {

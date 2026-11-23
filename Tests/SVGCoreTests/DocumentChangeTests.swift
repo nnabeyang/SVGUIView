@@ -86,6 +86,20 @@ struct DocumentChangeTests {
       #"<style>.a ~ rect { fill: lime }</style><rect width="50" height="50"/>"#
         + #"<rect id="b" width="10" height="10" class="a"/>"#
     ),
+    // A change changes the computed values of the later and earlier siblings, and their descendants, that
+    // `:nth-child()` and `:nth-last-child()` with selectors after `of` count.
+    (
+      #"<style>:nth-child(1 of .c) { fill: lime }</style><rect id="a" class="c" width="10" height="10"/>"#
+        + #"<rect class="c" width="50" height="50"/>"#, ("a", "class", "d"),
+      #"<style>:nth-child(1 of .c) { fill: lime }</style><rect id="a" class="d" width="10" height="10"/>"#
+        + #"<rect class="c" width="50" height="50"/>"#
+    ),
+    (
+      #"<style>:nth-last-child(1 of .c) > rect { fill: lime }</style><g class="c"><rect width="50" height="50"/></g>"#
+        + #"<rect id="b" class="c" width="10" height="10"/>"#, ("b", "class", "d"),
+      #"<style>:nth-last-child(1 of .c) > rect { fill: lime }</style><g class="c"><rect width="50" height="50"/></g>"#
+        + #"<rect id="b" class="d" width="10" height="10"/>"#
+    ),
     // The elements that references find are the changed ones.
     (
       ##"<linearGradient id="g"><stop id="s" stop-color="red"/></linearGradient>"##

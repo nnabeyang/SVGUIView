@@ -167,6 +167,16 @@ struct CascadeTests {
     #expect(cascade(element: element, stylesheet: stylesheet(css)).declared(WidthProperty.self) == .pixel(200))
   }
 
+  @Test("the specificity of :nth-child() with selectors after of is a pseudo-class and the most specific selector")
+  func nthChildOfSpecificity() {
+    let css = #"""
+      :nth-child(1 of #main, rect) { width: 200px;}
+      .container.wide { width: 100px;}
+      """#
+    let element = ElementCursor(root: documentElement(0, "rect", ["class": "container wide", "id": "main"]))
+    #expect(cascade(element: element, stylesheet: stylesheet(css)).declared(WidthProperty.self) == .pixel(200))
+  }
+
   @Test("rules of a later style element win over equal rules of an earlier one")
   func laterStyleElementWins() throws {
     let svg = #"""
