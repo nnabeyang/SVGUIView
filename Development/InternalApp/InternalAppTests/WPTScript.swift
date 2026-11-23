@@ -218,6 +218,10 @@ final class WPTScriptRunner {
       element(h)?.style.property(name) ?? ""
     }
     define("styleGet", styleGet)
+    let computed: @convention(block) (Int, String) -> String = { [unowned self] h, name in
+      element(h)?.computedStyle.property(name) ?? ""
+    }
+    define("computed", computed)
     let styleSet: @convention(block) (Int, String, String, String) -> Void = { [unowned self] h, name, value, priority in
       element(h)?.style.setProperty(name, to: value, priority: priority == "important" ? .important : .normal)
     }
@@ -323,6 +327,17 @@ final class WPTScriptRunner {
             else N.styleSet(handle, kebab(key), String(value), "");
             return true;
           },
+        });
+      }
+
+      // The style that getComputedStyle() gives, which reads the computed values and changes nothing.
+      function computedStyle(handle) {
+        return new Proxy({ getPropertyValue(name) { return N.computed(handle, name); } }, {
+          get(target, key) {
+            if (key in target) return target[key];
+            return typeof key === "string" ? N.computed(handle, kebab(key)) : undefined;
+          },
+          set() { return false; },
         });
       }
 
@@ -448,7 +463,7 @@ final class WPTScriptRunner {
         return timerID;
       };
       global.clearTimeout = (id) => { timers = timers.filter((timer) => timer.id !== id); };
-      global.getComputedStyle = (element) => element.style;
+      global.getComputedStyle = (element) => computedStyle(element.handle);
       global.addEventListener = (type, listener) => { if (type === "load") windowListeners.push(listener); };
       // The functions of /common/reftest-wait.js and /common/rendering-utils.js.
       global.takeScreenshot = () => document.documentElement.classList.remove("reftest-wait");
