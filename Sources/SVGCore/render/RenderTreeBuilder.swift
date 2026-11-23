@@ -42,6 +42,12 @@ package struct RenderTreeBuilder {
   private let imageViewBox: CGRect?
   /// How many SVG images the document is in, which limits the images in images.
   let imageDepth: Int
+  /// The time in seconds of the timeline of the document that the SVG images show their animations at.
+  let time: Double
+  /// The SVG images that the renderings of the document have parsed.
+  let imageDocuments: SVGImageDocuments
+  /// The SVG images whose animations change them, which the tree has.
+  let animatedImages = AnimatedImageCollector()
   /// Whether the shapes have the areas where they're hit, which a tree for hit testing needs, and the trees that are
   /// painted don't.
   package var collectsHitAreas = false
@@ -59,13 +65,17 @@ package struct RenderTreeBuilder {
   ///   - changed: The elements whose nodes can differ from the nodes of `previous` since the document changed, or
   ///     `nil` if it hasn't. The nodes of the other elements are reused, also in a document without animations.
   ///   - resources: Reads the files that the document references. By default, none is read.
+  ///   - time: The time in seconds of the timeline of the document, which the SVG images show their animations at.
+  ///   - imageDocuments: The SVG images that the renderings of the document have parsed, which the tree parses the
+  ///     others into. By default, the tree parses its images for itself.
   package init(
     base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache = .init(),
-    changed: Set<ElementID>? = nil, resources: ExternalResourceLoader = .none
+    changed: Set<ElementID>? = nil, resources: ExternalResourceLoader = .none, time: Double = 0,
+    imageDocuments: SVGImageDocuments = SVGImageDocuments()
   ) {
     self.init(
       base: base, viewPort: viewPort, scale: scale, reusing: previous, changed: changed, resources: resources,
-      imageFit: nil, imageViewBox: nil, imageDepth: 0)
+      imageFit: nil, imageViewBox: nil, imageDepth: 0, time: time, imageDocuments: imageDocuments)
   }
 
   /// The builder of a document in another file that a `<use>` element of the document of a builder shows.
@@ -78,15 +88,16 @@ package struct RenderTreeBuilder {
     self.init(
       base: base, viewPort: outer.viewPort, scale: outer.scale, reusing: .init(), changed: nil, resources: resources,
       imageFit: nil,
-      imageViewBox: nil, imageDepth: outer.imageDepth, documents: outer.documents, outer: OuterBuilder(outer),
-      documentChain: chain)
+      imageViewBox: nil, imageDepth: outer.imageDepth, time: outer.time, imageDocuments: outer.imageDocuments,
+      documents: outer.documents, outer: OuterBuilder(outer), documentChain: chain)
     collectsHitAreas = outer.collectsHitAreas
   }
 
   private init(
     base: SVGBaseContext, viewPort: CGRect, scale: CGFloat, reusing previous: RenderNodeCache,
     changed: Set<ElementID>?, resources: ExternalResourceLoader, imageFit: PreserveAspectRatio?, imageViewBox: CGRect?, imageDepth: Int,
-    documents: ExternalDocumentCollector = .init(), outer: OuterBuilder? = nil, documentChain: [URL]? = nil
+    time: Double, imageDocuments: SVGImageDocuments, documents: ExternalDocumentCollector = .init(),
+    outer: OuterBuilder? = nil, documentChain: [URL]? = nil
   ) {
     self.base = base
     self.viewPort = viewPort
@@ -97,6 +108,8 @@ package struct RenderTreeBuilder {
     self.imageFit = imageFit
     self.imageViewBox = imageViewBox
     self.imageDepth = imageDepth
+    self.time = time
+    self.imageDocuments = imageDocuments
     self.documents = documents
     self.outer = outer
     self.documentChain = documentChain ?? resources.resolvedBaseURL.map { [$0] } ?? []
@@ -117,7 +130,22 @@ package struct RenderTreeBuilder {
     }
     let root = await node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
     guard !Task.isCancelled else { return nil }
-    return RenderTree(rootTransforms: transforms, root: root, reusableNodes: reused.cache)
+    var tree = RenderTree(rootTransforms: transforms, root: root, reusableNodes: reused.cache)
+    tree.animatedImages = foundAnimatedImages(in: root)
+    return tree
+  }
+
+  /// The SVG images whose animations change them, of a tree whose root is a node.
+  private func foundAnimatedImages(in root: RenderNode?) -> AnimatedImages {
+    var found = AnimatedImages()
+    guard !animatedImages.hosts.isEmpty else { return found }
+    found.hosts = animatedImages.hosts
+    found.end = animatedImages.end
+    // The hosts that the nodes of the tree don't show are in paints, clip paths, masks or markers.
+    var shown = Set<ElementID>()
+    root?.elements(in: animatedImages.hosts, into: &shown, ancestors: &found.ancestors)
+    found.requiresFullRepaint = shown != animatedImages.hosts
+    return found
   }
 
   /// The render tree of an element and its descendants, and of its ancestors without their other children, in which
@@ -299,7 +327,11 @@ package struct RenderTreeBuilder {
       let stroke = await stroke(
         of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
       if let image = element as? SVGImageElement {
-        content = .image(await imagePaint(of: image, in: path.boundingBoxOfPath), stroke: stroke)
+        let paint = await imagePaint(of: image, in: path.boundingBoxOfPath)
+        if let end = paint?.animationEnd {
+          animatedImages.record(element.base.elementID, end: end)
+        }
+        content = .image(paint, stroke: stroke)
       } else {
         let fill = await fillPaint(
           of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
@@ -1088,7 +1120,8 @@ package struct RenderTreeBuilder {
   /// isn't an image, or is an SVG image deeper in SVG images than the ones that are drawn.
   ///
   /// The data is a data URL, or a file that the loader reads. It's decoded as a bitmap, or else parsed as an SVG
-  /// image: a document of its own, without animations, at time zero, which can't reference anything outside it.
+  /// image: a document of its own, which shows its animations at the time of the timeline of the document, and can't
+  /// reference anything outside it.
   private func imagePaint(of element: SVGImageElement, in rect: CGRect) async -> ImagePaint? {
     guard let image = await loadedImage(of: element) else { return nil }
     let clips =
@@ -1129,22 +1162,30 @@ package struct RenderTreeBuilder {
   ) async -> ImagePaint? {
     let content: ImageContent
     let viewBox: CGRect
+    var animationEnd: Double?
     switch image.content {
     case .bitmap(let bitmap, let imageOrientation):
       let turn = orientation == .fromImage ? imageOrientation : .up
       content = .bitmap(bitmap, orientation: turn)
       viewBox = CGRect(origin: .zero, size: LoadedImage.size(of: bitmap, in: turn))
-    case .document(let document):
+    case .document(let untimed, let end):
+      // The image shows its animations at the time of the timeline of the document.
+      let document = untimed.isAnimated ? untimed.at(time: time) : untimed
       guard let svg = document.root else { return nil }
       let builder = RenderTreeBuilder(
         base: document, viewPort: rect, scale: scale, reusing: .init(), changed: nil, resources: .none,
-        imageFit: preserveAspectRatio, imageViewBox: image.viewBox, imageDepth: imageDepth + 1)
+        imageFit: preserveAspectRatio, imageViewBox: image.viewBox, imageDepth: imageDepth + 1, time: time,
+        imageDocuments: imageDocuments)
       let context = ResolveContext(
         base: document, viewPort: rect, scale: scale, viewBox: CGRect(origin: .zero, size: rect.size))
       guard
         let node = await builder.node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
       else { return nil }
       content = .document(node)
+      // The image changes while its animations or the ones of the images in it do.
+      if untimed.isAnimated || !builder.animatedImages.hosts.isEmpty {
+        animationEnd = max(untimed.isAnimated ? end : 0, builder.animatedImages.end)
+      }
       // The image is placed by its natural aspect ratio, with its view box stretched to it.
       guard builder.viewBoxOfImage(svg).width > 0, builder.viewBoxOfImage(svg).height > 0 else { return nil }
       viewBox = builder.naturalBoxOfImage(svg)
@@ -1152,7 +1193,8 @@ package struct RenderTreeBuilder {
     let placed = viewBox.applying(preserveAspectRatio.getTransform(viewBox: viewBox, size: rect.size))
       .offsetBy(dx: rect.minX, dy: rect.minY)
     let clip: CGRect? = clips && !rect.contains(placed) ? rect : nil
-    return ImagePaint(content: content, rect: placed, clip: clip, interpolates: interpolates)
+    return ImagePaint(
+      content: content, rect: placed, clip: clip, interpolates: interpolates, animationEnd: animationEnd)
   }
 
   /// The view box of the root element of an SVG image: the one of the `<view>` that the URL of the image names, its

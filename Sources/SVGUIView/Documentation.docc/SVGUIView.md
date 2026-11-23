@@ -137,7 +137,10 @@ which are the `@keyframes` rules and the `animation-*` properties, and the SMIL
 animation elements `<animate>`, `<set>`, `<animateTransform>` and
 `<animateMotion>`. The time starts at zero when the document is loaded, and a
 view that doesn't play its animations displays the document at time zero. A
-document without animations looks the same at any time. SMIL begin and end
+document without animations looks the same at any time. The animations of an
+SVG image that an `<image>` or a `<feImage>` shows run too, at the time of the
+document, as the secure animated mode of SVG Integration has them, and the
+document's animations end where the images stop changing too. SMIL begin and end
 times that depend on user events, access keys or the wall clock never come by
 themselves, and `<animateColor>` is ignored.
 

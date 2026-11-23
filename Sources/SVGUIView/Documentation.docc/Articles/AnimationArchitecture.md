@@ -20,6 +20,13 @@ means it supports:
 - **SMIL animation:** the `<animate>`, `<set>`, `<animateTransform>` and
   `<animateMotion>` elements.
 
+These animations also run in the SVG images that `<image>` and `<feImage>`
+elements show, at the time of the document that shows them. A rendering finds
+the images whose animations change them, and the view then plays the document
+until they end, paints the elements that show them again at each frame, and
+paints every layer again where such an image is in a pattern, a mask, a clip
+path or a marker.
+
 JavaScript is out of scope. `<script>` elements and event handler attributes,
 such as `onclick`, are ignored. Instead, a Swift API lets an app read and change
 the document: it can change attributes, styles and classes, and control

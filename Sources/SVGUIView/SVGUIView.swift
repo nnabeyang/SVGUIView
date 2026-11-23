@@ -70,7 +70,9 @@ public class SVGUIView: UIView {
   private var appliesChangesForWaiters = false
   /// The time in seconds after which the document doesn't change, where the animations stop advancing, which is
   /// infinite for animations that don't end.
-  private var animationEnd: Double { loaded.animationEnd }
+  private var animationEnd: Double {
+    animatedImages.isEmpty ? loaded.animationEnd : max(loaded.animationEnd, animatedImages.end)
+  }
   /// Counts the data that the view loads, so that the data that ``setData(_:)`` parses isn't shown if newer data was
   /// given meanwhile.
   private var loadGeneration = 0
@@ -335,6 +337,13 @@ public class SVGUIView: UIView {
   public private(set) var baseURL: URL?
   /// The data of the files that the document has read, which the renderings of the document share.
   private var resourceCache = ExternalResourceCache()
+  /// The SVG images that the renderings of the document have parsed, which they share.
+  private var imageDocuments = SVGImageDocuments()
+  /// The SVG images of the document whose animations change them, which the latest rendering found. The view finds
+  /// them by rendering, since the images can be in files that only a rendering reads.
+  private var animatedImages = AnimatedImages()
+  /// The time of the frame in layers that the view shows, or `nil` if it shows an image.
+  private var shownFrameTime: Duration?
   /// Counts the documents that the view shows, so that the style sheets that a rendering read for a document aren't
   /// given to another one.
   private var documentGeneration = 0
@@ -416,6 +425,9 @@ public class SVGUIView: UIView {
     self.baseURL = baseURL
     // The files that another document refers to by the same URLs can be other files.
     resourceCache = ExternalResourceCache()
+    imageDocuments = SVGImageDocuments()
+    animatedImages = AnimatedImages()
+    shownFrameTime = nil
     self.loaded = loaded
     document = SVGDocument(tree: loaded.context.document)
     currentTime = .zero
@@ -588,7 +600,15 @@ public class SVGUIView: UIView {
     // so that the view shows what a snapshot of the frame shows.
     let promoted = rendersLayers ? promoted.union(changingElements) : nil
     renderedInLayers = promoted != nil
-    let painting = paintsFiltersIntoOwnLayers ? nil : painting
+    let images = imageDocuments
+    let animated = animatedImages
+    // The SVG images that animate make the frame differ from the one that the view shows, unless both are after the
+    // images stop changing.
+    let imagesChange =
+      !animated.isEmpty && shownFrameTime != time && min(shownFrameTime?.seconds ?? -1, time.seconds) < animated.end
+    let painting =
+      paintsFiltersIntoOwnLayers || animated.requiresFullRepaint && imagesChange
+      ? nil : imagesChange ? painting.union(animated.hosts) : painting
     let usesGPU = runsFiltersOnGPU && !isInBackground
     // The layers that the view shows are reused for the same size, data and content mode, where the changes of the
     // document since them leave them as they are.
@@ -620,7 +640,8 @@ public class SVGUIView: UIView {
           rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, promoted: promoted, painting: painting,
           usesGPU: usesGPU,
           previous: previous, previousNodes: previousNodes, previousStyled: previousStyled, changes: changes,
-          time: time, fit: fit, resources: resources, timeoutDuration: timeoutDuration)
+          time: time, fit: fit, resources: resources, imageDocuments: images, animatedImages: animated,
+          imagesChange: imagesChange, timeoutDuration: timeoutDuration)
         let result: Result<RenderedContainer, SVGRenderingError>
         switch rendered {
         case .success(.unchanged):
@@ -628,7 +649,7 @@ public class SVGUIView: UIView {
           Self.signposter.endInterval("Render", signpost, "unchanged")
           await target.finishRendering(ofRendering: generation) { $0.unchangedFrameCount += 1 }
           return
-        case .success(.changed(let layers, _, _, _)):
+        case .success(.changed(let layers, _, _, _, _)):
           result = .success(layers)
         case .failure(let error):
           result = .failure(error)
@@ -648,19 +669,21 @@ public class SVGUIView: UIView {
         }
         await target.finishRendering(ofRendering: generation) { view in
           view.showLayers(result)
-          if case .success(.changed(_, let nodes, let styled, let resolved)) = rendered {
+          if case .success(.changed(_, let nodes, let styled, let resolved, let found)) = rendered {
             view.adoptStyleSheets(of: resolved, ofDocument: document)
             view.shownNodes = nodes
             view.shownStyled = styled
             view.shownInputs = inputs
             view.shownContext = renderedContext
+            view.shownFrameTime = time
+            view.adoptAnimatedImages(found, ofDocument: document)
             view.changeLog.removeAll { $0.generation <= renderedContext.generation }
           }
         }
       } else {
         let result = await SVGUIView.makeImage(
           rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, time: time,
-          fit: fit, resources: resources, timeoutDuration: timeoutDuration
+          fit: fit, resources: resources, imageDocuments: images, timeoutDuration: timeoutDuration
         )
         switch result {
         case .success: Self.signposter.endInterval("Render", signpost, "painted")
@@ -669,6 +692,8 @@ public class SVGUIView: UIView {
         await target.finishRendering(ofRendering: generation) { view in
           if case .success(let rendered) = result {
             view.adoptStyleSheets(of: rendered.resolved, ofDocument: document)
+            view.shownFrameTime = nil
+            view.adoptAnimatedImages(rendered.animatedImages, ofDocument: document)
           }
           view.show(result.map(\.image))
           view.changeLog.removeAll { $0.generation <= renderedContext.generation }
@@ -1088,10 +1113,18 @@ public class SVGUIView: UIView {
     let document = documentGeneration
     let rendered = try await SVGUIView.makeImage(
       rect: rect, scale: scale, wideGamut: wideGamut, base: capturedBase, time: time,
-      fit: fit, resources: resourceLoader, timeoutDuration: timeoutDuration
+      fit: fit, resources: resourceLoader, imageDocuments: imageDocuments, timeoutDuration: timeoutDuration
     ).get()
     adoptStyleSheets(of: rendered.resolved, ofDocument: document)
     return rendered.image
+  }
+
+  /// Keeps the SVG images whose animations change them that a rendering of the document found, and plays the
+  /// animations until they end, unless the view shows another document since.
+  private func adoptAnimatedImages(_ found: AnimatedImages, ofDocument document: Int) {
+    guard document == documentGeneration, found != animatedImages else { return }
+    animatedImages = found
+    updatePlayback()
   }
 
   /// Keeps the context that a rendering made with the style sheets in other files that it read, so that the next
@@ -1145,6 +1178,7 @@ public class SVGUIView: UIView {
     time: Duration,
     fit: ContentFit,
     resources: ExternalResourceLoader,
+    imageDocuments: SVGImageDocuments,
     timeoutDuration: Duration
   ) async -> Result<RenderedImage, SVGRenderingError> {
     guard base.root != nil else { return .failure(.missingRootElement) }
@@ -1164,7 +1198,9 @@ public class SVGUIView: UIView {
       let signposter = Self.signposter
       let base = signposter.withIntervalSignpost("Style") { resolved.at(time: time.seconds) }
       let buildInterval = signposter.beginInterval("Build")
-      let builder = RenderTreeBuilder(base: base, viewPort: rect, scale: scale, resources: resources)
+      let builder = RenderTreeBuilder(
+        base: base, viewPort: rect, scale: scale, resources: resources, time: time.seconds,
+        imageDocuments: imageDocuments)
       let built = await builder.build(fit: fit)
       signposter.endInterval("Build", buildInterval)
       guard let tree = built else { return nil }
@@ -1180,7 +1216,9 @@ public class SVGUIView: UIView {
       guard !Task.isCancelled else { return nil }
       // Making the image copies the bitmap, which can fail as allocating it can.
       guard let image = graphics.makeImage() else { return .failure(.allocationFailed) }
-      return .success(RenderedImage(image: image, resolved: base.needsExternalStyleSheets ? resolved : nil))
+      return .success(
+        RenderedImage(
+          image: image, resolved: base.needsExternalStyleSheets ? resolved : nil, animatedImages: tree.animatedImages))
     }
     return rendered.flatMap { $0 }
   }
@@ -1190,7 +1228,7 @@ public class SVGUIView: UIView {
   @concurrent
   private static func makeElementImage(
     of element: ElementID, size: CGSize, scale: CGFloat, wideGamut: Bool, base: SVGBaseContext, time: Duration,
-    fit: ContentFit, resources: ExternalResourceLoader, timeoutDuration: Duration
+    fit: ContentFit, resources: ExternalResourceLoader, imageDocuments: SVGImageDocuments, timeoutDuration: Duration
   ) async -> Result<(snapshot: SVGDocument.ElementSnapshot?, resolved: SVGBaseContext?), SVGRenderingError> {
     guard base.root != nil else { return .failure(.missingRootElement) }
     guard (size.width * scale).rounded(.up) > 0, (size.height * scale).rounded(.up) > 0 else {
@@ -1207,7 +1245,8 @@ public class SVGUIView: UIView {
         ? await base.resolvingExternalStyleSheets(loader: resources, at: time.seconds) : base
       guard !Task.isCancelled else { return nil }
       let builder = RenderTreeBuilder(
-        base: styleSheets.at(time: time.seconds), viewPort: rect, scale: scale, resources: resources)
+        base: styleSheets.at(time: time.seconds), viewPort: rect, scale: scale, resources: resources,
+        time: time.seconds, imageDocuments: imageDocuments)
       guard let tree = await builder.build(along: element, fit: fit) else { return nil }
       let resolved = base.needsExternalStyleSheets ? styleSheets : nil
       guard let (node, transform) = tree.subtree(of: element) else { return .success((nil, resolved)) }
@@ -1250,6 +1289,8 @@ public class SVGUIView: UIView {
   private struct RenderedImage: Sendable {
     let image: CGImage
     let resolved: SVGBaseContext?
+    /// The SVG images whose animations change them.
+    let animatedImages: AnimatedImages
   }
 
   /// Renders the document at a time into layers: the layers of the elements whose transform or opacity changes, and
@@ -1280,6 +1321,9 @@ public class SVGUIView: UIView {
     time: Duration,
     fit: ContentFit,
     resources: ExternalResourceLoader,
+    imageDocuments: SVGImageDocuments,
+    animatedImages: AnimatedImages,
+    imagesChange: Bool,
     timeoutDuration: Duration
   ) async -> Result<LayerFrame, SVGRenderingError> {
     guard base.root != nil else { return .failure(.missingRootElement) }
@@ -1295,19 +1339,26 @@ public class SVGUIView: UIView {
       guard !Task.isCancelled else { return nil }
       let base = signposter.withIntervalSignpost("Style") { resolved.at(time: time.seconds) }
       // A frame whose animated values are the same as the frame that the view shows looks the same.
-      if let previousStyled, base.hasSameAnimatedValues(as: previousStyled) { return LayerFrame.unchanged }
+      if let previousStyled, !imagesChange, base.hasSameAnimatedValues(as: previousStyled) {
+        return LayerFrame.unchanged
+      }
       // The nodes and the painting of the elements that the changes of the document since the layers that the view
       // shows make again can differ from them, and every one can where the changes make every element again.
       let changed = changes.map { changes in
         signposter.withIntervalSignpost("Changes") { base.changedNodes(since: changes.context, by: changes.elements) }
       }
-      let reusesNodes = changed.map { $0 != nil } ?? true
+      // The nodes of the elements that show SVG images that animate are made again, and every node is where an image
+      // is drawn where no node shows it.
+      let reusesNodes = (changed.map { $0 != nil } ?? true) && !(imagesChange && animatedImages.requiresFullRepaint)
+      let changedNodes =
+        imagesChange
+        ? (changed??.nodes ?? []).union(animatedImages.hosts).union(animatedImages.ancestors) : changed??.nodes ?? []
       let buildInterval = signposter.beginInterval("Build")
       // The tree keeps the nodes that the next frame can reuse even where the document hasn't changed since the
       // layers that the view shows, as in the first frame of continuous changes, after one image.
       let tree = await RenderTreeBuilder(
         base: base, viewPort: rect, scale: scale, reusing: reusesNodes ? previousNodes : RenderNodeCache(),
-        changed: changed??.nodes ?? [], resources: resources
+        changed: changedNodes, resources: resources, time: time.seconds, imageDocuments: imageDocuments
       ).build(fit: fit)
       signposter.endInterval("Build", buildInterval)
       guard let tree else { return nil }
@@ -1329,7 +1380,7 @@ public class SVGUIView: UIView {
       else { return nil }
       return LayerFrame.changed(
         layers: layers, nodes: tree.reusableNodes, styled: base,
-        resolved: readsStyleSheets ? resolved : nil)
+        resolved: readsStyleSheets ? resolved : nil, animatedImages: tree.animatedImages)
     }
   }
 
@@ -1358,7 +1409,9 @@ public class SVGUIView: UIView {
   /// none for a frame that looks the same as the one that the view shows.
   private enum LayerFrame: Sendable {
     /// A frame, with the context with the style sheets in other files that the rendering read, or `nil`.
-    case changed(layers: RenderedContainer, nodes: RenderNodeCache, styled: SVGBaseContext, resolved: SVGBaseContext?)
+    case changed(
+      layers: RenderedContainer, nodes: RenderNodeCache, styled: SVGBaseContext, resolved: SVGBaseContext?,
+      animatedImages: AnimatedImages)
     case unchanged
   }
 }
@@ -1525,7 +1578,7 @@ extension SVGUIView: DocumentHost {
     let document = documentGeneration
     let rendered = try await Self.makeElementImage(
       of: element, size: rect.size, scale: scale ?? displayScale, wideGamut: displaysWideGamut, base: baseContext,
-      time: displayedTime, fit: ContentFit(contentMode), resources: resourceLoader,
+      time: displayedTime, fit: ContentFit(contentMode), resources: resourceLoader, imageDocuments: imageDocuments,
       timeoutDuration: configuration.timeoutDuration
     ).get()
     adoptStyleSheets(of: rendered.resolved, ofDocument: document)

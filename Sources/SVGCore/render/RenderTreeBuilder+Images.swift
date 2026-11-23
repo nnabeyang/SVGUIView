@@ -7,8 +7,9 @@ struct LoadedImage {
   enum Content {
     /// A bitmap, with its pixels as they're stored, and the orientation that its metadata gives.
     case bitmap(CGImage, orientation: CGImagePropertyOrientation)
-    /// An SVG image: a document of its own, without animations, at time zero.
-    case document(SVGBaseContext)
+    /// An SVG image: a document of its own, without the values of its animations, and the time in seconds after
+    /// which its animations don't change it.
+    case document(SVGBaseContext, animationEnd: Double)
   }
 
   let content: Content
@@ -76,7 +77,7 @@ extension LoadedImage {
       let size = Self.size(of: image, in: orientation == .fromImage ? imageOrientation : .up)
       return IntrinsicSize(
         width: size.width, height: size.height, ratio: size.height > 0 ? size.width / size.height : nil)
-    case .document(let document):
+    case .document(let document, _):
       return document.root?.intrinsicSize(viewBox: viewBox) ?? IntrinsicSize()
     }
   }
@@ -122,9 +123,12 @@ extension RenderTreeBuilder {
       return LoadedImage(content: .bitmap(image, orientation: orientation), viewBox: nil)
     }
     guard imageDepth < Self.maxImageDepth, let data = EmbeddedImage.svgData(of: data) else { return nil }
-    let document = SVGParser.parse(data: data, languages: base.document.languages)
+    let parsed = imageDocuments.document(of: data, languages: base.document.languages)
+    let document = parsed.context
     guard document.root != nil else { return nil }
-    return LoadedImage(content: .document(document), viewBox: fragment.flatMap { Self.viewBox(of: $0, in: document) })
+    return LoadedImage(
+      content: .document(document, animationEnd: parsed.animationEnd),
+      viewBox: fragment.flatMap { Self.viewBox(of: $0, in: document) })
   }
 
   /// The view box of the `<view>` element of an SVG image that a fragment names, or `nil` if it names none, or the
