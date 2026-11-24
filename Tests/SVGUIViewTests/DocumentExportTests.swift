@@ -110,6 +110,40 @@ struct DocumentExportTests {
     #expect(try !self.written(parsed).contains("xmlns:xlink"))
   }
 
+  @Test("an attribute of a name that the document can't write isn't set, and the document is parsed back")
+  func unwritableNames() throws {
+    let view = view(#"<svg xmlns="http://www.w3.org/2000/svg"><rect id="r"/></svg>"#)
+    let rect = try #require(view.document.element(id: "r"))
+    let unwritable = [
+      "foo:bar", "xmlns", "xmlns:foo", "xml:", ":x", "a:b:c", "", "has space", "1x", "-x", "a<b", "a=b", "a\"b",
+    ]
+    for name in unwritable {
+      rect.setAttribute(name, to: "1")
+      #expect(rect.attribute(name) == nil, "\(name)")
+    }
+    let writable = ["data-x", "xml:lang", "xml:space", "xlink:href", "x.1", "_x", "名前", "é"]
+    for name in writable {
+      rect.setAttribute(name, to: "v")
+      #expect(rect.attribute(name) == "v", "\(name)")
+    }
+    let xml = view.document.svgData()
+    let parser = XMLParser(data: xml)
+    parser.shouldProcessNamespaces = true
+    #expect(parser.parse(), "\(String(decoding: xml, as: UTF8.self))")
+    let parsed = self.view(String(decoding: xml, as: UTF8.self))
+    let again = try #require(parsed.document.element(id: "r"))
+    for name in ["data-x", "xml:lang", "xml:space", "xlink:href", "x.1", "_x", "名前", "é"] {
+      #expect(again.attribute(name) == "v", "\(name)")
+    }
+    // The document sets the attributes that it writes for its own changes.
+    let text = view.document.createElement("text")
+    text.textContent = "a"
+    text.style.setProperty("fill", to: "red")
+    text.classList.add("c")
+    #expect(text.attribute("style") != nil)
+    #expect(text.attribute("class") == "c")
+  }
+
   @Test("the white space that xml:space keeps is written as it is")
   func whiteSpace() throws {
     let view = view(

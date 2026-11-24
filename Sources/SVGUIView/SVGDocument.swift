@@ -285,8 +285,10 @@ public final class SVGDocument {
     tree(containing: id)?.attributes(of: id)?[name]
   }
 
-  /// Sets or removes an attribute, unless it already has the value.
+  /// Sets or removes an attribute, unless it already has the value. An attribute of a name that the document can't
+  /// write isn't set.
   fileprivate func setAttribute(_ name: String, to value: String?, of id: ElementID) {
+    if value != nil, !AttributeName.isWritable(name) { return }
     switch location(of: id) {
     case .connected:
       guard let attributes = tree.attributes(of: id), attributes[name] != value else { return }
@@ -596,6 +598,12 @@ extension SVGDocument.Element {
   }
 
   /// Sets the value of an attribute.
+  ///
+  /// The element doesn't get an attribute of a name that the document can't
+  /// write as XML, as a parsed document doesn't have one: a name with a
+  /// prefix other than `xml` and `xlink`, `xmlns` and the names with its
+  /// prefix, and a name that isn't a name of XML, such as one with a space
+  /// or one that starts with a digit.
   ///
   /// - Parameters:
   ///   - name: The name of the attribute, without a namespace. The `href` of
