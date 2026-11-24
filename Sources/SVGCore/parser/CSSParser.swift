@@ -237,12 +237,20 @@ enum StylesheetRule {
   case `import`(ExternalStyleSheet)
   /// An `@font-face` rule, which reads a font.
   case fontFace(FontFaceRule)
+  /// An `@namespace` rule, which the selectors of the rules after it use.
+  case namespace
   /// An at-rule that the style sheet ignores, such as `@keyframes` without a block.
   case ignored
 }
 
 struct CSSParser {
   private var input: _CSSParser.Parser
+  /// The namespaces that the `@namespace` rules declare, which the selectors of the style rules after them use.
+  private var namespaces = Namespaces.default()
+  /// Whether an `@namespace` rule declares a namespace, which it does before the other rules than `@import` rules, as
+  /// CSS Namespaces 3 says.
+  private var declaresNamespaces = true
+
   init(input: _CSSParser.Parser) {
     self.input = input
   }
@@ -254,7 +262,7 @@ struct CSSParser {
       switch rule {
       case .style(let rule): rules.append(rule)
       case .keyframes(let rule): keyframes[rule.name] = rule
-      case .import, .fontFace, .ignored: break
+      case .import, .fontFace, .namespace, .ignored: break
       }
     }
     return Stylesheet(rules: rules, keyframes: keyframes)
@@ -284,6 +292,9 @@ struct CSSParser {
       case .success(.fontFace(let rule)):
         rules.append(.fontFace(rule))
         importsAllowed = false
+      case .success(.namespace):
+        // `@import` rules come before `@namespace` rules.
+        importsAllowed = false
       case .success(.ignored), .failure:
         break
       }
@@ -305,6 +316,13 @@ extension CSSParser: AtRuleParser {
       // The prelude has nothing.
       guard input.isExhausted() else { return .failure(input.newCustomError(error: .invalid)) }
       return .success(.fontFace)
+    case "namespace":
+      // An optional prefix and the URL of the namespace, as a URL or a string.
+      let prefix = try? input.tryParse { $0.expectIdent() }.get()
+      guard case .success(let url) = input.expectUrlOrString(), input.isExhausted() else {
+        return .failure(input.newCustomError(error: .invalid))
+      }
+      return .success(.namespace(prefix: prefix, url: url))
     case "import":
       // The URL, and the media queries after it, which the rest of the prelude is.
       guard case .success(let url) = input.expectUrlOrString() else {
@@ -320,7 +338,24 @@ extension CSSParser: AtRuleParser {
   }
 
   mutating func ruleWithoutBlock(prelude: Prelude, start _: ParserState) -> StylesheetRule {
-    if case .import(let sheet) = prelude { .import(sheet) } else { .ignored }
+    switch prelude {
+    case .import(let sheet):
+      return .import(sheet)
+    case .namespace(let prefix, let url):
+      // An `@namespace` rule after the other rules is ignored.
+      guard declaresNamespaces else { return .ignored }
+      let namespace = Namespace(rawValue: url)
+      if let prefix {
+        var prefixes = namespaces.prefixes
+        prefixes[Prefix(rawValue: prefix)] = namespace
+        namespaces = Namespaces(default: namespaces.default, prefixes: prefixes)
+      } else {
+        namespaces = Namespaces(default: namespace, prefixes: namespaces.prefixes)
+      }
+      return .namespace
+    default:
+      return .ignored
+    }
   }
 
   mutating func parseBlock(
@@ -330,6 +365,7 @@ extension CSSParser: AtRuleParser {
       guard let rule = FontFaceRule(descriptors: FontFaceDescriptorParser.descriptors(in: &input)) else {
         return .failure(input.newCustomError(error: .invalid))
       }
+      declaresNamespaces = false
       return .success(.fontFace(rule))
     }
     guard case .keyframes(let name) = prelude else { return .failure(input.newCustomError(error: .invalid)) }
@@ -341,6 +377,7 @@ extension CSSParser: AtRuleParser {
     }
     // The block ends where the body parser stopped.
     input = bodyParser.input
+    declaresNamespaces = false
     return .success(.keyframes(KeyframesRule(name: name, keyframes: keyframes)))
   }
 }
@@ -370,6 +407,9 @@ extension CSSParser: QualifiedRuleParser {
     case `import`(ExternalStyleSheet)
     /// An `@font-face` rule, whose descriptors are in its block.
     case fontFace
+    /// An `@namespace` rule: the prefix that it declares, or `nil` for the default namespace, and the URL of the
+    /// namespace.
+    case namespace(prefix: String?, url: String)
   }
   typealias QualifiedRule = DeclOrRule
 
@@ -378,11 +418,12 @@ extension CSSParser: QualifiedRuleParser {
   ) -> Result<StylesheetRule, CSSParseError> {
     guard case .selectors(let selectors) = prelude else { return .failure(input.newCustomError(error: .invalid)) }
     let declarations = CSSDeclarationParser.declarations(in: &input)
+    declaresNamespaces = false
     return .success(.style(CSSRule(selectors: selectors, declarations: declarations, sourceOrder: 0)))
   }
 
   mutating func parseQualifiedPrelude(input: inout _CSSParser.Parser) -> Result<Prelude, CSSParseError> {
-    let selectorParser = SelectorParser(stylesheetOrigin: .author, namespaces: .default(), urlData: .init(URL(string: "https://example.com")!), forSupportsRule: false)
+    let selectorParser = SelectorParser(stylesheetOrigin: .author, namespaces: namespaces, urlData: .init(URL(string: "https://example.com")!), forSupportsRule: false)
     return SelectorList.parse(parser: selectorParser, input: &input, parseRelative: .no).map { .selectors($0) }
   }
 }

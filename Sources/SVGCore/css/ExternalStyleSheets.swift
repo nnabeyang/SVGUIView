@@ -50,7 +50,7 @@ struct StyleSheetSources: Sendable, Equatable {
         case .keyframes(let rule): keyframes.append(rule)
         case .import(let sheet): imports.append(sheet)
         case .fontFace(let rule): fontFaces.append(rule)
-        case .ignored: break
+        case .namespace, .ignored: break
         }
       }
     }
