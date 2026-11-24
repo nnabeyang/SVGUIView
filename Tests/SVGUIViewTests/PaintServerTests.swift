@@ -45,4 +45,20 @@ struct PaintServerTests {
     #expect(pattern == [0, 255, 0, 255], "\(pattern)")
     #expect(withoutFallback[3] == 0, "\(withoutFallback)")
   }
+
+  @Test("the viewBox of a pattern places its origin at the tile, before patternTransform scales the tile")
+  func patternViewBox() async throws {
+    // The viewBox starts at 10, where the red half of the content is.
+    let origin = try await pixel(
+      #"<pattern id="p" width="20" height="20" patternUnits="userSpaceOnUse" viewBox="10 0 20 20">"#
+        + #"<rect x="10" width="10" height="20" fill="red"/></pattern><rect width="20" height="20" fill="url(#p)"/>"#,
+      x: 5, y: 10)
+    #expect(origin == [255, 0, 0, 255], "\(origin)")
+    // A tile of 10, half red: the viewBox of 40 fits a tile of 20, which the transform scales by a half once.
+    let scaled = try await pixel(
+      #"<pattern id="p" width="20" height="20" patternUnits="userSpaceOnUse" viewBox="0 0 40 40""#
+        + #" patternTransform="scale(0.5)"><rect width="20" height="40" fill="red"/></pattern>"#
+        + #"<rect width="20" height="20" fill="url(#p)"/>"#, x: 4, y: 4)
+    #expect(scaled == [255, 0, 0, 255], "\(scaled)")
+  }
 }

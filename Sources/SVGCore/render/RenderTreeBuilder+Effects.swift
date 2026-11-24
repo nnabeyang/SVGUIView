@@ -271,7 +271,8 @@ extension RenderTreeBuilder {
   ) async -> PatternPaint? {
     let (pattern, references) = mergedPattern(pattern, guard: references)
     let transform = pattern.patternTransform?.matrix(box: context.viewBoxSize, context: context) ?? .identity
-    let tileSize = pattern.size(frame: frame, context: context).applying(transform.scale)
+    let size = pattern.size(frame: frame, context: context)
+    let tileSize = size.applying(transform.scale)
     guard CGContext.bitmapLayout(size: tileSize, scale: scale) != nil else { return nil }
 
     let contentUnits = pattern.viewBox != nil ? .userSpaceOnUse : (pattern.patternContentUnits ?? .userSpaceOnUse)
@@ -280,7 +281,8 @@ extension RenderTreeBuilder {
     switch contentUnits {
     case .userSpaceOnUse:
       if let patternViewBox = pattern.viewBox?.toCGRect() {
-        viewBoxTransform = pattern.getTransform(viewBox: patternViewBox, size: tileSize)
+        // The tile is drawn with the scale of `patternTransform`, so the viewBox is placed in the pattern before it.
+        viewBoxTransform = pattern.getTransform(viewBox: patternViewBox, size: size)
         viewBox = patternViewBox
       } else {
         viewBox = context.viewBox
