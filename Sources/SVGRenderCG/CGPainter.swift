@@ -597,14 +597,11 @@ package struct CGPainter {
       .scaledBy(x: scaleX, y: scaleY)
       .concatenating(graphics.ctm)
     if paintCells(of: tileImage, matrix: matrix, path: path, into: graphics) { return }
-    // A pattern of Core Graphics handles a cell at the pixels of the device, so a cell much larger than what shows,
-    // such as the tile of a pattern in a much enlarged space, can't be drawn that way.
-    let cell = CGRect(x: 0, y: 0, width: tileImage.width, height: tileImage.height).applying(matrix)
-    let visible = graphics.boundingBoxOfClipPath.intersection(path.boundingBoxOfPath).applying(graphics.ctm)
-    if !visible.isNull, Self.isLarger(cell.size, than: visible) {
-      paintLargeCells(of: tileImage, matrix: matrix, path: path, into: graphics)
-      return
-    }
+    // Cells under a rotation or a skew are put side by side into one image, so that the edges between them aren't
+    // antialiased, as a pattern of Core Graphics antialiases the edges of each cell. A pattern of Core Graphics also
+    // handles a cell at the pixels of the device, so a cell much larger than what shows, such as the tile of a pattern
+    // in a much enlarged space, can't be drawn that way.
+    if paintTransformedCells(of: tileImage, matrix: matrix, path: path, into: graphics) { return }
     guard
       let cgPattern = CGPattern(
         info: Unmanaged.passRetained(tileImage).toOpaque(),
@@ -726,54 +723,66 @@ package struct CGPainter {
     abs(cell.width) > visible.width || abs(cell.height) > visible.height
   }
 
-  /// Fills a path with the few cells of a pattern that are larger than what shows, under a rotation or a skew.
+  /// Fills a path with the cells of a pattern under a rotation or a skew, or larger than what shows, or returns
+  /// `false` where a pattern of Core Graphics draws them instead: where the image of the cells would be much larger
+  /// than what shows.
   ///
-  /// The cells are put side by side into one image at the pixels of the tile, which is drawn once with the transform
-  /// of the pattern, so that no edges between cells are antialiased. Where that image can't be made, each cell is
-  /// drawn on its own.
+  /// The cells that cover what shows are put side by side into one image at the pixels of the tile, which is drawn
+  /// once with the transform of the pattern, so that no edges between cells are antialiased. Where that image can't
+  /// be made for cells larger than what shows, each cell is drawn on its own.
   ///
   /// - Parameter matrix: The transform from the space of the pattern, the pixels of the tile, to the device.
-  private func paintLargeCells(of tile: CGImage, matrix: CGAffineTransform, path: CGPath, into graphics: CGContext) {
+  private func paintTransformedCells(
+    of tile: CGImage, matrix: CGAffineTransform, path: CGPath, into graphics: CGContext
+  ) -> Bool {
     let width = CGFloat(tile.width)
     let height = CGFloat(tile.height)
+    let visibleArea = graphics.boundingBoxOfClipPath.intersection(path.boundingBoxOfPath)
+    guard !visibleArea.isNull, !visibleArea.isEmpty else { return true }
+    let visiblePixels = visibleArea.applying(graphics.ctm)
+    let cell = CGRect(x: 0, y: 0, width: width, height: height).applying(matrix)
+    let isLarge = Self.isLarger(cell.size, than: visiblePixels)
+    guard isLarge || matrix.b != 0 || matrix.c != 0 else { return false }
+    // The cells that cover what shows, in the space of the pattern.
+    let area = visiblePixels.applying(matrix.inverted())
+    let columns = Int((area.minX / width).rounded(.down))..<Int((area.maxX / width).rounded(.up))
+    let rows = Int((area.minY / height).rounded(.down))..<Int((area.maxY / height).rounded(.up))
+    let cells = CGRect(
+      x: CGFloat(columns.lowerBound) * width, y: CGFloat(rows.lowerBound) * height,
+      width: CGFloat(columns.count) * width, height: CGFloat(rows.count) * height)
+    // The image of small cells covers the bounding box of what shows turned into the space of the pattern, which is
+    // at most twice as large, at the pixels of the tile, which are no finer than the pixels of the device.
+    if !isLarge, cells.width * cells.height > Self.maxCellsArea(visiblePixels) { return false }
     graphics.saveGState()
     defer { graphics.restoreGState() }
     graphics.addPath(path)
     graphics.clip()
-    let visible = graphics.boundingBoxOfClipPath
-    guard !visible.isEmpty else { return }
-    // The cells that cover what the clip shows, in the space of the pattern.
-    let area = visible.applying(graphics.ctm).applying(matrix.inverted())
-    let columns = Int((area.minX / width).rounded(.down))..<Int((area.maxX / width).rounded(.up))
-    let rows = Int((area.minY / height).rounded(.down))..<Int((area.maxY / height).rounded(.up))
-    guard columns.count * rows.count <= Self.maxCells else { return }
     graphics.concatenate(graphics.ctm.inverted())
     graphics.concatenate(matrix)
-    let cells = CGRect(
-      x: CGFloat(columns.lowerBound) * width, y: CGFloat(rows.lowerBound) * height,
-      width: CGFloat(columns.count) * width, height: CGFloat(rows.count) * height)
     if let context = CGContext.bitmap(
       size: cells.size, scale: 1, space: tile.colorSpace ?? CGColorSpaceCreateDeviceRGB())
     {
-      for row in rows {
-        for column in columns {
-          context.draw(
-            tile,
-            in: CGRect(
-              x: CGFloat(column - columns.lowerBound) * width, y: CGFloat(row - rows.lowerBound) * height,
-              width: width, height: height))
-        }
-      }
+      // The cells lie on the pixels of the image, so tiling it with the tile antialiases no edges.
+      context.draw(tile, in: CGRect(x: 0, y: 0, width: width, height: height), byTiling: true)
       if let image = context.makeImage() {
         graphics.draw(image, in: cells)
-        return
+        return true
       }
     }
+    // Small cells are drawn by a pattern of Core Graphics instead, and too many large cells aren't drawn.
+    guard isLarge else { return false }
+    guard columns.count * rows.count <= Self.maxCells else { return true }
     for row in rows {
       for column in columns {
         graphics.draw(
           tile, in: CGRect(x: CGFloat(column) * width, y: CGFloat(row) * height, width: width, height: height))
       }
     }
+    return true
+  }
+
+  /// The most pixels of the image of the cells of a pattern under a rotation or a skew, for what shows of the device.
+  private static func maxCellsArea(_ visible: CGRect) -> CGFloat {
+    4 * max(visible.width * visible.height, 1)
   }
 }
