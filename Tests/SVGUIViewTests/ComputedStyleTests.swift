@@ -508,6 +508,21 @@ struct ComputedStyleTests {
     #expect(style.property("unknown") == nil)
   }
 
+  @Test("text-orientation isn't a presentation attribute, while the style attribute and style sheets set it")
+  func textOrientation() throws {
+    let document = SVGUIView(
+      data: Data(
+        #"""
+        <svg xmlns="http://www.w3.org/2000/svg"><style>.u { text-orientation: upright }</style>
+        <text id="a" text-orientation="upright">a</text>
+        <text id="b" style="text-orientation: sideways">b</text><text id="c" class="u">c</text></svg>
+        """#.utf8)
+    ).document
+    #expect(try #require(document.element(id: "a")).computedStyle.property("text-orientation") == "mixed")
+    #expect(try #require(document.element(id: "b")).computedStyle.property("text-orientation") == "sideways")
+    #expect(try #require(document.element(id: "c")).computedStyle.property("text-orientation") == "upright")
+  }
+
   @Test("a change of the document is visible at once, and an element out of the tree has no values")
   func changes() throws {
     let document = SVGUIView(data: Data(#"<svg xmlns="http://www.w3.org/2000/svg"><rect id="r"/></svg>"#.utf8)).document

@@ -271,12 +271,17 @@ enum WritingModeProperty: StyleProperty {
   }
 }
 
-/// `text-orientation`, which way the glyphs of vertical text stand.
+/// `text-orientation`, which way the glyphs of vertical text stand. It isn't a presentation attribute, as SVG 2 lists
+/// none for it and Chrome and Firefox read none, while `glyph-orientation-vertical` is one.
 enum TextOrientationProperty: StyleProperty {
   static let id = PropertyID.textOrientation
   static let isInherited = true
   static let initial = TextOrientation.mixed
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.textOrientation }
+
+  static func accepts(attributeOn _: SVGElementName) -> Bool {
+    false
+  }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TextOrientation? {
     keyword(text, origin: origin)
