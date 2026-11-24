@@ -337,6 +337,10 @@ public class SVGUIView: UIView {
   public private(set) var baseURL: URL?
   /// The data of the files that the document has read, which the renderings of the document share.
   private var resourceCache = ExternalResourceCache()
+  /// The text element that a person types into, and where the caret is, or `nil` if no text is edited.
+  var textEditing: TextEditingSession?
+  /// The object that the view tells when the editing of text begins, changes the text and ends.
+  public weak var textEditingDelegate: (any SVGUIViewTextEditingDelegate)?
   /// The SVG images that the renderings of the document have parsed, which they share.
   private var imageDocuments = SVGImageDocuments()
   /// The SVG images of the document whose animations change them, which the latest rendering found. The view finds
@@ -420,6 +424,8 @@ public class SVGUIView: UIView {
 
   /// Shows new data with its document at time zero.
   private func show(_ data: Data, baseURL: URL?, loaded: LoadedDocument) {
+    // The text that is edited is of the document that the view no longer shows.
+    endTextEditing()
     documentGeneration += 1
     storedData = data
     self.baseURL = baseURL
@@ -440,6 +446,7 @@ public class SVGUIView: UIView {
   override public var contentMode: UIView.ContentMode {
     didSet {
       if contentMode != oldValue {
+        refreshTextEditingTransform()
         setNeedsDisplay()
       }
     }
@@ -450,6 +457,8 @@ public class SVGUIView: UIView {
     // Otherwise UIKit only scales the image rendered for the old size, margins and all.
     if bounds.size != renderedSize {
       setNeedsDisplay()
+      // The text that is edited moves with the document, such as when the keyboard makes the view smaller.
+      refreshTextEditingTransform()
     }
     updatePlayback()
   }
@@ -872,6 +881,11 @@ public class SVGUIView: UIView {
   /// points, or is 300 × 150 points without a view box. Percentages and
   /// viewport units aren't sizes, since they're relative to the view. The size
   /// is zero without a document.
+  /// The view takes the input of the keyboard while it edits text.
+  override public var canBecomeFirstResponder: Bool {
+    textEditing != nil
+  }
+
   override public var intrinsicContentSize: CGSize {
     svg?.size ?? .zero
   }
@@ -1618,6 +1632,16 @@ extension SVGUIView: DocumentHost {
     let geometry = await builder.geometry(
       of: element, fit: fit, includesStroke: includesStroke, includesPath: includesPath)
     return (geometry, base.needsExternalStyleSheets ? resolved : nil)
+  }
+
+  /// The characters that text or a span of text of the document with its changes renders, and where they are in the
+  /// user space of the text, at the time that the view displays, found on the main actor for the text that is edited.
+  func editedCharacterGeometry(of element: ElementID) -> (text: [Character], characters: [CharacterGeometry?])? {
+    applyDocumentChanges()
+    let builder = RenderTreeBuilder(
+      base: baseContext.at(time: displayedTime.seconds), viewPort: CGRect(origin: .zero, size: bounds.size),
+      scale: displayScale, resources: resourceLoader)
+    return builder.characterGeometry(of: element)
   }
 
   func characterGeometry(of element: ElementID) async -> (text: [Character], characters: [CharacterGeometry?])? {
