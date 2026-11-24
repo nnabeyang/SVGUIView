@@ -131,7 +131,11 @@ rendered in a way that differs from browsers:
   to every character. A length in `ex`, `ch`, `ic` or `lh` is measured with
   the fonts of the system, without the fonts of `@font-face` rules.
 - A document in another file that a `<use>` element shows is shown without
-  its animations, at time zero, as an SVG image is.
+  its animations, at time zero.
+- The animations of an SVG image run on the timeline of the document that
+  shows it, from the time that the document is loaded, while a browser runs
+  them on a timeline of the image, from the time that it loads the image. They
+  differ for an image that a change of the document adds later.
 
 SVGUIView follows the text of the specifications in a few places where some
 browsers don't:

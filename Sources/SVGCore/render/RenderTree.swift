@@ -33,6 +33,8 @@ package struct RenderTree: Sendable {
   /// The nodes of elements that make the same nodes at every time, which the render tree of the document at another
   /// time can reuse.
   package var reusableNodes = RenderNodeCache()
+  /// The SVG images whose animations change them.
+  package var animatedImages = AnimatedImages()
 }
 
 /// Nodes of a render tree by the elements and the modes that they're made for.
@@ -175,6 +177,9 @@ package struct ImagePaint: Sendable {
   /// Whether a bitmap is interpolated where it's scaled, which `image-rendering` decides. An SVG image is drawn as
   /// shapes, which it doesn't apply to.
   package var interpolates = true
+  /// The time in seconds after which the animations of an SVG image, or of the images in it, don't change it, or
+  /// `nil` for an image that doesn't animate.
+  package var animationEnd: Double? = nil
 }
 
 /// What an image is drawn from.

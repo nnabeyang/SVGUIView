@@ -27,6 +27,15 @@ extension RenderTreeBuilder {
     case .drawsNothing: return .filtered(nil)
     case .filters(let elements): filters = elements
     }
+    // The SVG images that the `feImage` primitives of this filter draw make the element change while they animate.
+    let outerImagesEnd = animatedImages.filterImagesEnd
+    animatedImages.filterImagesEnd = nil
+    defer {
+      if let end = animatedImages.filterImagesEnd {
+        animatedImages.record(element.base.elementID, end: end)
+      }
+      animatedImages.filterImagesEnd = outerImagesEnd
+    }
     // The source keeps the filters of the `feImage` primitives that draw the element.
     var sourceReferences = ReferenceGuard()
     sourceReferences.filters = references.filters
@@ -259,22 +268,30 @@ extension RenderTreeBuilder {
     case nil:
       return nil
     case .data(let data):
-      return await imagePaint(
-        data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false,
-        interpolates: image.base.style.imageRendering.interpolates, in: subregion
-      ).map { .picture($0) }
+      return await picture(of: data, image: image, subregion: subregion)
     case .external(let href):
       guard let data = await resources.data(forHref: href) else { return nil }
-      return await imagePaint(
-        data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false,
-        interpolates: image.base.style.imageRendering.interpolates, in: subregion
-      ).map { .picture($0) }
+      return await picture(of: data, image: image, subregion: subregion)
     case .element(let id):
       guard let element = base[id] else { return nil }
       return await node(
         of: element, context: context, mode: .normal, guard: references, instance: instance + [image.base.elementID]
       ).map { .element($0, origin: subregion.origin) }
     }
+  }
+
+  /// The picture of the data of a `feImage`, which tells the filter being built when an SVG image in it stops
+  /// changing.
+  private func picture(of data: Data, image: SVGFeImageElement, subregion: CGRect) async -> ImagePrimitive? {
+    guard
+      let paint = await imagePaint(
+        data: data, preserveAspectRatio: image.preserveAspectRatio, clips: false,
+        interpolates: image.base.style.imageRendering.interpolates, in: subregion)
+    else { return nil }
+    if let end = paint.animationEnd {
+      animatedImages.filterImagesEnd = max(animatedImages.filterImagesEnd ?? 0, end)
+    }
+    return .picture(paint)
   }
 
   /// The steps of a `feDropShadow`: a shadow of the flood color and opacity in the color space of the primitive,

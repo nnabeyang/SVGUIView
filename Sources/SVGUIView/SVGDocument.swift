@@ -140,6 +140,11 @@ public final class SVGDocument {
   /// when SMIL animations keep beginning again, such as two that begin when
   /// the other ends.
   ///
+  /// The time also includes the animations of the SVG images that the
+  /// document shows, which the view finds when it renders the document, so
+  /// it includes them after the view has rendered the document once, such as
+  /// after ``SVGUIView/waitUntilDisplayed()``.
+  ///
   /// ```swift
   /// if let end = svgView.document.animationEnd {
   ///   // Render the frames from zero to `end`.
