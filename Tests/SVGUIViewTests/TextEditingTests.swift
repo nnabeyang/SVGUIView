@@ -149,7 +149,7 @@ struct TextEditingTests {
     #expect(abs(caret.tx) < 0.001 && abs(caret.ty) < 0.001)
     // The caret stands across the line, as tall as the line, where the character starts.
     let layout = try #require(await text.textLayout())
-    let b = try #require(layout.characters[1])
+    let b = layout.characters[1]
     // The caret is a rectangle in a frame that its transform turns into the view, about the origin of the view.
     let rect = view.caretRect(for: TextEditingPosition(1))
     let center = CGPoint(x: rect.midX, y: rect.midY).applying(caret)
@@ -164,8 +164,8 @@ struct TextEditingTests {
     #expect(rects.count == 1)
     #expect(abs(atan2(rects[0].transform.b, rects[0].transform.a) - angle) < 0.001)
     // The selection is as long as the line, not as the box around the turned line.
-    let first = try #require(layout.characters[0])
-    let last = try #require(layout.characters[2])
+    let first = layout.characters[0]
+    let last = layout.characters[2]
     #expect(abs(rects[0].rect.width - (last.end.x - first.start.x)) < 0.5)
     // The selection is on the characters.
     let selection = rects[0].rect.applying(rects[0].transform)
