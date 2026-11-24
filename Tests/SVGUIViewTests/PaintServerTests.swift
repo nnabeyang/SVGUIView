@@ -46,6 +46,30 @@ struct PaintServerTests {
     #expect(withoutFallback[3] == 0, "\(withoutFallback)")
   }
 
+  @Test("the transform property of a gradient and a pattern overrides gradientTransform and patternTransform")
+  func transformProperty() async throws {
+    func gradient(_ attributes: String) async throws -> [UInt8] {
+      try await pixel(
+        #"<linearGradient id="g" gradientUnits="userSpaceOnUse" x2="20" \#(attributes)>"#
+          + #"<stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>"#
+          + #"<rect width="20" height="20" fill="url(#g)"/>"#, x: 15, y: 10)
+    }
+    // Scaled by a half, the gradient ends at 10, and pads blue after it.
+    let styled = try await gradient(#"gradientTransform="scale(1)" style="transform: scale(0.5)""#)
+    let attribute = try await gradient(#"gradientTransform="scale(0.5)""#)
+    // The transform attribute isn't a presentation attribute of a gradient.
+    let transformAttribute = try await gradient(#"transform="scale(0.5)""#)
+    #expect(styled[0] < 5 && styled[2] > 250, "\(styled)")
+    #expect(attribute[0] < 5 && attribute[2] > 250, "\(attribute)")
+    #expect(transformAttribute[0] > 40, "\(transformAttribute)")
+    let pattern = try await pixel(
+      #"<style>pattern { transform: translate(10px, 0) }</style>"#
+        + #"<pattern id="p" width="20" height="20" patternUnits="userSpaceOnUse">"#
+        + #"<rect width="10" height="20" fill="red"/></pattern><rect width="20" height="20" fill="url(#p)"/>"#,
+      x: 15, y: 10)
+    #expect(pattern == [255, 0, 0, 255], "\(pattern)")
+  }
+
   @Test("the viewBox of a pattern places its origin at the tile, before patternTransform scales the tile")
   func patternViewBox() async throws {
     // The viewBox starts at 10, where the red half of the content is.

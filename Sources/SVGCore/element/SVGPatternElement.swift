@@ -48,7 +48,7 @@ final class SVGPatternElement: SVGDrawableElement {
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
 
-    patternTransform = TransformList(attribute: attributes["patternTransform", default: ""])
+    patternTransform = TransformList(paintServer: base, attribute: "patternTransform")
     patternUnits = SVGUnitType(rawValue: attributes["patternUnits", default: ""])
     patternContentUnits = SVGUnitType(rawValue: attributes["patternContentUnits", default: ""])
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])

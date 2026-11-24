@@ -95,7 +95,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
 
     parentId = fragmentID(of: attributes.href)
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
-    gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
+    gradientTransform = TransformList(paintServer: base, attribute: "gradientTransform")
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
 
     if let parentId = parentId {
@@ -196,7 +196,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
     parentId = fragmentID(of: attributes.href)
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
-    gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
+    gradientTransform = TransformList(paintServer: base, attribute: "gradientTransform")
 
     if let parentId = parentId {
       parentIds = [parentId]
