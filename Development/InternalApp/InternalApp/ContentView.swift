@@ -19,6 +19,7 @@ struct ContentView: View {
         .navigationDestination(for: DragDemo.self) { _ in DragDemoView() }
         .navigationDestination(for: HitTestDemo.self) { _ in HitTestDemoView() }
         .navigationDestination(for: DrawDemo.self) { _ in DrawDemoView() }
+        .navigationDestination(for: TextDemo.self) { _ in TextDemoView() }
         .toolbar {
           ToolbarItem(placement: .primaryAction) {
             Button("Open File…") { showingPicker = true }
@@ -108,6 +109,9 @@ private struct FolderView: View {
           }
           NavigationLink(value: DrawDemo()) {
             Label("Draw and Share", systemImage: "scribble")
+          }
+          NavigationLink(value: TextDemo()) {
+            Label("Type Text", systemImage: "character.cursor.ibeam")
           }
         }
       }
