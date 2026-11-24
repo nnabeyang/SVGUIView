@@ -13,6 +13,14 @@ package enum GradientPaint: Sendable {
     case .radial(let gradient): gradient.units
     }
   }
+
+  /// The transform from the coordinates of the gradient to the coordinates of its units.
+  package var transform: CGAffineTransform {
+    switch self {
+    case .linear(let gradient): gradient.transform
+    case .radial(let gradient): gradient.transform
+    }
+  }
 }
 
 package struct LinearGradientPaint: Sendable {
