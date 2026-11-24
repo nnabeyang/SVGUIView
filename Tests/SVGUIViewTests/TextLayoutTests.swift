@@ -118,6 +118,17 @@ struct TextLayoutTests {
     #expect(turned.start.y >= upright.end.y - 0.01)
   }
 
+  @Test("text-orientation of the style attribute stands Latin letters upright, and an attribute of it doesn't")
+  func textOrientation() async throws {
+    let view = view(
+      ##"<text id="a" x="350" y="20" style="writing-mode: vertical-rl" text-orientation="upright">b</text>"##
+        + ##"<text id="s" x="300" y="20" style="writing-mode: vertical-rl; text-orientation: upright">b</text>"##)
+    let attribute = try await layout("a", in: view)
+    let style = try await layout("s", in: view)
+    #expect(abs(attribute.characters[0].angle - .pi / 2) < 1e-6)
+    #expect(abs(style.characters[0].angle) < 1e-6)
+  }
+
   @Test("rotate and a path turn the characters, and the ones off the path aren't rendered")
   func turned() async throws {
     let view = view(
