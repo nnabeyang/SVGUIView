@@ -138,6 +138,42 @@ struct TextEditingTests {
     #expect(abs(rects[0].rect.minX - layout.characters[0].extent.minX) < 0.01)
   }
 
+  @Test("the caret and the selection of a turned text turn with it, and a point finds the caret it's on")
+  func turnedText() async throws {
+    let view = view(##"<text id="t" x="100" y="150" transform="rotate(30 100 150)">abc</text>"##)
+    let text = try element("t", in: view)
+    #expect(await view.beginTextEditing(of: text))
+    let angle = CGFloat.pi / 6
+    let caret = view.caretTransform(for: TextEditingPosition(1))
+    #expect(abs(atan2(caret.b, caret.a) - angle) < 0.001)
+    #expect(abs(caret.tx) < 0.001 && abs(caret.ty) < 0.001)
+    // The caret stands across the line, as tall as the line, where the character starts.
+    let layout = try #require(await text.textLayout())
+    let b = layout.characters[1]
+    // The caret is a rectangle in a frame that its transform turns into the view, about the origin of the view.
+    let rect = view.caretRect(for: TextEditingPosition(1))
+    let center = CGPoint(x: rect.midX, y: rect.midY).applying(caret)
+    #expect(abs(rect.width - 2) < 0.01)
+    let start = b.start.applying(CGAffineTransform(translationX: 100, y: 150).rotated(by: angle).translatedBy(x: -100, y: -150))
+    let line = CGPoint(x: b.ascent.x - b.descent.x, y: b.ascent.y - b.descent.y)
+    #expect(abs(rect.height - (line.x * line.x + line.y * line.y).squareRoot()) < 0.01)
+    let across = CGPoint(x: center.x - start.x, y: center.y - start.y)
+    // The center of the caret is on the line through the start of the character across the baseline.
+    #expect(abs(across.x * cos(angle) + across.y * sin(angle)) < 0.01)
+    let rects = view.selectionRects(for: TextEditingRange(0..<3))
+    #expect(rects.count == 1)
+    #expect(abs(atan2(rects[0].transform.b, rects[0].transform.a) - angle) < 0.001)
+    // The selection is as long as the line, not as the box around the turned line.
+    let first = layout.characters[0]
+    let last = layout.characters[2]
+    #expect(abs(rects[0].rect.width - (last.end.x - first.start.x)) < 0.5)
+    // The selection is on the characters.
+    let selection = rects[0].rect.applying(rects[0].transform)
+    let middle = b.start.applying(CGAffineTransform(translationX: 100, y: 150).rotated(by: angle).translatedBy(x: -100, y: -150))
+    #expect(selection.contains(middle))
+    #expect((view.closestPosition(to: center) as? TextEditingPosition)?.offset == 1)
+  }
+
   @Test("the caret moves with the document when the view changes its size, as the keyboard makes it smaller")
   func resizing() async throws {
     let view = view(##"<text id="t" x="10" y="50">ab</text>"##)
