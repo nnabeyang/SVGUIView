@@ -332,21 +332,21 @@ public func matchesSimpleSelector<E: Element>(
       localName: localName,
       operation: .withValue(operator: op, CaseSensitivity: caseSensitivity.toUnconditional, value: attributeValue))
   case .attributeOther(let selector):
-    // Attributes of SVG elements are in no namespace, which a selector without a namespace or with any namespace
-    // finds.
-    switch selector.namespace {
-    case .none, .any:
+    let operation: AttrSelectorOperation<E.Impl.AttrValue> =
       switch selector.operation {
-      case .exists:
-        value = element.attributeMatches(localName: selector.localName, operation: .exists)
+      case .exists: .exists
       case .withValue(let op, let caseSensitivity, let attributeValue):
-        value = element.attributeMatches(
-          localName: selector.localName,
-          operation: .withValue(operator: op, CaseSensitivity: caseSensitivity.toUnconditional, value: attributeValue))
+        .withValue(operator: op, CaseSensitivity: caseSensitivity.toUnconditional, value: attributeValue)
       }
-    case .specific:
-      value = false
+    // A selector without a namespace finds an attribute in no namespace, and one with a namespace, or with any, finds
+    // the attributes that the element has in it.
+    if let namespace = selector.getNamespace() {
+      value = element.attributeMatches(namespace: namespace, localName: selector.localName, operation: operation)
+    } else {
+      value = element.attributeMatches(localName: selector.localName, operation: operation)
     }
+  case .namespace(_, let url), .defaultNamespace(let url):
+    value = element.hasNamespace(url)
   case .root, .scope:
     // Without a scope element, `:scope` is the root element.
     value = element.isRoot

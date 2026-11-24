@@ -106,13 +106,45 @@ extension ElementCursor: Element {
   }
 
   func attributeMatches(localName: Impl.LocalName, operation: AttrSelectorOperation<Impl.AttrValue>) -> Bool {
-    guard let attribute = element.writtenAttributes[localName.rawValue] else { return false }
+    attributeMatches(name: localName.rawValue, operation: operation)
+  }
+
+  /// The attributes in namespaces that the document keeps are the ones of XLink and XML, under the names with their
+  /// usual prefixes, such as `xlink:href` and `xml:space`.
+  func attributeMatches(
+    namespace: NamespaceConstraint<Impl.NamespaceUrl>, localName: Impl.LocalName,
+    operation: AttrSelectorOperation<Impl.AttrValue>
+  ) -> Bool {
+    switch namespace {
+    case .any:
+      return attributeMatches(localName: localName, operation: operation)
+        || Self.prefixes.values.contains { attributeMatches(name: $0 + ":" + localName.rawValue, operation: operation) }
+    case .specific(let url) where url.rawValue.isEmpty:
+      return attributeMatches(localName: localName, operation: operation)
+    case .specific(let url):
+      guard let prefix = Self.prefixes[url.rawValue] else { return false }
+      return attributeMatches(name: prefix + ":" + localName.rawValue, operation: operation)
+    }
+  }
+
+  /// The prefixes of the names of the attributes in namespaces that the document keeps, by the URLs of the namespaces.
+  private static let prefixes = [
+    "http://www.w3.org/1999/xlink": "xlink", "http://www.w3.org/XML/1998/namespace": "xml",
+  ]
+
+  /// Whether the element has an attribute of a name as the document keeps it, whose value the operation accepts.
+  private func attributeMatches(name: String, operation: AttrSelectorOperation<Impl.AttrValue>) -> Bool {
+    guard let attribute = element.writtenAttributes[name] else { return false }
     switch operation {
     case .exists:
       return true
     case .withValue(let op, let caseSensitivity, let value):
       return op.evalString(elementAttrValue: attribute, attrSelectorValue: value.rawValue, caseSensitivity: caseSensitivity)
     }
+  }
+
+  func hasNamespace(_ url: Impl.NamespaceUrl) -> Bool {
+    url.rawValue == (element.namespace ?? "http://www.w3.org/2000/svg")
   }
 
   var isEmpty: Bool {
