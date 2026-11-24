@@ -48,7 +48,10 @@ An ``SVGDocument/Element`` reads and changes its attributes as they're written:
   attribute. Attributes are named without a namespace, except the `href` of
   the XLink namespace, which is named `xlink:href`. It's a separate attribute
   from `href`, as in SVG 2: an element that has both uses `href`, and uses
-  `xlink:href` once `href` is removed.
+  `xlink:href` once `href` is removed. An attribute that the document can't
+  write as XML isn't set, as a parsed document doesn't have one: a name with
+  another prefix, such as `foo:bar`, `xmlns` and the names with its prefix,
+  and a name that isn't a name of XML.
 - ``SVGDocument/Element/classList`` adds, removes and toggles the classes of
   the `class` attribute.
 - ``SVGDocument/Element/style`` declares and removes the properties of the
