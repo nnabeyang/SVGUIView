@@ -59,12 +59,14 @@ final class TextEditingSelectionRect: UITextSelectionRect {
   private let storedContainsStart: Bool
   private let storedContainsEnd: Bool
   private let storedIsVertical: Bool
+  private let storedTransform: CGAffineTransform
 
-  init(rect: CGRect, containsStart: Bool, containsEnd: Bool, isVertical: Bool) {
+  init(rect: CGRect, containsStart: Bool, containsEnd: Bool, isVertical: Bool, transform: CGAffineTransform) {
     storedRect = rect
     storedContainsStart = containsStart
     storedContainsEnd = containsEnd
     storedIsVertical = isVertical
+    storedTransform = transform
   }
 
   override var rect: CGRect { storedRect }
@@ -72,6 +74,41 @@ final class TextEditingSelectionRect: UITextSelectionRect {
   override var containsStart: Bool { storedContainsStart }
   override var containsEnd: Bool { storedContainsEnd }
   override var isVertical: Bool { storedIsVertical }
+  override var transform: CGAffineTransform { storedTransform }
+}
+
+/// A rectangle in a frame that a rotation turns into the coordinates of the view, as `UITextInput` tells the caret and
+/// the selection of a turned text: the rotation is about the origin of the view, not about the rectangle.
+struct TurnedRect {
+  /// The rectangle in the turned frame.
+  var rect: CGRect
+  /// The rotation from the turned frame to the coordinates of the view.
+  var transform: CGAffineTransform
+
+  /// The upright rectangle around points of the view, in the frame that an angle turns, and the rotation.
+  init(around points: [CGPoint], angle: CGFloat) {
+    let rotation = angle == 0 ? CGAffineTransform.identity : CGAffineTransform(rotationAngle: angle)
+    let path = CGMutablePath()
+    path.addLines(between: angle == 0 ? points : points.map { $0.applying(rotation.inverted()) })
+    rect = path.boundingBoxOfPath
+    transform = rotation
+  }
+
+  init(rect: CGRect, transform: CGAffineTransform) {
+    self.rect = rect
+    self.transform = transform
+  }
+
+  /// The bounds of the rectangle in the coordinates of the view.
+  var bounds: CGRect { rect.applying(transform) }
+
+  /// The square of the distance from a point of the view to the rectangle.
+  func squaredDistance(to point: CGPoint) -> CGFloat {
+    let local = point.applying(transform.inverted())
+    let dx = max(rect.minX - local.x, 0, local.x - rect.maxX)
+    let dy = max(rect.minY - local.y, 0, local.y - rect.maxY)
+    return dx * dx + dy * dy
+  }
 }
 
 /// The `text` element that a person types into, its text, and the selection.
@@ -264,9 +301,9 @@ extension SVGUIView {
 
   /// The bounds of the text that is edited, in the coordinates of the view.
   func editedTextBounds(of session: TextEditingSession) -> CGRect {
-    var bounds = caretRect(for: TextEditingPosition(session.selection.lowerBound))
+    var bounds = caret(at: session.selection.lowerBound, in: session).bounds
     for rect in selectionRects(for: TextEditingRange(0..<session.text.count)) {
-      bounds = bounds.union(rect.rect)
+      bounds = bounds.union(TurnedRect(rect: rect.rect, transform: rect.transform).bounds)
     }
     return bounds
   }
@@ -352,11 +389,11 @@ extension SVGUIView {
     for rect in selectionRects(for: TextEditingRange(marked)) {
       let line = rect.rect
       if session.isVertical {
-        path.move(to: CGPoint(x: line.minX, y: line.minY))
-        path.addLine(to: CGPoint(x: line.minX, y: line.maxY))
+        path.move(to: CGPoint(x: line.minX, y: line.minY), transform: rect.transform)
+        path.addLine(to: CGPoint(x: line.minX, y: line.maxY), transform: rect.transform)
       } else {
-        path.move(to: CGPoint(x: line.minX, y: line.maxY))
-        path.addLine(to: CGPoint(x: line.maxX, y: line.maxY))
+        path.move(to: CGPoint(x: line.minX, y: line.maxY), transform: rect.transform)
+        path.addLine(to: CGPoint(x: line.maxX, y: line.maxY), transform: rect.transform)
       }
     }
     session.markLayer.path = path
@@ -602,17 +639,35 @@ extension SVGUIView: UITextInput {
     return selectionRects(for: range).first?.rect ?? caretRect(for: range.start)
   }
 
-  public func caretRect(for position: UITextPosition) -> CGRect {
-    guard let session = textEditing, let position = position as? TextEditingPosition else { return .null }
-    let (point, ascent, descent) = caretGeometry(at: position.offset, in: session)
+  /// The angle that the text that is edited is turned by in the view, which turns its caret and its selection. The
+  /// baseline of a horizontal line, or the x-axis of the text, goes along it.
+  private func angle(of session: TextEditingSession) -> CGFloat {
+    let transform = session.transform
+    return transform.b == 0 && transform.a >= 0 ? 0 : atan2(transform.b, transform.a)
+  }
+
+  /// The caret at an offset of the text: a thin bar across the line, which the angle of the text turns.
+  private func caret(at offset: Int, in session: TextEditingSession) -> TurnedRect {
+    let (point, ascent, descent) = caretGeometry(at: offset, in: session)
     let top = CGPoint(x: point.x + ascent.x, y: point.y + ascent.y).applying(session.transform)
     let bottom = CGPoint(x: point.x + descent.x, y: point.y + descent.y).applying(session.transform)
-    let rect = CGRect(
-      x: min(top.x, bottom.x), y: min(top.y, bottom.y), width: abs(top.x - bottom.x), height: abs(top.y - bottom.y))
-    // The caret is a thin bar across the line.
-    return session.isVertical
-      ? CGRect(x: rect.minX, y: rect.midY - 1, width: rect.width, height: 2)
-      : CGRect(x: rect.midX - 1, y: rect.minY, width: 2, height: rect.height)
+    let line = TurnedRect(around: [top, bottom], angle: angle(of: session))
+    let rect = line.rect
+    return TurnedRect(
+      rect: session.isVertical
+        ? CGRect(x: rect.minX, y: rect.midY - 1, width: rect.width, height: 2)
+        : CGRect(x: rect.midX - 1, y: rect.minY, width: 2, height: rect.height),
+      transform: line.transform)
+  }
+
+  public func caretRect(for position: UITextPosition) -> CGRect {
+    guard let session = textEditing, let position = position as? TextEditingPosition else { return .null }
+    return caret(at: position.offset, in: session).rect
+  }
+
+  public func caretTransform(for position: UITextPosition) -> CGAffineTransform {
+    guard let session = textEditing, let position = position as? TextEditingPosition else { return .identity }
+    return caret(at: position.offset, in: session).transform
   }
 
   public func selectionRects(for range: UITextRange) -> [UITextSelectionRect] {
@@ -620,12 +675,13 @@ extension SVGUIView: UITextInput {
       let characters = session.layout?.characters
     else { return [] }
     let text = session.text
-    var rects = [CGRect]()
+    let angle = angle(of: session)
+    var rects = [TurnedRect]()
     var rendered = 0
-    var line: CGRect?
+    var line: [CGPoint]?
     for (offset, character) in text.enumerated() {
       if character == "\n" {
-        if let current = line { rects.append(current) }
+        if let current = line { rects.append(TurnedRect(around: current, angle: angle)) }
         line = nil
         continue
       }
@@ -633,15 +689,13 @@ extension SVGUIView: UITextInput {
       guard range.range.contains(offset), characters.indices.contains(rendered),
         let geometry = characters[rendered]
       else { continue }
-      let path = CGMutablePath()
-      path.addLines(between: geometry.corners.map { $0.applying(session.transform) })
-      let box = path.boundingBoxOfPath
-      line = line.map { $0.union(box) } ?? box
+      line = (line ?? []) + geometry.corners.map { $0.applying(session.transform) }
     }
-    if let current = line { rects.append(current) }
+    if let current = line { rects.append(TurnedRect(around: current, angle: angle)) }
     return rects.enumerated().map { index, rect in
       TextEditingSelectionRect(
-        rect: rect, containsStart: index == 0, containsEnd: index == rects.count - 1, isVertical: session.isVertical)
+        rect: rect.rect, containsStart: index == 0, containsEnd: index == rects.count - 1,
+        isVertical: session.isVertical, transform: rect.transform)
     }
   }
 
@@ -657,13 +711,10 @@ extension SVGUIView: UITextInput {
 
   /// The offset whose caret is the closest to a point, among the offsets.
   private func closestPosition(to point: CGPoint, in offsets: Range<Int>) -> UITextPosition? {
+    guard let session = textEditing else { return nil }
     var closest: (offset: Int, distance: CGFloat)?
     for offset in offsets {
-      let caret = caretRect(for: TextEditingPosition(offset))
-      guard !caret.isNull else { continue }
-      let dx = max(caret.minX - point.x, 0, point.x - caret.maxX)
-      let dy = max(caret.minY - point.y, 0, point.y - caret.maxY)
-      let distance = dx * dx + dy * dy
+      let distance = caret(at: offset, in: session).squaredDistance(to: point)
       if closest.map({ distance < $0.distance }) ?? true {
         closest = (offset, distance)
       }
