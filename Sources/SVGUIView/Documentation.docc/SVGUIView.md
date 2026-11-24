@@ -242,6 +242,7 @@ of those rules and for the features that SVGUIView doesn't support.
 - ``SVGDocument/PathPoint``
 - ``SVGDocument/TextLayout``
 - ``SVGDocument/CharacterGeometry``
+- ``SVGUIViewTextEditingDelegate``
 - ``SVGDocument/Animation``
 
 ### Configuring rendering

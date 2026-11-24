@@ -231,6 +231,54 @@ so the characters of a `<text>` element without spans are the ones of its
 ones of the string that the app changes. The layout is found off the main
 actor, as a rendering is, so read it again after changing the text.
 
+### Typing text
+
+A person types into a `<text>` element of the document as into a text field:
+``SVGUIView/SVGUIView/beginTextEditing(of:selecting:)`` makes the view the first
+responder, shows the keyboard, and shows the caret, the selection with its
+handles, the loupe and the edit menu over the text. Text that the keyboard
+composes, such as Japanese before it's converted, is shown in the text,
+underlined, until it's committed.
+
+```swift
+// Adds a text where a finger tapped, and lets the person type into it.
+let text = svgView.document.createElement("text")
+text.setAttribute("x", to: "\(point.x)")
+text.setAttribute("y", to: "\(point.y)")
+text.setAttribute("font-size", to: "32")
+try svgView.document.rootElement?.append(text)
+svgView.textEditingDelegate = self
+await svgView.beginTextEditing(of: text)
+```
+
+A tap outside the text, ``SVGUIView/SVGUIView/endTextEditing()`` and new data
+end the editing. The ``SVGUIView/SVGUIView/textEditingDelegate`` hears when the
+editing begins and ends, and each change of the text with the text before it,
+which an app registers to undo:
+
+```swift
+func svgView(_ view: SVGUIView, didChangeTextOf element: SVGDocument.Element, from oldText: String) {
+  undoManager?.registerUndo(withTarget: element) { $0.textContent = oldText }
+}
+
+func svgViewDidEndTextEditing(_ view: SVGUIView, element: SVGDocument.Element) {
+  // A text that the person left empty is removed.
+  if element.textContent.isEmpty { element.remove() }
+}
+```
+
+The text is a `<text>` element with character data and no children, or with
+`<tspan>` elements that are its lines, each with an `x` attribute, or a `y`
+attribute in vertical text, and character data only. Other text, such as text
+with spans in other styles, isn't edited. The editing sets
+`xml:space="preserve"`, so that the spaces that the person types are kept, and
+writes a text of more than one line as `<tspan>` elements, each `1.2em` after
+the one before it, as other editors write it. The style of the text, such as its
+fill, font and `text-anchor`, is changed with its attributes and its style, as
+the style of any element is. `SVGView` doesn't edit text: a SwiftUI app that
+edits text wraps an ``SVGUIView/SVGUIView`` in a `UIViewRepresentable` of its
+own.
+
 ### Measuring shapes
 
 An app places things along a shape, or lets a finger slide along it, with
