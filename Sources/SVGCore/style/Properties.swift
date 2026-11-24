@@ -911,6 +911,12 @@ enum TransformProperty: StyleProperty {
   static let initial = TransformList.none
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.transform }
 
+  /// A gradient and a pattern take `gradientTransform` and `patternTransform` as the presentation attributes of the
+  /// property, as SVG 2 says, and not `transform`.
+  static func accepts(attributeOn name: SVGElementName) -> Bool {
+    name != .linearGradient && name != .radialGradient && name != .pattern
+  }
+
   static func parse(_ text: String, origin: DeclarationOrigin) -> TransformList? {
     var input = _CSSParser.Parser(input: ParserInput(input: text))
     return TransformList.parse(&input, origin: origin)

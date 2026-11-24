@@ -1071,6 +1071,8 @@ package struct RenderTreeBuilder {
         // Display doesn't apply to paint servers, which are never rendered themselves.
         let gradient = gradientPaint(of: server, context: context, opacity: opacity)
         if isEmpty, gradient?.units == .objectBoundingBox { return fallbackPaint }
+        // A gradient that its transform makes flat can't be used, as a pattern can't, and paints the fallback.
+        if let gradient, !gradient.transform.isInvertible { return fallbackPaint }
         return .gradient(gradient)
       } else if let pattern = base.patterns[id] {
         // A cycle of patterns stops the pattern, which paints black.
@@ -1087,6 +1089,10 @@ package struct RenderTreeBuilder {
           // A pattern without width or height, such as one that references nothing for them, paints the fallback.
           let size = merged.size(frame: frame, context: context)
           guard size.width > 0, size.height > 0 else { return fallbackPaint }
+          // A pattern that its transform makes flat, such as `scale(0)`, can't be used, and paints the fallback, as
+          // browsers paint it.
+          let transform = merged.patternTransform?.matrix(box: context.viewBoxSize, context: context) ?? .identity
+          guard transform.isInvertible else { return fallbackPaint }
           return .pattern(
             await patternPaint(
               pattern, frame: frame, opacity: opacity, context: context, mode: mode, guard: references,

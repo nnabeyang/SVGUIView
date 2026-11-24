@@ -13,6 +13,14 @@ package enum GradientPaint: Sendable {
     case .radial(let gradient): gradient.units
     }
   }
+
+  /// The transform from the coordinates of the gradient to the coordinates of its units.
+  package var transform: CGAffineTransform {
+    switch self {
+    case .linear(let gradient): gradient.transform
+    case .radial(let gradient): gradient.transform
+    }
+  }
 }
 
 package struct LinearGradientPaint: Sendable {
@@ -27,6 +35,8 @@ package struct LinearGradientPaint: Sendable {
   /// The colors of the stops that have one, and the offsets of all the stops.
   package let colors: [CGColor]
   package let locations: [CGFloat]
+  /// The color space that the colors are interpolated in: the `color-interpolation` of the gradient element.
+  package let colorInterpolation: SVGColorInterpolation
 }
 
 package struct RadialGradientPaint: Sendable {
@@ -45,4 +55,6 @@ package struct RadialGradientPaint: Sendable {
   /// The colors of the stops that have one, and the offsets of all the stops.
   package let colors: [CGColor]
   package let locations: [CGFloat]
+  /// The color space that the colors are interpolated in: the `color-interpolation` of the gradient element.
+  package let colorInterpolation: SVGColorInterpolation
 }

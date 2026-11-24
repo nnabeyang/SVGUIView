@@ -95,7 +95,7 @@ final class SVGLinearGradientServer: SVGGradientServer {
 
     parentId = fragmentID(of: attributes.href)
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
-    gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
+    gradientTransform = TransformList(paintServer: base, attribute: "gradientTransform")
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
 
     if let parentId = parentId {
@@ -150,7 +150,8 @@ final class SVGLinearGradientServer: SVGGradientServer {
     return .linear(
       LinearGradientPaint(
         units: gradientUnits, transform: transform(context: context), x1: x1, y1: y1, x2: x2, y2: y2,
-        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: locations))
+        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: locations,
+        colorInterpolation: base.style.colorInterpolation ?? .sRGB))
   }
 }
 
@@ -195,7 +196,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     spreadMethod = Self.parseSpreadMethod(attributes["spreadMethod", default: ""])
     parentId = fragmentID(of: attributes.href)
     gradientUnits = SVGUnitType(rawValue: attributes["gradientUnits", default: ""])
-    gradientTransform = TransformList(attribute: attributes["gradientTransform", default: ""])
+    gradientTransform = TransformList(paintServer: base, attribute: "gradientTransform")
 
     if let parentId = parentId {
       parentIds = [parentId]
@@ -257,6 +258,7 @@ final class SVGRadialGradientServer: SVGGradientServer {
     return .radial(
       RadialGradientPaint(
         units: gradientUnits, transform: transform(context: context), cx: cx, cy: cy, r: r, fx: fx, fy: fy, fr: fr,
-        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: locations))
+        spreadMethod: spreadMethod ?? .pad, colors: colors, locations: locations,
+        colorInterpolation: base.style.colorInterpolation ?? .sRGB))
   }
 }

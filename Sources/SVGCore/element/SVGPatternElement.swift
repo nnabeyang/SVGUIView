@@ -48,7 +48,7 @@ final class SVGPatternElement: SVGDrawableElement {
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
 
-    patternTransform = TransformList(attribute: attributes["patternTransform", default: ""])
+    patternTransform = TransformList(paintServer: base, attribute: "patternTransform")
     patternUnits = SVGUnitType(rawValue: attributes["patternUnits", default: ""])
     patternContentUnits = SVGUnitType(rawValue: attributes["patternContentUnits", default: ""])
     preserveAspectRatio = PreserveAspectRatio(description: attributes["preserveAspectRatio", default: ""])
@@ -97,8 +97,9 @@ final class SVGPatternElement: SVGDrawableElement {
     }
   }
 
+  /// The transform that places the `viewBox` in a tile of the size of the pattern, before `patternTransform`.
   func getTransform(viewBox: CGRect, size: CGSize) -> CGAffineTransform {
     let preserveAspectRatio = preserveAspectRatio ?? .init(xAlign: .mid, yAlign: .mid, option: .meet)
-    return preserveAspectRatio.getTransform(viewBox: viewBox, size: size).translatedBy(x: viewBox.minX, y: viewBox.minY)
+    return preserveAspectRatio.getTransform(viewBox: viewBox, size: size)
   }
 }

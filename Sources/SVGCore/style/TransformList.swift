@@ -23,8 +23,21 @@ struct TransformList: Sendable, Equatable {
 }
 
 extension TransformList {
-  /// The transform list of an attribute that isn't a presentation attribute, such as `patternTransform`, or `nil` if
-  /// it's invalid.
+  /// The transform of a gradient or a pattern: the `transform` property of the element, whose presentation attribute
+  /// is `gradientTransform` or `patternTransform`, or `nil` if neither the attribute nor a style declares one, so that
+  /// the element takes the transform of the element that it references.
+  init?(paintServer base: SVGBaseElement, attribute name: String) {
+    let style = base.style.transform
+    if style != .none {
+      self = style
+    } else if let attribute = TransformList(attribute: base.attributes[name, default: ""]) {
+      self = attribute
+    } else {
+      return nil
+    }
+  }
+
+  /// The transform list of an attribute, such as `patternTransform`, or `nil` if it's invalid.
   init?(attribute text: String) {
     var input = _CSSParser.Parser(input: ParserInput(input: text))
     guard let list = Self.parse(&input, origin: .attribute) else { return nil }

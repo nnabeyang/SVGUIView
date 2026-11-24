@@ -166,10 +166,22 @@ struct CascadedValues: Sendable {
     of name: SVGElementName, attributes: [String: String]
   ) -> [PropertyDeclaration] {
     // Each property has one attribute, so the order of the attributes doesn't change the cascaded values.
-    let declarations = attributes.compactMap { attribute, text -> PropertyDeclaration? in
+    var declarations = attributes.compactMap { attribute, text -> PropertyDeclaration? in
       guard let id = PropertyID(rawValue: attribute) else { return nil }
       var declarator = AttributeDeclarator(name: name, text: text)
       return id.visit(&declarator)
+    }
+    // SVG 2 makes `gradientTransform` and `patternTransform` the presentation attributes of `transform`.
+    let transformAttribute: String? =
+      switch name {
+      case .linearGradient, .radialGradient: "gradientTransform"
+      case .pattern: "patternTransform"
+      default: nil
+      }
+    if let transformAttribute, let text = attributes[transformAttribute],
+      let value = TransformProperty.declared(attribute: text)
+    {
+      declarations.append(PropertyDeclaration(TransformProperty.self, value))
     }
     // SVG 2 maps `xml:space` to `white-space` in the user agent's style sheet, so that the `white-space` attribute
     // and style sheets override it.
