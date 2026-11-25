@@ -144,6 +144,38 @@ struct DocumentExportTests {
     #expect(text.attribute("class") == "c")
   }
 
+  @Test("an element created with a name that isn't a name of XML isn't written, and the document is parsed back")
+  func unwritableElementNames() throws {
+    let view = view(#"<svg xmlns="http://www.w3.org/2000/svg"><g id="g"/></svg>"#)
+    let document = view.document
+    let group = try #require(document.element(id: "g"))
+    let unwritable = ["foo:bar", "xmlns:g", ":x", "", "has space", "1x", "-x", "a<b", "a=b", "a\"b"]
+    for (index, name) in unwritable.enumerated() {
+      let element = document.createElement(name)
+      #expect(element.localName == name)
+      let child = document.createElement("rect")
+      child.setAttribute("id", to: "hidden\(index)")
+      try element.append(child)
+      try group.append(element)
+      // The element alone is written without it.
+      let alone = element.svgData()
+      #expect(XMLParser(data: alone).parse(), "\(String(decoding: alone, as: UTF8.self))")
+    }
+    for name in ["名前", "x.1", "_x"] {
+      let element = document.createElement(name)
+      element.setAttribute("id", to: name)
+      try group.append(element)
+    }
+    let xml = document.svgData()
+    let parser = XMLParser(data: xml)
+    parser.shouldProcessNamespaces = true
+    #expect(parser.parse(), "\(String(decoding: xml, as: UTF8.self))")
+    #expect(try written(view) == #"<svg xmlns="http://www.w3.org/2000/svg"><g id="g"><名前 id="名前"/><x.1 id="x.1"/><_x id="_x"/></g></svg>"#)
+    let parsed = self.view(String(decoding: xml, as: UTF8.self))
+    #expect(parsed.document.element(id: "hidden0") == nil)
+    #expect(parsed.document.element(id: "名前")?.localName == "名前")
+  }
+
   @Test("the white space that xml:space keeps is written as it is")
   func whiteSpace() throws {
     let view = view(

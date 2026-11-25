@@ -9,7 +9,9 @@ extension DocumentTree {
   /// another namespace declares its namespace where it differs from its parent's. An attribute of the XLink namespace,
   /// such as `xlink:href`, is written as it is, and the root declares the XLink namespace if the document has one.
   /// Nothing is added between the elements, so that the character data, and the white space that `xml:space` keeps,
-  /// are written as they are.
+  /// are written as they are. An element whose name isn't a name of XML Namespaces (`NCName`), which only an element
+  /// created with a name such as `foo:bar` or `has space` has, isn't written, and neither are its descendants, so that
+  /// the XML is always read again.
   package func xmlData() -> Data {
     var xml = #"<?xml version="1.0" encoding="UTF-8"?>"# + "\n"
     if let root {
@@ -28,7 +30,8 @@ extension DocumentTree {
   /// `href` and `xlink:href`, found again in the referenced elements. A referenced element is written with its
   /// descendants, unless it's the element, one of its descendants or ancestors, or in another referenced element, and
   /// the referenced elements are in document order. The root element of the document is written as ``xmlData()``
-  /// writes it, when it's an `svg` element. The attributes are written as ``xmlData()`` writes them.
+  /// writes it, when it's an `svg` element. The attributes are written as ``xmlData()`` writes them, and an element
+  /// whose name isn't a name of XML isn't written, as ``xmlData()`` doesn't write it.
   package func xmlData(of id: ElementID) -> Data? {
     guard let root, let element = cursor(at: id)?.element else { return nil }
     if element === root, root.name == .svg {
@@ -139,6 +142,8 @@ extension DocumentTree {
     _ element: DocumentElement, parentNamespace: String?, isRoot: Bool, declaresXLink: Bool = false,
     into xml: inout String
   ) {
+    // A name that isn't a name of XML would make the XML unreadable.
+    guard AttributeName.isNCName(Substring(element.localName)) else { return }
     let namespace = element.namespace ?? svgNamespace
     xml += "<" + element.localName
     if isRoot || namespace != (parentNamespace ?? svgNamespace) {

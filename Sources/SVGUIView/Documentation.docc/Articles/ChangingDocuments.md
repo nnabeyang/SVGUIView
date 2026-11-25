@@ -67,7 +67,11 @@ document is rendered, as it is when the document is written with it.
 ``SVGDocument/Element/append(_:)`` and
 ``SVGDocument/Element/insert(_:before:)`` insert it among the children of
 another element. ``SVGDocument/Element/remove()`` removes an element from its
-parent, with its descendants.
+parent, with its descendants. An element with a name that isn't a name of XML,
+such as `foo:bar` or `has space`, is created, but it isn't rendered, and the
+document isn't written with it or its descendants, so that the written SVG can
+be read again. A `use` element that references one of its descendants shows
+nothing in the document that is read from it.
 
 ```swift
 let circle = document.createElement("circle")

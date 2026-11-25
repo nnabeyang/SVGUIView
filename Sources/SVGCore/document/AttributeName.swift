@@ -21,7 +21,7 @@ package enum AttributeName {
   }
 
   /// Whether a string is a name of XML without a colon: a `NameStartChar` followed by `NameChar`s of XML 1.0, without
-  /// the colon.
+  /// the colon. The names of the elements that a document writes are such names too.
   package static func isNCName(_ name: Substring) -> Bool {
     var scalars = name.unicodeScalars.makeIterator()
     guard let first = scalars.next(), isNameStart(first) else { return false }
