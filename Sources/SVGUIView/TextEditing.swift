@@ -77,21 +77,39 @@ final class TextEditingSelectionRect: UITextSelectionRect {
   override var transform: CGAffineTransform { storedTransform }
 }
 
-/// A rectangle in a frame that a rotation turns into the coordinates of the view, as `UITextInput` tells the caret and
-/// the selection of a turned text: the rotation is about the origin of the view, not about the rectangle.
+/// A rectangle that a transform turns in the coordinates of the view, as `UITextInput` tells the caret and the
+/// selection of a turned text. UIKit draws the caret with its transform about the origin of the view, while the
+/// loupe is placed by the rectangle alone, so the rectangle is where the turned one is, and the transform turns it
+/// about its center, with the translation that this takes.
 struct TurnedRect {
-  /// The rectangle in the turned frame.
+  /// The rectangle before it's turned, at the center of the turned one.
   var rect: CGRect
-  /// The rotation from the turned frame to the coordinates of the view.
+  /// The transform that turns the rectangle into the coordinates of the view.
   var transform: CGAffineTransform
 
-  /// The upright rectangle around points of the view, in the frame that an angle turns, and the rotation.
+  /// The rectangle around points of the view along an angle: the upright rectangle at the center of the points, of
+  /// the size of the rectangle along the angle, and the rotation by the angle about its center.
+  ///
+  /// The rectangle is where the turned one is, so that what reads it without its transform finds the right place, as
+  /// the loupe of the text interaction does with the caret. With its transform, it's the turned one, whether the
+  /// transform is applied about the origin of the view or about the center of the rectangle.
   init(around points: [CGPoint], angle: CGFloat) {
-    let rotation = angle == 0 ? CGAffineTransform.identity : CGAffineTransform(rotationAngle: angle)
     let path = CGMutablePath()
-    path.addLines(between: angle == 0 ? points : points.map { $0.applying(rotation.inverted()) })
-    rect = path.boundingBoxOfPath
-    transform = rotation
+    guard angle != 0 else {
+      path.addLines(between: points)
+      rect = path.boundingBoxOfPath
+      transform = .identity
+      return
+    }
+    let rotation = CGAffineTransform(rotationAngle: angle)
+    path.addLines(between: points.map { $0.applying(rotation.inverted()) })
+    let turned = path.boundingBoxOfPath
+    let center = CGPoint(x: turned.midX, y: turned.midY).applying(rotation)
+    rect = CGRect(
+      x: center.x - turned.width / 2, y: center.y - turned.height / 2, width: turned.width, height: turned.height)
+    transform = CGAffineTransform(translationX: -center.x, y: -center.y)
+      .concatenating(rotation)
+      .concatenating(CGAffineTransform(translationX: center.x, y: center.y))
   }
 
   init(rect: CGRect, transform: CGAffineTransform) {
