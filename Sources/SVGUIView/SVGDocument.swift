@@ -64,9 +64,10 @@ public final class SVGDocument {
   /// instructions, the document type declaration, the attributes of other
   /// namespaces, such as the ones that editors add, and the character data of
   /// the other elements. The elements that were created and not inserted, or
-  /// removed, aren't written. References to other files, such as the `href`
-  /// of an `image`, are written as they are, so a relative one refers to a
-  /// file next to where the data is saved.
+  /// removed, aren't written, and neither are the elements created with a
+  /// name that isn't a name of XML, with their descendants. References to
+  /// other files, such as the `href` of an `image`, are written as they are,
+  /// so a relative one refers to a file next to where the data is saved.
   public func svgData() -> Data {
     tree.xmlData()
   }
@@ -170,7 +171,11 @@ public final class SVGDocument {
   /// element. The view shows the element once it's in the tree.
   ///
   /// - Parameter localName: The name of the element, such as `rect`. An
-  ///   element with a name that SVGUIView doesn't know isn't rendered.
+  ///   element with a name that SVGUIView doesn't know isn't rendered. An
+  ///   element with a name that isn't a name of XML, such as `foo:bar` or
+  ///   `has space`, isn't rendered either, and ``svgData()`` doesn't write it
+  ///   or its descendants, so that the SVG can be read again. Its
+  ///   ``Element/localName`` is the name as it's given.
   public func createElement(_ localName: String) -> Element {
     let created = DocumentTree(elementNamed: localName, identifier: nextElementID, languages: tree.languages)
     nextElementID += 1
