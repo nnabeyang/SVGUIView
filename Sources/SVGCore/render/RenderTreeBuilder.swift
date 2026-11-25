@@ -188,7 +188,11 @@ package struct RenderTreeBuilder {
     func isStable(_ id: ElementID) -> Bool {
       !(unstable?.contains(id) ?? false) && !(changed?.contains(id) ?? false)
     }
-    guard unstable != nil || changed != nil, isStable(element.base.elementID), instance.allSatisfy(isStable) else {
+    // A paint server of a context element is placed by the bounds of the element, which change with the elements
+    // around this one, so a node painted with it is built again.
+    guard unstable != nil || changed != nil, isStable(element.base.elementID), instance.allSatisfy(isStable),
+      context.contextPaint?.hasServer != true
+    else {
       return await makeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
     }
     let key = RenderNodeCache.Key(id: renderID(of: element, instance: instance), mode: mode)
@@ -322,30 +326,20 @@ package struct RenderTreeBuilder {
     let transform =
       mode != .filter(isRoot: true)
       ? await transform(of: element, context: context, frame: geometry?.frame ?? .zero, guard: references) : .identity
-    var content: ShapeContent?
-    if let path, element.style.visibility == .visible {
-      let stroke = await stroke(
-        of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
-      if let image = element as? SVGImageElement {
-        let paint = await imagePaint(of: image, in: path.boundingBoxOfPath)
-        if let end = paint?.animationEnd {
-          animatedImages.record(element.base.elementID, end: end)
-        }
-        content = .image(paint, stroke: stroke)
-      } else {
-        let fill = await fillPaint(
-          of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
-        content = .vector(fill: fill, stroke: stroke, fillRule: element.pathFillRule)
-      }
-    }
-    let id = renderID(of: element, instance: instance)
     let isClipped = if case .clipToZero = mask { true } else { false }
-    let markers: [RenderNode] =
-      if !isClipped, let shape = element as? any ShapeGeometry {
-        await markerNodes(of: shape, context: context, guard: references, instance: instance)
+    // The paints and the markers of the element are in its user space, where a context paint is placed.
+    let (content, markers) =
+      if context.contextPaint == nil {
+        await paints(
+          of: element, path: path, frame: geometry?.frame ?? .zero, drawsMarkers: !isClipped, context: context,
+          mode: mode, guard: references, instance: instance)
       } else {
-        []
+        await paints(
+          of: element, path: path, frame: geometry?.frame ?? .zero, drawsMarkers: !isClipped,
+          entering: mode != .filter(isRoot: true) ? transform : nil, context: context, mode: mode,
+          guard: references, instance: instance)
       }
+    let id = renderID(of: element, instance: instance)
     let order = element.style.paintOrder
     // The fill and the stroke are painted as shapes of their own when the stroke is painted first, or the markers
     // between them.
@@ -403,6 +397,62 @@ package struct RenderTreeBuilder {
         blendMode: blendMode(of: element, mode: mode)))
   }
 
+  /// What a shape paints: its fill and its stroke, or its image and its stroke, and its markers.
+  ///
+  /// It's inlined, so that a shape doesn't make one more asynchronous call than it did without context paints, which
+  /// the instruction counts of the benchmarks showed.
+  ///
+  /// - Parameters:
+  ///   - frame: The bounds of the shape, which the paint servers of its context paints use.
+  ///   - drawsMarkers: Whether the markers are drawn, which they aren't where a mask clips everything.
+  ///   - context: The context of the shape in its user space.
+  @inline(__always)
+  private func paints(
+    of element: any SVGDrawableElement, path: CGPath?, frame: CGRect, drawsMarkers: Bool, context: ResolveContext,
+    mode: DrawMode, guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> (content: ShapeContent?, markers: [RenderNode]) {
+    var content: ShapeContent?
+    if let path, element.style.visibility == .visible {
+      let stroke = await stroke(
+        of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
+      if let image = element as? SVGImageElement {
+        let paint = await imagePaint(of: image, in: path.boundingBoxOfPath)
+        if let end = paint?.animationEnd {
+          animatedImages.record(element.base.elementID, end: end)
+        }
+        content = .image(paint, stroke: stroke)
+      } else {
+        let fill = await fillPaint(
+          of: element, path: path, context: context, mode: mode, guard: references, instance: instance)
+        content = .vector(fill: fill, stroke: stroke, fillRule: element.pathFillRule)
+      }
+    }
+    let markers: [RenderNode] =
+      if drawsMarkers, let shape = element as? any ShapeGeometry {
+        await markerNodes(of: shape, frame: frame, context: context, guard: references, instance: instance)
+      } else {
+        []
+      }
+    return (content, markers)
+  }
+
+  /// What a shape paints, with the context paint of a context placed in the user space of the shape.
+  ///
+  /// It's apart from ``paints(of:path:frame:drawsMarkers:context:mode:guard:instance:)``, which most shapes use, so
+  /// that only the shapes with a context paint keep a second context in the frame of their task.
+  ///
+  /// - Parameter transform: The transform of the shape, or `nil` for one drawn as the source of its filter.
+  private func paints(
+    of element: any SVGDrawableElement, path: CGPath?, frame: CGRect, drawsMarkers: Bool,
+    entering transform: CGAffineTransform?, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
+    instance: [ElementID]
+  ) async -> (content: ShapeContent?, markers: [RenderNode]) {
+    let placed = await entering(transform, of: element, context: context, frame: frame, guard: references)
+    return await paints(
+      of: element, path: path, frame: frame, drawsMarkers: drawsMarkers, context: placed, mode: mode,
+      guard: references, instance: instance)
+  }
+
   /// The mask of an element with its bounds, where a line that has a mask and no area clips everything.
   func maskApplication(
     of element: any SVGDrawableElement, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard,
@@ -455,6 +505,14 @@ package struct RenderTreeBuilder {
     let transform =
       mode != .filter(isRoot: true)
       ? await transform(of: text, context: context, frame: frame, guard: references) : .identity
+    // The spans are painted in the user space of the text, where a context paint is placed.
+    let context =
+      if context.contextPaint == nil {
+        context
+      } else {
+        await entering(
+          mode != .filter(isRoot: true) ? transform : nil, of: text, context: context, frame: frame, guard: references)
+      }
     // The nodes of the shapes, with the spans that each one is in.
     var children = [(node: RenderNode, spans: [any SVGDrawableElement])]()
     for span in spans {
@@ -500,7 +558,7 @@ package struct RenderTreeBuilder {
       if !span.colorGlyphs.isEmpty {
         let bounds = CGMutablePath()
         for glyph in span.colorGlyphs { bounds.addRect(glyph.bounds) }
-        let draws = element.style.visibility == .visible && element.style.fill != .none
+        let draws = element.style.visibility == .visible && !isNone(element.style.fill, in: context)
         children.append(
           (
             .shape(
@@ -603,20 +661,50 @@ package struct RenderTreeBuilder {
       mode != .filter(isRoot: true)
       ? await transform(of: group, context: context, frame: frame, guard: references) : .identity
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
-    var children = [RenderNode]()
-    for child in renderedChildren(of: group) {
-      guard let child = child as? (any SVGDrawableElement), !leavesOut(child, of: group, instance: instance) else {
-        continue
+    // The children are in the user space of the group, where a context paint is placed.
+    let children =
+      if context.contextPaint == nil {
+        await childNodes(of: group, context: context, mode: childMode, guard: references, instance: instance)
+      } else {
+        await childNodes(
+          of: group, entering: mode != .filter(isRoot: true) ? transform : nil, frame: frame, context: context,
+          mode: childMode, guard: references, instance: instance)
       }
-      if let node = await node(of: child, context: context, mode: childMode, guard: references, instance: instance) {
-        children.append(node)
-      }
-    }
     return .group(
       GroupNode(
         id: renderID(of: group, instance: instance), transform: transform, opacity: opacity(of: group, mode: mode), clip: clip,
         mask: mask, children: children, blendMode: blendMode(of: group, mode: mode),
         isolates: group.style.isolation == .isolate))
+  }
+
+  /// The nodes of the children of a group that it renders, in a context of its user space.
+  private func childNodes(
+    of group: SVGGroupElement, context: ResolveContext, mode: DrawMode, guard references: ReferenceGuard,
+    instance: [ElementID]
+  ) async -> [RenderNode] {
+    var children = [RenderNode]()
+    for child in renderedChildren(of: group) {
+      guard let child = child as? (any SVGDrawableElement), !leavesOut(child, of: group, instance: instance) else {
+        continue
+      }
+      if let node = await node(of: child, context: context, mode: mode, guard: references, instance: instance) {
+        children.append(node)
+      }
+    }
+    return children
+  }
+
+  /// The nodes of the children of a group, with the context paint of a context placed in the user space of the
+  /// group. It's apart from ``childNodes(of:context:mode:guard:instance:)`` so that only the groups with a context
+  /// paint keep a second context in the frame of their task.
+  ///
+  /// - Parameter transform: The transform of the group, or `nil` for one drawn as the source of its filter.
+  private func childNodes(
+    of group: SVGGroupElement, entering transform: CGAffineTransform?, frame: CGRect?, context: ResolveContext,
+    mode: DrawMode, guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> [RenderNode] {
+    let placed = await entering(transform, of: group, context: context, frame: frame, guard: references)
+    return await childNodes(of: group, context: placed, mode: mode, guard: references, instance: instance)
   }
 
   /// The children of a group that it renders. A `<switch>` renders only its first child whose conditional processing
@@ -650,6 +738,14 @@ package struct RenderTreeBuilder {
       mode != .filter(isRoot: true) && svg.base.name != .symbol
       ? await transform(of: svg, context: context, frame: nil, guard: references) : .identity
     var (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
+    // A context paint is placed in the user space of the content, also where the filter moves the content.
+    var placement: [CGAffineTransform]?
+    if let layout, context.contextPaint != nil {
+      let placing =
+        mode == .filter(isRoot: true) && svg.base.name != .symbol
+        ? await self.transform(of: svg, context: context, frame: nil, guard: references) : transform
+      placement = [placing, translation, layout.viewBoxTransform]
+    }
     // The filter of the element moves the content to the viewport and to the position of the element instead.
     if mode == .filter(isRoot: true) {
       translation = .identity
@@ -659,7 +755,10 @@ package struct RenderTreeBuilder {
       return .viewport(
         ViewportNode(id: id, transform: transform, translation: translation, opacity: opacity(of: svg, mode: mode), content: nil))
     }
-    let inner = layout.context
+    var inner = layout.context
+    for transform in placement ?? [] {
+      inner = inner.entering(transform)
+    }
     var overflowClip: CGRect?
     // The view shows the viewport of the root element, which clips it whatever its overflow is. The overflow of the
     // `<image>` element that shows an SVG image clips the image instead.
@@ -786,11 +885,30 @@ package struct RenderTreeBuilder {
     }
     let transform =
       isFilterRoot ? .identity : await transform(of: use, context: context, frame: frame, guard: references)
+    // The `<use>` element is the context element of what it shows, in its user space. Its bounds are found only
+    // for a paint server, which they place.
+    let style = use.style
+    let useFrame =
+      style.fill.isServer || style.stroke.isServer
+      ? await self.frame(of: use, context: context, path: nil, guard: references) : CGRect.zero
+    let contextPaint =
+      if context.contextPaint == nil {
+        ContextPaint(of: use, frame: useFrame, context: context, builder: self)
+      } else {
+        ContextPaint(
+          of: use, frame: useFrame,
+          context: await entering(
+            isFilterRoot ? nil : transform, of: use, context: context, frame: frame, guard: references),
+          builder: self)
+      }
     let content = await withReferencedElement(of: use, context: context, guard: references) { referenced in
-      UseInstance(
-        translation: translation(of: use, context: context), opacity: opacity(of: use, mode: mode),
+      let translation = translation(of: use, context: context)
+      var context = referenced.context
+      context.contextPaint = contextPaint.entering(translation)
+      return UseInstance(
+        translation: translation, opacity: opacity(of: use, mode: mode),
         content: await referenced.builder.node(
-          of: referenced.element, context: referenced.context, mode: .normal, guard: referenced.references,
+          of: referenced.element, context: context, mode: .normal, guard: referenced.references,
           instance: instance + [use.base.elementID] + referenced.instance))
     }
     return .use(
@@ -1041,13 +1159,22 @@ package struct RenderTreeBuilder {
 
   /// What a value of `fill` or `stroke` paints with, or `nil` if it paints nothing. The units of a paint server
   /// are the bounds of the element without its stroke, for its fill and its stroke alike.
+  ///
+  /// - Parameter knownFrame: The bounds of the element, if they're known, such as the bounds of a context element,
+  ///   which can't be found again inside the `<use>` element that is the context element.
   private func paint(
     _ value: Paint, opacity: CGFloat, of element: any SVGDrawableElement, path: CGPath, context: ResolveContext,
-    mode: DrawMode, guard references: ReferenceGuard, instance: [ElementID]
+    mode: DrawMode, guard references: ReferenceGuard, instance: [ElementID], frame knownFrame: CGRect? = nil
   ) async -> FillPaint? {
+    if let channel = context.contextPaint?.channel(for: value) {
+      return await paint(channel, opacity: opacity, of: element, mode: mode, guard: references, instance: instance)
+    }
     let style = element.style
     switch style.resolved(value) {
     case .none:
+      return nil
+    case .contextFill, .contextStroke:
+      // Without a context element, or with one whose paint is `none`, nothing is painted.
       return nil
     case .color(let color):
       // A color that isn't known, such as a misspelled name, paints nothing.
@@ -1065,7 +1192,8 @@ package struct RenderTreeBuilder {
       if owner.id != id {
         return await owner.builder.paint(
           .url(owner.id, fallback: fallback), opacity: opacity, of: element, path: path,
-          context: context.with(base: owner.builder.base), mode: mode, guard: references, instance: instance)
+          context: context.with(base: owner.builder.base), mode: mode, guard: references, instance: instance,
+          frame: knownFrame)
       }
       if let server = base.pservers[id] {
         // Display doesn't apply to paint servers, which are never rendered themselves.
@@ -1085,7 +1213,12 @@ package struct RenderTreeBuilder {
           {
             return fallbackPaint
           }
-          let frame = await frame(of: element, context: context, path: path, guard: references)
+          let frame =
+            if let knownFrame {
+              knownFrame
+            } else {
+              await frame(of: element, context: context, path: path, guard: references)
+            }
           // A pattern without width or height, such as one that references nothing for them, paints the fallback.
           let size = merged.size(frame: frame, context: context)
           guard size.width > 0, size.height > 0 else { return fallbackPaint }
@@ -1104,6 +1237,52 @@ package struct RenderTreeBuilder {
       return fallbackPaint
     case .currentColor, .expression:
       preconditionFailure("currentColor is resolved")
+    }
+  }
+
+  /// The context in the user space that the transform of an element establishes, where a context paint is placed.
+  /// The callers look for a context paint first, which most contexts don't have, so that they don't make an
+  /// asynchronous call for nothing.
+  ///
+  /// - Parameter transform: The transform of the element, or `nil` for one drawn as the source of its filter, which
+  ///   moves the result instead, and whose transform is found if there is a context paint.
+  func entering(
+    _ transform: CGAffineTransform?, of element: any SVGDrawableElement, context: ResolveContext, frame: CGRect?,
+    guard references: ReferenceGuard
+  ) async -> ResolveContext {
+    guard context.contextPaint != nil else { return context }
+    if let transform { return context.entering(transform) }
+    return context.entering(await self.transform(of: element, context: context, frame: frame, guard: references))
+  }
+
+  /// What `context-fill` or `context-stroke` paints with, or `nil` if it paints nothing: the paint of the context
+  /// element, with `currentcolor` as the color of the painted element, and the opacity of the painted element. A
+  /// gradient or a pattern paints in the user space and the bounding box of the context element.
+  private func paint(
+    _ channel: ContextPaint.Channel, opacity: CGFloat, of element: any SVGDrawableElement, mode: DrawMode,
+    guard references: ReferenceGuard, instance: [ElementID]
+  ) async -> FillPaint? {
+    let source = channel.source
+    let value = element.style.resolved(source.value)
+    guard value.isServer else {
+      if case .color(let color) = value { return color.toCGColor(opacity: opacity).map { .color($0) } }
+      return nil
+    }
+    let painted = await source.builder.paint(
+      value, opacity: opacity, of: source.element, path: CGPath(rect: source.frame, transform: nil),
+      context: source.context, mode: mode, guard: references, instance: instance, frame: source.frame)
+    // The fallback color paints as it is.
+    guard let painted, !painted.isColor else { return painted }
+    return .context(painted, frame: source.frame, transform: channel.fromContext)
+  }
+
+  /// Whether a value of `fill` or `stroke` is `none`, or `context-fill` or `context-stroke` where the context
+  /// element doesn't paint, or there is no context element.
+  func isNone(_ value: Paint, in context: ResolveContext) -> Bool {
+    switch value {
+    case .none: true
+    case .contextFill, .contextStroke: context.contextPaint?.channel(for: value) == nil
+    default: false
     }
   }
 
@@ -1241,7 +1420,7 @@ package struct RenderTreeBuilder {
     of element: any SVGDrawableElement, context: ResolveContext, paint: FillPaint
   ) -> StrokeStyle? {
     let style = element.style
-    if case .none = style.stroke { return nil }
+    if isNone(style.stroke, in: context) { return nil }
     let dashes = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
     return StrokeStyle(
       paint: paint,
@@ -1279,8 +1458,8 @@ package struct RenderTreeBuilder {
           strokingWithWidth: width, lineCap: style.strokeLinecap, lineJoin: style.strokeLinejoin,
           miterLimit: style.strokeMiterlimit))
     }
-    let fillsPainted = if case .none = style.fill { element is SVGImageElement } else { true }
-    let strokesPainted = if case .none = style.stroke { false } else { true }
+    let fillsPainted = isNone(style.fill, in: context) ? element is SVGImageElement : true
+    let strokesPainted = !isNone(style.stroke, in: context)
     return HitArea(
       pointerEvents: style.pointerEvents, isVisible: style.visibility == .visible, fillsPainted: fillsPainted,
       strokesPainted: strokesPainted, fill: RenderPath(fill), fillRule: isCells ? .fill : element.pathFillRule,

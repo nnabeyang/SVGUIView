@@ -178,6 +178,16 @@ package struct CGPainter {
       }
       graphics.restoreGState()
       return
+    case .context(let paint, let contextFrame, let transform):
+      // The paint of the context element paints in its user space, where the path is placed back.
+      guard transform.isInvertible else { return }
+      var inverse = transform.inverted()
+      guard let placed = path.copy(using: &inverse) else { return }
+      graphics.saveGState()
+      graphics.concatenate(transform)
+      await self.paint(paint, path: placed, frame: contextFrame, fillRule: fillRule, into: graphics)
+      graphics.restoreGState()
+      return
     }
     graphics.addPath(path)
     graphics.drawPath(using: fillRule)

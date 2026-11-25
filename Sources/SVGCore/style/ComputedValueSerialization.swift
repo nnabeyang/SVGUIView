@@ -137,6 +137,8 @@ extension ComputedStyle {
     case .none: "none"
     case .color(let color): CSSText.color(color)
     case .url(let id, let fallback): CSSText.url(id) + (fallback.map { " " + paintText($0) } ?? "")
+    case .contextFill: "context-fill"
+    case .contextStroke: "context-stroke"
     // `resolved(_:)` leaves no `currentcolor`.
     case .currentColor, .expression: CSSText.color(color)
     }

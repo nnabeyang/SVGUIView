@@ -188,7 +188,12 @@ extension SVGAttributeScanner {
     guard let type = SVGFillType(rawValue: name.lowercased()) else {
       _ = reader.consumeWhitespace()
       guard reader.isEOF else { return .color(.named(SVGColorName(name: "black"))) }
-      return name.lowercased() == "none" ? Paint.none : .color(.named(SVGColorName(name: name)))
+      switch name.lowercased() {
+      case "none": return Paint.none
+      case "context-fill": return .contextFill
+      case "context-stroke": return .contextStroke
+      default: return .color(.named(SVGColorName(name: name)))
+      }
     }
     switch type {
     case .current:
@@ -207,7 +212,11 @@ extension SVGAttributeScanner {
       // The fallback is the rest of the value: a paint other than a paint server, with nothing after it.
       guard reader.consumeWhitespace() != nil else { return .url(id, fallback: nil) }
       guard let fallback = scanPaint(), reader.isEOF else { return nil }
-      if case .url = fallback { return nil }
+      // The fallback is `none` or a color.
+      switch fallback {
+      case .url, .contextFill, .contextStroke: return nil
+      default: break
+      }
       return .url(id, fallback: fallback)
     }
   }

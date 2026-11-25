@@ -245,7 +245,7 @@ struct ComputedStyleTests {
      font-style="oblique 10deg" baseline-shift="sub" clip-path="ellipse(1px 2px at 3px 4px) fill-box" filter="brightness(1.5) hue-rotate(90deg) grayscale(50%)" transform-origin="center"
      font-size="x-large" dominant-baseline="middle" writing-mode="vertical-rl" image-rendering="pixelated" stroke-linejoin="bevel" fill-rule="evenodd" text-anchor="middle" display="block" overflow="hidden" direction="rtl" unicode-bidi="bidi-override" white-space="pre" word-spacing="2mm" letter-spacing="0"/>
     <g id="i" clip-path="inset(1px 2px round 3px)" baseline-shift="2px" font-family="monospace" font-style="italic" paint-order="markers stroke" transform="skewX(30)" style="transition-property: none; animation-timing-function: linear(0, 0.5 25%, 1); font-weight: bolder"/>
-    <g id="j" clip-path="polygon(evenodd, 0 0, 10px 0, 5px 10%)" baseline-shift="super" paint-order="fill markers" style="animation-name: k, none; animation-timing-function: ease-in, steps(4, jump-none); font-size: 2cm"/>
+    <g id="j" clip-path="polygon(evenodd, 0 0, 10px 0, 5px 10%)" baseline-shift="super" paint-order="fill markers" fill="context-stroke" stroke="Context-Fill" style="animation-name: k, none; animation-timing-function: ease-in, steps(4, jump-none); font-size: 2cm"/>
     <g id="k" clip-path="fill-box" stroke-dashoffset="-1" stroke-miterlimit="10" style="cx: calc(1px + 10%); cy: max(5px, 10%); font-size: 50%; stop-opacity: 0.333; flood-opacity: 2; text-orientation: upright"/>
     </svg>
     """#
@@ -255,6 +255,8 @@ struct ComputedStyleTests {
   /// of `monospace` is the one that SVGUIView renders it in, which is Chrome's, and a `transform-origin` of `center`
   /// stays a percentage, since SVGUIView doesn't know the box that it's of.
   private static let expectedKeywords: [(id: String, property: String, value: String?)] = [
+    ("j", "fill", "context-stroke"),
+    ("j", "stroke", "context-fill"),
     ("h", "shape-rendering", "optimizespeed"),
     ("h", "pointer-events", "visiblepainted"),
     ("h", "color-interpolation", "linearrgb"),

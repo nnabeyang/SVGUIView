@@ -16,8 +16,8 @@ let package = Package(
   targets: [
     .binaryTarget(
       name: "SVGTestSuite",
-      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/789662255.zip",
-      checksum: "1028953d8fd10813925ca4230ebad093db521df1fa7dc0a1f41b251f1fbc0774"),
+      url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/791209014.zip",
+      checksum: "5783549b3652888ab5e7b9ca0c6812a6536794556f1262d3c5a7bb688e71b501"),
     .binaryTarget(
       name: "SVGSnapshotReferences",
       url: "https://api.github.com/repos/nnabeyang/SnapshotAssets/releases/assets/789663778.zip",
