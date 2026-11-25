@@ -236,10 +236,12 @@ enum MarkerVertices {
   private static func bisector(_ incoming: CGVector?, _ outgoing: CGVector?) -> Double {
     guard let incoming else { return angle(of: outgoing) }
     guard let outgoing else { return angle(of: incoming) }
+    // Half the turn from the incoming direction to the outgoing one, which turns to the left (counterclockwise in the
+    // y-down space) when the directions are opposite, as Chrome and Firefox turn.
     let a = angle(of: incoming)
-    var b = angle(of: outgoing)
-    if b - a > 180 { b -= 360 }
-    if a - b > 180 { b += 360 }
-    return (a + b) / 2
+    var turn = angle(of: outgoing) - a
+    while turn >= 180 { turn -= 360 }
+    while turn < -180 { turn += 360 }
+    return a + turn / 2
   }
 }
