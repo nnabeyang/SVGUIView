@@ -59,6 +59,17 @@ struct MarkerVerticesTests {
     expectClose(vertices("M 5 5"), [[5, 5, 0]])
   }
 
+  @Test("opposite directions into and out of a vertex take the bisector half a turn to the left of the way in")
+  func oppositeDirections() {
+    // The start of each closed subpath goes along it and back, as the markers of markers-orient-002 of
+    // web-platform-tests, whose angles Chrome and Firefox take.
+    expectClose(vertices("M 50 0 v 50 z"), [[50, 0, -180], [50, 50, 0], [50, 0, -180]])
+    expectClose(vertices("M 100 50 h -50 z"), [[100, 50, -90], [50, 50, 90], [100, 50, -90]])
+    expectClose(vertices("M 50 100 v -50 z"), [[50, 100, 0], [50, 50, -180], [50, 100, 0]])
+    expectClose(vertices("M 0 50 h 50 z"), [[0, 50, 90], [50, 50, -90], [0, 50, 90]])
+    expectClose(vertices("M 0 0 H 10 H 0"), [[0, 0, 0], [10, 0, -90], [0, 0, 180]])
+  }
+
   @Test("an arc takes the directions of its ellipse at its ends")
   func arc() {
     // Half a circle over its center from the left to the right, which starts up and ends down.
