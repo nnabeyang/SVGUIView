@@ -129,6 +129,29 @@ struct TurnedRect {
   }
 }
 
+/// The view that draws the caret of the text that is edited, which turns its bar by the angle of the text.
+///
+/// The caret of a turned text is an upright rectangle at its center, without a transform. UIKit places this view
+/// there, and also places a copy of it, of the same class, while a person drags the caret with the loupe, so both turn
+/// the bar about their centers. The view finds the angle in the `SVGUIView` that it's in.
+final class TextCursorView: UIStandardTextCursorView {
+  override func didMoveToSuperview() {
+    super.didMoveToSuperview()
+    setNeedsLayout()
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    var ancestor = superview
+    while let view = ancestor, !(view is SVGUIView) {
+      ancestor = view.superview
+    }
+    let angle = (ancestor as? SVGUIView)?.textEditing?.angle ?? 0
+    layer.sublayerTransform =
+      angle == 0 ? CATransform3DIdentity : CATransform3DMakeAffineTransform(CGAffineTransform(rotationAngle: angle))
+  }
+}
+
 /// The `text` element that a person types into, its text, and the selection.
 @MainActor
 final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelectionDisplayInteractionDelegate {
@@ -144,7 +167,18 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
   var markedTextStyle: [NSAttributedString.Key: Any]?
   weak var inputDelegate: (any UITextInputDelegate)?
   /// The transform from the user space of the text to the coordinates of the view.
-  var transform: CGAffineTransform = .identity
+  var transform: CGAffineTransform = .identity {
+    didSet {
+      // The caret turns its bar by the angle of the text.
+      display?.cursorView.setNeedsLayout()
+    }
+  }
+
+  /// The angle that the text is turned by in the view, which turns its caret and its selection. The baseline of a
+  /// horizontal line, or the x-axis of the text, goes along it.
+  var angle: CGFloat {
+    transform.b == 0 && transform.a >= 0 ? 0 : atan2(transform.b, transform.a)
+  }
   /// Whether the lines are vertical, which `writing-mode` decides.
   let isVertical: Bool
   /// The interaction that shows the caret, the selection, the loupe and the edit menu.
@@ -153,6 +187,8 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
   var display: UITextSelectionDisplayInteraction?
   /// Whether the session added the display interaction, which it removes at the end.
   var addsDisplay = false
+  /// The view that drew the caret of the display interaction before the session, which it draws with again at the end.
+  var replacedCursorView: (any UIView & UITextCursorView)?
   /// The line under the marked characters.
   let markLayer = CAShapeLayer()
   /// Where the characters are, which the changes of the text find again.
@@ -270,6 +306,10 @@ extension SVGUIView {
       session.addsDisplay = true
     }
     layer.addSublayer(session.markLayer)
+    if let display = session.display {
+      session.replacedCursorView = display.cursorView
+      display.cursorView = TextCursorView(frame: .zero)
+    }
     becomeFirstResponder()
     session.display?.isActivated = true
     session.display?.setNeedsSelectionUpdate()
@@ -308,6 +348,9 @@ extension SVGUIView {
     }
     textEditing = nil
     session.display?.isActivated = false
+    if let display = session.display, let cursorView = session.replacedCursorView {
+      display.cursorView = cursorView
+    }
     if session.addsDisplay, let display = session.display {
       removeInteraction(display)
     }
@@ -657,19 +700,12 @@ extension SVGUIView: UITextInput {
     return selectionRects(for: range).first?.rect ?? caretRect(for: range.start)
   }
 
-  /// The angle that the text that is edited is turned by in the view, which turns its caret and its selection. The
-  /// baseline of a horizontal line, or the x-axis of the text, goes along it.
-  private func angle(of session: TextEditingSession) -> CGFloat {
-    let transform = session.transform
-    return transform.b == 0 && transform.a >= 0 ? 0 : atan2(transform.b, transform.a)
-  }
-
   /// The caret at an offset of the text: a thin bar across the line, which the angle of the text turns.
   private func caret(at offset: Int, in session: TextEditingSession) -> TurnedRect {
     let (point, ascent, descent) = caretGeometry(at: offset, in: session)
     let top = CGPoint(x: point.x + ascent.x, y: point.y + ascent.y).applying(session.transform)
     let bottom = CGPoint(x: point.x + descent.x, y: point.y + descent.y).applying(session.transform)
-    let line = TurnedRect(around: [top, bottom], angle: angle(of: session))
+    let line = TurnedRect(around: [top, bottom], angle: session.angle)
     let rect = line.rect
     return TurnedRect(
       rect: session.isVertical
@@ -683,9 +719,12 @@ extension SVGUIView: UITextInput {
     return caret(at: position.offset, in: session).rect
   }
 
+  /// The transform of the caret, which is always the identity: the caret of a turned text is an upright rectangle at
+  /// its center, as ``caretRect(for:)`` gives it, and the view that draws the caret turns its bar by the angle of the
+  /// text. UIKit draws the caret that a person drags, with the loupe, with a copy of that view that doesn't get the
+  /// transform of the caret, so the view turns the bar instead, as it does for both.
   public func caretTransform(for position: UITextPosition) -> CGAffineTransform {
-    guard let session = textEditing, let position = position as? TextEditingPosition else { return .identity }
-    return caret(at: position.offset, in: session).transform
+    .identity
   }
 
   public func selectionRects(for range: UITextRange) -> [UITextSelectionRect] {
@@ -693,7 +732,7 @@ extension SVGUIView: UITextInput {
       let characters = session.layout?.characters
     else { return [] }
     let text = session.text
-    let angle = angle(of: session)
+    let angle = session.angle
     var rects = [TurnedRect]()
     var rendered = 0
     var line: [CGPoint]?
