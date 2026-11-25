@@ -1794,7 +1794,8 @@ struct RenderTreeBuilderTests {
       """##)
     let mask = try #require(try shape(try children(of: tree).last).mask.mask, "The rectangle isn't masked")
     #expect(mask.frame == CGRect(x: 0, y: 0, width: 10, height: 10))
-    #expect(mask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
+    // The region is 10% past the bounding box on each side by default.
+    #expect(mask.region == CGRect(x: -1, y: -1, width: 12, height: 12))
     let paint = try #require(
       try shape(mask.contents.first).content?.vector?.fill?.pattern, "The content of the mask isn't filled with a pattern")
     // The rectangle in the tile references the pattern again, which paints black.
@@ -3186,7 +3187,7 @@ struct RenderTreeBuilderTests {
     let use = try #require(nodes[2].use, "The third child isn't a use element")
     let groupMask = try #require(group.mask)
     #expect(groupMask.frame == CGRect(x: 2, y: 0, width: 5, height: 5))
-    #expect(groupMask.region == CGRect(x: -2, y: -2, width: 24, height: 24))
+    #expect(groupMask.region == CGRect(x: 1.5, y: -0.5, width: 6, height: 6))
     let svgContent = try #require(svg.content)
     #expect(try #require(svgContent.mask).frame == CGRect(x: 0, y: 0, width: 5, height: 5))
     #expect(try #require(use.mask).frame == CGRect(x: 3, y: 0, width: 4, height: 4))

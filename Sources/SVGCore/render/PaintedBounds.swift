@@ -104,14 +104,14 @@ extension ViewportNode {
 
 extension CGRect {
   /// The rectangle without what a clip path and a mask leave out, which is everything outside the bounds of the
-  /// clip path, and outside the bounds and the region of the mask.
+  /// shapes of the clip path, and outside the region of the mask.
   fileprivate func clipped(by clip: ClipPathEffect?, _ mask: MaskEffect?) -> CGRect {
     var rect = self
     if let clip {
-      rect = rect.intersection(clip.frame)
+      rect = rect.intersection(clip.region)
     }
     if let mask {
-      rect = rect.intersection(mask.frame).intersection(mask.region)
+      rect = rect.intersection(mask.region)
     }
     return rect
   }

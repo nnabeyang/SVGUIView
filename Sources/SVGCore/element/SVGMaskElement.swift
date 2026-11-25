@@ -34,6 +34,9 @@ final class SVGMaskElement: SVGDrawableElement {
 
   let children: [any SVGElement]
   let maskContentUnits: SVGUnitType?
+  /// The units of `x`, `y`, `width` and `height`, which are `objectBoundingBox` by default.
+  let maskUnits: SVGUnitType?
+  let maskType: MaskType
 
   init(base _: SVGBaseElement, text _: String, attributes _: [String: String]) {
     fatalError()
@@ -49,6 +52,8 @@ final class SVGMaskElement: SVGDrawableElement {
     width = SVGLength(attributes["width"])
     height = SVGLength(attributes["height"])
     maskContentUnits = SVGUnitType(rawValue: attributes["maskContentUnits", default: ""])
+    maskUnits = SVGUnitType(rawValue: attributes["maskUnits", default: ""])
+    maskType = base.style.maskType
   }
 
   func mask(context: inout SVGBaseContext) {

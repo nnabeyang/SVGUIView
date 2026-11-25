@@ -3,9 +3,9 @@ import Foundation
 
 /// A clip path, built for the bounds of the element that it clips.
 ///
-/// The shapes are drawn into a bitmap of the bounds, whose alpha clips the element.
+/// The shapes are drawn into a bitmap of their region, whose alpha clips the element.
 package final class ClipPathEffect: Sendable {
-  /// The bounds of the element, which the bitmap covers.
+  /// The bounds of the element, which the units of the shapes are fractions of.
   package let frame: CGRect
   /// The `transform` of the `<clipPath>` element.
   package let transform: CGAffineTransform
@@ -21,6 +21,26 @@ package final class ClipPathEffect: Sendable {
     self.shapes = shapes
     self.clipPath = clipPath
   }
+
+  /// The bounds of the shapes in the user space of the clipped element, which the clip path covers, so that what the
+  /// element draws outside its bounds, such as its markers, is clipped as the shapes clip it.
+  package var region: CGRect {
+    let units: CGAffineTransform =
+      switch self.units {
+      case .userSpaceOnUse: .identity
+      case .objectBoundingBox:
+        CGAffineTransform(a: frame.width, b: 0, c: 0, d: frame.height, tx: frame.minX, ty: frame.minY)
+      }
+    let space = units.concatenating(transform)
+    var region = CGRect.null
+    for shape in shapes {
+      region = region.union(shape.path.cgPath.boundingBoxOfPath.applying(shape.transform.concatenating(space)))
+    }
+    if let clipPath {
+      region = region.intersection(clipPath.region)
+    }
+    return region
+  }
 }
 
 /// A child of a `<clipPath>` element.
@@ -34,24 +54,27 @@ package struct ClipShape: Sendable {
 
 /// A mask, built for the bounds of the element that it masks.
 ///
-/// The content is drawn into a bitmap of the bounds, whose luminance masks the element.
+/// The content is drawn into a bitmap of the region, whose luminance or alpha masks the element.
 package final class MaskEffect: Sendable {
-  /// The bounds of the element, which the bitmap covers.
+  /// The bounds of the element, which the units of the content are fractions of.
   package let frame: CGRect
-  /// The rectangle of `x`, `y`, `width` and `height`, which clips the element too.
+  /// The rectangle of `x`, `y`, `width` and `height`, which clips the element too, and the bitmap covers.
   package let region: CGRect
   package let contentUnits: SVGUnitType
+  /// Whether the luminance or the alpha of the content masks the element.
+  package let maskType: MaskType
   package let colorInterpolation: SVGColorInterpolation
   /// The nodes of the children of the `<mask>` element, in the units of its content.
   package let contents: [RenderNode]
 
   init(
-    frame: CGRect, region: CGRect, contentUnits: SVGUnitType, colorInterpolation: SVGColorInterpolation,
-    contents: [RenderNode]
+    frame: CGRect, region: CGRect, contentUnits: SVGUnitType, maskType: MaskType,
+    colorInterpolation: SVGColorInterpolation, contents: [RenderNode]
   ) {
     self.frame = frame
     self.region = region
     self.contentUnits = contentUnits
+    self.maskType = maskType
     self.colorInterpolation = colorInterpolation
     self.contents = contents
   }

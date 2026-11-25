@@ -682,6 +682,23 @@ enum IsolationProperty: StyleProperty {
   }
 }
 
+/// Whether a `<mask>` element masks with the luminance or the alpha of its content. Only the `<mask>` element takes it
+/// as a presentation attribute.
+enum MaskTypeProperty: StyleProperty {
+  static let id = PropertyID.maskType
+  static let isInherited = false
+  static let initial = MaskType.luminance
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.maskType }
+
+  static func accepts(attributeOn name: SVGElementName) -> Bool {
+    name == .mask
+  }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> MaskType? {
+    keyword(text, origin: origin)
+  }
+}
+
 enum ClipRuleProperty: StyleProperty {
   static let id = PropertyID.clipRule
   static let isInherited = true

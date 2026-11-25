@@ -36,11 +36,12 @@ struct PaintedBoundsTests {
       #"<path d="M10 50 L50 40 L10 30" fill="none" stroke="black" stroke-width="2" stroke-miterlimit="20"/>"#,
       CGRect(x: 9, y: 29, width: 45.123, height: 22)
     ),
-    // A clip path paints nothing outside the shape, so it leaves out the stroke.
+    // A clip path paints nothing outside its shapes, so it leaves out the part of the stroke outside them, and keeps
+    // the part inside them, also outside the bounds of the element.
     (
-      #"<clipPath id="c"><rect width="100" height="100"/></clipPath>"#
+      #"<clipPath id="c"><rect width="30" height="100"/></clipPath>"#
         + ##"<rect x="10" y="20" width="30" height="40" stroke="black" stroke-width="4" clip-path="url(#c)"/>"##,
-      CGRect(x: 10, y: 20, width: 30, height: 40)
+      CGRect(x: 8, y: 18, width: 22, height: 44)
     ),
     // A filter paints in its region, which is larger than the element by 10% on each side by default.
     (

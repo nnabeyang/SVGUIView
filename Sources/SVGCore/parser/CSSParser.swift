@@ -491,7 +491,7 @@ struct CSSDeclarationParser: DeclarationParser {
   /// The declarations of a property or of the longhands of a shorthand, by its name in lowercase, or `nil` if the
   /// name is unknown or the value is invalid.
   static func propertyDeclarations(_ name: String, input: inout _CSSParser.Parser) -> [PropertyDeclaration]? {
-    if let id = PropertyID(rawValue: name) {
+    if let id = PropertyID(cssName: name) {
       Self.declaration(id.property, input: &input).map { [$0] }
     } else if name == AnimationShorthand.name {
       AnimationShorthand.declarations(css: &input)
@@ -563,7 +563,7 @@ struct CSSDeclarationParser: DeclarationParser {
     }
     let longhands: [any StyleProperty.Type]
     let shorthand: String?
-    if let id = PropertyID(rawValue: name) {
+    if let id = PropertyID(cssName: name) {
       longhands = [id.property]
       shorthand = nil
     } else if let shorthandLonghands = Self.longhands(ofShorthand: name) {
