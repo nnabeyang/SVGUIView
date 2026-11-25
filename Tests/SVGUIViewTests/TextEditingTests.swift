@@ -144,18 +144,20 @@ struct TextEditingTests {
     let text = try element("t", in: view)
     #expect(await view.beginTextEditing(of: text))
     let angle = CGFloat.pi / 6
-    let caret = view.caretTransform(for: TextEditingPosition(1))
-    #expect(abs(atan2(caret.b, caret.a) - angle) < 0.001)
+    // The caret is an upright rectangle where the turned caret is, without a transform, so that the loupe, which reads
+    // the rectangle alone, is at the caret, and the view that draws it turns its bar.
+    #expect(view.caretTransform(for: TextEditingPosition(1)) == .identity)
+    let display = try #require(view.interactions.lazy.compactMap { $0 as? UITextSelectionDisplayInteraction }.first)
+    let cursor = try #require(display.cursorView as? TextCursorView)
+    view.addSubview(cursor)
+    cursor.layoutIfNeeded()
+    let bar = CATransform3DGetAffineTransform(cursor.layer.sublayerTransform)
+    #expect(abs(atan2(bar.b, bar.a) - angle) < 0.001)
     // The caret stands across the line, as tall as the line, where the character starts.
     let layout = try #require(await text.textLayout())
     let b = layout.characters[1]
-    // The caret is a rectangle where the turned caret is, which its transform turns about its center, so that the
-    // loupe, which reads the rectangle alone, is at the caret.
     let rect = view.caretRect(for: TextEditingPosition(1))
     let center = CGPoint(x: rect.midX, y: rect.midY)
-    #expect(abs(center.applying(caret).x - center.x) < 0.001 && abs(center.applying(caret).y - center.y) < 0.001)
-    let turned = rect.applying(caret)
-    #expect(abs(turned.midX - center.x) < 0.001 && abs(turned.midY - center.y) < 0.001)
     #expect(abs(rect.width - 2) < 0.01)
     let start = b.start.applying(CGAffineTransform(translationX: 100, y: 150).rotated(by: angle).translatedBy(x: -100, y: -150))
     let line = CGPoint(x: b.ascent.x - b.descent.x, y: b.ascent.y - b.descent.y)
@@ -183,8 +185,16 @@ struct TextEditingTests {
   func uprightText() async throws {
     let view = view(##"<text id="t" x="100" y="150">abc</text>"##)
     #expect(await view.beginTextEditing(of: try element("t", in: view)))
+    let display = try #require(view.interactions.lazy.compactMap { $0 as? UITextSelectionDisplayInteraction }.first)
+    let cursor = try #require(display.cursorView as? TextCursorView)
+    view.addSubview(cursor)
+    cursor.layoutIfNeeded()
+    #expect(CATransform3DIsIdentity(cursor.layer.sublayerTransform))
     #expect(view.caretTransform(for: TextEditingPosition(1)) == .identity)
     #expect(view.selectionRects(for: TextEditingRange(0..<3)).map(\.transform) == [.identity])
+    view.endTextEditing()
+    // The display interaction draws its caret with the view that it had before the editing.
+    #expect(!(display.cursorView is TextCursorView))
   }
 
   @Test("the caret moves with the document when the view changes its size, as the keyboard makes it smaller")
