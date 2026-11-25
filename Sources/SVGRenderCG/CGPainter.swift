@@ -553,7 +553,11 @@ package struct CGPainter {
       await paint(node, into: graphics)
       graphics.restoreGState()
     }
-    return graphics.makeImage().flatMap(luminanceToAlpha)
+    // The alpha of the image masks for `alpha`, and its luminance, put into its alpha, for `luminance`.
+    switch mask.maskType {
+    case .luminance: return graphics.makeImage().flatMap(luminanceToAlpha)
+    case .alpha: return graphics.makeImage()
+    }
   }
 
   // MARK: - Patterns

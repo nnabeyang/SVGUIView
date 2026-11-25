@@ -232,7 +232,7 @@ extension RenderTreeBuilder {
       height: (element.height ?? .percent(120)).calculatedLength(
         frame: frame, context: context, mode: .height, unitType: units))
     return MaskEffect(
-      frame: frame, region: region, contentUnits: contentUnits,
+      frame: frame, region: region, contentUnits: contentUnits, maskType: element.maskType,
       colorInterpolation: element.colorInterpolation ?? .sRGB, contents: contents)
   }
 

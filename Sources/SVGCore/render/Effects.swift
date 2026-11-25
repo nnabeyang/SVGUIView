@@ -54,24 +54,27 @@ package struct ClipShape: Sendable {
 
 /// A mask, built for the bounds of the element that it masks.
 ///
-/// The content is drawn into a bitmap of the region, whose luminance masks the element.
+/// The content is drawn into a bitmap of the region, whose luminance or alpha masks the element.
 package final class MaskEffect: Sendable {
   /// The bounds of the element, which the units of the content are fractions of.
   package let frame: CGRect
   /// The rectangle of `x`, `y`, `width` and `height`, which clips the element too, and the bitmap covers.
   package let region: CGRect
   package let contentUnits: SVGUnitType
+  /// Whether the luminance or the alpha of the content masks the element.
+  package let maskType: MaskType
   package let colorInterpolation: SVGColorInterpolation
   /// The nodes of the children of the `<mask>` element, in the units of its content.
   package let contents: [RenderNode]
 
   init(
-    frame: CGRect, region: CGRect, contentUnits: SVGUnitType,
+    frame: CGRect, region: CGRect, contentUnits: SVGUnitType, maskType: MaskType,
     colorInterpolation: SVGColorInterpolation, contents: [RenderNode]
   ) {
     self.frame = frame
     self.region = region
     self.contentUnits = contentUnits
+    self.maskType = maskType
     self.colorInterpolation = colorInterpolation
     self.contents = contents
   }

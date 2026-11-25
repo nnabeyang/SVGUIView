@@ -103,6 +103,11 @@ enum Isolation: String, CaseIterable, Sendable {
   case auto, isolate
 }
 
+/// Whether a mask masks with the luminance or the alpha of its content.
+package enum MaskType: String, CaseIterable, Sendable {
+  case luminance, alpha
+}
+
 /// What a shape is rendered for, which trades the precision of its edges for speed or crispness.
 enum ShapeRendering: String, CaseIterable, Sendable {
   case auto

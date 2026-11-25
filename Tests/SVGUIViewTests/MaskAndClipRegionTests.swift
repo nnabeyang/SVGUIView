@@ -41,6 +41,23 @@ struct MaskAndClipRegionTests {
     #expect(outside[3] == 0, "\(outside)")
   }
 
+  @Test("a mask of the alpha type masks with the alpha of its content, and of the luminance type with its luminance")
+  func maskType() async throws {
+    func masked(_ type: String) async throws -> [UInt8] {
+      try await pixel(
+        #"<mask id="m" mask-type="\#(type)"><rect width="20" height="20" fill="black"/></mask>"#
+          + #"<rect width="20" height="20" fill="lime" mask="url(#m)"/>"#, x: 10, y: 10)
+    }
+    let alpha = try await masked("alpha")
+    let luminance = try await masked("luminance")
+    #expect(alpha == Self.lime, "\(alpha)")
+    #expect(luminance[3] == 0, "\(luminance)")
+    let styled = try await pixel(
+      #"<mask id="m" style="mask-type: alpha"><rect width="20" height="20" fill="black"/></mask>"#
+        + #"<rect width="20" height="20" fill="lime" mask="url(#m)"/>"#, x: 10, y: 10)
+    #expect(styled == Self.lime, "\(styled)")
+  }
+
   @Test("a clip path clips what an element draws outside its bounds, such as a marker, as its shapes clip it")
   func clipOutsideBounds() async throws {
     let content = """
