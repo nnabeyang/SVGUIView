@@ -219,11 +219,18 @@ extension RenderTreeBuilder {
         contents.append(node)
       }
     }
+    // The region is in fractions of the bounding box of the masked element by default, and in its user space, where
+    // a percentage is of the viewport, for `userSpaceOnUse`.
+    let units = element.maskUnits ?? .objectBoundingBox
     let region = CGRect(
-      x: (element.x ?? .percent(-10)).value(context: context, mode: .width),
-      y: (element.y ?? .percent(-10)).value(context: context, mode: .height),
-      width: (element.width ?? .percent(120)).value(context: context, mode: .width),
-      height: (element.height ?? .percent(120)).value(context: context, mode: .height))
+      x: (element.x ?? .percent(-10)).calculatedLength(
+        frame: frame, context: context, mode: .width, unitType: units, isPosition: true),
+      y: (element.y ?? .percent(-10)).calculatedLength(
+        frame: frame, context: context, mode: .height, unitType: units, isPosition: true),
+      width: (element.width ?? .percent(120)).calculatedLength(
+        frame: frame, context: context, mode: .width, unitType: units),
+      height: (element.height ?? .percent(120)).calculatedLength(
+        frame: frame, context: context, mode: .height, unitType: units))
     return MaskEffect(
       frame: frame, region: region, contentUnits: contentUnits,
       colorInterpolation: element.colorInterpolation ?? .sRGB, contents: contents)

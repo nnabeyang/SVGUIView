@@ -357,10 +357,12 @@ package struct CGPainter {
 
   /// Clips `target` to a clip path.
   ///
-  /// - Parameter extent: The rectangle that the clip covers, which is the bounds of the clipped element by default,
-  ///   and the filter region for the result of a filter, which can go past them.
+  /// - Parameter extent: The rectangle that the clip covers, which is the bounds of its shapes by default, and the
+  ///   filter region for the result of a filter.
   func apply(_ clip: ClipPathEffect, to target: CGContext, extent: CGRect? = nil) async {
-    let (extent, scale) = bitmapExtent(of: extent ?? clip.frame, in: target)
+    // The region of large shapes is limited to what shows, so that the bitmap isn't larger than the target.
+    let (extent, scale) = bitmapExtent(
+      of: extent ?? clip.region.intersection(target.boundingBoxOfClipPath), in: target)
     guard !extent.isNull else {
       target.clip(to: .zero)
       return
@@ -412,10 +414,12 @@ package struct CGPainter {
 
   /// Clips `target` to a mask.
   ///
-  /// - Parameter extent: The rectangle that the mask covers, which is the bounds of the masked element by default,
-  ///   and the filter region for the result of a filter, which can go past them.
+  /// - Parameter extent: The rectangle that the mask covers, which is its region by default, and the filter region
+  ///   for the result of a filter.
   func apply(_ mask: MaskEffect, to target: CGContext, extent: CGRect? = nil) async {
-    let (extent, scale) = bitmapExtent(of: extent ?? mask.frame, in: target)
+    // The mask covers its region, which can go past the bounds of the element, such as over its stroke.
+    let (extent, scale) = bitmapExtent(
+      of: extent ?? mask.region.intersection(target.boundingBoxOfClipPath), in: target)
     guard !extent.isNull else {
       target.clip(to: .zero)
       return

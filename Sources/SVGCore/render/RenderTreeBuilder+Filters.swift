@@ -333,18 +333,15 @@ extension RenderTreeBuilder {
   /// give it here.
   private func effectRect(of filter: SVGFilterElement, frame: CGRect, context: ResolveContext) -> CGRect {
     let units = filter.filterUnits ?? .objectBoundingBox
-    let x =
-      filter.x?.calculatedLength(frame: frame, context: context, mode: .width, unitType: units, isPosition: true)
-      ?? (frame.minX - 0.1 * frame.width)
-    let y =
-      filter.y?.calculatedLength(frame: frame, context: context, mode: .height, unitType: units, isPosition: true)
-      ?? (frame.minY - 0.1 * frame.height)
-    let width =
-      filter.width?.calculatedLength(frame: frame, context: context, mode: .width, unitType: units)
-      ?? 1.2 * frame.width
-    let height =
-      filter.height?.calculatedLength(frame: frame, context: context, mode: .height, unitType: units)
-      ?? 1.2 * frame.height
+    // The defaults are -10% and 120% in the units: of the bounding box, or of the viewport for `userSpaceOnUse`.
+    let x = (filter.x ?? .percent(-10)).calculatedLength(
+      frame: frame, context: context, mode: .width, unitType: units, isPosition: true)
+    let y = (filter.y ?? .percent(-10)).calculatedLength(
+      frame: frame, context: context, mode: .height, unitType: units, isPosition: true)
+    let width = (filter.width ?? .percent(120)).calculatedLength(
+      frame: frame, context: context, mode: .width, unitType: units)
+    let height = (filter.height ?? .percent(120)).calculatedLength(
+      frame: frame, context: context, mode: .height, unitType: units)
     return CGRect(x: x, y: y, width: width, height: height)
   }
 
