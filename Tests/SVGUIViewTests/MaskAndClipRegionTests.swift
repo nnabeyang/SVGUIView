@@ -79,4 +79,16 @@ struct MaskAndClipRegionTests {
       x: 5, y: 5)
     #expect(pixel == Self.lime, "\(pixel)")
   }
+
+  @Test("-webkit-clip-path in a style is clip-path")
+  func webkitClipPath() async throws {
+    let content = """
+      <clipPath id="c"><rect width="10" height="20"/></clipPath>\
+      <rect width="20" height="20" fill="lime" style="-webkit-clip-path: url(#c)"/>
+      """
+    let inside = try await pixel(content, x: 5, y: 10)
+    let outside = try await pixel(content, x: 15, y: 10)
+    #expect(inside == Self.lime, "\(inside)")
+    #expect(outside[3] == 0, "\(outside)")
+  }
 }

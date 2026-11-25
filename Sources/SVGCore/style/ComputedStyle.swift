@@ -717,3 +717,14 @@ struct Language: Sendable, Hashable {
     Self.tags.withLock { $0.tags[Int(index)] }
   }
 }
+
+extension PropertyID {
+  /// The property of a name in a style sheet or the `style` attribute, in lowercase, which is also a legacy name that
+  /// browsers alias to a property, such as `-webkit-clip-path` for `clip-path`.
+  init?(cssName name: String) {
+    switch name {
+    case "-webkit-clip-path": self = .clipPath
+    default: self.init(rawValue: name)
+    }
+  }
+}
