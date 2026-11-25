@@ -7,9 +7,15 @@ extension RenderTreeBuilder {
   ///
   /// A marker is a viewport at its vertex, whose content is the children of the `<marker>` element with the
   /// computed values that they have where the element is, not where the shape is. Each marker is a copy of the
-  /// content of its own, which the shape and the place in the instance chain tell apart.
+  /// content of its own, which the shape and the place in the instance chain tell apart. The shape is the context
+  /// element of the content, whose `context-fill` and `context-stroke` paint with the paints of the shape.
+  ///
+  /// - Parameters:
+  ///   - frame: The bounds of the shape, which its paint servers use.
+  ///   - context: The context of the shape in its user space.
   func markerNodes(
-    of element: any ShapeGeometry, context: ResolveContext, guard references: ReferenceGuard, instance: [ElementID]
+    of element: any ShapeGeometry, frame: CGRect, context: ResolveContext, guard references: ReferenceGuard,
+    instance: [ElementID]
   ) async -> [RenderNode] {
     let style = element.style
     let ids = (start: style.markerStart.id, mid: style.markerMid.id, end: style.markerEnd.id)
@@ -22,6 +28,7 @@ extension RenderTreeBuilder {
     if references.markers == nil {
       references = references.beginning(.markers)
     }
+    let contextPaint = ContextPaint(of: element, frame: frame, context: context, builder: self)
     var nodes = [RenderNode]()
     for (index, vertex) in vertices.enumerated() {
       let isStart = index == 0
@@ -44,7 +51,7 @@ extension RenderTreeBuilder {
         // The instance chain tells the copies of the content apart with the shape and the number of the copy.
         let copy = ElementID(rawValue: -1 - nodes.count)
         if let node = await owner.builder.markerNode(
-          marker, at: vertex, isStart: isStart, strokeWidth: strokeWidth,
+          marker, at: vertex, isStart: isStart, strokeWidth: strokeWidth, contextPaint: contextPaint,
           context: owner.id == id ? context : context.with(base: owner.builder.base),
           guard: markerReferences, instance: instance + [element.base.elementID, copy])
         {
@@ -58,7 +65,7 @@ extension RenderTreeBuilder {
   /// A marker at a vertex, or `nil` if it has no area.
   private func markerNode(
     _ marker: SVGMarkerElement, at vertex: MarkerVertex, isStart: Bool, strokeWidth: CGFloat,
-    context: ResolveContext, guard references: ReferenceGuard, instance: [ElementID]
+    contextPaint: ContextPaint, context: ResolveContext, guard references: ReferenceGuard, instance: [ElementID]
   ) async -> RenderNode? {
     let size = CGSize(
       width: marker.width?.value(context: context, mode: .width) ?? 3,
@@ -71,7 +78,7 @@ extension RenderTreeBuilder {
       viewBox.map { (marker.preserveAspectRatio ?? PreserveAspectRatio()).getTransform(viewBox: $0, size: size) }
       ?? .identity
     // The lines of text-decoration on the text in it are the ones that the elements around the marker declare.
-    let contentContext = ResolveContext(
+    var contentContext = ResolveContext(
       base: base, viewPort: viewPort, scale: self.scale,
       viewBox: viewBox ?? CGRect(origin: .zero, size: size)
     ).styled(by: marker).with(textDecorators: textDecorators(around: marker))
@@ -84,6 +91,8 @@ extension RenderTreeBuilder {
       .rotated(by: marker.angle(at: vertex, isStart: isStart) * .pi / 180)
       .scaledBy(x: scale, y: scale)
       .translatedBy(x: -reference.x, y: -reference.y)
+    // The paints of the shape are placed in its user space, which the marker is placed in.
+    contentContext.contextPaint = contextPaint.entering(transform).entering(viewBoxTransform)
     let overflowClip: CGRect? =
       switch marker.overflow {
       case .visible, .auto: nil

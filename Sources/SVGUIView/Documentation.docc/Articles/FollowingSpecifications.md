@@ -145,6 +145,13 @@ browsers don't:
 - `glyph-orientation-vertical="0"` sets the characters of vertical text
   upright.
 - Selectors match the copies that `<use>` elements make within their own tree.
+- `context-fill` and `context-stroke` paint with the fill and the stroke of
+  the shape that references a marker, for the content of the marker, and of
+  the `<use>` element that shows an element, for its copy. A gradient or a
+  pattern paints in the user space and the bounding box of that shape or
+  `<use>` element, so that it continues across them, and an element that
+  isn't in a marker or a `<use>` element paints nothing with them. The
+  opacity and the `currentcolor` are the ones of the element that's painted.
 - The copy of an element of another file that a `<use>` element shows is
   styled by the style sheets of that file, and not of the document of the
   `<use>` element.

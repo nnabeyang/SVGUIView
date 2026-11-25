@@ -12,6 +12,11 @@ indirect enum Paint: Sendable, Equatable {
   /// A paint server, such as a gradient or a pattern, by its ID, and the paint used instead where the server can't
   /// paint: `none`, a color or `currentColor`.
   case url(String, fallback: Paint?)
+  /// The paint of the fill of the context element: the element that references the marker that the element is in,
+  /// or the `<use>` element that shows it. It stays a keyword in computed values and is resolved where it's used.
+  case contextFill
+  /// The paint of the stroke of the context element.
+  case contextStroke
 
   /// Whether the paint is a paint server, whose coordinates the element that it paints sets.
   var isServer: Bool {

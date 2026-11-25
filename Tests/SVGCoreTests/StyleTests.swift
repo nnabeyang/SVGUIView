@@ -75,7 +75,7 @@ struct StyleTests {
     #expect(width == .pixel(2))
   }
 
-  @Test("fill and stroke take none, currentColor, colors and paint servers")
+  @Test("fill and stroke take none, currentColor, colors, paint servers, context-fill and context-stroke")
   func paints() {
     func describe(_ value: Declared<Paint>?) -> String? {
       guard case .value(let paint) = value else { return nil }
@@ -85,6 +85,8 @@ struct StyleTests {
       case .expression: "expression"
       case .color(let color): color.description
       case .url(let id, _): "url(\(id))"
+      case .contextFill: "context-fill"
+      case .contextStroke: "context-stroke"
       }
     }
     #expect(describe(declared(FillProperty.self, css: "none")) == "none")
@@ -92,6 +94,11 @@ struct StyleTests {
     #expect(describe(declared(FillProperty.self, css: "url(#a)")) == "url(a)")
     #expect(describe(StrokeProperty.declared(attribute: "currentcolor")) == "currentColor")
     #expect(describe(StrokeProperty.declared(attribute: "#ff0000")) == SVGColor.hex(SVGHexColor(hex: "ff0000")!).description)
+    #expect(describe(declared(FillProperty.self, css: "context-fill")) == "context-fill")
+    #expect(describe(declared(StrokeProperty.self, css: "Context-Stroke")) == "context-stroke")
+    #expect(describe(FillProperty.declared(attribute: " context-stroke ")) == "context-stroke")
+    // The fallback of a paint server is `none` or a color.
+    #expect(FillProperty.declared(attribute: "url(#a) context-fill") == nil)
   }
 
   @Test("a name that isn't a color and a function that isn't supported are invalid")

@@ -46,6 +46,8 @@ extension RenderTreeBuilder {
     var sourceContext = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: context.viewBox)
     // The lines of text-decoration that the element and its ancestors declare are drawn on the text in it.
     sourceContext.textDecorators = context.textDecorators
+    // The element paints `context-fill` and `context-stroke` as it does without its filter.
+    sourceContext.contextPaint = context.contextPaint
     let source = await nodeWithoutFilter(
       of: element, context: sourceContext, mode: .filter(isRoot: true), guard: sourceReferences, instance: instance)
     var transform = await transform(of: element, context: elementContext, frame: frame, guard: references)

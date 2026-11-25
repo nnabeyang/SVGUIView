@@ -198,6 +198,19 @@ package enum FillPaint: Sendable {
   /// A pattern, or `nil` for one whose tile can't be made, which paints nothing. A cycle of patterns paints black
   /// instead.
   case pattern(PatternPaint?)
+  /// A gradient or a pattern of the context element of `context-fill` or `context-stroke`, which paints in the user
+  /// space of the context element, with its units in the bounding box of the context element.
+  ///
+  /// - Parameters:
+  ///   - frame: The bounding box of the context element, in its user space.
+  ///   - transform: The transform from the user space of the context element to the user space of the painted
+  ///     element.
+  indirect case context(FillPaint, frame: CGRect, transform: CGAffineTransform)
+
+  /// Whether the paint is a color.
+  var isColor: Bool {
+    if case .color = self { true } else { false }
+  }
 }
 
 package struct StrokeStyle: Sendable {

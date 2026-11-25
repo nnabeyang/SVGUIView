@@ -85,6 +85,8 @@ struct ResolveContext: GeometryContext {
   var viewBox: CGRect
   var style = ComputedStyle.initial
   var textDecorators = TextDecorators()
+  /// The paints that `context-fill` and `context-stroke` use, or `nil` where there is no context element.
+  var contextPaint: ContextPaint?
 
   var viewBoxSize: CGSize {
     viewBox.size

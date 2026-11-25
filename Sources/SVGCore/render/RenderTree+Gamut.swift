@@ -51,6 +51,8 @@ extension FillPaint {
       gradient.colors.contains(where: \.isOutsideSRGB)
     case .gradient(nil), .pattern:
       false
+    case .context(let paint, _, _):
+      paint.usesWideGamut
     }
   }
 }
