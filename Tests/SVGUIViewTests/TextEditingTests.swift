@@ -230,6 +230,48 @@ struct TextEditingTests {
     #expect(view.editedTextElement == nil)
   }
 
+  @Test("a tap away from a turned text ends the editing, also where it's inside the bounds of the turned text")
+  func endingAwayFromTurnedText() async throws {
+    let view = view(##"<text id="t" x="60" y="60" transform="rotate(45 60 60)">abcdefgh</text>"##)
+    let session = try #require(await view.beginTextEditing(of: try element("t", in: view)) ? view.textEditing : nil)
+    let line = try #require(view.selectionRects(for: TextEditingRange(0..<8)).first)
+    let center = CGPoint(x: line.rect.midX, y: line.rect.midY)
+    let angle = CGFloat.pi / 4
+    // Along the line, and across it.
+    func point(along: CGFloat, across: CGFloat) -> CGPoint {
+      CGPoint(
+        x: center.x + along * cos(angle) - across * sin(angle), y: center.y + along * sin(angle) + across * cos(angle))
+    }
+    let width = line.rect.width
+    let height = line.rect.height
+    // Within the margin of 20 across the line and past its end, the editing goes on.
+    #expect(session.interactionShouldBegin(session.interaction, at: point(along: 0, across: height / 2 + 10)))
+    #expect(session.interactionShouldBegin(session.interaction, at: point(along: width / 2 + 10, across: 0)))
+    #expect(view.editedTextElement != nil)
+    // 40 across the line is in the bounds of the turned line, but away from the text, so the editing ends.
+    let away = point(along: 0, across: height / 2 + 40)
+    let bounds = CGMutablePath()
+    bounds.addLines(between: TurnedRect(rect: line.rect, transform: line.transform).corners)
+    #expect(bounds.boundingBoxOfPath.contains(away))
+    #expect(!session.interactionShouldBegin(session.interaction, at: away))
+    #expect(view.editedTextElement == nil)
+  }
+
+  @Test("a tap beside a short line of a text that isn't turned, within the longer line, goes on editing")
+  func tapBesideShortLine() async throws {
+    let view = view(##"<text id="t" x="10" y="50">abcdefgh</text>"##)
+    let session = try #require(await view.beginTextEditing(of: try element("t", in: view)) ? view.textEditing : nil)
+    view.selectedTextRange = TextEditingRange(8..<8)
+    view.insertText("\n")
+    view.insertText("a")
+    let lines = view.selectionRects(for: TextEditingRange(0..<10))
+    try #require(lines.count == 2)
+    let beside = CGPoint(x: lines[0].rect.maxX - 5, y: lines[1].rect.midY)
+    #expect(lines[1].rect.maxX < beside.x - 20)
+    #expect(session.interactionShouldBegin(session.interaction, at: beside))
+    #expect(view.editedTextElement != nil)
+  }
+
   @Test("the typed text renders as the same text written in the document")
   func rendering() async throws {
     let typed = view(##"<text id="t" x="10" y="50"></text>"##)
