@@ -120,13 +120,17 @@ package struct RenderTreeBuilder {
   package func build(fit: ContentFit) async -> RenderTree? {
     guard let svg = base.root else { return RenderTree(rootTransforms: [], root: nil) }
     let viewBox = svg.getViewBox(size: viewPort.size)
-    let context = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: viewBox)
+    var context = ResolveContext(base: base, viewPort: viewPort, scale: scale, viewBox: viewBox)
     let (width, height) = rootSize(of: svg, context: context)
     // The view places the box of the width and the height of the root element, which places its view box in that
     // box itself. A box without an area shows nothing.
     var transforms = [CGAffineTransform]()
     if width > 0, height > 0 {
       transforms.append(fit.transform(size: CGSize(width: width, height: height), in: viewPort.size))
+    }
+    // A stroke that doesn't scale is stroked in the coordinates of the view, where the root transforms place the root.
+    if base.usesNonScalingStroke {
+      context.hostSpace = HostSpace(transforms.reversed().reduce(CGAffineTransform.identity) { $0.concatenating($1) })
     }
     let root = await node(of: svg, context: context, mode: .root, guard: ReferenceGuard(), instance: [])
     guard !Task.isCancelled else { return nil }
@@ -189,9 +193,10 @@ package struct RenderTreeBuilder {
       !(unstable?.contains(id) ?? false) && !(changed?.contains(id) ?? false)
     }
     // A paint server of a context element is placed by the bounds of the element, which change with the elements
-    // around this one, so a node painted with it is built again.
+    // around this one, and a stroke that doesn't scale changes with the transforms of the ancestors, so a node
+    // painted with either is built again.
     guard unstable != nil || changed != nil, isStable(element.base.elementID), instance.allSatisfy(isStable),
-      context.contextPaint?.hasServer != true
+      context.contextPaint?.hasServer != true, context.hostSpace == nil
     else {
       return await makeNode(of: element, context: context, mode: mode, guard: references, instance: instance)
     }
@@ -329,7 +334,7 @@ package struct RenderTreeBuilder {
     let isClipped = if case .clipToZero = mask { true } else { false }
     // The paints and the markers of the element are in its user space, where a context paint is placed.
     let (content, markers) =
-      if context.contextPaint == nil {
+      if !context.tracksPlacement {
         await paints(
           of: element, path: path, frame: geometry?.frame ?? .zero, drawsMarkers: !isClipped, context: context,
           mode: mode, guard: references, instance: instance)
@@ -354,12 +359,18 @@ package struct RenderTreeBuilder {
     // `shape-rendering` applies to shapes, and not to text or images.
     let antialiases =
       element is SVGTextElement || element is SVGImageElement ? true : element.style.shapeRendering.antialiases
-    // Text is hit on the cells of its glyphs.
+    // Text is hit on the cells of its glyphs, and a stroke that doesn't scale on its outline.
+    let strokeOutline: CGPath? =
+      switch content {
+      case .vector(_, let stroke?, _)?, .image(_, let stroke?)?: stroke.outline?.cgPath
+      default: nil
+      }
     let hitArea = path.flatMap { path in
       collectsHitAreas
         ? hitArea(
           of: element, fill: (element as? SVGTextElement)?.cells(in: context) ?? path, stroked: path,
-          frame: geometry?.frame ?? path.boundingBoxOfPath, isCells: element is SVGTextElement, context: context)
+          strokeOutline: strokeOutline, frame: geometry?.frame ?? path.boundingBoxOfPath,
+          isCells: element is SVGTextElement, context: context)
         : nil
     }
     guard !markers.isEmpty || parts != nil else {
@@ -507,7 +518,7 @@ package struct RenderTreeBuilder {
       ? await transform(of: text, context: context, frame: frame, guard: references) : .identity
     // The spans are painted in the user space of the text, where a context paint is placed.
     let context =
-      if context.contextPaint == nil {
+      if !context.tracksPlacement {
         context
       } else {
         await entering(
@@ -663,7 +674,7 @@ package struct RenderTreeBuilder {
     let childMode = mode == .filter(isRoot: true) ? .filter(isRoot: false) : mode
     // The children are in the user space of the group, where a context paint is placed.
     let children =
-      if context.contextPaint == nil {
+      if !context.tracksPlacement {
         await childNodes(of: group, context: context, mode: childMode, guard: references, instance: instance)
       } else {
         await childNodes(
@@ -740,7 +751,7 @@ package struct RenderTreeBuilder {
     var (translation, layout) = viewport(of: svg, context: context, isRoot: isRoot)
     // A context paint is placed in the user space of the content, also where the filter moves the content.
     var placement: [CGAffineTransform]?
-    if let layout, context.contextPaint != nil {
+    if let layout, context.tracksPlacement {
       let placing =
         mode == .filter(isRoot: true) && svg.base.name != .symbol
         ? await self.transform(of: svg, context: context, frame: nil, guard: references) : transform
@@ -891,20 +902,19 @@ package struct RenderTreeBuilder {
     let useFrame =
       style.fill.isServer || style.stroke.isServer
       ? await self.frame(of: use, context: context, path: nil, guard: references) : CGRect.zero
-    let contextPaint =
-      if context.contextPaint == nil {
-        ContextPaint(of: use, frame: useFrame, context: context, builder: self)
+    let (contextPaint, hostSpace) =
+      if !context.tracksPlacement {
+        (ContextPaint(of: use, frame: useFrame, context: context, builder: self), HostSpace?.none)
       } else {
-        ContextPaint(
-          of: use, frame: useFrame,
-          context: await entering(
-            isFilterRoot ? nil : transform, of: use, context: context, frame: frame, guard: references),
-          builder: self)
+        await placement(
+          of: use, frame: useFrame, entering: isFilterRoot ? nil : transform, context: context,
+          useFrame: frame, guard: references)
       }
     let content = await withReferencedElement(of: use, context: context, guard: references) { referenced in
       let translation = translation(of: use, context: context)
       var context = referenced.context
       context.contextPaint = contextPaint.entering(translation)
+      context.hostSpace = hostSpace?.entering(translation)
       return UseInstance(
         translation: translation, opacity: opacity(of: use, mode: mode),
         content: await referenced.builder.node(
@@ -915,6 +925,22 @@ package struct RenderTreeBuilder {
       UseNode(
         id: renderID(of: use, instance: instance), transform: transform, clip: clip, mask: mask, instance: content,
         blendMode: blendMode(of: use, mode: mode), isolates: use.style.isolation == .isolate))
+  }
+
+  /// The paints of a `<use>` element as the context element, and where its user space is in the view, for a context
+  /// that follows them. It's apart from `useNode`, so that only those `<use>` elements keep a second context in the
+  /// frame of their task.
+  ///
+  /// - Parameters:
+  ///   - frame: The bounds of the `<use>` element, which its paint servers use.
+  ///   - transform: The transform of the `<use>` element, or `nil` for one drawn as the source of its filter.
+  ///   - useFrame: The bounds that its transform is about, if they're known.
+  private func placement(
+    of use: SVGUseElement, frame: CGRect, entering transform: CGAffineTransform?, context: ResolveContext,
+    useFrame: CGRect?, guard references: ReferenceGuard
+  ) async -> (ContextPaint, HostSpace?) {
+    let placed = await entering(transform, of: use, context: context, frame: useFrame, guard: references)
+    return (ContextPaint(of: use, frame: frame, context: placed, builder: self), placed.hostSpace)
   }
 
   // MARK: - `<use>`
@@ -1250,7 +1276,7 @@ package struct RenderTreeBuilder {
     _ transform: CGAffineTransform?, of element: any SVGDrawableElement, context: ResolveContext, frame: CGRect?,
     guard references: ReferenceGuard
   ) async -> ResolveContext {
-    guard context.contextPaint != nil else { return context }
+    guard context.tracksPlacement else { return context }
     if let transform { return context.entering(transform) }
     return context.entering(await self.transform(of: element, context: context, frame: frame, guard: references))
   }
@@ -1412,17 +1438,25 @@ package struct RenderTreeBuilder {
         style.stroke, opacity: style.strokeOpacity, of: element, path: path, context: context, mode: mode,
         guard: references, instance: instance)
     else { return nil }
-    return strokeStyle(of: element, context: context, paint: paint)
+    return strokeStyle(of: element, context: context, paint: paint, path: path)
   }
 
   /// The stroke of an element with what it's painted with, or `nil` if the element has no stroke.
+  ///
+  /// A stroke with `vector-effect: non-scaling-stroke` is outlined in the coordinates of the view, where it's as wide
+  /// as its `stroke-width` and its dashes are as long as they're given, and the outline is placed back in the user
+  /// space, as SVG 2 strokes it in the host coordinate space. Where the context doesn't know where the user space is
+  /// in the view, as in the content of a clip path, a mask or a pattern, it's stroked as any other stroke.
+  ///
+  /// - Parameter path: The path that the stroke follows, which a stroke that doesn't scale is outlined along, or
+  ///   `nil` if only the width is needed.
   private func strokeStyle(
-    of element: any SVGDrawableElement, context: ResolveContext, paint: FillPaint
+    of element: any SVGDrawableElement, context: ResolveContext, paint: FillPaint, path: CGPath? = nil
   ) -> StrokeStyle? {
     let style = element.style
     if isNone(style.stroke, in: context) { return nil }
     let dashes = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
-    return StrokeStyle(
+    let stroke = StrokeStyle(
       paint: paint,
       dashes: dashes.contains { $0 > 0 } ? dashes : nil,
       dashOffset: style.strokeDashoffset.value(context: context, mode: .other),
@@ -1430,6 +1464,28 @@ package struct RenderTreeBuilder {
       cap: style.strokeLinecap,
       join: style.strokeLinejoin,
       miterLimit: style.strokeMiterlimit)
+    guard style.vectorEffect == .nonScalingStroke, let host = context.hostSpace else { return stroke }
+    // A user space that the view flattens shows no stroke.
+    guard host.transform.isInvertible else { return nil }
+    let outline = path.flatMap { stroke.width > 0 ? Self.outline(of: $0, stroke: stroke, in: host.transform) : nil }
+    return StrokeStyle(
+      paint: stroke.paint, dashes: stroke.dashes, dashOffset: stroke.dashOffset, width: stroke.width / host.scale,
+      cap: stroke.cap, join: stroke.join, miterLimit: stroke.miterLimit, outline: outline.map(RenderPath.init))
+  }
+
+  /// The outline of a stroke along a path, made in the coordinates of a transform from the user space and placed
+  /// back in the user space, or `nil` if the path can't be placed there.
+  private static func outline(of path: CGPath, stroke: StrokeStyle, in host: CGAffineTransform) -> CGPath? {
+    var toHost = host
+    guard let placed = (stroke.cap == .square ? path.squareCapped : path).copy(using: &toHost) else { return nil }
+    var outline = placed
+    if let dashes = stroke.dashes {
+      outline = outline.copy(dashingWithPhase: stroke.dashOffset, lengths: dashes)
+    }
+    outline = outline.copy(
+      strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)
+    var toUser = host.inverted()
+    return outline.copy(using: &toUser)
   }
 
   /// Where an element is hit, in a context styled by the element: its fill, and its stroke with its dashes, caps and
@@ -1438,15 +1494,19 @@ package struct RenderTreeBuilder {
   /// - Parameters:
   ///   - fill: The area of the fill, which is the cells of the glyphs of text.
   ///   - stroked: The path that the stroke follows.
+  ///   - strokeOutline: The outline of a stroke that doesn't scale, which is hit as it's painted, or `nil` to outline
+  ///     the stroke in the user space.
   ///   - isCells: Whether the fill is the cells of glyphs, where both the fill and the stroke are hit.
   private func hitArea(
-    of element: any SVGDrawableElement, fill: CGPath, stroked: CGPath, frame: CGRect, isCells: Bool,
-    context: ResolveContext
+    of element: any SVGDrawableElement, fill: CGPath, stroked: CGPath, strokeOutline: CGPath? = nil, frame: CGRect,
+    isCells: Bool, context: ResolveContext
   ) -> HitArea {
     let style = element.style
     let width = style.strokeWidth.value(context: context, mode: .other)
     var stroke: RenderPath?
-    if width > 0, !isCells {
+    if let strokeOutline, !isCells {
+      stroke = RenderPath(strokeOutline)
+    } else if width > 0, !isCells {
       var outline = stroked
       let dashes = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
       if dashes.contains(where: { $0 > 0 }) {

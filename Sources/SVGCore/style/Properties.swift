@@ -699,6 +699,18 @@ enum MaskTypeProperty: StyleProperty {
   }
 }
 
+/// Whether an element is stroked in the coordinates of the view, which isn't inherited.
+enum VectorEffectProperty: StyleProperty {
+  static let id = PropertyID.vectorEffect
+  static let isInherited = false
+  static let initial = VectorEffect.none
+  static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.vectorEffect }
+
+  static func parse(_ text: String, origin: DeclarationOrigin) -> VectorEffect? {
+    keyword(text, origin: origin)
+  }
+}
+
 enum ClipRuleProperty: StyleProperty {
   static let id = PropertyID.clipRule
   static let isInherited = true

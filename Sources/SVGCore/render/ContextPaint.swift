@@ -100,12 +100,46 @@ final class ContextPaintSource {
   }
 }
 
+/// Where a user space is in the view, which `vector-effect: non-scaling-stroke` strokes in, as SVG 2 strokes it in the
+/// host coordinate space: the coordinates of the view, apart from every transform, the ones of the root included.
+///
+/// It's a class that doesn't change, so that the contexts that carry it, which are copied for every element, stay
+/// small.
+final class HostSpace {
+  /// The transform from the user space to the coordinates of the view.
+  let transform: CGAffineTransform
+
+  init(_ transform: CGAffineTransform) {
+    self.transform = transform
+  }
+
+  /// The user space that a transform establishes in this one, such as the one of a child.
+  func entering(_ transform: CGAffineTransform) -> HostSpace {
+    transform == .identity ? self : HostSpace(transform.concatenating(self.transform))
+  }
+
+  /// How much the transform scales lengths, which divides a width in the view to give it in the user space, as
+  /// browsers measure it: the root mean square of the scales along the two axes.
+  var scale: CGFloat {
+    let t = transform
+    return ((t.a * t.a + t.b * t.b + t.c * t.c + t.d * t.d) / 2).squareRoot()
+  }
+}
+
 extension ResolveContext {
-  /// The context with its context paint in the user space that a transform establishes, such as the one of a child.
+  /// Whether the context follows the transforms down the tree: for the paints of a context element, or for where the
+  /// user space is in the view. Most contexts don't, and they aren't copied for it.
+  var tracksPlacement: Bool {
+    contextPaint != nil || hostSpace != nil
+  }
+
+  /// The context with its context paint and its host space in the user space that a transform establishes, such as
+  /// the one of a child.
   func entering(_ transform: CGAffineTransform) -> ResolveContext {
-    guard let contextPaint else { return self }
+    guard tracksPlacement else { return self }
     var context = self
-    context.contextPaint = contextPaint.entering(transform)
+    context.contextPaint = contextPaint?.entering(transform)
+    context.hostSpace = hostSpace?.entering(transform)
     return context
   }
 }

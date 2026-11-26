@@ -219,10 +219,15 @@ package struct StrokeStyle: Sendable {
   /// The dashes, or `nil` if none of them has a length.
   package let dashes: [CGFloat]?
   package let dashOffset: CGFloat
+  /// The width in the user space. A stroke that doesn't scale is as wide in the view as its `stroke-width`, so its
+  /// width here is about what it is in the user space, as markers and bounds measure it.
   package let width: CGFloat
   package let cap: CGLineCap
   package let join: CGLineJoin
   package let miterLimit: CGFloat
+  /// The outline of a stroke that doesn't scale, with its dashes, caps and joins, in the user space, which is painted
+  /// as the stroke is, or `nil` for a stroke that the painter strokes itself.
+  package var outline: RenderPath?
 }
 
 package enum MaskApplication: Sendable {

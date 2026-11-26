@@ -41,6 +41,9 @@ package struct SVGBaseContext: Sendable {
   let restyleScope: RestyleScope?
   /// The cascaded values of the copies that `<use>` elements show.
   let instanceStyles: InstanceStyles
+  /// Whether an element is stroked with `vector-effect: non-scaling-stroke`, for which the render tree finds where the
+  /// elements are in the view.
+  private(set) var usesNonScalingStroke = false
   private(set) var pservers = [String: any SVGGradientServer]()
   private(set) var contentIdMap = [String: ObjectIdentifier]()
   private(set) var contents = [ObjectIdentifier: any SVGElement]()
@@ -59,13 +62,16 @@ package struct SVGBaseContext: Sendable {
   /// The context of the elements made from a document. Of elements with the same ID, the first one in the document
   /// is the one that references find.
   ///
-  /// - Parameter restyleScope: The elements whose computed values animations can change, which the context of the
-  ///   document at a time keeps from the context that it comes from, or `nil` to find them.
+  /// - Parameters:
+  ///   - restyleScope: The elements whose computed values animations can change, which the context of the document at
+  ///     a time keeps from the context that it comes from, or `nil` to find them.
   ///   - instanceStyles: The cascaded values of the copies that `<use>` elements show, which a context of the same
   ///     document and attributes keeps, or `nil` to find them for this document.
+  ///   - usesNonScalingStroke: Whether an element is stroked without scaling, which the context of the document at a
+  ///     time keeps from the context that it comes from, or `nil` to find it.
   init(
     document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?, animations: DocumentAnimations,
-    restyleScope: RestyleScope? = nil, instanceStyles: InstanceStyles? = nil
+    restyleScope: RestyleScope? = nil, instanceStyles: InstanceStyles? = nil, usesNonScalingStroke: Bool? = nil
   ) {
     self.document = document
     self.stylesheet = stylesheet
@@ -83,15 +89,31 @@ package struct SVGBaseContext: Sendable {
           }
         }
     self.restyleScope = restyleScope ?? (isAnimated ? root.map { RestyleScope(root: $0, animations: animations) } : nil)
+    // An animation can stroke an element without scaling at another time, which the contexts at those times keep
+    // from this one without looking at the elements again.
+    let findsNonScalingStroke = usesNonScalingStroke == nil
+    self.usesNonScalingStroke =
+      usesNonScalingStroke
+      ?? (animations.keyframes.values.contains { rule in
+        rule.keyframes.contains { $0.declarations.properties.contains(.vectorEffect) }
+      } || animations.smil.contains { $0.attributeName == PropertyID.vectorEffect.rawValue })
     guard let root else { return }
     for content in root.elements {
       contents[content.index] = content
       addID(of: content)
+      if findsNonScalingStroke, Self.isStrokedWithoutScaling(content) {
+        self.usesNonScalingStroke = true
+      }
     }
     root.clip(context: &self)
     root.mask(context: &self)
     root.pattern(context: &self)
     root.filter(context: &self)
+  }
+
+  /// Whether an element is stroked with `vector-effect: non-scaling-stroke`.
+  private static func isStrokedWithoutScaling(_ element: any SVGElement) -> Bool {
+    element.style.vectorEffect == .nonScalingStroke
   }
 
   /// Adds an element to the tables of the elements that IDs name, other than the ones of `clip(context:)`,
@@ -191,7 +213,7 @@ package struct SVGBaseContext: Sendable {
         let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
         return SVGBaseContext(
           document: document, stylesheet: stylesheet, root: animated, animations: animations,
-          instanceStyles: instanceStyles)
+          instanceStyles: instanceStyles, usesNonScalingStroke: usesNonScalingStroke)
       }
       var replacements = [ObjectIdentifier: any SVGElement]()
       animated =
@@ -199,7 +221,8 @@ package struct SVGBaseContext: Sendable {
         as? SVGSVGElement
       return SVGBaseContext(
         updating: self, document: document, stylesheet: stylesheet, root: animated, animations: animations,
-        isAnimated: isAnimated, restyleScope: restyleScope, instanceStyles: instanceStyles, replacements: replacements)
+        isAnimated: isAnimated, restyleScope: restyleScope, instanceStyles: instanceStyles, replacements: replacements,
+        findsNonScalingStroke: false)
     } else {
       // Animations of attributes that aren't properties change the attributes before the cascade, so the elements
       // are made again from the document with the animated attributes.
@@ -213,18 +236,20 @@ package struct SVGBaseContext: Sendable {
     }
     return SVGBaseContext(
       document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope,
-      instanceStyles: instanceStyles)
+      instanceStyles: instanceStyles, usesNonScalingStroke: usesNonScalingStroke)
   }
 
   /// The context of the elements of this context with some of them made again, which keeps the elements that
   /// references find, with the replaced ones replaced, instead of finding them in the whole tree again.
   ///
-  /// - Parameter replacements: The elements that are made again, by the identities of the elements that they
-  ///   replace.
+  /// - Parameters:
+  ///   - replacements: The elements that are made again, by the identities of the elements that they replace.
+  ///   - findsNonScalingStroke: Whether the elements made again are looked at for a stroke without scaling, which a
+  ///     change of the document makes, and the time of animations doesn't.
   private init(
     updating context: SVGBaseContext, document: DocumentTree, stylesheet: Stylesheet, root: SVGSVGElement?,
     animations: DocumentAnimations, isAnimated: Bool, restyleScope: RestyleScope?, instanceStyles: InstanceStyles,
-    replacements: [ObjectIdentifier: any SVGElement]
+    replacements: [ObjectIdentifier: any SVGElement], findsNonScalingStroke: Bool
   ) {
     self.document = document
     self.stylesheet = stylesheet
@@ -241,6 +266,14 @@ package struct SVGBaseContext: Sendable {
       contents[old] = nil
       contents[new.index] = new
     }
+    // The elements that a change of the document makes again can be stroked without scaling. Each of them is a
+    // replacement of its own, so their descendants aren't visited. The contexts of the times of animations keep the
+    // value of the document, which the animations that can change it are part of, since reading the computed values
+    // of the elements made again for each frame costs more than the frame does otherwise. A context that had such an
+    // element keeps following where the elements are in the view, which only takes more time where none is left.
+    usesNonScalingStroke =
+      context.usesNonScalingStroke
+      || (findsNonScalingStroke && replacements.values.contains(where: Self.isStrokedWithoutScaling))
     contentIdMap = context.contentIdMap.mapValues { replacements[$0]?.index ?? $0 }
     pservers = context.pservers.mapValues { replacements[$0.index] as? any SVGGradientServer ?? $0 }
     clipPaths = context.clipPaths.mapValues(replaced)
@@ -262,7 +295,8 @@ package struct SVGBaseContext: Sendable {
     self.init(
       updating: context, document: document, stylesheet: stylesheet, root: root, animations: animations,
       isAnimated: !animations.transitions.isEmpty, restyleScope: nil,
-      instanceStyles: InstanceStyles(document: document, stylesheet: stylesheet), replacements: changes.replacements)
+      instanceStyles: InstanceStyles(document: document, stylesheet: stylesheet), replacements: changes.replacements,
+      findsNonScalingStroke: true)
     guard !changes.removed.isEmpty || !changes.added.isEmpty else { return }
     // The IDs of the removed and the added elements can name other elements, so the elements that they name are
     // found again in document order.
@@ -274,6 +308,9 @@ package struct SVGBaseContext: Sendable {
     for element in changes.added.flatMap(\.elements) {
       contents[element.index] = element
       names.formUnion(Self.tableIDs(of: element))
+      if Self.isStrokedWithoutScaling(element) {
+        usesNonScalingStroke = true
+      }
     }
     guard !names.isEmpty, let root = self.root else { return }
     contentIdMap = contentIdMap.filter { !names.contains($0.key) }
@@ -308,7 +345,7 @@ package struct SVGBaseContext: Sendable {
     let animated = root.restyled(parent: nil, root: nil, animations: animations) as? SVGSVGElement
     return SVGBaseContext(
       document: document, stylesheet: stylesheet, root: animated, animations: animations, restyleScope: restyleScope,
-      instanceStyles: instanceStyles)
+      instanceStyles: instanceStyles, usesNonScalingStroke: usesNonScalingStroke)
   }
 
   mutating func setClipPath(id: String, value: SVGClipPathElement) {

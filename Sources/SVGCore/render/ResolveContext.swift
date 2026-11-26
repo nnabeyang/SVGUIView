@@ -87,6 +87,8 @@ struct ResolveContext: GeometryContext {
   var textDecorators = TextDecorators()
   /// The paints that `context-fill` and `context-stroke` use, or `nil` where there is no context element.
   var contextPaint: ContextPaint?
+  /// Where the user space is in the view, which only a document with `vector-effect: non-scaling-stroke` follows.
+  var hostSpace: HostSpace?
 
   var viewBoxSize: CGSize {
     viewBox.size

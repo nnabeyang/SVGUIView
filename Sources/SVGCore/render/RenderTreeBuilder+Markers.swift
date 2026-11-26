@@ -23,7 +23,12 @@ extension RenderTreeBuilder {
       return []
     }
     let vertices = MarkerVertices.vertices(of: data)
-    let strokeWidth = style.strokeWidth.value(context: context, mode: .other)
+    // The markers in units of the stroke width scale with the width in the user space, which a stroke that doesn't
+    // scale has where the transforms to the view make it as wide as its `stroke-width` there.
+    var strokeWidth = style.strokeWidth.value(context: context, mode: .other)
+    if style.vectorEffect == .nonScalingStroke, let host = context.hostSpace, host.scale > 0 {
+      strokeWidth /= host.scale
+    }
     var references = references
     if references.markers == nil {
       references = references.beginning(.markers)
@@ -93,6 +98,7 @@ extension RenderTreeBuilder {
       .translatedBy(x: -reference.x, y: -reference.y)
     // The paints of the shape are placed in its user space, which the marker is placed in.
     contentContext.contextPaint = contextPaint.entering(transform).entering(viewBoxTransform)
+    contentContext.hostSpace = context.hostSpace?.entering(transform).entering(viewBoxTransform)
     let overflowClip: CGRect? =
       switch marker.overflow {
       case .visible, .auto: nil

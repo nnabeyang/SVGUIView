@@ -91,6 +91,7 @@ extension ComputedStyle {
     case .mixBlendMode: mixBlendMode.rawValue
     case .isolation: isolation.rawValue
     case .maskType: maskType.rawValue
+    case .vectorEffect: vectorEffect.rawValue
     case .transform: CSSText.transform(transform)
     case .transformOrigin: "\(CSSText.length(transformOrigin.x)) \(CSSText.length(transformOrigin.y))"
     case .transformBox: transformBox.rawValue
