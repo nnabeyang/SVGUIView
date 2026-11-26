@@ -148,8 +148,8 @@ struct TextLayoutTests {
 
   @Test("the characters of a ligature have the geometry of the ligature, and a caret can go between them")
   func ligature() async throws {
-    // The fonts that draw "fi" as a ligature differ between systems, so the text is laid out in the first family of
-    // the ones that draw it here.
+    // The fonts that draw "fi" as a ligature may differ between systems, so the text is laid out in the first family
+    // of the ones that draw it here. Hoefler Text draws it on the simulators of the tests, in any language.
     var found: SVGDocument.TextLayout?
     for family in ["Hoefler Text", "Baskerville", "Palatino", "Didot", "Helvetica Neue"] {
       let view = view(##"<text id="t" x="10" y="50" font-family="\##(family)">fia</text>"##)
@@ -159,10 +159,7 @@ struct TextLayoutTests {
         break
       }
     }
-    guard let layout = found else {
-      // No font of the system draws the ligature.
-      return
-    }
+    let layout = try #require(found, "No font of the system draws a ligature of fi")
     let f = layout.characters[0]
     let i = layout.characters[1]
     #expect(f == i)
@@ -173,6 +170,18 @@ struct TextLayoutTests {
     let caret = try #require(layout.caretPath(at: 1)).boundingBoxOfPath
     #expect(abs(caret.minX - (f.start.x + f.end.x) / 2) < 0.01)
     #expect(layout.insertionIndex(closestTo: CGPoint(x: (f.start.x + f.end.x) / 2 + 0.5, y: 45)) == 1)
+  }
+
+  @Test("a family of several words without quotes is one family, as the same family in quotes is")
+  func unquotedFamily() async throws {
+    func advance(_ family: String) async throws -> CGFloat {
+      let view = view(##"<text id="t" x="10" y="50" font-family="\##(family)">mmmm</text>"##)
+      let layout = try await layout("t", in: view)
+      return try #require(layout.characters.last).end.x - layout.characters[0].start.x
+    }
+    let unquoted = try await advance("Helvetica Neue")
+    #expect(unquoted == (try await advance("'Helvetica Neue'")))
+    #expect(unquoted != (try await advance("Helvetica")))
   }
 
   @Test("the layout has the changes of the text")
