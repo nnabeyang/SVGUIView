@@ -266,7 +266,7 @@ private struct FilterGeometry {
         guard area(of: subregion) != nil, color.count == 4 else { return false }
       case .gaussianBlur(let blur):
         guard area(of: subregion) != nil else { return false }
-        if case .hetero(let x, let y) = blur.standardDeviation, x >= 0, y >= 0, x != y {
+        if case .hetero(let x, let y) = blur.standardDeviation, x != y {
           guard GaussianBlurPrimitive.isGaussian(x * scale), GaussianBlurPrimitive.isGaussian(y * scale) else {
             return false
           }
@@ -436,11 +436,6 @@ private struct FilterRun {
       let selected = self.input(blur.input, source: &source, input: converted, space: blurSpace)
     else { return nil }
     switch blur.standardDeviation {
-    case .hetero(let x, let y) where x < 0 || y < 0:
-      // The CPU leaves the input of the primitive, rather than the one that it takes.
-      return converted
-    case .iso(let x) where x < 0:
-      return selected
     case .hetero(let x, let y) where x != y:
       let deviationX = x * scale
       let deviationY = y * scale

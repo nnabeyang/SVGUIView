@@ -34,7 +34,7 @@ struct FilterInputTests {
 
   @Test(
     "a negative standard deviation gives the input that the blur names, not the result before it",
-    arguments: ["2 -1", "-1"])
+    arguments: ["-1 -1", "-1"])
   func negativeDeviation(_ deviation: String) async throws {
     let content = square(
       #"<feOffset dx="10"/><feGaussianBlur in="SourceGraphic" stdDeviation=""# + deviation + #""/>"#)

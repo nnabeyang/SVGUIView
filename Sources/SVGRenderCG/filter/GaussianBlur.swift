@@ -48,17 +48,12 @@ extension GaussianBlurPrimitive {
     else { return nil }
     let inputData = buffer.data
     defer { free(inputData) }
-    // The output of the blur, which is the input itself where the blur has no effect.
+    // The output of the blur. A standard deviation of 0 blurs with a kernel of 1, which copies the input.
     guard let data = malloc(buffer.rowBytes * Int(buffer.height)) else { return nil }
     defer { free(data) }
     var destBuffer = vImage_Buffer(data: data, height: buffer.height, width: buffer.width, rowBytes: buffer.rowBytes)
     switch standardDeviation {
     case .hetero(let x, let y):
-      // A negative deviation disables the blur, so that the result is the input, as the specification gives.
-      guard x >= 0, y >= 0 else {
-        destBuffer = buffer
-        break
-      }
       if x != y {
         guard applyHetero(srcBuffer: &buffer, destBuffer: &destBuffer, deviationX: x * scale, deviationY: y * scale, scale: scale)
         else { return nil }
@@ -66,10 +61,6 @@ extension GaussianBlurPrimitive {
         guard applyIso(srcBuffer: &buffer, destBuffer: &destBuffer, deviation: x * scale, scale: scale) else { return nil }
       }
     case .iso(let x):
-      guard x >= 0 else {
-        destBuffer = buffer
-        break
-      }
       guard applyIso(srcBuffer: &buffer, destBuffer: &destBuffer, deviation: x * scale, scale: scale) else { return nil }
     }
     // The image uses the memory of the buffer, which is freed after the image is drawn below.
