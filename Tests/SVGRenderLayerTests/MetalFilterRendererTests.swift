@@ -126,6 +126,8 @@ struct MetalFilterRendererTests {
     filter(#"<feGaussianBlur stdDeviation="2 0"/>"#),
     filter(#"<feGaussianBlur stdDeviation="0"/>"#),
     filter(#"<feGaussianBlur stdDeviation="-1"/>"#),
+    filter(#"<feGaussianBlur stdDeviation="2 -1"/>"#),
+    filter(#"<feGaussianBlur in="SourceAlpha" stdDeviation="-1 -1"/>"#),
     filter(#"<feGaussianBlur in="SourceAlpha" stdDeviation="1"/>"#),
     // Blurs of a flood of the whole region, with transparent black outside its edges.
     filter(#"<feFlood flood-color="gold"/><feGaussianBlur stdDeviation="2"/>"#),

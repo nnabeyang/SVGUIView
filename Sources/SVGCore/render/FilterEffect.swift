@@ -72,11 +72,11 @@ extension FilteredNode {
       case .gaussianBlur(let blur):
         switch blur.standardDeviation {
         case .iso(let deviation):
-          width += 3 * max(deviation, 0)
-          height += 3 * max(deviation, 0)
+          width += 3 * deviation
+          height += 3 * deviation
         case .hetero(let x, let y):
-          width += 3 * max(x, 0)
-          height += 3 * max(y, 0)
+          width += 3 * x
+          height += 3 * y
         }
       case .morphology(_, _, let radius):
         width += max(radius.width, 0)
@@ -325,5 +325,17 @@ package struct GaussianBlurPrimitive: Sendable {
   }
 
   package let input: SVGFilterInput?
+  /// The standard deviation in the user space, whose components aren't negative. A component of 0 doesn't blur in its
+  /// direction.
   package let standardDeviation: StandardDeviation
+
+  /// A blur of the input by a standard deviation, whose negative components are 0, as the specification treats them.
+  package init(input: SVGFilterInput?, standardDeviation: StandardDeviation) {
+    self.input = input
+    self.standardDeviation =
+      switch standardDeviation {
+      case .iso(let deviation): .iso(max(deviation, 0))
+      case .hetero(let x, let y): .hetero(x: max(x, 0), y: max(y, 0))
+      }
+  }
 }
