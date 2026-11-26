@@ -309,15 +309,17 @@ struct TextEditingTests {
     #expect(view.selectionHandle(at: center(0)) == .start)
     #expect(view.selectionHandle(at: center(8)) == .end)
     #expect(view.selectionHandle(at: center(4)) == nil)
-    view.moveSelection(.end, to: center(3))
+    // The end moves from the start, which stays.
+    #expect(view.moveSelection(from: 0, to: center(3)) == .end)
     #expect((view.selectedTextRange as? TextEditingRange)?.range == 0..<3)
-    view.moveSelection(.start, to: center(2))
+    #expect(view.moveSelection(from: 3, to: center(2)) == .start)
     #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
-    // An end doesn't go past the other one, and keeps a character selected.
-    view.moveSelection(.start, to: center(8))
-    #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
-    view.moveSelection(.end, to: center(0))
-    #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
+    // The dragged end passes the other one, and they swap, as on a text that isn't turned.
+    #expect(view.moveSelection(from: 3, to: center(6)) == .end)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<6)
+    // Where they meet, the selection stays.
+    #expect(view.moveSelection(from: 3, to: center(3)) == .end)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<6)
   }
 
   @Test("the edit menu offers Cut and Copy with a selection, and Select with a caret, as a text view does")

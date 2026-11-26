@@ -21,23 +21,30 @@ extension SVGUIView {
     return start <= end ? .start : .end
   }
 
-  /// Moves an end of the selection to the position of the text closest to a point of the view, along the angle of the
-  /// text, and keeps a character selected, as dragging a handle does.
-  func moveSelection(_ end: SelectionEnd, to point: CGPoint) {
+  /// Moves the end of the selection that is dragged to the position of the text closest to a point of the view, along
+  /// the angle of the text, from the other end, which stays where it is, as dragging a handle does. The ends swap where
+  /// the dragged one passes the other one, and the selection stays as it is where they meet, so that a character stays
+  /// selected.
+  ///
+  /// - Parameter anchor: The position of the end that isn't dragged.
+  /// - Returns: The end that the dragged position is now.
+  @discardableResult
+  func moveSelection(from anchor: Int, to point: CGPoint) -> SelectionEnd? {
     guard let session = textEditing, !session.selection.isEmpty,
       let position = (closestPosition(to: point) as? TextEditingPosition)?.offset
-    else { return }
-    let selection =
-      switch end {
-      case .start: min(position, session.selection.upperBound - 1)..<session.selection.upperBound
-      case .end: session.selection.lowerBound..<max(position, session.selection.lowerBound + 1)
-      }
-    guard selection != session.selection else { return }
-    session.inputDelegate?.selectionWillChange(self)
-    session.selection = selection
-    session.typingAttributes = nil
-    session.inputDelegate?.selectionDidChange(self)
-    session.display?.setNeedsSelectionUpdate()
+    else { return nil }
+    guard position != anchor else {
+      return session.selection.lowerBound == anchor ? .end : .start
+    }
+    let selection = min(position, anchor)..<max(position, anchor)
+    if selection != session.selection {
+      session.inputDelegate?.selectionWillChange(self)
+      session.selection = selection
+      session.typingAttributes = nil
+      session.inputDelegate?.selectionDidChange(self)
+      session.display?.setNeedsSelectionUpdate()
+    }
+    return position < anchor ? .start : .end
   }
 
   /// The position of an end of the selection.
@@ -78,14 +85,18 @@ extension TextEditingSession: UIGestureRecognizerDelegate {
     let point = gesture.location(in: view)
     switch gesture.state {
     case .began:
+      // The other end stays where it is while the dragged one moves.
+      handleAnchor = end == .start ? selection.upperBound : selection.lowerBound
       let caret = view.caret(at: offset, in: self)
       handleOffset = CGVector(dx: caret.rect.midX - handleTouchDown.x, dy: caret.rect.midY - handleTouchDown.y)
       handleLoupe = UITextLoupeSession.begin(at: point, fromSelectionWidgetView: nil, in: view)
       fallthrough
     case .changed:
       let target = CGPoint(x: point.x + handleOffset.dx, y: point.y + handleOffset.dy)
-      view.moveSelection(end, to: target)
-      if let moved = view.position(of: end) {
+      if let moved = view.moveSelection(from: handleAnchor, to: target) {
+        draggedEnd = moved
+      }
+      if let draggedEnd, let moved = view.position(of: draggedEnd) {
         let caret = view.caretRect(for: TextEditingPosition(moved))
         handleLoupe?.move(to: CGPoint(x: caret.midX, y: caret.midY), withCaretRect: caret, trackingCaret: true)
       }
