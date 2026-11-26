@@ -27,10 +27,15 @@ struct AttributeScannerTests {
     ("'Arial", ["Arial"]),
     ("a,,b", []),
     ("(", []),
+    ("Hoefler Text", ["Hoefler Text"]),
+    ("Times  New   Roman, serif", ["Times New Roman", "-webkit-serif"]),
+    (#""a b" c"#, []),
+    ("serif foo", ["serif foo"]),
+    ("'serif', a", ["serif", "a"]),
   ]
 
   @Test(
-    "font families are names or strings, and a string without the closing quote ends at the end",
+    "font families are sequences of names or strings, and a string without the closing quote ends at the end",
     arguments: familyTexts)
   func fontFamilies(text: String, families: [String]) {
     #expect(SVGUIFont(name: text, size: .medium, weight: .normal).families == families)

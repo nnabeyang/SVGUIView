@@ -125,23 +125,33 @@ extension SVGAttributeScanner {
     "standard",
   ]
 
-  /// The families of a `font-family` value, or none if a character is neither in a name nor in quotes.
+  /// The families of a `font-family` value, separated by commas, or none if the value isn't a list of families.
+  ///
+  /// A family is a string, or a sequence of identifiers separated by whitespace, whose name is the identifiers joined
+  /// by single spaces, as CSS Fonts 4 reads a family name without quotes: `Times New Roman` is one family. A single
+  /// identifier that names a generic family, such as `serif`, is the generic family, and a string never is.
   mutating func scanFontFamilies() -> [String] {
     var families = [String]()
     guard reader.consumeWhitespace() != nil else { return families }
     while !reader.isEOF {
-      let family: String
       let ch = reader.peek()
       if ch == UInt8(ascii: "\"") || ch == UInt8(ascii: "'") {
-        family = consumeString()
-      } else if let name = scanIdentity() {
-        family = name
+        families.append(consumeString())
+      } else if let first = scanIdentity() {
+        var names = [first]
+        while reader.consumeWhitespace() != nil, reader.peek().isName {
+          names.append(consumeName())
+        }
+        let family = names.joined(separator: " ")
+        families.append(names.count == 1 && Self.familyNames.contains(family) ? "-webkit-\(family)" : family)
       } else {
         return []
       }
-      let prefix = Self.familyNames.contains(family) ? "-webkit-" : ""
-      families.append("\(prefix)\(family)")
-      consumeWhitespaceIfNext(UInt8(ascii: ","))
+      // A family ends at a comma or at the end of the value.
+      guard let next = reader.consumeWhitespace() else { break }
+      guard next == UInt8(ascii: ",") else { return [] }
+      reader.advance()
+      _ = reader.consumeWhitespace()
     }
     return families
   }
