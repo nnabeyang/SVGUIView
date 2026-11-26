@@ -112,6 +112,14 @@ final class DocumentElement: Sendable {
       texts: [text], children: [])
   }
 
+  /// The element with other character data before each child and after the last one, one more than the children.
+  func replacingTexts(_ texts: [String]) -> DocumentElement {
+    DocumentElement(
+      id: id, name: name, localName: localName, namespace: namespace, attributes: attributes,
+      writtenAttributes: storedWrittenAttributes,
+      texts: texts, children: children)
+  }
+
   /// The element without the child at a position. The character data before and after the child goes together.
   func removingChild(at index: Int) -> DocumentElement {
     var children = children
@@ -298,6 +306,25 @@ package struct DocumentTree: Sendable {
         languages: languages, mayHaveAnimationElements: mayHaveAnimationElements),
       removed
     )
+  }
+
+  /// The document with the character data of an element before each of its children and after the last one replaced,
+  /// or `nil` if the document doesn't have the element or the texts aren't one more than the children.
+  ///
+  /// The element and its ancestors are copied with their identifiers, and every other subtree is shared.
+  package func replacingTexts(of id: ElementID, with texts: [String]) -> DocumentTree? {
+    guard let root, let path = paths[id] else { return nil }
+    let element = path.reduce(root) { $0.children[$1] }
+    guard texts.count == element.children.count + 1 else { return nil }
+    return DocumentTree(
+      root: root.replacingDescendant(at: path[...], with: element.replacingTexts(texts)), paths: paths,
+      languages: languages, mayHaveAnimationElements: mayHaveAnimationElements)
+  }
+
+  /// The character data of an element before each of its children and after the last one, without the character data
+  /// of the children, or `nil` if the document doesn't have the element.
+  package func texts(of id: ElementID) -> [String]? {
+    cursor(at: id)?.element.texts
   }
 
   /// The character data of an element and its descendants in document order, or `nil` if the document doesn't have
