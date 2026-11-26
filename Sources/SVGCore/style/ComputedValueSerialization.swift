@@ -325,7 +325,7 @@ enum CSSText {
   }
 
   static func url(_ id: String) -> String {
-    let reference = id.hasPrefix("#") || id.contains("/") || id.contains(":") ? id : "#" + id
+    let reference = id.hasPrefix("#") || id.contains("/") || id.contains(":") || id.contains("#") ? id : "#" + id
     return "url(\"\(reference)\")"
   }
 

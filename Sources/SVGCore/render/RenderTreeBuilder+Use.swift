@@ -97,6 +97,23 @@ extension RenderTreeBuilder {
       external: document, of: self, resources: resources.rebased(to: file), chain: documentChain + [file])
   }
 
+  /// The builder of the SVG document of a data URL, which a marker of the document names, or `nil` if the URL isn't
+  /// a data URL of an SVG document, the document is already in the chain of documents that shows it, or the chain is
+  /// as deep as is drawn.
+  ///
+  /// The document is parsed once for all the renderings, as an SVG image is, and reads no files.
+  func dataDocumentBuilder(for href: some StringProtocol) -> RenderTreeBuilder? {
+    guard EmbeddedImage.isDataURL(href), documentChain.count < Self.maxDocumentDepth else { return nil }
+    // The document is the URL without its fragment.
+    let url = href.firstIndex(of: "#").map { href[..<$0] } ?? href[...]
+    guard let key = URL(string: String(url)), !documentChain.contains(key),
+      let data = EmbeddedImage.data(ofHref: url).flatMap(EmbeddedImage.svgData(of:))
+    else { return nil }
+    let document = imageDocuments.document(of: data, languages: base.document.languages).context
+    guard document.root != nil else { return nil }
+    return RenderTreeBuilder(external: document, of: self, resources: .none, chain: documentChain + [key])
+  }
+
   /// The builder of the document whose element a reference names, and the ID of the element there: this builder,
   /// or the builder of the document of the `<use>` element that a value that the copy inherits came from.
   func owner(ofReference id: String) -> (builder: RenderTreeBuilder, id: String) {
