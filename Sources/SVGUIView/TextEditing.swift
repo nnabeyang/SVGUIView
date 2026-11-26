@@ -15,6 +15,14 @@ public protocol SVGUIViewTextEditingDelegate: AnyObject {
   /// keyboard marks while they're composed, such as Japanese before it's converted, change the text once when
   /// they're committed.
   func svgView(_ view: SVGUIView, didChangeTextOf element: SVGDocument.Element, from oldText: String)
+  /// The text of the element or the attributes of its runs changed, from the styled text before it, which an app can
+  /// register to undo with ``SVGDocument/Element/setStyledText(_:)``.
+  ///
+  /// The view calls this method for every change, also of the attributes alone, such as
+  /// ``SVGUIView/setTextAttribute(_:to:in:)`` makes. By default, it calls
+  /// ``svgView(_:didChangeTextOf:from:)`` with the characters of the text, so that an app that adopts only that
+  /// method hears about the changes.
+  func svgView(_ view: SVGUIView, didChangeTextOf element: SVGDocument.Element, fromStyledText oldText: SVGStyledText)
   /// The editing of the element ended, and the view hid the keyboard. An app can remove an element that has no text
   /// left.
   func svgViewDidEndTextEditing(_ view: SVGUIView, element: SVGDocument.Element)
@@ -25,6 +33,11 @@ public protocol SVGUIViewTextEditingDelegate: AnyObject {
 extension SVGUIViewTextEditingDelegate {
   public func svgViewDidBeginTextEditing(_: SVGUIView, element _: SVGDocument.Element) {}
   public func svgView(_: SVGUIView, didChangeTextOf _: SVGDocument.Element, from _: String) {}
+  public func svgView(
+    _ view: SVGUIView, didChangeTextOf element: SVGDocument.Element, fromStyledText oldText: SVGStyledText
+  ) {
+    svgView(view, didChangeTextOf: element, from: oldText.string)
+  }
   public func svgViewDidEndTextEditing(_: SVGUIView, element _: SVGDocument.Element) {}
   public func svgView(_: SVGUIView, shouldEndTextEditingAt _: CGPoint) -> Bool { true }
 }
@@ -169,11 +182,16 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
   weak var view: SVGUIView?
   /// The characters of the text, with a line feed between the lines.
   var text: [Character]
+  /// The attributes of the run of each character, which are none for a line feed.
+  var attributes: [[String: String]]
+  /// The attributes of the characters that are typed next, which an attribute that is set without a selection gives,
+  /// or `nil` for the attributes of the characters around the caret. Moving the selection removes them.
+  var typingAttributes: [String: String]?
   var selection: Range<Int>
   /// The characters that the keyboard marks while they're composed, or `nil`.
   var marked: Range<Int>?
   /// The text before the marked characters began, which the change that commits them changes from.
-  var textBeforeMarking: String?
+  var textBeforeMarking: SVGStyledText?
   var markedTextStyle: [NSAttributedString.Key: Any]?
   weak var inputDelegate: (any UITextInputDelegate)?
   /// The transform from the user space of the text to the coordinates of the view.
@@ -204,16 +222,57 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
   /// Where the characters are, which the changes of the text find again.
   private var cachedLayout: (text: [Character], characters: [CharacterGeometry?])??
 
-  init(element: SVGDocument.Element, view: SVGUIView, text: [Character], isVertical: Bool) {
+  init(element: SVGDocument.Element, view: SVGUIView, text: SVGStyledText, isVertical: Bool) {
     self.element = element
     self.view = view
-    self.text = text
+    self.text = Array(text.string)
+    attributes = Self.lineFeedsWithoutAttributes(Array(text.string), text.characterAttributes)
     self.isVertical = isVertical
-    selection = text.count..<text.count
+    selection = self.text.count..<self.text.count
     super.init()
     markLayer.fillColor = nil
     markLayer.strokeColor = UIColor.tintColor.cgColor
     markLayer.lineWidth = 2
+  }
+
+  /// The text with the attributes of its runs.
+  var styledText: SVGStyledText {
+    SVGStyledText(characters: text, attributes: attributes)
+  }
+
+  /// The attributes of characters, with none for the line feeds, which aren't in a run.
+  static func lineFeedsWithoutAttributes(_ text: [Character], _ attributes: [[String: String]]) -> [[String: String]] {
+    zip(text, attributes).map { $0 == "\n" ? [:] : $1 }
+  }
+
+  /// The attributes that a character typed in place of a range takes: the typing attributes, or the ones of the
+  /// character before it in its line, or else of the character after it in its line.
+  func inheritedAttributes(at range: Range<Int>) -> [String: String] {
+    if let typingAttributes { return typingAttributes }
+    // A selection that is replaced gives the attributes of its first character.
+    if !range.isEmpty, text[range.lowerBound] != "\n" {
+      return attributes[range.lowerBound]
+    }
+    if range.lowerBound > 0, text[range.lowerBound - 1] != "\n" {
+      return attributes[range.lowerBound - 1]
+    }
+    if range.upperBound < text.count, text[range.upperBound] != "\n" {
+      return attributes[range.upperBound]
+    }
+    return [:]
+  }
+
+  /// Reads the text of the element again, after an app changed it, and keeps the selection in it.
+  func reload() -> Bool {
+    guard let styled = element.styledText else { return false }
+    text = Array(styled.string)
+    attributes = Self.lineFeedsWithoutAttributes(text, styled.characterAttributes)
+    selection = selection.clamped(to: 0..<text.count)
+    marked = nil
+    textBeforeMarking = nil
+    typingAttributes = nil
+    invalidateLayout()
+    return true
   }
 
   /// The rendered characters and where they are, in the user space of the text.
@@ -263,10 +322,12 @@ extension SVGUIView {
   /// until it's committed. A tap outside the text, ``endTextEditing()`` and new data end the editing, and the
   /// ``textEditingDelegate`` hears about the changes.
   ///
-  /// The element is a `text` element of the document that the view shows, in a window, with character data and no
-  /// children, or with `tspan` elements that are lines: each with an `x` attribute, or a `y` attribute in vertical
-  /// text, and with character data only. The editing sets `xml:space="preserve"`, so that spaces are kept, and writes
-  /// a text of more than one line as lines of that form, the next one `1.2em` after the one before it.
+  /// The element is a `text` element of the document that the view shows, in a window, whose content is a line of
+  /// character data and `tspan` elements of runs, or `tspan` elements that are lines of them: each line with an `x`
+  /// attribute, or a `y` attribute in vertical text. The `tspan` of a run has no position attributes and no child
+  /// elements, and ``SVGDocument/Element/styledText`` reads its attributes. The editing sets
+  /// `xml:space="preserve"`, so that spaces are kept, and writes a text of more than one line as lines of that form,
+  /// the next one `1.2em` after the one before it.
   ///
   /// - Parameters:
   ///   - element: The `text` element to edit.
@@ -278,24 +339,14 @@ extension SVGUIView {
     guard element.document === document, element.isConnected, element.localName == "text", window != nil else {
       return false
     }
-    let writingMode = element.computedStyle.property("writing-mode") ?? "horizontal-tb"
-    let isVertical = writingMode.hasPrefix("vertical") || writingMode.hasPrefix("sideways")
-    let lineAttribute = isVertical ? "y" : "x"
-    let children = element.children
-    guard
-      children.allSatisfy({
-        $0.localName == "tspan" && $0.attribute(lineAttribute) != nil && $0.children.isEmpty
-      })
-    else { return false }
+    guard let styled = element.styledText else { return false }
     endTextEditing()
-    let lines = children.isEmpty ? [element.textContent] : children.map(\.textContent)
     let session = TextEditingSession(
-      element: element, view: self, text: Array(lines.joined(separator: "\n")), isVertical: isVertical)
+      element: element, view: self, text: styled, isVertical: StyledTextContent.isVertical(element))
     element.setAttribute("xml:space", to: "preserve")
-    // Character data between the lines would be rendered with the spaces kept, so the lines are written again.
-    if !children.isEmpty, element.textContent != lines.joined() {
-      writeLines(lines, of: session)
-    }
+    // Character data between the lines would be rendered with the spaces kept, so the text is written again in the
+    // form that the editing writes, which keeps what's already in that form.
+    StyledTextContent.write(styled, into: element)
     if let range {
       session.selection = range.clamped(to: 0..<session.text.count)
     }
@@ -395,61 +446,29 @@ extension SVGUIView {
     // characters, which it marks.
     let movesSelection = session.marked == nil && marked == nil
     if movesSelection { session.inputDelegate?.selectionWillChange(self) }
-    let old = String(session.text)
+    let old = session.styledText
     if session.marked == nil, marked != nil {
       session.textBeforeMarking = old
     }
+    // The characters take the attributes of the typing or of the characters around them.
+    let inherited = session.inheritedAttributes(at: range)
     session.text.replaceSubrange(range, with: characters)
+    session.attributes.replaceSubrange(range, with: characters.map { $0 == "\n" ? [:] : inherited })
     session.selection = selection.clamped(to: 0..<session.text.count)
     session.marked = marked?.clamped(to: 0..<session.text.count)
-    let lines = String(session.text).split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    writeLines(lines, of: session)
+    StyledTextContent.write(session.styledText, into: session.element)
     session.invalidateLayout()
     updateMarkLayer(of: session)
     if movesSelection { session.inputDelegate?.selectionDidChange(self) }
     session.display?.setNeedsSelectionUpdate()
     if notifies { session.inputDelegate?.textDidChange(self) }
     // The marked characters change the text once, when they're committed.
-    if session.marked == nil, String(session.text) != (session.textBeforeMarking ?? old) {
+    if session.marked == nil, session.styledText != (session.textBeforeMarking ?? old) {
       textEditingDelegate?.svgView(
-        self, didChangeTextOf: session.element, from: session.textBeforeMarking ?? old)
+        self, didChangeTextOf: session.element, fromStyledText: session.textBeforeMarking ?? old)
     }
     if session.marked == nil {
       session.textBeforeMarking = nil
-    }
-  }
-
-  /// Writes the lines into the element: one line as its character data, and more as `tspan` elements.
-  private func writeLines(_ lines: [String], of session: TextEditingSession) {
-    let element = session.element
-    guard lines.count > 1 else {
-      if !element.children.isEmpty || element.textContent != lines.first ?? "" {
-        element.textContent = lines.first ?? ""
-      }
-      return
-    }
-    let lineAttribute = session.isVertical ? "y" : "x"
-    let children = element.children
-    if children.count == lines.count {
-      for (child, line) in zip(children, lines) where child.textContent != line {
-        child.textContent = line
-      }
-      return
-    }
-    // The lines start where the text does, and each one is 1.2em after the one before it.
-    let start =
-      element.attribute(lineAttribute)?.split(whereSeparator: { $0 == " " || $0 == "," }).first
-      .map(String.init) ?? "0"
-    let isRightToLeft = (element.computedStyle.property("writing-mode") ?? "") == "vertical-rl"
-    let advance =
-      session.isVertical ? (isRightToLeft ? ("dx", "-1.2em") : ("dx", "1.2em")) : ("dy", "1.2em")
-    element.textContent = ""
-    for (index, line) in lines.enumerated() {
-      let tspan = document.createElement("tspan")
-      tspan.setAttribute(lineAttribute, to: start)
-      tspan.setAttribute(advance.0, to: index == 0 ? "0" : advance.1)
-      tspan.textContent = line
-      try? element.append(tspan)
     }
   }
 
@@ -579,6 +598,7 @@ extension SVGUIView: UITextInput {
     set {
       guard let session = textEditing, let range = newValue as? TextEditingRange else { return }
       session.selection = range.range.clamped(to: 0..<session.text.count)
+      session.typingAttributes = nil
       session.display?.setNeedsSelectionUpdate()
     }
   }
@@ -797,6 +817,137 @@ extension SVGUIView: UITextInput {
     }
     let start = min(position.offset, max(session.text.count - 1, 0))
     return TextEditingRange(start..<min(start + 1, session.text.count))
+  }
+
+  // MARK: - Attributes of runs
+
+  /// The text that a person types into, with the attributes of its runs, or `nil` if the view doesn't edit text.
+  public var editedStyledText: SVGStyledText? {
+    textEditing?.styledText
+  }
+
+  /// Sets an attribute of the characters of a range of the text that is edited, or removes it if the value is `nil`,
+  /// such as `font-weight` to `bold` or `fill` to `red`. The characters are written as a `tspan` element of a run
+  /// with the attribute.
+  ///
+  /// Without characters in the range, the attribute is set for the characters that are typed next at the caret,
+  /// until the selection moves. The attributes that place characters, such as `x` and `dy`, aren't set.
+  ///
+  /// ```swift
+  /// svgView.setTextAttribute("font-weight", to: "bold")
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - name: The name of the attribute, which is a presentation attribute of `tspan` elements, such as `fill`.
+  ///   - value: The value of the attribute, or `nil` to remove it.
+  ///   - range: The characters, or `nil` for the selection.
+  public func setTextAttribute(_ name: String, to value: String?, in range: UITextRange? = nil) {
+    guard let session = textEditing, !StyledTextContent.positionAttributes.contains(name), session.marked == nil
+    else { return }
+    let range =
+      ((range as? TextEditingRange)?.range ?? session.selection).clamped(to: 0..<session.text.count)
+    guard !range.isEmpty else {
+      var typing = session.inheritedAttributes(at: range)
+      typing[name] = value
+      session.typingAttributes = typing
+      return
+    }
+    let old = session.styledText
+    for index in range where session.text[index] != "\n" {
+      session.attributes[index][name] = value
+    }
+    guard session.styledText != old else { return }
+    session.inputDelegate?.selectionWillChange(self)
+    StyledTextContent.write(session.styledText, into: session.element)
+    session.invalidateLayout()
+    updateMarkLayer(of: session)
+    session.inputDelegate?.selectionDidChange(self)
+    session.display?.setNeedsSelectionUpdate()
+    textEditingDelegate?.svgView(self, didChangeTextOf: session.element, fromStyledText: old)
+  }
+
+  /// The attributes that every character of a range of the text that is edited has with the same value, or the
+  /// attributes of the characters that are typed next at the caret without characters in the range, which an app
+  /// shows in its controls, such as whether bold is on.
+  ///
+  /// - Parameter range: The characters, or `nil` for the selection.
+  public func textAttributes(in range: UITextRange? = nil) -> [String: String] {
+    guard let session = textEditing else { return [:] }
+    let range =
+      ((range as? TextEditingRange)?.range ?? session.selection).clamped(to: 0..<session.text.count)
+    let characters = range.filter { session.text[$0] != "\n" }
+    guard let first = characters.first else { return session.inheritedAttributes(at: range) }
+    return session.attributes[first].filter { name, value in
+      characters.allSatisfy { session.attributes[$0][name] == value }
+    }
+  }
+
+  /// Reads the text that the view edits again, after an app wrote its content, or ends the editing if the content
+  /// isn't text that the view edits.
+  func textDidChange(of element: SVGDocument.Element) {
+    guard let session = textEditing, session.element == element else { return }
+    session.inputDelegate?.textWillChange(self)
+    session.inputDelegate?.selectionWillChange(self)
+    let reloaded = session.reload()
+    updateMarkLayer(of: session)
+    session.inputDelegate?.selectionDidChange(self)
+    session.inputDelegate?.textDidChange(self)
+    session.display?.setNeedsSelectionUpdate()
+    if !reloaded {
+      endTextEditing()
+    }
+  }
+
+  /// Sets an attribute of the selection to a value, or removes it if every character of the selection has it, as
+  /// the edit menu and the keyboard toggle bold, italic and underline.
+  ///
+  /// The characters are on where their runs or the text that they inherit from have a value that is on, such as a
+  /// `font-weight` of 700 for bold, as the text looks. Where the text is on, the characters are turned off with the
+  /// value that is off, such as `normal`, and on by removing the attribute of their runs, and elsewhere the other way
+  /// around.
+  private func toggleTextAttribute(_ name: String, on: String, off: String, isOn valueIsOn: (String) -> Bool) {
+    guard let session = textEditing else { return }
+    let inherited = session.element.computedStyle.property(name).map(valueIsOn) ?? false
+    func isOn(_ attributes: [String: String]) -> Bool {
+      attributes[name].map(valueIsOn) ?? inherited
+    }
+    let range = session.selection
+    let characters = range.filter { session.text[$0] != "\n" }
+    let allOn =
+      characters.isEmpty
+      ? isOn(session.inheritedAttributes(at: range)) : characters.allSatisfy { isOn(session.attributes[$0]) }
+    // The characters take the value that they inherit where it's the one that they get.
+    setTextAttribute(name, to: allOn ? (inherited ? off : nil) : (inherited ? nil : on))
+  }
+
+  override public func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+    if action == #selector(toggleBoldface(_:)) || action == #selector(toggleItalics(_:))
+      || action == #selector(toggleUnderline(_:))
+    {
+      return textEditing != nil && allowsEditingTextAttributes
+    }
+    return super.canPerformAction(action, withSender: sender)
+  }
+
+  override public func toggleBoldface(_: Any?) {
+    guard allowsEditingTextAttributes else { return }
+    toggleTextAttribute("font-weight", on: "bold", off: "normal") {
+      $0 == "bold" || $0 == "bolder" || (Double($0) ?? 0) >= 600
+    }
+  }
+
+  override public func toggleItalics(_: Any?) {
+    guard allowsEditingTextAttributes else { return }
+    toggleTextAttribute("font-style", on: "italic", off: "normal") {
+      $0.hasPrefix("italic") || $0.hasPrefix("oblique")
+    }
+  }
+
+  override public func toggleUnderline(_: Any?) {
+    guard allowsEditingTextAttributes else { return }
+    toggleTextAttribute("text-decoration", on: "underline", off: "none") {
+      $0.split(separator: " ").contains("underline")
+    }
   }
 
   // MARK: - Editing actions

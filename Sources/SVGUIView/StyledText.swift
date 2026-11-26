@@ -248,8 +248,21 @@ extension SVGDocument.Element {
   /// and more lines as `tspan` elements 1.2em apart. It does nothing for
   /// another element.
   ///
+  /// Use it to undo a change of the text that a person types, with the text
+  /// that ``SVGUIView/SVGUIViewTextEditingDelegate/svgView(_:didChangeTextOf:fromStyledText:)``
+  /// gives. The text that a view edits takes the new text.
+  ///
+  /// ```swift
+  /// func svgView(
+  ///   _ view: SVGUIView, didChangeTextOf element: SVGDocument.Element,
+  ///   fromStyledText oldText: SVGStyledText
+  /// ) {
+  ///   undoManager?.registerUndo(withTarget: element) { $0.setStyledText(oldText) }
+  /// }
+  /// ```
   public func setStyledText(_ text: SVGStyledText) {
     guard localName == "text" else { return }
     StyledTextContent.write(text, into: self)
+    (document.host as? SVGUIView)?.textDidChange(of: self)
   }
 }

@@ -260,12 +260,15 @@ await svgView.beginTextEditing(of: text)
 
 A tap outside the text, ``SVGUIView/SVGUIView/endTextEditing()`` and new data
 end the editing. The ``SVGUIView/SVGUIView/textEditingDelegate`` hears when the
-editing begins and ends, and each change of the text with the text before it,
-which an app registers to undo:
+editing begins and ends, and each change of the text with the styled text before
+it, which an app registers to undo:
 
 ```swift
-func svgView(_ view: SVGUIView, didChangeTextOf element: SVGDocument.Element, from oldText: String) {
-  undoManager?.registerUndo(withTarget: element) { $0.textContent = oldText }
+func svgView(
+  _ view: SVGUIView, didChangeTextOf element: SVGDocument.Element,
+  fromStyledText oldText: SVGStyledText
+) {
+  undoManager?.registerUndo(withTarget: element) { $0.setStyledText(oldText) }
 }
 
 func svgViewDidEndTextEditing(_ view: SVGUIView, element: SVGDocument.Element) {
@@ -274,15 +277,41 @@ func svgViewDidEndTextEditing(_ view: SVGUIView, element: SVGDocument.Element) {
 }
 ```
 
-The text is a `<text>` element with character data and no children, or with
-`<tspan>` elements that are its lines, each with an `x` attribute, or a `y`
-attribute in vertical text, and character data only. Other text, such as text
-with spans in other styles, isn't edited. The editing sets
+The text is a `<text>` element with character data and `<tspan>` elements of
+runs, or with `<tspan>` elements that are its lines of them, each line with an
+`x` attribute, or a `y` attribute in vertical text. The `<tspan>` of a run has
+no position attributes, such as `dx`, and no child elements. Other text, such
+as text with spans that move their characters, isn't edited. The editing sets
 `xml:space="preserve"`, so that the spaces that the person types are kept, and
 writes a text of more than one line as `<tspan>` elements, each `1.2em` after
-the one before it, as other editors write it. The style of the text, such as its
-fill, font and `text-anchor`, is changed with its attributes and its style, as
-the style of any element is. `SVGView` doesn't edit text: a SwiftUI app that
+the one before it, as other editors write it. The style of the whole text, such
+as its fill, font and `text-anchor`, is changed with its attributes and its
+style, as the style of any element is.
+
+### Formatting ranges of text
+
+A range of the text that a person types into can have attributes of its own,
+such as bold or another color.
+``SVGUIView/SVGUIView/setTextAttribute(_:to:in:)`` sets an attribute of the
+selection, and the characters are written as a `<tspan>` element with the
+attribute. Without a selection, the attribute is for the characters that are
+typed next. Typed characters take the attributes of the character before them.
+``SVGUIView/SVGUIView/textAttributes(in:)`` gives the attributes that the
+selection has, which an app shows in its controls:
+
+```swift
+@objc func bold() {
+  let isBold = svgView.textAttributes()["font-weight"] == "bold"
+  svgView.setTextAttribute("font-weight", to: isBold ? nil : "bold")
+}
+// <text x="10" y="50">Hello, <tspan font-weight="bold">world</tspan></text>
+```
+
+With ``SVGUIView/SVGUIView/allowsEditingTextAttributes``, a person also toggles
+bold, italic and underline with the edit menu and with ⌘B, ⌘I and ⌘U of a
+keyboard. ``SVGDocument/Element/styledText`` reads the text with the
+attributes of its runs as an ``SVGStyledText``, and
+``SVGDocument/Element/setStyledText(_:)`` writes it, which undoes a change. `SVGView` doesn't edit text: a SwiftUI app that
 edits text wraps an ``SVGUIView/SVGUIView`` in a `UIViewRepresentable` of its
 own.
 
