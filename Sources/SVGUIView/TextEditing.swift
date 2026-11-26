@@ -117,8 +117,18 @@ struct TurnedRect {
     self.transform = transform
   }
 
-  /// The bounds of the rectangle in the coordinates of the view.
-  var bounds: CGRect { rect.applying(transform) }
+  /// The corners of the turned rectangle in the coordinates of the view.
+  var corners: [CGPoint] {
+    [
+      CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+      CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY),
+    ].map { $0.applying(transform) }
+  }
+
+  /// Whether a point of the view is in the turned rectangle.
+  func contains(_ point: CGPoint) -> Bool {
+    rect.contains(point.applying(transform.inverted()))
+  }
 
   /// The square of the distance from a point of the view to the rectangle.
   func squaredDistance(to point: CGPoint) -> CGFloat {
@@ -220,9 +230,10 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
 
   func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
     guard let view else { return true }
-    // A tap outside the text ends the editing, unless the delegate keeps it.
-    let bounds = view.editedTextBounds(of: self).insetBy(dx: -20, dy: -20)
-    guard !bounds.contains(point) else { return true }
+    // A tap outside the text ends the editing, unless the delegate keeps it, as a tap outside a text view does. The
+    // text is the rectangle along its angle around its caret and lines, so that a tap away from a turned text ends it
+    // too, and a tap just outside the lines ends it at any scale of the view.
+    guard !view.editedTextArea(of: self).contains(point) else { return true }
     if view.textEditingDelegate?.svgView(view, shouldEndTextEditingAt: point) ?? true {
       view.endTextEditing()
       return false
@@ -360,13 +371,14 @@ extension SVGUIView {
     textEditingDelegate?.svgViewDidEndTextEditing(self, element: session.element)
   }
 
-  /// The bounds of the text that is edited, in the coordinates of the view.
-  func editedTextBounds(of session: TextEditingSession) -> CGRect {
-    var bounds = caret(at: session.selection.lowerBound, in: session).bounds
+  /// The rectangle along the angle of the text that is edited around its caret and its lines, in the coordinates of
+  /// the view. It's the bounds of the caret and the lines for a text that isn't turned.
+  func editedTextArea(of session: TextEditingSession) -> TurnedRect {
+    var corners = caret(at: session.selection.lowerBound, in: session).corners
     for rect in selectionRects(for: TextEditingRange(0..<session.text.count)) {
-      bounds = bounds.union(TurnedRect(rect: rect.rect, transform: rect.transform).bounds)
+      corners += TurnedRect(rect: rect.rect, transform: rect.transform).corners
     }
-    return bounds
+    return TurnedRect(around: corners, angle: session.angle)
   }
 
   // MARK: - Changing the text
