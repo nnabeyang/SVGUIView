@@ -108,6 +108,14 @@ enum Isolation: String, CaseIterable, Sendable {
   case auto, isolate
 }
 
+/// How an element is drawn apart from its transforms: `non-scaling-stroke` strokes it in the coordinates of the view,
+/// as wide as `stroke-width` there whatever its transforms are. The other values of SVG 2, which no browser supports,
+/// aren't read.
+package enum VectorEffect: String, CaseIterable, Sendable {
+  case none
+  case nonScalingStroke = "non-scaling-stroke"
+}
+
 /// Whether a mask masks with the luminance or the alpha of its content.
 package enum MaskType: String, CaseIterable, Sendable {
   case luminance, alpha

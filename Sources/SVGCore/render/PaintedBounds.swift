@@ -75,7 +75,9 @@ extension ShapeNode {
       case .image(_, let stroke): stroke
       case .colorGlyphs: nil
       }
-    if let stroke, stroke.width > 0 {
+    if let outline = stroke?.outline {
+      bounds = bounds.union(outline.cgPath.boundingBoxOfPath)
+    } else if let stroke, stroke.width > 0 {
       let stroked = path.copy(
         strokingWithWidth: stroke.width, lineCap: stroke.cap, lineJoin: stroke.join, miterLimit: stroke.miterLimit)
       bounds = bounds.union(stroked.boundingBoxOfPath).union(geometry.frame.insetBy(dx: -stroke.width / 2, dy: -stroke.width / 2))

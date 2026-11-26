@@ -53,6 +53,7 @@ enum PropertyID: String, CaseIterable, Sendable {
   case mixBlendMode = "mix-blend-mode"
   case isolation
   case maskType = "mask-type"
+  case vectorEffect = "vector-effect"
   case transform
   case transformOrigin = "transform-origin"
   case transformBox = "transform-box"
@@ -145,6 +146,7 @@ enum PropertyID: String, CaseIterable, Sendable {
     case .mixBlendMode: visitor.visit(MixBlendModeProperty.self)
     case .isolation: visitor.visit(IsolationProperty.self)
     case .maskType: visitor.visit(MaskTypeProperty.self)
+    case .vectorEffect: visitor.visit(VectorEffectProperty.self)
     case .transform: visitor.visit(TransformProperty.self)
     case .transformOrigin: visitor.visit(TransformOriginProperty.self)
     case .transformBox: visitor.visit(TransformBoxProperty.self)
@@ -249,6 +251,7 @@ struct ComputedStyle: Sendable, Equatable {
   var mixBlendMode: MixBlendMode
   var isolation: Isolation
   var maskType: MaskType
+  var vectorEffect = VectorEffectProperty.initial
   var transform: TransformList
   var transformOrigin: TransformOrigin
   var transformBox: TransformBox

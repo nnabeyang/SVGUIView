@@ -2,7 +2,8 @@ import Foundation
 
 extension SVGBaseContext {
   /// The elements whose painting can change with the time in other ways than their transform and their opacity,
-  /// with their descendants.
+  /// with their descendants. In a document with a stroke with `vector-effect: non-scaling-stroke`, an animation of a
+  /// transform changes the painting too.
   ///
   /// An animation of a property that the descendants inherit, such as `fill`, changes them too, so the descendants of
   /// an element count as well. An animation inside a clip path, a mask, a pattern, a gradient or a filter changes the
@@ -19,6 +20,17 @@ extension SVGBaseContext {
     }
     for animation in animations.smil where !animation.changesCompositing {
       painting.insert(animation.target)
+    }
+    // A stroke with `vector-effect: non-scaling-stroke` changes with the transforms around it, so an animation of a
+    // transform paints again in a document that has one.
+    if usesNonScalingStroke {
+      for element in root?.elements ?? []
+      where animatedProperties(of: element).contains(where: { $0 != .opacity && Self.compositingProperties.contains($0) }) {
+        painting.insert(element.base.elementID)
+      }
+      for animation in animations.smil where animation.changesCompositing && animation.attributeName != "opacity" {
+        painting.insert(animation.target)
+      }
     }
     painting.formUnion(elementsUsingResources(thatChange: painting.union(elementsWithAnimatedCompositing())))
     var elements = Set<ElementID>()

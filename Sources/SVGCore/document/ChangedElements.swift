@@ -82,13 +82,18 @@ final class ElementReferencesCache: Sendable {
 extension SVGBaseContext {
   /// The elements that changes of a document make again, as ``changing(to:changes:at:startsTransitions:)`` of the
   /// context before the changes makes them. This is the context after the changes.
+  ///
+  /// A change of only the transform of an element paints it again where the document has a stroke with
+  /// `vector-effect: non-scaling-stroke`, whose outline changes with the transforms around it.
   package func changedElements(by changes: DocumentChanges) -> ChangedElements {
-    Self.changedElements(by: changes, in: document, with: stylesheet)
+    Self.changedElements(by: changes, in: document, with: stylesheet, repaintsMoves: usesNonScalingStroke)
   }
 
   /// The elements that changes of a document make again with a style sheet.
+  ///
+  /// - Parameter repaintsMoves: Whether a change of only the transform of an element paints it again.
   static func changedElements(
-    by changes: DocumentChanges, in document: DocumentTree, with stylesheet: Stylesheet
+    by changes: DocumentChanges, in document: DocumentTree, with stylesheet: Stylesheet, repaintsMoves: Bool = false
   ) -> ChangedElements {
     var elements = ChangedElements()
     elements.isEverything = changes.stylesheets
@@ -129,7 +134,7 @@ extension SVGBaseContext {
       // attribute.
       let moves =
         !changes.paintingAttributes.contains(id) && !changes.inserted.contains(id) && !changes.texts.contains(id)
-        && !stylesheet.hasAttributeSelectors
+        && !stylesheet.hasAttributeSelectors && !repaintsMoves
       change(cursor, repaints: !moves)
     }
     if stylesheet.hasSiblingCombinators {

@@ -48,6 +48,7 @@ extension RenderTreeBuilder {
     sourceContext.textDecorators = context.textDecorators
     // The element paints `context-fill` and `context-stroke` as it does without its filter.
     sourceContext.contextPaint = context.contextPaint
+    sourceContext.hostSpace = context.hostSpace
     let source = await nodeWithoutFilter(
       of: element, context: sourceContext, mode: .filter(isRoot: true), guard: sourceReferences, instance: instance)
     var transform = await transform(of: element, context: elementContext, frame: frame, guard: references)
