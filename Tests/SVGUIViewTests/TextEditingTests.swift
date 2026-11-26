@@ -230,10 +230,11 @@ struct TextEditingTests {
     #expect(view.editedTextElement == nil)
   }
 
-  @Test("a tap away from a turned text ends the editing, also where it's inside the bounds of the turned text")
+  @Test("a tap just outside a turned text ends the editing, also where it's inside the bounds of the turned text")
   func endingAwayFromTurnedText() async throws {
     let view = view(##"<text id="t" x="60" y="60" transform="rotate(45 60 60)">abcdefgh</text>"##)
-    let session = try #require(await view.beginTextEditing(of: try element("t", in: view)) ? view.textEditing : nil)
+    let text = try element("t", in: view)
+    let session = try #require(await view.beginTextEditing(of: text) ? view.textEditing : nil)
     let line = try #require(view.selectionRects(for: TextEditingRange(0..<8)).first)
     let center = CGPoint(x: line.rect.midX, y: line.rect.midY)
     let angle = CGFloat.pi / 4
@@ -244,16 +245,20 @@ struct TextEditingTests {
     }
     let width = line.rect.width
     let height = line.rect.height
-    // Within the margin of 20 across the line and past its end, the editing goes on.
-    #expect(session.interactionShouldBegin(session.interaction, at: point(along: 0, across: height / 2 + 10)))
-    #expect(session.interactionShouldBegin(session.interaction, at: point(along: width / 2 + 10, across: 0)))
+    // In the line, near its edges, the editing goes on.
+    #expect(session.interactionShouldBegin(session.interaction, at: point(along: 0, across: height / 2 - 5)))
+    #expect(session.interactionShouldBegin(session.interaction, at: point(along: width / 2 - 5, across: 0)))
     #expect(view.editedTextElement != nil)
-    // 40 across the line is in the bounds of the turned line, but away from the text, so the editing ends.
-    let away = point(along: 0, across: height / 2 + 40)
+    // Just across the line is in the bounds of the turned line, but outside the text, so the editing ends.
+    let across = point(along: 0, across: height / 2 + 5)
     let bounds = CGMutablePath()
     bounds.addLines(between: TurnedRect(rect: line.rect, transform: line.transform).corners)
-    #expect(bounds.boundingBoxOfPath.contains(away))
-    #expect(!session.interactionShouldBegin(session.interaction, at: away))
+    #expect(bounds.boundingBoxOfPath.contains(across))
+    #expect(!session.interactionShouldBegin(session.interaction, at: across))
+    #expect(view.editedTextElement == nil)
+    // Just past the end of the line ends it too.
+    let again = try #require(await view.beginTextEditing(of: text) ? view.textEditing : nil)
+    #expect(!again.interactionShouldBegin(again.interaction, at: point(along: width / 2 + 5, across: 0)))
     #expect(view.editedTextElement == nil)
   }
 

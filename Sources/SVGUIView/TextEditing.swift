@@ -125,9 +125,9 @@ struct TurnedRect {
     ].map { $0.applying(transform) }
   }
 
-  /// Whether a point of the view is in the turned rectangle, or within a margin of it along its angle.
-  func contains(_ point: CGPoint, margin: CGFloat) -> Bool {
-    rect.insetBy(dx: -margin, dy: -margin).contains(point.applying(transform.inverted()))
+  /// Whether a point of the view is in the turned rectangle.
+  func contains(_ point: CGPoint) -> Bool {
+    rect.contains(point.applying(transform.inverted()))
   }
 
   /// The square of the distance from a point of the view to the rectangle.
@@ -230,9 +230,10 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
 
   func interactionShouldBegin(_ interaction: UITextInteraction, at point: CGPoint) -> Bool {
     guard let view else { return true }
-    // A tap outside the text ends the editing, unless the delegate keeps it. The text is the rectangle along its
-    // angle, so that a tap away from a turned text ends it too.
-    guard !view.editedTextArea(of: self).contains(point, margin: 20) else { return true }
+    // A tap outside the text ends the editing, unless the delegate keeps it, as a tap outside a text view does. The
+    // text is the rectangle along its angle around its caret and lines, so that a tap away from a turned text ends it
+    // too, and a tap just outside the lines ends it at any scale of the view.
+    guard !view.editedTextArea(of: self).contains(point) else { return true }
     if view.textEditingDelegate?.svgView(view, shouldEndTextEditingAt: point) ?? true {
       view.endTextEditing()
       return false
