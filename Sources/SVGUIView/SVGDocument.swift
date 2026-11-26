@@ -290,6 +290,10 @@ public final class SVGDocument {
     tree(containing: id)?.attributes(of: id)?[name]
   }
 
+  fileprivate func attributes(of id: ElementID) -> [String: String] {
+    tree(containing: id)?.attributes(of: id) ?? [:]
+  }
+
   /// Sets or removes an attribute, unless it already has the value. An attribute of a name that the document can't
   /// write isn't set.
   fileprivate func setAttribute(_ name: String, to value: String?, of id: ElementID) {
@@ -342,6 +346,29 @@ public final class SVGDocument {
         changes.restructured.insert(id)
       }
       if tree.isStyleElement(id) || removed.contains(where: \.hasStyleElement) {
+        changes.stylesheets = true
+      }
+      host?.documentDidChange()
+    case .detached(let root):
+      detached[root] = replaced
+    }
+  }
+
+  fileprivate func texts(of id: ElementID) -> [String] {
+    tree(containing: id)?.texts(of: id) ?? []
+  }
+
+  /// Replaces the character data of an element before each of its children and after the last one, which are one
+  /// more than the children, unless it already has them.
+  fileprivate func setTexts(_ texts: [String], of id: ElementID) {
+    guard let location = location(of: id), let current = tree(containing: id), current.texts(of: id) != texts,
+      let replaced = current.replacingTexts(of: id, with: texts)
+    else { return }
+    switch location {
+    case .connected:
+      tree = replaced
+      changes.texts.insert(id)
+      if tree.isStyleElement(id) {
         changes.stylesheets = true
       }
       host?.documentDidChange()
@@ -648,6 +675,19 @@ extension SVGDocument.Element {
   public var textContent: String {
     get { document.textContent(of: id) }
     nonmutating set { document.setTextContent(newValue, of: id) }
+  }
+
+  /// The attributes of the element, by their names.
+  var attributes: [String: String] {
+    document.attributes(of: id)
+  }
+
+  /// The character data of the element before each of its children and after
+  /// the last one, without the character data of the children: one more than
+  /// the children.
+  var characterData: [String] {
+    get { document.texts(of: id) }
+    nonmutating set { document.setTexts(newValue, of: id) }
   }
 
   /// The parent of the element, or `nil` for the root element and for an

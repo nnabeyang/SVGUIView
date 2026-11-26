@@ -341,6 +341,10 @@ public class SVGUIView: UIView {
   var textEditing: TextEditingSession?
   /// The object that the view tells when the editing of text begins, changes the text and ends.
   public weak var textEditingDelegate: (any SVGUIViewTextEditingDelegate)?
+  /// Whether a person can change the attributes of the text that is edited with the edit menu and the keyboard, such
+  /// as bold with ⌘B, as `allowsEditingTextAttributes` lets them in a text view. It's `false` by default, and an app
+  /// can always change them with ``setTextAttribute(_:to:in:)``.
+  public var allowsEditingTextAttributes = false
   /// The SVG images that the renderings of the document have parsed, which they share.
   private var imageDocuments = SVGImageDocuments()
   /// The SVG images of the document whose animations change them, which the latest rendering found. The view finds

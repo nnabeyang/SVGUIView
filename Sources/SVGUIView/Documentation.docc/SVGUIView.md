@@ -243,6 +243,7 @@ of those rules and for the features that SVGUIView doesn't support.
 - ``SVGDocument/TextLayout``
 - ``SVGDocument/CharacterGeometry``
 - ``SVGUIViewTextEditingDelegate``
+- ``SVGStyledText``
 - ``SVGDocument/Animation``
 
 ### Configuring rendering

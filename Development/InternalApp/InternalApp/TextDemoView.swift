@@ -34,6 +34,19 @@ struct TextDemoView: View {
       }
       .padding(.horizontal)
 
+      // While a text is edited, these change the selection, and otherwise the selected text.
+      HStack {
+        Button("Bold", systemImage: "bold") { model.toggle("font-weight", value: "bold") }
+        Button("Italic", systemImage: "italic") { model.toggle("font-style", value: "italic") }
+        Button("Underline", systemImage: "underline") { model.toggle("text-decoration", value: "underline") }
+        Spacer()
+        Button("Undo", systemImage: "arrow.uturn.backward") { model.undo() }
+          .disabled(!model.canUndo)
+      }
+      .labelStyle(.iconOnly)
+      .buttonStyle(.bordered)
+      .padding(.horizontal)
+
       TextCanvasView(model: model)
         .modifier(Pane(title: "SVGUIView", size: 1, isVisible: true))
         .padding(.horizontal)
@@ -47,7 +60,7 @@ struct TextDemoView: View {
     .ignoresSafeArea(.keyboard)
     .navigationTitle("Type Text")
     .navigationBarTitleDisplayMode(.inline)
-    .onChange(of: model.fill) { model.applyStyle() }
+    .onChange(of: model.fill) { model.applyFill() }
     .onChange(of: model.fontSize) { model.applyStyle() }
     .onChange(of: model.anchor) { model.applyStyle() }
     .onChange(of: model.outlined) { model.applyStyle() }
@@ -67,16 +80,69 @@ final class TextDemoModel {
   var element: SVGDocument.Element?
   /// Called after the style of the selected text changed, which moves its frame.
   @ObservationIgnored var styleDidChange: (() -> Void)?
+  /// The view that edits the text, while a text is edited.
+  @ObservationIgnored weak var editor: SVGUIView?
+  /// The changes of the texts, the latest last, which undo puts back: each text with its styled text before.
+  @ObservationIgnored private var undoStack = [(SVGDocument.Element, SVGStyledText)]()
+  var canUndo = false
 
-  /// Sets the style of the controls on the selected text.
-  func applyStyle() {
-    guard let element else { return }
+  /// Remembers a change of a text, which undo puts back.
+  func registerUndo(of element: SVGDocument.Element, from oldText: SVGStyledText) {
+    undoStack.append((element, oldText))
+    canUndo = true
+  }
+
+  /// Puts the latest change of a text back.
+  func undo() {
+    guard let (element, oldText) = undoStack.popLast() else { return }
+    element.setStyledText(oldText)
+    canUndo = !undoStack.isEmpty
+    styleDidChange?()
+  }
+
+  /// The fill of the controls as an SVG color.
+  private var fillValue: String {
     let color = UIColor(fill).resolvedColor(with: .current)
     var red: CGFloat = 0
     var green: CGFloat = 0
     var blue: CGFloat = 0
     color.getRed(&red, green: &green, blue: &blue, alpha: nil)
-    element.setAttribute("fill", to: "rgb(\(Int(red * 255)), \(Int(green * 255)), \(Int(blue * 255)))")
+    return "rgb(\(Int(red * 255)), \(Int(green * 255)), \(Int(blue * 255)))"
+  }
+
+  /// Sets the fill of the selection while a text is edited, or of the selected text otherwise.
+  func applyFill() {
+    if let editor, editor.editedTextElement != nil {
+      editor.setTextAttribute("fill", to: fillValue)
+    } else {
+      applyStyle()
+    }
+  }
+
+  /// Sets an attribute of the selection while a text is edited, or of the selected text otherwise, or removes it
+  /// where all of it has the attribute.
+  func toggle(_ name: String, value: String) {
+    if let editor, editor.editedTextElement != nil {
+      // The view toggles the selection as it looks, also where the text inherits the attribute.
+      switch name {
+      case "font-weight": editor.toggleBoldface(nil)
+      case "font-style": editor.toggleItalics(nil)
+      default: editor.toggleUnderline(nil)
+      }
+    } else if let element {
+      if element.attribute(name) == value {
+        element.removeAttribute(name)
+      } else {
+        element.setAttribute(name, to: value)
+      }
+      styleDidChange?()
+    }
+  }
+
+  /// Sets the style of the controls on the selected text.
+  func applyStyle() {
+    guard let element else { return }
+    element.setAttribute("fill", to: fillValue)
     element.setAttribute("font-size", to: "\(fontSize)")
     element.setAttribute("text-anchor", to: anchor)
     if outlined {
@@ -159,6 +225,9 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
     clipsToBounds = true
     svgView.contentMode = .scaleAspectFit
     svgView.textEditingDelegate = self
+    // A person also toggles bold, italic and underline with the edit menu and the keyboard.
+    svgView.allowsEditingTextAttributes = true
+    model.editor = svgView
     svgView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(svgView)
     NSLayoutConstraint.activate([
@@ -417,7 +486,10 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
     avoidKeyboard()
   }
 
-  func svgView(_ view: SVGUIView, didChangeTextOf _: SVGDocument.Element, from _: String) {
+  func svgView(
+    _ view: SVGUIView, didChangeTextOf element: SVGDocument.Element, fromStyledText oldText: SVGStyledText
+  ) {
+    model.registerUndo(of: element, from: oldText)
     let text = view.editedText ?? ""
     let lines = text.split(separator: "\n", omittingEmptySubsequences: false).count
     model.status =

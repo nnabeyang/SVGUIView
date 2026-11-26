@@ -52,18 +52,21 @@ struct TextEditingTests {
     }
   }
 
-  @Test("editing begins on a text element of character data or of lines, and on nothing else")
+  @Test("editing begins on a text element of character data and runs or of lines of them, and on nothing else")
   func begin() async throws {
     let view = view(
       ##"<text id="a" x="10" y="50">ab</text><text id="l" x="10" y="100"><tspan x="10">c</tspan><tspan x="10" dy="1.2em">d</tspan></text>"##
-        + ##"<text id="s" x="10" y="200">e<tspan font-weight="bold">f</tspan></text><rect id="r" width="1" height="1"/>"##)
+        + ##"<text id="s" x="10" y="200">e<tspan font-weight="bold">f</tspan></text>"##
+        + ##"<text id="p" x="10" y="250">e<tspan dx="5">f</tspan></text><rect id="r" width="1" height="1"/>"##)
     #expect(await view.beginTextEditing(of: try element("a", in: view)))
     #expect(view.editedText == "ab")
     #expect(try element("a", in: view).attribute("xml:space") == "preserve")
     #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<2)
     #expect(await view.beginTextEditing(of: try element("l", in: view)))
     #expect(view.editedText == "c\nd")
-    #expect(await view.beginTextEditing(of: try element("s", in: view)) == false)
+    #expect(await view.beginTextEditing(of: try element("s", in: view)))
+    #expect(view.editedText == "ef")
+    #expect(await view.beginTextEditing(of: try element("p", in: view)) == false)
     #expect(await view.beginTextEditing(of: try element("r", in: view)) == false)
     let detached = SVGUIView(data: Data(##"<svg xmlns="http://www.w3.org/2000/svg"><text id="t">a</text></svg>"##.utf8))
     #expect(await detached.beginTextEditing(of: try element("t", in: detached)) == false)
