@@ -132,6 +132,10 @@ rendered in a way that differs from browsers:
   the fonts of the system, without the fonts of `@font-face` rules.
 - A document in another file that a `<use>` element shows is shown without
   its animations, at time zero.
+- A marker can be an element of the SVG document of a `data:` URL, such as
+  `marker-start="url(data:image/svg+xml;base64,…#m)"`, which reads no other
+  files. A marker of another file, and a paint server, a clip path, a mask or
+  a filter of another document, aren't drawn.
 - `vector-effect: non-scaling-stroke` strokes a shape as wide as its
   `stroke-width` in the coordinates of the view, whatever the transforms are,
   the ones of the view box of the root element and of the content mode of the

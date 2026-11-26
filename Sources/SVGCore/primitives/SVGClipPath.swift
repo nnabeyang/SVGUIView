@@ -31,20 +31,47 @@ enum SVGClipPath: Equatable, Sendable {
 }
 
 /// A value of `marker-start`, `marker-mid` or `marker-end`: the `<marker>` to draw at vertices of a shape.
+///
+/// The marker is an element of the document, named by its ID, or an element of the SVG document of a data URL, named
+/// by the URL with its fragment, such as `data:image/svg+xml;base64,…#m`. An ID never has a `#`, which tells them
+/// apart, so that the value stays as small as one string in every computed style.
 enum SVGMarkerReference: Equatable {
   case url(String)
   case none
 
   init?(description: String) {
-    guard let reference = SVGClipPath(description: description) else { return nil }
-    if case .url(let id) = reference {
-      self = .url(id)
-    } else {
-      self = .none
+    if let reference = SVGClipPath(description: description) {
+      if case .url(let id) = reference {
+        self = .url(id)
+      } else {
+        self = .none
+      }
+      return
     }
+    guard let url = Self.documentURL(in: description) else { return nil }
+    self = .url(url)
   }
 
-  /// The id of the marker, or `nil` for `none`.
+  /// The URL with a fragment that a `url()` names, in quotes or not, if it names an element of another document.
+  private static func documentURL(in text: String) -> String? {
+    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard text.utf8.count > 5, text.prefix(4).lowercased() == "url(", text.hasSuffix(")") else { return nil }
+    var url = text.dropFirst(4).dropLast().trimmingCharacters(in: .whitespacesAndNewlines)
+    if let quote = url.first, quote == "\"" || quote == "'" {
+      guard url.count >= 2, url.last == quote else { return nil }
+      url = String(url.dropFirst().dropLast())
+    }
+    guard !url.hasPrefix("#"), Self.isDocumentReference(url) else { return nil }
+    return url
+  }
+
+  /// Whether a reference names an element of another document: a URL with a fragment, rather than an ID.
+  static func isDocumentReference(_ reference: some StringProtocol) -> Bool {
+    guard let hash = reference.firstIndex(of: "#") else { return false }
+    return reference.index(after: hash) != reference.endIndex
+  }
+
+  /// The id of the marker, or `nil` for `none`. For a marker of another document, it's its URL with the fragment.
   var id: String? {
     if case .url(let id) = self { id } else { nil }
   }

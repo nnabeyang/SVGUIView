@@ -49,7 +49,15 @@ extension RenderTreeBuilder {
         guard let id else { continue }
         // A marker that the copy of an element of another document inherits from the `<use>` element that shows
         // it is a marker of the document of the `<use>` element.
-        let owner = owner(ofReference: id)
+        var owner = owner(ofReference: id)
+        // A marker of the SVG document of a data URL is drawn by the builder of that document.
+        if SVGMarkerReference.isDocumentReference(owner.id) {
+          guard let hash = owner.id.firstIndex(of: "#"),
+            let builder = owner.builder.dataDocumentBuilder(for: owner.id[..<hash]),
+            let fragment = EmbeddedImage.fragment(ofHref: owner.id)
+          else { continue }
+          owner = (builder, fragment)
+        }
         guard let marker = owner.builder.base.markers[owner.id] else { continue }
         var markerReferences = references
         guard markerReferences.insert(marker: id) else { continue }
