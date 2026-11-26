@@ -320,6 +320,32 @@ struct TextEditingTests {
     #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
   }
 
+  @Test("the edit menu offers Cut and Copy with a selection, and Select with a caret, as a text view does")
+  func editMenu() async throws {
+    let view = view(##"<text id="t" x="10" y="50">ab cd</text>"##)
+    #expect(await view.beginTextEditing(of: try element("t", in: view), selecting: 4..<4))
+    let cut = #selector(UIResponderStandardEditActions.cut(_:))
+    let copy = #selector(UIResponderStandardEditActions.copy(_:))
+    let select = #selector(UIResponderStandardEditActions.select(_:))
+    let selectAll = #selector(UIResponderStandardEditActions.selectAll(_:))
+    #expect(!view.canPerformAction(cut, withSender: nil))
+    #expect(!view.canPerformAction(copy, withSender: nil))
+    #expect(view.canPerformAction(select, withSender: nil))
+    #expect(view.canPerformAction(selectAll, withSender: nil))
+    // Select selects the word at the caret.
+    view.select(nil)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<5)
+    #expect(view.canPerformAction(cut, withSender: nil))
+    #expect(view.canPerformAction(copy, withSender: nil))
+    #expect(!view.canPerformAction(select, withSender: nil))
+    view.selectAll(nil)
+    #expect(!view.canPerformAction(selectAll, withSender: nil))
+    // A caret after a word, before a space, selects that word.
+    view.selectedTextRange = TextEditingRange(2..<2)
+    view.select(nil)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 0..<2)
+  }
+
   @Test("the typed text renders as the same text written in the document")
   func rendering() async throws {
     let typed = view(##"<text id="t" x="10" y="50"></text>"##)

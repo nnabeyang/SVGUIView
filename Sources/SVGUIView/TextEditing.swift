@@ -937,13 +937,41 @@ extension SVGUIView: UITextInput {
     setTextAttribute(name, to: allOn ? (inherited ? off : nil) : (inherited ? nil : on))
   }
 
+  /// Whether the edit menu and the keyboard offer an action for the text that is edited, as a text view offers it:
+  /// Cut and Copy with a selection, Select with a caret in text, Select All unless all is selected, Paste with text
+  /// to paste, and the toggles of bold, italic and underline with ``allowsEditingTextAttributes``.
   override public func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-    if action == #selector(toggleBoldface(_:)) || action == #selector(toggleItalics(_:))
-      || action == #selector(toggleUnderline(_:))
-    {
-      return textEditing != nil && allowsEditingTextAttributes
+    guard let session = textEditing else { return super.canPerformAction(action, withSender: sender) }
+    switch action {
+    case #selector(toggleBoldface(_:)), #selector(toggleItalics(_:)), #selector(toggleUnderline(_:)):
+      return allowsEditingTextAttributes
+    case #selector(cut(_:)), #selector(copy(_:)):
+      return !session.selection.isEmpty
+    case #selector(select(_:)):
+      return session.selection.isEmpty && !session.text.isEmpty
+    case #selector(selectAll(_:)):
+      return session.selection != 0..<session.text.count && !session.text.isEmpty
+    case #selector(paste(_:)):
+      return UIPasteboard.general.hasStrings
+    default:
+      return super.canPerformAction(action, withSender: sender)
     }
-    return super.canPerformAction(action, withSender: sender)
+  }
+
+  /// Selects the word at the caret, or the word before it where the caret isn't in a word, as the Select action of a
+  /// text view does.
+  override public func select(_: Any?) {
+    guard let session = textEditing, session.selection.isEmpty else { return }
+    let caret = TextEditingPosition(session.selection.lowerBound)
+    let word =
+      tokenizer.rangeEnclosingPosition(caret, with: .word, inDirection: .storage(.forward))
+      ?? tokenizer.rangeEnclosingPosition(caret, with: .word, inDirection: .storage(.backward))
+    guard let range = (word as? TextEditingRange)?.range, !range.isEmpty else { return }
+    session.inputDelegate?.selectionWillChange(self)
+    session.selection = range
+    session.typingAttributes = nil
+    session.inputDelegate?.selectionDidChange(self)
+    session.display?.setNeedsSelectionUpdate()
   }
 
   override public func toggleBoldface(_: Any?) {
