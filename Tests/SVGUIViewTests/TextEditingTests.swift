@@ -280,6 +280,46 @@ struct TextEditingTests {
     #expect(view.editedTextElement != nil)
   }
 
+  @Test("a tap on a handle of the selection, which sticks out of the line, doesn't end the editing")
+  func handleTap() async throws {
+    let view = view(##"<text id="t" x="60" y="60">abcdef</text>"##)
+    let session = try #require(
+      await view.beginTextEditing(of: try element("t", in: view), selecting: 0..<6) ? view.textEditing : nil)
+    let start = view.caret(at: 0, in: session).rect
+    // The knob of the start handle is above the line.
+    let knob = CGPoint(x: start.midX, y: start.minY - 10)
+    #expect(view.selectionHandle(at: knob) == .start)
+    #expect(session.interactionShouldBegin(session.interaction, at: knob))
+    #expect(view.editedTextElement != nil)
+    // A tap away from the handles ends it.
+    #expect(view.selectionHandle(at: CGPoint(x: start.midX, y: start.minY - 40)) == nil)
+    #expect(!session.interactionShouldBegin(session.interaction, at: CGPoint(x: start.midX, y: start.minY - 40)))
+    #expect(view.editedTextElement == nil)
+  }
+
+  @Test("a handle of a turned text is found where it's drawn, and dragging it moves its end along the text")
+  func turnedHandles() async throws {
+    let view = view(##"<text id="t" x="60" y="60" transform="rotate(45 60 60)">abcdefgh</text>"##)
+    let session = try #require(
+      await view.beginTextEditing(of: try element("t", in: view), selecting: 0..<8) ? view.textEditing : nil)
+    func center(_ offset: Int) -> CGPoint {
+      let caret = view.caret(at: offset, in: session).rect
+      return CGPoint(x: caret.midX, y: caret.midY)
+    }
+    #expect(view.selectionHandle(at: center(0)) == .start)
+    #expect(view.selectionHandle(at: center(8)) == .end)
+    #expect(view.selectionHandle(at: center(4)) == nil)
+    view.moveSelection(.end, to: center(3))
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 0..<3)
+    view.moveSelection(.start, to: center(2))
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
+    // An end doesn't go past the other one, and keeps a character selected.
+    view.moveSelection(.start, to: center(8))
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
+    view.moveSelection(.end, to: center(0))
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
+  }
+
   @Test("the typed text renders as the same text written in the document")
   func rendering() async throws {
     let typed = view(##"<text id="t" x="10" y="50"></text>"##)
