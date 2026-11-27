@@ -194,6 +194,11 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
   var textBeforeMarking: SVGStyledText?
   var markedTextStyle: [NSAttributedString.Key: Any]?
   weak var inputDelegate: (any UITextInputDelegate)?
+  /// The number of the latest finding of the transform.
+  var transformRequest = 0
+  /// The number of the finding whose transform the session has, so that a finding that began before the view changed
+  /// its size, and ends after a later one, doesn't put the old transform back.
+  var takenTransformRequest = 0
   /// The transform from the user space of the text to the coordinates of the view.
   var transform: CGAffineTransform = .identity {
     didSet {
@@ -248,6 +253,22 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
     markLayer.fillColor = nil
     markLayer.strokeColor = UIColor.tintColor.cgColor
     markLayer.lineWidth = 2
+  }
+
+  /// Begins a finding of the transform, and gives its number.
+  func beginTransformRequest() -> Int {
+    transformRequest += 1
+    return transformRequest
+  }
+
+  /// Takes the transform that a finding found, unless the session has the transform of a later finding, and returns
+  /// whether it took it.
+  @discardableResult
+  func takeTransform(_ transform: CGAffineTransform, of request: Int) -> Bool {
+    guard request > takenTransformRequest else { return false }
+    takenTransformRequest = request
+    self.transform = transform
+    return true
   }
 
   /// The text with the attributes of its runs.
@@ -367,9 +388,11 @@ extension SVGUIView {
       session.selection = range.clamped(to: 0..<session.text.count)
     }
     textEditing = session
-    session.transform = await element.transformToView() ?? .identity
+    let request = session.beginTransformRequest()
+    let transform = await element.transformToView() ?? .identity
     // The editing can have ended while the transform was found.
     guard textEditing === session else { return false }
+    session.takeTransform(transform, of: request)
     session.interaction.textInput = self
     session.interaction.delegate = session
     addInteraction(session.interaction)
@@ -410,10 +433,13 @@ extension SVGUIView {
   /// shows the caret and the selection there.
   func refreshTextEditingTransform() {
     guard let session = textEditing else { return }
+    let request = session.beginTransformRequest()
     Task {
-      guard let transform = await session.element.transformToView(), textEditing === session else { return }
+      guard let transform = await session.element.transformToView(), textEditing === session,
+        request > session.takenTransformRequest
+      else { return }
       session.inputDelegate?.selectionWillChange(self)
-      session.transform = transform
+      session.takeTransform(transform, of: request)
       updateMarkLayer(of: session)
       session.inputDelegate?.selectionDidChange(self)
       session.display?.setNeedsSelectionUpdate()

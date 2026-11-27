@@ -200,6 +200,18 @@ struct TextEditingTests {
     #expect(!(display.cursorView is TextCursorView))
   }
 
+  @Test("a transform found for an older size doesn't replace the one of a later finding, whichever ends last")
+  func latestTransform() async throws {
+    let view = view(##"<text id="t" x="10" y="50">ab</text>"##)
+    let session = try #require(await view.beginTextEditing(of: try element("t", in: view)) ? view.textEditing : nil)
+    let old = session.beginTransformRequest()
+    let new = session.beginTransformRequest()
+    let half = CGAffineTransform(scaleX: 0.5, y: 0.5)
+    #expect(session.takeTransform(half, of: new))
+    #expect(!session.takeTransform(.identity, of: old))
+    #expect(session.transform == half)
+  }
+
   @Test("the caret moves with the document when the view changes its size, as the keyboard makes it smaller")
   func resizing() async throws {
     let view = view(##"<text id="t" x="10" y="50">ab</text>"##)
