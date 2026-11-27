@@ -224,6 +224,8 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
   let handlePan = UIPanGestureRecognizer()
   /// The end of the selection whose handle is dragged, or `nil`.
   var draggedEnd: SelectionEnd?
+  /// The end of the selection whose handle the latest touch is on, where the view drags it, or `nil`.
+  var touchedHandle: SelectionEnd?
   /// The position of the end of the selection that isn't dragged.
   var handleAnchor = 0
   /// Where the finger that may drag a handle touched the view.

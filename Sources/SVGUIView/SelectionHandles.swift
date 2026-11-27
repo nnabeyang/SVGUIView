@@ -47,6 +47,15 @@ extension SVGUIView {
     return position < anchor ? .start : .end
   }
 
+  /// The gestures of the view don't begin on a handle that the view drags, such as the dragging of the text
+  /// interaction, which finds the handles of a turned text where the text would be without its angle.
+  override public func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+    if let session = textEditing, gesture !== session.handlePan, session.touchedHandle != nil {
+      return false
+    }
+    return super.gestureRecognizerShouldBegin(gesture)
+  }
+
   /// The position of an end of the selection.
   func position(of end: SelectionEnd) -> Int? {
     textEditing.map { end == .start ? $0.selection.lowerBound : $0.selection.upperBound }
@@ -57,27 +66,37 @@ extension SVGUIView {
 /// whose handles the interaction finds where the text would be without its angle, and from the knob of a handle that
 /// sticks out of the lines of a text that isn't turned. The text interaction drags the others.
 extension TextEditingSession: UIGestureRecognizerDelegate {
+  /// The end of the selection whose handle the view drags from a point: a handle of a turned text, or the knob of a
+  /// handle out of the lines of a text that isn't turned, whose handles the interaction drags from the lines.
+  func handleDragged(from point: CGPoint) -> SelectionEnd? {
+    guard let view, let end = view.selectionHandle(at: point) else { return nil }
+    if angle == 0, view.editedTextArea(of: self).contains(point) { return nil }
+    return end
+  }
+
   func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
     guard gesture === handlePan, let view else { return true }
+    // Each touch on the view finds whether it's on a handle that the view drags, which the other gestures of the
+    // view don't begin on.
     handleTouchDown = touch.location(in: view)
-    return view.selectionHandle(at: handleTouchDown) != nil
+    touchedHandle = handleDragged(from: handleTouchDown)
+    return touchedHandle != nil
   }
 
   func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
-    guard gesture === handlePan, let view else { return true }
-    guard let end = view.selectionHandle(at: handleTouchDown) else { return false }
-    // The interaction drags the handles of a text that isn't turned from where they're in the lines.
-    if angle == 0, view.editedTextArea(of: self).contains(handleTouchDown) { return false }
+    guard gesture === handlePan else { return true }
+    guard let end = touchedHandle else { return false }
     draggedEnd = end
     return true
   }
 
-  /// The gestures of the text interaction wait for the dragging of a handle, so that they don't move the caret where
-  /// it begins.
+  /// The gestures of the text interaction, on the view and on the views of its handles, wait for the dragging of a
+  /// handle, so that they don't move the caret or drag the handle where it begins.
   func gestureRecognizer(
     _ gesture: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer
   ) -> Bool {
-    gesture === handlePan && other.view === view && other !== gesture
+    guard gesture === handlePan, other !== gesture, let view, let otherView = other.view else { return false }
+    return otherView.isDescendant(of: view)
   }
 
   @objc func dragHandle(_ gesture: UIPanGestureRecognizer) {
@@ -104,6 +123,7 @@ extension TextEditingSession: UIGestureRecognizerDelegate {
       handleLoupe?.invalidate()
       handleLoupe = nil
       draggedEnd = nil
+      touchedHandle = nil
     }
   }
 }

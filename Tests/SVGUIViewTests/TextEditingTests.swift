@@ -322,6 +322,28 @@ struct TextEditingTests {
     #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<6)
   }
 
+  @Test("the view drags the handles of a turned text, and the other gestures of the view don't begin on them")
+  func handleGestures() async throws {
+    let view = view(##"<text id="t" x="60" y="60" transform="rotate(45 60 60)">abcdefgh</text>"##)
+    let session = try #require(
+      await view.beginTextEditing(of: try element("t", in: view), selecting: 0..<8) ? view.textEditing : nil)
+    let end = view.caret(at: 8, in: session).rect
+    #expect(session.handleDragged(from: CGPoint(x: end.midX, y: end.midY)) == .end)
+    let tap = UITapGestureRecognizer()
+    view.addGestureRecognizer(tap)
+    session.touchedHandle = .end
+    #expect(!view.gestureRecognizerShouldBegin(tap))
+    session.touchedHandle = nil
+    #expect(view.gestureRecognizerShouldBegin(tap))
+    // On a text that isn't turned, the text interaction drags the handles from the lines.
+    let flat = self.view(##"<text id="f" x="60" y="60">abcdefgh</text>"##)
+    let flatSession = try #require(
+      await flat.beginTextEditing(of: try element("f", in: flat), selecting: 0..<8) ? flat.textEditing : nil)
+    let start = flat.caret(at: 0, in: flatSession).rect
+    #expect(flatSession.handleDragged(from: CGPoint(x: start.midX, y: start.midY)) == nil)
+    #expect(flatSession.handleDragged(from: CGPoint(x: start.midX, y: start.minY - 10)) == .start)
+  }
+
   @Test("the edit menu offers Cut and Copy with a selection, and Select with a caret, as a text view does")
   func editMenu() async throws {
     let view = view(##"<text id="t" x="10" y="50">ab cd</text>"##)
