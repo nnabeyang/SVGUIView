@@ -200,6 +200,50 @@ struct TextEditingTests {
     #expect(!(display.cursorView is TextCursorView))
   }
 
+  /// Records what the view tells the keyboard about its text.
+  private final class InputRecorder: NSObject, UITextInputDelegate {
+    var selectionChanges = 0
+    func selectionWillChange(_: (any UITextInput)?) { selectionChanges += 1 }
+    func selectionDidChange(_: (any UITextInput)?) {}
+    func textWillChange(_: (any UITextInput)?) {}
+    func textDidChange(_: (any UITextInput)?) {}
+    @available(iOS 18.4, *)
+    func conversationContext(_: UIConversationContext?, didChange _: (any UITextInput)?) {}
+  }
+
+  @Test("a new size of the view moves the selection in the view without telling the keyboard that the selection changes")
+  func resizingKeepsSelection() async throws {
+    let view = view(##"<text id="t" x="10" y="50">ab cd</text>"##)
+    view.contentMode = .scaleAspectFit
+    let session = try #require(
+      await view.beginTextEditing(of: try element("t", in: view), selecting: 3..<5) ? view.textEditing : nil)
+    // The beginning of the editing tells the keyboard where the selection is once, after it connects.
+    for _ in 0..<10 { await Task.yield() }
+    // The keyboard accepts its autocorrection, and collapses the selection, when it hears that the selection changed.
+    let recorder = InputRecorder()
+    session.inputDelegate = recorder
+    let before = view.caretRect(for: TextEditingPosition(3))
+    view.frame = CGRect(x: 0, y: 0, width: 200, height: 300)
+    view.layoutIfNeeded()
+    try await waitUntil("The caret stays at \(view.caretRect(for: TextEditingPosition(3)))") {
+      abs(view.caretRect(for: TextEditingPosition(3)).height - before.height / 2) < 0.01
+    }
+    #expect(recorder.selectionChanges == 0)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<5)
+  }
+
+  @Test("a transform found for an older size doesn't replace the one of a later finding, whichever ends last")
+  func latestTransform() async throws {
+    let view = view(##"<text id="t" x="10" y="50">ab</text>"##)
+    let session = try #require(await view.beginTextEditing(of: try element("t", in: view)) ? view.textEditing : nil)
+    let old = session.beginTransformRequest()
+    let new = session.beginTransformRequest()
+    let half = CGAffineTransform(scaleX: 0.5, y: 0.5)
+    #expect(session.takeTransform(half, of: new))
+    #expect(!session.takeTransform(.identity, of: old))
+    #expect(session.transform == half)
+  }
+
   @Test("the caret moves with the document when the view changes its size, as the keyboard makes it smaller")
   func resizing() async throws {
     let view = view(##"<text id="t" x="10" y="50">ab</text>"##)

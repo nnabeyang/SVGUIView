@@ -40,6 +40,11 @@ struct TextDemoView: View {
         Button("Italic", systemImage: "italic") { model.toggle("font-style", value: "italic") }
         Button("Underline", systemImage: "underline") { model.toggle("text-decoration", value: "underline") }
         Spacer()
+        // The picture changes its size while a text is edited, as the views of an app do when the keyboard or the
+        // device turns, and the caret and the selection follow the text.
+        Button("Width", systemImage: "arrow.left.and.right") {
+          withAnimation { model.isNarrow.toggle() }
+        }
         Button("Undo", systemImage: "arrow.uturn.backward") { model.undo() }
           .disabled(!model.canUndo)
       }
@@ -48,6 +53,7 @@ struct TextDemoView: View {
       .padding(.horizontal)
 
       TextCanvasView(model: model)
+        .frame(maxWidth: model.isNarrow ? 220 : .infinity)
         .modifier(Pane(title: "SVGUIView", size: 1, isVisible: true))
         .padding(.horizontal)
 
@@ -75,6 +81,8 @@ final class TextDemoModel {
   var fontSize = 36
   var anchor = "start"
   var outlined = true
+  /// Whether the picture is narrower, which changes the size of the view.
+  var isNarrow = false
   var status = "Tap the picture to add text."
   /// The selected text, which the controls change.
   var element: SVGDocument.Element?
@@ -82,22 +90,55 @@ final class TextDemoModel {
   @ObservationIgnored var styleDidChange: (() -> Void)?
   /// The view that edits the text, while a text is edited.
   @ObservationIgnored weak var editor: SVGUIView?
-  /// The changes of the texts, the latest last, which undo puts back: each text with its styled text before.
-  @ObservationIgnored private var undoStack = [(SVGDocument.Element, SVGStyledText)]()
-  var canUndo = false
+  /// A change that undo puts back.
+  private enum Change {
+    /// A text was added, which undo removes.
+    case added(SVGDocument.Element)
+    /// The styled text of a text changed from the one before.
+    case text(SVGDocument.Element, SVGStyledText)
 
-  /// Remembers a change of a text, which undo puts back.
-  func registerUndo(of element: SVGDocument.Element, from oldText: SVGStyledText) {
-    undoStack.append((element, oldText))
+    var element: SVGDocument.Element {
+      switch self {
+      case .added(let element), .text(let element, _): element
+      }
+    }
+  }
+
+  /// The changes of the texts, the latest last.
+  @ObservationIgnored private var undoStack = [Change]()
+  var canUndo = false
+  /// Removes a text that undo takes away, ending its editing.
+  @ObservationIgnored var removeText: ((SVGDocument.Element) -> Void)?
+
+  /// Remembers that a text was added, which undo removes.
+  func registerAdding(_ element: SVGDocument.Element) {
+    undoStack.append(.added(element))
     canUndo = true
   }
 
-  /// Puts the latest change of a text back.
-  func undo() {
-    guard let (element, oldText) = undoStack.popLast() else { return }
-    element.setStyledText(oldText)
+  /// Remembers a change of a text, which undo puts back.
+  func registerUndo(of element: SVGDocument.Element, from oldText: SVGStyledText) {
+    undoStack.append(.text(element, oldText))
+    canUndo = true
+  }
+
+  /// Forgets the changes of a text that was removed, which undo can't put back.
+  func forget(_ element: SVGDocument.Element) {
+    undoStack.removeAll { $0.element == element }
     canUndo = !undoStack.isEmpty
-    styleDidChange?()
+  }
+
+  /// Puts the latest change of a text back: its text before, or no text where it was added.
+  func undo() {
+    guard let change = undoStack.popLast() else { return }
+    switch change {
+    case .added(let element):
+      removeText?(element)
+    case .text(let element, let oldText):
+      element.setStyledText(oldText)
+      styleDidChange?()
+    }
+    canUndo = !undoStack.isEmpty
   }
 
   /// The fill of the controls as an SVG color.
@@ -228,6 +269,7 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
     // A person also toggles bold, italic and underline with the edit menu and the keyboard.
     svgView.allowsEditingTextAttributes = true
     model.editor = svgView
+    model.removeText = { [weak self] element in self?.remove(element) }
     svgView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(svgView)
     NSLayoutConstraint.activate([
@@ -253,7 +295,11 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
       gesture.delegate = self
       svgView.addGestureRecognizer(gesture)
     }
-    model.styleDidChange = { [weak self] in self?.updateFrame() }
+    model.styleDidChange = { [weak self] in
+      self?.updateFrame()
+      // Undo changes the text that is edited too.
+      self?.showCount()
+    }
     NotificationCenter.default.addObserver(
       self, selector: #selector(keyboardWillChange(_:)), name: UIResponder.keyboardWillChangeFrameNotification,
       object: nil)
@@ -400,6 +446,7 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
     text.setAttribute("x", to: "\(Int(location.x))")
     text.setAttribute("y", to: "\(Int(location.y))")
     try? root.append(text)
+    model.registerAdding(text)
     select(text)
     model.applyStyle()
     await svgView.beginTextEditing(of: text)
@@ -427,6 +474,12 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
       guard let box = await element.boundingBox(), let transform = await element.transformToView(),
         model.element == element, svgView.editedTextElement == nil
       else { return }
+      // A text without characters, which undo can leave, has no frame.
+      guard !element.textContent.isEmpty else {
+        frameLayer.path = nil
+        selectedFrame = nil
+        return
+      }
       // A text turns about its center, which is found once, before it's moved or turned.
       if placements[element] == nil {
         placements[element] = Placement(center: CGPoint(x: box.midX, y: box.midY))
@@ -490,11 +543,28 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
     _ view: SVGUIView, didChangeTextOf element: SVGDocument.Element, fromStyledText oldText: SVGStyledText
   ) {
     model.registerUndo(of: element, from: oldText)
-    let text = view.editedText ?? ""
+    showCount()
+  }
+
+  /// Shows how many characters and lines the edited text has, after it changed.
+  private func showCount() {
+    guard let text = svgView.editedText else { return }
     let lines = text.split(separator: "\n", omittingEmptySubsequences: false).count
     model.status =
       "\(text.count) \(text.count == 1 ? "character" : "characters"), \(lines) \(lines == 1 ? "line" : "lines")"
     // A new line can go under the keyboard.
+    avoidKeyboard()
+  }
+
+  /// Removes a text, after its editing ends, and deselects it.
+  private func remove(_ element: SVGDocument.Element) {
+    if svgView.editedTextElement == element {
+      svgView.endTextEditing()
+    }
+    element.remove()
+    placements[element] = nil
+    model.forget(element)
+    select(nil)
     avoidKeyboard()
   }
 
@@ -503,6 +573,7 @@ private final class TextCanvas: UIView, SVGUIViewTextEditingDelegate, UIGestureR
     if element.textContent.isEmpty {
       element.remove()
       placements[element] = nil
+      model.forget(element)
       select(nil)
     } else {
       select(element)
