@@ -40,6 +40,11 @@ struct TextDemoView: View {
         Button("Italic", systemImage: "italic") { model.toggle("font-style", value: "italic") }
         Button("Underline", systemImage: "underline") { model.toggle("text-decoration", value: "underline") }
         Spacer()
+        // The picture changes its size while a text is edited, as the views of an app do when the keyboard or the
+        // device turns, and the caret and the selection follow the text.
+        Button("Width", systemImage: "arrow.left.and.right") {
+          withAnimation { model.isNarrow.toggle() }
+        }
         Button("Undo", systemImage: "arrow.uturn.backward") { model.undo() }
           .disabled(!model.canUndo)
       }
@@ -48,6 +53,7 @@ struct TextDemoView: View {
       .padding(.horizontal)
 
       TextCanvasView(model: model)
+        .frame(maxWidth: model.isNarrow ? 220 : .infinity)
         .modifier(Pane(title: "SVGUIView", size: 1, isVisible: true))
         .padding(.horizontal)
 
@@ -75,6 +81,8 @@ final class TextDemoModel {
   var fontSize = 36
   var anchor = "start"
   var outlined = true
+  /// Whether the picture is narrower, which changes the size of the view.
+  var isNarrow = false
   var status = "Tap the picture to add text."
   /// The selected text, which the controls change.
   var element: SVGDocument.Element?
