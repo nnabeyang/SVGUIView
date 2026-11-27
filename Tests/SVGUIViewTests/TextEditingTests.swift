@@ -280,6 +280,96 @@ struct TextEditingTests {
     #expect(view.editedTextElement != nil)
   }
 
+  @Test("a tap on a handle of the selection, which sticks out of the line, doesn't end the editing")
+  func handleTap() async throws {
+    let view = view(##"<text id="t" x="60" y="60">abcdef</text>"##)
+    let session = try #require(
+      await view.beginTextEditing(of: try element("t", in: view), selecting: 0..<6) ? view.textEditing : nil)
+    let start = view.caret(at: 0, in: session).rect
+    // The knob of the start handle is above the line.
+    let knob = CGPoint(x: start.midX, y: start.minY - 10)
+    #expect(view.selectionHandle(at: knob) == .start)
+    #expect(session.interactionShouldBegin(session.interaction, at: knob))
+    #expect(view.editedTextElement != nil)
+    // A tap away from the handles ends it.
+    #expect(view.selectionHandle(at: CGPoint(x: start.midX, y: start.minY - 40)) == nil)
+    #expect(!session.interactionShouldBegin(session.interaction, at: CGPoint(x: start.midX, y: start.minY - 40)))
+    #expect(view.editedTextElement == nil)
+  }
+
+  @Test("a handle of a turned text is found where it's drawn, and dragging it moves its end along the text")
+  func turnedHandles() async throws {
+    let view = view(##"<text id="t" x="60" y="60" transform="rotate(45 60 60)">abcdefgh</text>"##)
+    let session = try #require(
+      await view.beginTextEditing(of: try element("t", in: view), selecting: 0..<8) ? view.textEditing : nil)
+    func center(_ offset: Int) -> CGPoint {
+      let caret = view.caret(at: offset, in: session).rect
+      return CGPoint(x: caret.midX, y: caret.midY)
+    }
+    #expect(view.selectionHandle(at: center(0)) == .start)
+    #expect(view.selectionHandle(at: center(8)) == .end)
+    #expect(view.selectionHandle(at: center(4)) == nil)
+    // The end moves from the start, which stays.
+    #expect(view.moveSelection(from: 0, to: center(3)) == .end)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 0..<3)
+    #expect(view.moveSelection(from: 3, to: center(2)) == .start)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 2..<3)
+    // The dragged end passes the other one, and they swap, as on a text that isn't turned.
+    #expect(view.moveSelection(from: 3, to: center(6)) == .end)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<6)
+    // Where they meet, the selection stays.
+    #expect(view.moveSelection(from: 3, to: center(3)) == .end)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<6)
+  }
+
+  @Test("the view drags the handles of a turned text, and the other gestures of the view don't begin on them")
+  func handleGestures() async throws {
+    let view = view(##"<text id="t" x="60" y="60" transform="rotate(45 60 60)">abcdefgh</text>"##)
+    let session = try #require(
+      await view.beginTextEditing(of: try element("t", in: view), selecting: 0..<8) ? view.textEditing : nil)
+    let end = view.caret(at: 8, in: session).rect
+    #expect(session.handleDragged(from: CGPoint(x: end.midX, y: end.midY)) == .end)
+    let tap = UITapGestureRecognizer()
+    view.addGestureRecognizer(tap)
+    session.touchedHandle = .end
+    #expect(!view.gestureRecognizerShouldBegin(tap))
+    session.touchedHandle = nil
+    #expect(view.gestureRecognizerShouldBegin(tap))
+    // On a text that isn't turned, the text interaction drags the handles from the lines.
+    let flat = self.view(##"<text id="f" x="60" y="60">abcdefgh</text>"##)
+    let flatSession = try #require(
+      await flat.beginTextEditing(of: try element("f", in: flat), selecting: 0..<8) ? flat.textEditing : nil)
+    let start = flat.caret(at: 0, in: flatSession).rect
+    #expect(flatSession.handleDragged(from: CGPoint(x: start.midX, y: start.midY)) == nil)
+    #expect(flatSession.handleDragged(from: CGPoint(x: start.midX, y: start.minY - 10)) == .start)
+  }
+
+  @Test("the edit menu offers Cut and Copy with a selection, and Select with a caret, as a text view does")
+  func editMenu() async throws {
+    let view = view(##"<text id="t" x="10" y="50">ab cd</text>"##)
+    #expect(await view.beginTextEditing(of: try element("t", in: view), selecting: 4..<4))
+    let cut = #selector(UIResponderStandardEditActions.cut(_:))
+    let copy = #selector(UIResponderStandardEditActions.copy(_:))
+    let select = #selector(UIResponderStandardEditActions.select(_:))
+    let selectAll = #selector(UIResponderStandardEditActions.selectAll(_:))
+    #expect(!view.canPerformAction(cut, withSender: nil))
+    #expect(!view.canPerformAction(copy, withSender: nil))
+    #expect(view.canPerformAction(select, withSender: nil))
+    #expect(view.canPerformAction(selectAll, withSender: nil))
+    // Select selects the word at the caret.
+    view.select(nil)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 3..<5)
+    #expect(view.canPerformAction(cut, withSender: nil))
+    #expect(view.canPerformAction(copy, withSender: nil))
+    #expect(!view.canPerformAction(select, withSender: nil))
+    view.selectAll(nil)
+    #expect(!view.canPerformAction(selectAll, withSender: nil))
+    // A caret after a word, before a space, selects that word.
+    view.selectedTextRange = TextEditingRange(2..<2)
+    view.select(nil)
+    #expect((view.selectedTextRange as? TextEditingRange)?.range == 0..<2)
+  }
+
   @Test("the typed text renders as the same text written in the document")
   func rendering() async throws {
     let typed = view(##"<text id="t" x="10" y="50"></text>"##)

@@ -219,6 +219,21 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
   var replacedCursorView: (any UIView & UITextCursorView)?
   /// The line under the marked characters.
   let markLayer = CAShapeLayer()
+  /// The gesture that drags a handle of the selection where the text interaction doesn't: on a turned text, and from
+  /// the knob of a handle that sticks out of the lines.
+  let handlePan = UIPanGestureRecognizer()
+  /// The end of the selection whose handle is dragged, or `nil`.
+  var draggedEnd: SelectionEnd?
+  /// The end of the selection whose handle the latest touch is on, where the view drags it, or `nil`.
+  var touchedHandle: SelectionEnd?
+  /// The position of the end of the selection that isn't dragged.
+  var handleAnchor = 0
+  /// Where the finger that may drag a handle touched the view.
+  var handleTouchDown = CGPoint.zero
+  /// The distance from the finger to the caret of the dragged end, which the caret keeps.
+  var handleOffset = CGVector.zero
+  /// The loupe that shows the dragged end.
+  var handleLoupe: UITextLoupeSession?
   /// Where the characters are, which the changes of the text find again.
   private var cachedLayout: (text: [Character], characters: [CharacterGeometry?])??
 
@@ -292,7 +307,8 @@ final class TextEditingSession: NSObject, UITextInteractionDelegate, UITextSelec
     // A tap outside the text ends the editing, unless the delegate keeps it, as a tap outside a text view does. The
     // text is the rectangle along its angle around its caret and lines, so that a tap away from a turned text ends it
     // too, and a tap just outside the lines ends it at any scale of the view.
-    guard !view.editedTextArea(of: self).contains(point) else { return true }
+    // The handles of the selection stick out of the lines, and a tap on them isn't outside the text.
+    guard !view.editedTextArea(of: self).contains(point), view.selectionHandle(at: point) == nil else { return true }
     if view.textEditingDelegate?.svgView(view, shouldEndTextEditingAt: point) ?? true {
       view.endTextEditing()
       return false
@@ -357,6 +373,9 @@ extension SVGUIView {
     session.interaction.textInput = self
     session.interaction.delegate = session
     addInteraction(session.interaction)
+    session.handlePan.addTarget(session, action: #selector(TextEditingSession.dragHandle(_:)))
+    session.handlePan.delegate = session
+    addGestureRecognizer(session.handlePan)
     // The caret and the selection are drawn by the display interaction, which a custom text view activates when it
     // becomes the first responder, as Apple's "Adopting system selection UI in custom text views" describes.
     if let display = interactions.lazy.compactMap({ $0 as? UITextSelectionDisplayInteraction }).first {
@@ -417,6 +436,8 @@ extension SVGUIView {
       removeInteraction(display)
     }
     removeInteraction(session.interaction)
+    removeGestureRecognizer(session.handlePan)
+    session.handleLoupe?.invalidate()
     session.markLayer.removeFromSuperlayer()
     resignFirstResponder()
     textEditingDelegate?.svgViewDidEndTextEditing(self, element: session.element)
@@ -733,7 +754,7 @@ extension SVGUIView: UITextInput {
   }
 
   /// The caret at an offset of the text: a thin bar across the line, which the angle of the text turns.
-  private func caret(at offset: Int, in session: TextEditingSession) -> TurnedRect {
+  func caret(at offset: Int, in session: TextEditingSession) -> TurnedRect {
     let (point, ascent, descent) = caretGeometry(at: offset, in: session)
     let top = CGPoint(x: point.x + ascent.x, y: point.y + ascent.y).applying(session.transform)
     let bottom = CGPoint(x: point.x + descent.x, y: point.y + descent.y).applying(session.transform)
@@ -920,13 +941,41 @@ extension SVGUIView: UITextInput {
     setTextAttribute(name, to: allOn ? (inherited ? off : nil) : (inherited ? nil : on))
   }
 
+  /// Whether the edit menu and the keyboard offer an action for the text that is edited, as a text view offers it:
+  /// Cut and Copy with a selection, Select with a caret in text, Select All unless all is selected, Paste with text
+  /// to paste, and the toggles of bold, italic and underline with ``allowsEditingTextAttributes``.
   override public func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-    if action == #selector(toggleBoldface(_:)) || action == #selector(toggleItalics(_:))
-      || action == #selector(toggleUnderline(_:))
-    {
-      return textEditing != nil && allowsEditingTextAttributes
+    guard let session = textEditing else { return super.canPerformAction(action, withSender: sender) }
+    switch action {
+    case #selector(toggleBoldface(_:)), #selector(toggleItalics(_:)), #selector(toggleUnderline(_:)):
+      return allowsEditingTextAttributes
+    case #selector(cut(_:)), #selector(copy(_:)):
+      return !session.selection.isEmpty
+    case #selector(select(_:)):
+      return session.selection.isEmpty && !session.text.isEmpty
+    case #selector(selectAll(_:)):
+      return session.selection != 0..<session.text.count && !session.text.isEmpty
+    case #selector(paste(_:)):
+      return UIPasteboard.general.hasStrings
+    default:
+      return super.canPerformAction(action, withSender: sender)
     }
-    return super.canPerformAction(action, withSender: sender)
+  }
+
+  /// Selects the word at the caret, or the word before it where the caret isn't in a word, as the Select action of a
+  /// text view does.
+  override public func select(_: Any?) {
+    guard let session = textEditing, session.selection.isEmpty else { return }
+    let caret = TextEditingPosition(session.selection.lowerBound)
+    let word =
+      tokenizer.rangeEnclosingPosition(caret, with: .word, inDirection: .storage(.forward))
+      ?? tokenizer.rangeEnclosingPosition(caret, with: .word, inDirection: .storage(.backward))
+    guard let range = (word as? TextEditingRange)?.range, !range.isEmpty else { return }
+    session.inputDelegate?.selectionWillChange(self)
+    session.selection = range
+    session.typingAttributes = nil
+    session.inputDelegate?.selectionDidChange(self)
+    session.display?.setNeedsSelectionUpdate()
   }
 
   override public func toggleBoldface(_: Any?) {
