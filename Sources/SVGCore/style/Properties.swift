@@ -777,7 +777,7 @@ enum TextDecorationProperty: StyleProperty {
   static var computed: WritableKeyPath<ComputedStyle, Computed> & Sendable { \ComputedStyle.textDecoration }
 
   static func parse(_ text: String, origin: DeclarationOrigin) -> TextDecorationLines? {
-    TextDecorationLines(text, caseInsensitive: origin == .css)
+    TextDecorationLines(text, origin: origin)
   }
 
   static func compute(_ lines: TextDecorationLines, in resolver: StyleResolver) -> TextDecorationLines {

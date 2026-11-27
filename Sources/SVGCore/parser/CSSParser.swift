@@ -124,28 +124,95 @@ struct TextDecorationLines: OptionSet, Hashable, Sendable {
     self.rawValue = rawValue
   }
 
-  /// The lines of a value, which is `none` or keywords of lines separated by white space, each at most once, or
-  /// `nil` if it isn't valid.
-  init?(_ text: String, caseInsensitive: Bool) {
-    let keywords = text.split(whereSeparator: \.isWhitespace).map { caseInsensitive ? $0.lowercased() : String($0) }
-    if keywords == ["none"] {
-      self = []
-      return
-    }
-    var lines: Self = []
-    for keyword in keywords {
-      let line: Self
-      switch keyword {
-      case "underline": line = .underline
-      case "overline": line = .overline
-      case "line-through": line = .lineThrough
-      default: return nil
+  /// The lines of a value of the shorthand `text-decoration`, or `nil` if it isn't valid.
+  ///
+  /// The value has the line, the thickness, the style and the color, in any order and each at most once, as CSS Text
+  /// Decoration 4 defines. Only the line is kept, so the thickness, the style and the color are read only to tell
+  /// whether the value is valid. The line is `none` where the value doesn't have one. `blink` is read but draws no
+  /// line, as the specification lets user agents not blink.
+  init?(_ text: String, origin: DeclarationOrigin) {
+    var input = _CSSParser.Parser(input: ParserInput(input: text))
+    var lines: Self?
+    var hasThickness = false
+    var hasStyle = false
+    var hasColor = false
+    while !input.isExhausted() {
+      if lines == nil, let value = Self.lines(&input, origin: origin) {
+        lines = value
+      } else if !hasThickness, attempt(&input, { Self.thickness(&$0, origin: origin) }) != nil {
+        hasThickness = true
+      } else if !hasStyle, attempt(&input, { Self.style(&$0, origin: origin) }) != nil {
+        hasStyle = true
+      } else if !hasColor, attempt(&input, Self.color) != nil {
+        hasColor = true
+      } else {
+        return nil
       }
-      guard !lines.contains(line) else { return nil }
-      lines.insert(line)
     }
-    guard !lines.isEmpty else { return nil }
-    self = lines
+    guard lines != nil || hasThickness || hasStyle || hasColor else { return nil }
+    self = lines ?? []
+  }
+
+  /// The keyword of an identifier, in lowercase in CSS, or `nil` with the input as it was if the next token isn't an
+  /// identifier.
+  private static func ident(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> String? {
+    attempt(&input) { input in
+      guard case .success(.ident(let name)) = input.next() else { return nil }
+      return origin == .css ? name.lowercased() : name
+    }
+  }
+
+  /// The lines of `none` or of keywords of lines next to each other, each at most once, or `nil` with the input as it
+  /// was if the value doesn't start with one.
+  private static func lines(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> Self? {
+    let start = input.state
+    if ident(&input, origin: origin) == "none" { return [] }
+    input.reset(state: start)
+    var lines: Self = []
+    var keywords: Set<String> = []
+    while true {
+      // A keyword that comes twice ends the lines, and makes the value invalid where nothing else reads it.
+      let state = input.state
+      guard let name = ident(&input, origin: origin),
+        ["underline", "overline", "line-through", "blink"].contains(name), !keywords.contains(name)
+      else {
+        input.reset(state: state)
+        return keywords.isEmpty ? nil : lines
+      }
+      keywords.insert(name)
+      switch name {
+      case "underline": lines.insert(.underline)
+      case "overline": lines.insert(.overline)
+      case "line-through": lines.insert(.lineThrough)
+      default: break
+      }
+    }
+  }
+
+  /// A thickness: `auto`, `from-font` or a length or a percentage.
+  private static func thickness(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> Void? {
+    if let name = ident(&input, origin: origin) { return name == "auto" || name == "from-font" ? () : nil }
+    return lengthPercentage(&input, origin: origin).map { _ in () }
+  }
+
+  /// A style: `solid`, `double`, `dotted`, `dashed` or `wavy`.
+  private static func style(_ input: inout _CSSParser.Parser, origin: DeclarationOrigin) -> Void? {
+    ["solid", "double", "dotted", "dashed", "wavy"].contains(ident(&input, origin: origin)) ? () : nil
+  }
+
+  /// A color, which is the text of a token, or of a function with its arguments.
+  private static func color(_ input: inout _CSSParser.Parser) -> ColorValue? {
+    input.skipWhitespace()
+    let start = input.position
+    guard case .success(let token) = input.next() else { return nil }
+    if case .function = token {
+      let result: Result<Void, ParseError<Never>> = input.parseNestedBlock { input in
+        while case .success = input.next() {}
+        return .success(())
+      }
+      guard case .success = result else { return nil }
+    }
+    return ColorValue(input.slice(from: start))
   }
 }
 

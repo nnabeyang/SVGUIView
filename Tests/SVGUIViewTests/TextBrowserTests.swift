@@ -41,6 +41,16 @@ struct TextBrowserTests {
     }
   }
 
+  @Test(
+    "the line of text-decoration is drawn where the shorthand has a style, a color or a thickness too",
+    arguments: [#"text-decoration="underline wavy red""#, #"style="text-decoration: 1px dotted #00f line-through""#])
+  func shorthandLine(declaration: String) async throws {
+    // Spaces that have no outlines, so that only the line is drawn.
+    let rendering = try await render(
+      #"<text x="2" y="14" font-size="8" xml:space="preserve" \#(declaration)>"# + "\u{A0}\u{A0}</text>")
+    #expect(!columns(of: rendering) { _ in true }.isEmpty)
+  }
+
   @Test("a gradient of glyphs that rotate turns isn't turned with them")
   func turnedGlyphPaint() async throws {
     // Red left of x = 10 and green right of it, in the user space.
