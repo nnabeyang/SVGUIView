@@ -438,10 +438,11 @@ extension SVGUIView {
       guard let transform = await session.element.transformToView(), textEditing === session,
         request > session.takenTransformRequest
       else { return }
-      session.inputDelegate?.selectionWillChange(self)
+      // The selection stays where it is in the text, and only its place in the view changes, so the keyboard isn't
+      // told that it changes: the keyboard accepts the autocorrection that it offers, and collapses the selection, when
+      // it hears that the selection changed.
       session.takeTransform(transform, of: request)
       updateMarkLayer(of: session)
-      session.inputDelegate?.selectionDidChange(self)
       session.display?.setNeedsSelectionUpdate()
     }
   }
