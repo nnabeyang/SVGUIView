@@ -247,6 +247,7 @@ struct ComputedStyleTests {
     <g id="i" clip-path="inset(1px 2px round 3px)" baseline-shift="2px" font-family="monospace" font-style="italic" paint-order="markers stroke" transform="skewX(30)" style="transition-property: none; animation-timing-function: linear(0, 0.5 25%, 1); font-weight: bolder"/>
     <g id="j" clip-path="polygon(evenodd, 0 0, 10px 0, 5px 10%)" baseline-shift="super" paint-order="fill markers" fill="context-stroke" stroke="Context-Fill" style="animation-name: k, none; animation-timing-function: ease-in, steps(4, jump-none); font-size: 2cm"/>
     <g id="k" clip-path="fill-box" stroke-dashoffset="-1" stroke-miterlimit="10" style="cx: calc(1px + 10%); cy: max(5px, 10%); font-size: 50%; stop-opacity: 0.333; flood-opacity: 2; text-orientation: upright"/>
+    <g id="l" font-style="oblique" font-weight="100" style="font: italic bold 30px/2 Times New Roman, serif"/>
     </svg>
     """#
 
@@ -309,6 +310,10 @@ struct ComputedStyleTests {
     ("h", "clip-rule", "nonzero"),
     ("h", "transform-box", "view-box"),
     ("h", "visibility", "visible"),
+    ("l", "font-style", "italic"),
+    ("l", "font-weight", "700"),
+    ("l", "font-size", "30px"),
+    ("l", "font-family", "Times New Roman, serif"),
     ("i", "shape-rendering", "auto"),
     ("i", "pointer-events", "auto"),
     ("i", "color-interpolation", "srgb"),

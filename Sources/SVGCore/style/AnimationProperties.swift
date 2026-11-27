@@ -248,6 +248,26 @@ func attempt<T>(_ input: inout _CSSParser.Parser, _ parse: (inout _CSSParser.Par
   return nil
 }
 
+/// The text of the next component value: a token, or a function or a block with what's in it, or `nil` at the end of
+/// the input.
+func componentValueText(_ input: inout _CSSParser.Parser) -> String? {
+  input.skipWhitespace()
+  let start = input.position
+  switch input.next() {
+  case .success(.function), .success(.parenthesisBlock), .success(.squareBracketBlock), .success(.curlyBracketBlock):
+    let result: Result<Void, ParseError<Never>> = input.parseNestedBlock { input in
+      while case .success = input.next() {}
+      return .success(())
+    }
+    guard case .success = result else { return nil }
+  case .success:
+    break
+  case .failure:
+    return nil
+  }
+  return input.slice(from: start)
+}
+
 /// A `<time>`, in seconds.
 func time(_ input: inout _CSSParser.Parser) -> Double? {
   guard case .success(.dimention(let dimension)) = input.next() else { return nil }
