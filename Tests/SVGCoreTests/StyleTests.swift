@@ -635,11 +635,39 @@ struct StyleTests {
     ("underlineoverline", nil),
     ("underline underline", nil),
     ("", nil),
+    ("underline wavy", .underline),
+    ("wavy underline", .underline),
+    ("underline red", .underline),
+    ("underline rgb(255, 0, 0) dotted", .underline),
+    ("#f00 underline overline", [.underline, .overline]),
+    ("underline 2px", .underline),
+    ("from-font overline auto", nil),
+    ("from-font overline", .overline),
+    ("10% double line-through blue", .lineThrough),
+    ("underline blink", .underline),
+    ("blink", []),
+    ("wavy", []),
+    ("none red", []),
+    ("none underline", nil),
+    ("underline wavy wavy", nil),
+    ("red blue underline", nil),
+    ("underline red overline", nil),
+    ("underline 2px 3px", nil),
+    ("underline notacolor", nil),
+    ("blink blink", nil),
   ]
 
-  @Test("text-decoration is none or lines separated by white space, each at most once", arguments: textDecorations)
+  @Test(
+    "text-decoration has the line, the thickness, the style and the color in any order, each at most once",
+    arguments: textDecorations)
   func textDecoration(text: String, lines: TextDecorationLines?) {
     #expect(TextDecorationProperty.parse(text, origin: .attribute) == lines)
+  }
+
+  @Test("the keywords of text-decoration are case-insensitive only in CSS")
+  func textDecorationCase() {
+    #expect(TextDecorationProperty.parse("UNDERLINE Wavy", origin: .css) == .underline)
+    #expect(TextDecorationProperty.parse("UNDERLINE Wavy", origin: .attribute) == nil)
   }
 
   @Test("the lines of text-decoration add up with the lines of the ancestors")

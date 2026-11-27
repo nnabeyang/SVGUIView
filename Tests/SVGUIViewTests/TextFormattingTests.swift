@@ -201,6 +201,25 @@ struct TextFormattingTests {
     #expect(written(view).contains(##">abc</text>"##))
   }
 
+  @Test("toggling underline finds the line of a shorthand that has a style or a color too")
+  func toggleShorthandUnderline() async throws {
+    // The text has the line, so a range without it takes the line by losing its value.
+    let inherited = try await editing(
+      ##"<text id="t" x="10" y="50" text-decoration="underline wavy red"><tspan text-decoration="none">a</tspan>bc</text>"##
+    )
+    inherited.allowsEditingTextAttributes = true
+    select(0..<1, in: inherited)
+    inherited.toggleUnderline(nil)
+    #expect(written(inherited).contains(##">abc</text>"##))
+    // A run with the line loses it.
+    let run = try await editing(
+      ##"<text id="t" x="10" y="50">a<tspan text-decoration="underline wavy">b</tspan>c</text>"##)
+    run.allowsEditingTextAttributes = true
+    select(1..<2, in: run)
+    run.toggleUnderline(nil)
+    #expect(written(run).contains(##">abc</text>"##))
+  }
+
   @Test("the attributes of a range are the ones that every character of it has with the same value")
   func attributesOfRange() async throws {
     let view = try await editing(##"<text id="t" x="10" y="50">abc</text>"##)
