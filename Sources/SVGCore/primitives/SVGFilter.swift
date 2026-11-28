@@ -90,13 +90,7 @@ enum SVGFilter: Equatable {
     let arguments = text.trimmingCharacters(in: .whitespacesAndNewlines)
     switch name {
     case "url":
-      var reference = Substring(arguments)
-      if let quote = reference.first, quote == "\"" || quote == "'" {
-        guard reference.count >= 2, reference.last == quote else { return nil }
-        reference = reference.dropFirst().dropLast()
-      }
-      guard reference.first == "#", reference.count > 1 else { return nil }
-      return .url(String(reference.dropFirst()))
+      return localReferenceID(arguments: arguments).map { .url($0) }
     case "blur":
       guard !arguments.isEmpty else { return .blur(.number(0)) }
       guard let deviation = length(arguments), !isNegative(arguments) else { return nil }

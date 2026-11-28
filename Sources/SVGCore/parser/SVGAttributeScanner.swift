@@ -99,6 +99,47 @@ struct SVGAttributeScanner {
   }
 }
 
+extension SVGAttributeScanner {
+  /// The arguments of a `url()` whose name is read, from its opening parenthesis to its closing one, which can be
+  /// in quotes, or `nil` if the function isn't closed.
+  mutating func scanURLArguments() -> String? {
+    guard consume(ascii: UInt8(ascii: "(")) else { return nil }
+    let start = reader.readIndex
+    var quote: UInt8?
+    while let byte = reader.read() {
+      if let open = quote {
+        if byte == open { quote = nil }
+      } else if byte == UInt8(ascii: "\"") || byte == UInt8(ascii: "'") {
+        quote = byte
+      } else if byte == UInt8(ascii: ")") {
+        let end = reader.bytes.index(before: reader.readIndex)
+        return String(decoding: reader.bytes[start..<end], as: UTF8.self)
+      }
+    }
+    return nil
+  }
+}
+
+/// The text that the arguments of a `url()` reference: the URL in quotes or not, with the whitespace around it
+/// removed, as SVG 2 processes URLs, or `nil` if the quotes aren't closed.
+func urlReference(arguments: some StringProtocol) -> String? {
+  var reference = arguments.trimmingCharacters(in: .whitespacesAndNewlines)[...]
+  if let quote = reference.first, quote == "\"" || quote == "'" {
+    guard reference.count >= 2, reference.last == quote else { return nil }
+    reference = reference.dropFirst().dropLast()
+  }
+  return reference.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// The ID of the element of the document that the arguments of a `url()` reference, or `nil` if they don't reference
+/// one, such as a URL of another document. An ID can start with whitespace, which no element has.
+func localReferenceID(arguments: some StringProtocol) -> String? {
+  guard let reference = urlReference(arguments: arguments), reference.first == "#", reference.count > 1 else {
+    return nil
+  }
+  return String(reference.dropFirst())
+}
+
 // for points attribute of polyline and polygon tags
 extension SVGAttributeScanner {
   mutating func scanPoints() -> [CGPoint] {
@@ -215,10 +256,7 @@ extension SVGAttributeScanner {
         if case .color(let color) = expression { .color(color) } else { .expression(expression) }
       }
     case .url:
-      guard consume(ascii: UInt8(ascii: "(")) else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: "#"))
-      guard let id = scanIdentity() else { return nil }
-      guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+      guard let id = scanURLArguments().flatMap({ localReferenceID(arguments: $0) }) else { return nil }
       // The fallback is the rest of the value: a paint other than a paint server, with nothing after it.
       guard reader.consumeWhitespace() != nil else { return .url(id, fallback: nil) }
       guard let fallback = scanPaint(), reader.isEOF else { return nil }
@@ -740,10 +778,7 @@ extension SVGAttributeScanner {
     case .none:
       return SVGClipPath.none
     case .url:
-      guard consume(ascii: UInt8(ascii: "(")) else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: "#"))
-      guard let id = scanIdentity() else { return nil }
-      guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+      guard let id = scanURLArguments().flatMap({ localReferenceID(arguments: $0) }) else { return nil }
       return .url(url: id)
     }
   }
@@ -761,10 +796,7 @@ extension SVGAttributeScanner {
     case .none:
       return SVGMask.none
     case .url:
-      guard consume(ascii: UInt8(ascii: "(")) else { return nil }
-      consumeWhitespaceIfNext(UInt8(ascii: "#"))
-      guard let id = scanIdentity() else { return nil }
-      guard consume(ascii: UInt8(ascii: ")")) else { return nil }
+      guard let id = scanURLArguments().flatMap({ localReferenceID(arguments: $0) }) else { return nil }
       return .url(url: id)
     }
   }
