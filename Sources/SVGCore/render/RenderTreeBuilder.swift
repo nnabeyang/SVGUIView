@@ -1455,11 +1455,11 @@ package struct RenderTreeBuilder {
   ) -> StrokeStyle? {
     let style = element.style
     if isNone(style.stroke, in: context) { return nil }
-    let dashes = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
+    let dashing = dashes(of: element, context: context)
     let stroke = StrokeStyle(
       paint: paint,
-      dashes: dashes.contains { $0 > 0 } ? dashes : nil,
-      dashOffset: style.strokeDashoffset.value(context: context, mode: .other),
+      dashes: dashing?.lengths,
+      dashOffset: dashing?.phase ?? style.strokeDashoffset.value(context: context, mode: .other),
       width: style.strokeWidth.value(context: context, mode: .other),
       cap: style.strokeLinecap,
       join: style.strokeLinejoin,
@@ -1471,6 +1471,35 @@ package struct RenderTreeBuilder {
     return StrokeStyle(
       paint: stroke.paint, dashes: stroke.dashes, dashOffset: stroke.dashOffset, width: stroke.width / host.scale,
       cap: stroke.cap, join: stroke.join, miterLimit: stroke.miterLimit, outline: outline.map(RenderPath.init))
+  }
+
+  /// The dashes of the stroke of an element and the distance into them that the stroke starts at, or `nil` if the
+  /// stroke isn't dashed: no dash is longer than 0.
+  ///
+  /// The `pathLength` of a shape scales them by the length of its path over the `pathLength`. A `pathLength` of 0
+  /// scales them infinitely, as SVG 2 specifies: a dash longer than 0 becomes infinite, and one of 0 stays 0, so the
+  /// stroke is solid if its first dash is longer than 0, and is otherwise only the dash of 0 at the start of the path,
+  /// which only its caps show, as Chrome draws it.
+  private func dashes(
+    of element: any SVGDrawableElement, context: ResolveContext
+  ) -> (lengths: [CGFloat], phase: CGFloat)? {
+    let style = element.style
+    var lengths = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
+    guard lengths.contains(where: { $0 > 0 }) else { return nil }
+    var phase = style.strokeDashoffset.value(context: context, mode: .other)
+    if let pathLength = authorPathLength(of: element), let shape = element as? any ShapeGeometry {
+      let length = PathMeasure(shape.markerPath(in: context) ?? PathData(commands: [])).length
+      guard length > 0 else { return (lengths, phase) }
+      if pathLength == 0 {
+        // A gap longer than the path ends the stroke after the dash of 0.
+        guard lengths[0] == 0 else { return nil }
+        return ([0, length + 1], 0)
+      }
+      let scale = length / pathLength
+      lengths = lengths.map { $0 * scale }
+      phase *= scale
+    }
+    return (lengths, phase)
   }
 
   /// The outline of a stroke along a path, made in the coordinates of a transform from the user space and placed
@@ -1508,10 +1537,8 @@ package struct RenderTreeBuilder {
       stroke = RenderPath(strokeOutline)
     } else if width > 0, !isCells {
       var outline = stroked
-      let dashes = style.strokeDasharray.map { $0.value(context: context, mode: .other) }
-      if dashes.contains(where: { $0 > 0 }) {
-        outline = outline.copy(
-          dashingWithPhase: style.strokeDashoffset.value(context: context, mode: .other), lengths: dashes)
+      if let dashing = dashes(of: element, context: context) {
+        outline = outline.copy(dashingWithPhase: dashing.phase, lengths: dashing.lengths)
       }
       stroke = RenderPath(
         outline.copy(

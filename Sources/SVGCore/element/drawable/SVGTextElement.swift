@@ -107,13 +107,24 @@ final class SVGTextElement: ShapeGeometry {
       return nil
     }
     let pathLayouts = zip(content.textPaths, paths).map { textPath, measure in
-      let offset: CGFloat =
-        if case .percent(let percent) = textPath.startOffset {
-          percent / 100 * measure.length
-        } else {
-          // A sum of a percentage and a length, which an animation makes, has the percentage of the path too.
-          textPath.startOffset.value(total: measure.length, context: context)
+      var offset: CGFloat
+      if case .percent(let percent) = textPath.startOffset {
+        offset = percent / 100 * measure.length
+      } else {
+        // A sum of a percentage and a length, which an animation makes, has the percentage of the path too.
+        offset = textPath.startOffset.value(total: measure.length, context: context)
+        if offset.isFinite, let authorLength = measure.authorLength {
+          // A length is relative to the `pathLength` of the shape, and a `pathLength` of 0 scales it infinitely,
+          // which puts the text off the path unless it's 0.
+          let length = textPath.startOffset.value(total: 0, context: context)
+          let percentage = offset - length
+          offset =
+            percentage
+            + (authorLength > 0
+              ? length * measure.length / authorLength : length == 0 ? 0 : length > 0 ? .infinity : -.infinity)
+          return TextPathLayout(measure: measure, startOffset: offset, stretches: textPath.stretchesGlyphs)
         }
+      }
       return TextPathLayout(
         measure: measure, startOffset: offset.isFinite ? offset : 0, stretches: textPath.stretchesGlyphs)
     }

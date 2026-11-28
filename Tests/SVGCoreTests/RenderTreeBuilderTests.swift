@@ -690,6 +690,14 @@ struct RenderTreeBuilderTests {
     // A basic shape is a path of the same shape, as SVG 2 specifies.
     (##"<defs><line id="l" x1="2" y1="10" x2="100" y2="10"/></defs><text><textPath href="#l">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
     (##"<defs><rect id="r" x="2" y="10" width="98" height="5"/></defs><text><textPath href="#r">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    // A length of startOffset is relative to the `pathLength` of the shape that's referenced, and a percentage isn't.
+    (##"<defs><path id="p" d="M2 10 H100" pathLength="49"/></defs><text><textPath href="#p" startOffset="3">ab</textPath></text>"##, ##"<text x="8" y="10">ab</text>"##),
+    (##"<defs><path id="p" d="M2 10 H100" pathLength="49"/></defs><text><textPath href="#p" startOffset="10%">ab</textPath></text>"##, ##"<text x="11.8" y="10">ab</text>"##),
+    (##"<defs><path id="p" d="M2 10 H100" pathLength="0"/></defs><text><textPath href="#p" startOffset="0">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
+    (##"<defs><path id="p" d="M2 10 H100" pathLength="-1"/></defs><text><textPath href="#p" startOffset="3">ab</textPath></text>"##, ##"<text x="5" y="10">ab</text>"##),
+    (##"<defs><line id="p" x1="2" y1="10" x2="100" y2="10" pathLength="49"/></defs><text><textPath href="#p" startOffset="3">ab</textPath></text>"##, ##"<text x="8" y="10">ab</text>"##),
+    // The path attribute has no `pathLength`.
+    (##"<defs><path id="p" d="M2 10 H100" pathLength="49"/></defs><text><textPath path="M2 10 H100" href="#p" startOffset="3">ab</textPath></text>"##, ##"<text x="5" y="10">ab</text>"##),
     // The right side reverses the path.
     (##"<text><textPath path="M100 10 H2" side="right">ab</textPath></text>"##, ##"<text x="2" y="10">ab</text>"##),
     // On a straight path, bending the glyphs along it draws them as they are.
@@ -718,6 +726,14 @@ struct RenderTreeBuilderTests {
     for (a, e) in [(actual.minX, expected.minX), (actual.minY, expected.minY), (actual.maxX, expected.maxX), (actual.maxY, expected.maxY)] {
       #expect(abs(a - e) < 0.001, "\(actual) isn't \(expected)")
     }
+  }
+
+  @Test("a pathLength of 0 puts text that starts at a distance other than 0 off the path", arguments: ["1", "-1", "60"])
+  func zeroPathLength(startOffset: String) async throws {
+    let tree = try await renderTree(
+      ##"<g font-size="4"><defs><path id="p" d="M2 10 H100" pathLength="0"/></defs><text><textPath href="#p" startOffset=""##
+        + startOffset + ##"">ab</textPath></text></g>"##)
+    #expect(try shapes(of: children(of: tree)).allSatisfy { $0.geometry?.path.cgPath.isEmpty ?? true })
   }
 
   @Test("a glyph on a path turns in the direction of the path, and dy moves it across the path")
@@ -2124,6 +2140,40 @@ struct RenderTreeBuilderTests {
     let dashes = try #require(stroke.dashes)
     #expect(dashes.count == 2 && abs(dashes[0] - 2) < 0.001 && abs(dashes[1] - 96 / 25.4) < 0.001, "\(dashes)")
     #expect(abs(stroke.dashOffset - 1) < 0.001)
+  }
+
+  /// Dashed shapes with `pathLength`, and their dashes and the distance into them that the stroke starts at, or `nil`
+  /// for a solid stroke.
+  private static let pathLengthDashes: [(String, (lengths: [CGFloat], phase: CGFloat)?)] = [
+    // The dashes are scaled by the length of the path over the `pathLength`.
+    (#"<path d="M0 0 H100" pathLength="4" stroke-dasharray="1 1" stroke-dashoffset="1"/>"#, ([25, 25], 25)),
+    (#"<rect width="10" height="10" pathLength="4" stroke-dasharray="0.5 0.5"/>"#, ([5, 5], 0)),
+    (#"<line x2="50" pathLength="25" stroke-dasharray="3 1"/>"#, ([6, 2], 0)),
+    (#"<circle r="10" pathLength="1" stroke-dasharray="0.5"/>"#, ([CGFloat.pi * 10], 0)),
+    // A negative `pathLength` and one that isn't a number are ignored.
+    (#"<path d="M0 0 H100" pathLength="-4" stroke-dasharray="1 1" stroke-dashoffset="1"/>"#, ([1, 1], 1)),
+    (#"<path d="M0 0 H100" pathLength="4px" stroke-dasharray="1 1"/>"#, ([1, 1], 0)),
+    // A `pathLength` of 0 makes a dash longer than 0 infinite, so the stroke is solid, or only the dash of 0 at the
+    // start of the path.
+    (#"<path d="M0 0 H100" pathLength="0" stroke-dasharray="1 1" stroke-dashoffset="1"/>"#, nil),
+    (#"<path d="M0 0 H100" pathLength="0" stroke-dasharray="0 1" stroke-dashoffset="1"/>"#, ([0, 101], 0)),
+  ]
+
+  @Test("pathLength scales the dashes of the stroke of a shape", arguments: pathLengthDashes)
+  func pathLengthScalesDashes(content: String, expected: (lengths: [CGFloat], phase: CGFloat)?) async throws {
+    let tree = try await renderTree(#"<g stroke="black">"# + content + "</g>")
+    let stroke = try #require(
+      try shapes(of: children(of: tree)).last?.content?.vector?.stroke, "The shape has no stroke")
+    guard let expected else {
+      #expect(stroke.dashes == nil)
+      return
+    }
+    let dashes = try #require(stroke.dashes)
+    #expect(dashes.count == expected.lengths.count, "\(dashes)")
+    for (dash, length) in zip(dashes, expected.lengths) {
+      #expect(abs(dash - length) < 0.01, "\(dashes)")
+    }
+    #expect(abs(stroke.dashOffset - expected.phase) < 0.01, "\(stroke.dashOffset)")
   }
 
   @Test("a stroke takes a gradient or a pattern as a fill does, with its opacity, also on the glyphs of tspans")
