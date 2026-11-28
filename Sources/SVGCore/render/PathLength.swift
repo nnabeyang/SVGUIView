@@ -27,3 +27,14 @@ extension RenderTreeBuilder {
     return PathMeasure(shape.markerPath(in: context) ?? PathData(commands: []))
   }
 }
+
+/// The `pathLength` of a shape: the length that the author gives its path, which the distances along the path, such
+/// as the dashes of its stroke and the start offset of text on it, are relative to, or `nil` if the element isn't a
+/// `<path>` or a basic shape, or has no valid `pathLength`, which is a number that isn't negative.
+func authorPathLength(of element: any SVGElement) -> Double? {
+  guard element is any ShapeGeometry, !(element is SVGImageElement), !(element is SVGTextElement),
+    let text = element.base.attributes["pathLength"],
+    let value = Double(text.trimmingCharacters(in: .whitespaces)), value.isFinite, value >= 0
+  else { return nil }
+  return value
+}

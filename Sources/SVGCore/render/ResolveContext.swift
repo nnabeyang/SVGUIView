@@ -183,7 +183,9 @@ struct ResolveContext: GeometryContext {
     let box =
       style.transformBox == .viewBox
       ? CGRect(origin: .zero, size: viewBoxSize) : shape.path(in: context)?.boundingBoxOfPath ?? .zero
-    return PathMeasure(data, transform: context.transform(of: style, box: box))
+    var measure = PathMeasure(data, transform: context.transform(of: style, box: box))
+    measure.authorLength = authorPathLength(of: shape)
+    return measure
   }
 
   /// The transform of computed values about their transform origin in a reference box.

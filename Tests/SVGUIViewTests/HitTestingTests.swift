@@ -56,6 +56,11 @@ struct HitTestingTests {
         + #"<line id="butt" x1="20" y1="80" x2="180" y2="80" stroke="black" stroke-width="10"/>"#)
     #expect(await hit(view, 15, 20) == "dashed")
     #expect(await hit(view, 40, 20) == nil)
+    // pathLength scales the dashes: 180 long, 9 makes them 20.
+    let scaled = self.view(
+      #"<line id="scaled" x1="10" y1="20" x2="190" y2="20" stroke="black" stroke-width="10" stroke-dasharray="1 1" pathLength="9"/>"#)
+    #expect(await hit(scaled, 15, 20) == "scaled")
+    #expect(await hit(scaled, 40, 20) == nil)
     #expect(await hit(view, 17, 50) == "square")
     #expect(await hit(view, 17, 80) == nil)
   }

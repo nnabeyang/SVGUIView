@@ -24,6 +24,9 @@ package struct PathMeasure: Sendable {
   private(set) var end: CGPoint?
   /// Whether the path is one subpath that's closed.
   private(set) var isClosed = false
+  /// The `pathLength` of the shape that the path is of, which the start offset of text on the path is relative to, or
+  /// `nil` without one.
+  var authorLength: Double?
 
   /// The length of the path.
   package var length: Double { segments.last?.distance ?? 0 }
