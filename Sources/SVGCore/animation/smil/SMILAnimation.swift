@@ -68,8 +68,8 @@ struct SMILAnimation: Sendable {
   let keyTimes: [Double]?
   /// The easing of each interval between values for `calcMode="spline"`.
   let keySplines: [EasingFunction]?
-  /// The fractions of the length of the motion path of an `<animateMotion>` at the times of `keyTimes`, or `nil` to
-  /// go along the path as the calculation mode says.
+  /// The fractions of the length of the motion path of an `<animateMotion>` at the times of `keyTimes`, or spaced by
+  /// their distances for a paced animation, or `nil` to go along the path as the calculation mode says.
   let keyPoints: [Double]?
   /// Whether the animation adds to the value underneath it.
   let isAdditive: Bool
@@ -94,8 +94,9 @@ struct SMILAnimation: Sendable {
   let attributes: [String: String]
   /// The ID that the `<mpath>` child of an `<animateMotion>` references.
   let motionPath: String?
-  /// The path data of the `<path>` that the `<mpath>` child references, as written.
-  var motionPathData: String?
+  /// The path data of the `<path>` that the `<mpath>` child references: the computed value of its `d` property,
+  /// without animations.
+  var motionPathData: PathData?
   /// The times in seconds that the document API begins the animation at, which SMIL adds to the times of the
   /// `begin` list as `beginElement()` does.
   var addedBegins = [Double]()
@@ -184,11 +185,15 @@ extension SMILAnimation {
     } else {
       keySplines = nil
     }
-    // Key points need key times, one for each, and a paced animation ignores both.
-    if kind == .animateMotion, calcMode != .paced, let text = attributes["keyPoints"] {
-      guard let points = Self.numbers(text, separator: ";"), let times = keyTimes, points.count == times.count,
-        points.allSatisfy({ (0...1).contains($0) })
-      else { return nil }
+    // Key points need key times, one for each, except in a paced animation, which ignores the key times and spaces the
+    // key points by their distances, as Firefox does.
+    if kind == .animateMotion, let text = attributes["keyPoints"] {
+      guard let points = Self.numbers(text, separator: ";"), points.allSatisfy({ (0...1).contains($0) }) else {
+        return nil
+      }
+      if calcMode != .paced {
+        guard let times = keyTimes, points.count == times.count else { return nil }
+      }
       keyPoints = points
     } else {
       keyPoints = nil
@@ -269,7 +274,7 @@ extension SMILAnimation {
 extension SMILAnimation {
   /// The animations of a document in document order. An animation changes the element that its `href` references,
   /// or its parent.
-  static func animations(of document: DocumentTree) -> [SMILAnimation] {
+  static func animations(of document: DocumentTree, stylesheet: Stylesheet) -> [SMILAnimation] {
     guard let root = document.root else { return [] }
     // Of elements with the same ID, the first one in the document is the one that `href` finds.
     var elements = [String: DocumentElement]()
@@ -291,10 +296,10 @@ extension SMILAnimation {
             target = element
           }
           if let target, var animation = SMILAnimation(element: child, target: target) {
-            // The path of `<mpath>` is the path data of the `<path>` that it references, without the transform of
-            // the path.
+            // The path of `<mpath>` is the `d` property of the `<path>` that it references, from its attribute or
+            // CSS, without the transform of the path.
             if let id = animation.motionPath, let path = elements[id], path.name == .path {
-              animation.motionPathData = path.attributes["d"]
+              animation.motionPathData = document.computedStyle(of: path.id, stylesheet: stylesheet)?.d
             }
             animations.append(animation)
           }

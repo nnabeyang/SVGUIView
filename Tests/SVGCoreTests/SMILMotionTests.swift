@@ -37,6 +37,13 @@ struct SMILMotionTests {
       rect(#"<animateMotion path="M0 0 L40 0" calcMode="linear" keyPoints="0.5;1;0" keyTimes="0;0.5;1" dur="2s"/>"#),
       0.5, (30, 0, 0)
     ),
+    // A paced animation spaces the key points by their distances, without the key times.
+    (
+      rect(#"<animateMotion path="M0 0 L200 0" keyPoints="0;1;0.5" keyTimes="0;0.5;1" dur="10s"/>"#), 2.5,
+      (75, 0, 0)
+    ),
+    (rect(#"<animateMotion path="M0 0 L200 0" keyPoints="0;1;0.5" dur="10s"/>"#), 2.5, (75, 0, 0)),
+    (rect(#"<animateMotion path="M0 0 L200 0" keyPoints="0.5;0.5" keyTimes="0;1" dur="10s"/>"#), 0, (100, 0, 0)),
     // The values of a motion only make its path, so key times can fit its key points instead.
     (
       rect(
@@ -80,6 +87,22 @@ struct SMILMotionTests {
         ##"<animateMotion path="M0 0 L0 40" values="0,0; 40,40" dur="2s"><mpath href="#p"/></animateMotion>"##)
     #expect(matches(try motion(content, at: 1), 20, 50))
     #expect(matches(try motion(rect(#"<animateMotion path="M0 0 L0 40" values="0,0; 40,40" dur="2s"/>"#), at: 1), 0, 20))
+  }
+
+  /// Paths with the ID `p`, whose `d` property is the line from (0, 50) to (40, 50), from CSS or the attribute.
+  private static let referencedPaths = [
+    #"<path id="p" style="d: path('M0 50 L40 50')"/>"#,
+    #"<style>#p { d: path("M0 50 L40 50") }</style><path id="p"/>"#,
+    #"<g style="--line: path('M0 50 L40 50')"><path id="p" style="d: var(--line)"/></g>"#,
+    #"<path id="p" d="M0 0 L0 40" style="d: path('M0 50 L40 50')"/>"#,
+  ]
+
+  @Test("mpath moves along the d property of the path, from CSS or the attribute", arguments: referencedPaths)
+  func pathProperty(path: String) throws {
+    // The path can come after the animation.
+    let animation = rect(##"<animateMotion dur="2s"><mpath href="#p"/></animateMotion>"##)
+    #expect(matches(try motion(path + animation, at: 1), 20, 50))
+    #expect(matches(try motion(animation + path, at: 1), 20, 50))
   }
 
   @Test("an animation with values or key times that don't fit its path has no effect")

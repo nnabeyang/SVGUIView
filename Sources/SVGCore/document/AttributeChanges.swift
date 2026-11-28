@@ -129,7 +129,7 @@ extension SVGBaseContext {
       let added = Dictionary(
         self.animations.smil.map { ($0.elementID, ($0.addedBegins, $0.addedEnds)) },
         uniquingKeysWith: { first, _ in first })
-      smil = SMILAnimation.animations(of: document).map { animation in
+      smil = SMILAnimation.animations(of: document, stylesheet: stylesheet).map { animation in
         var animation = animation
         if let (begins, ends) = added[animation.elementID] {
           animation.addedBegins = begins
@@ -201,7 +201,7 @@ extension SVGBaseContext {
       self.animations.smil.map { ($0.elementID, ($0.addedBegins, $0.addedEnds)) }, uniquingKeysWith: { first, _ in first })
     var animations = DocumentAnimations(
       keyframes: stylesheet.keyframes,
-      smil: SMILAnimation.animations(of: document).map { animation in
+      smil: SMILAnimation.animations(of: document, stylesheet: stylesheet).map { animation in
         var animation = animation
         if let (begins, ends) = added[animation.elementID] {
           animation.addedBegins = begins
