@@ -56,12 +56,9 @@ enum SVGMarkerReference: Equatable {
   private static func documentURL(in text: String) -> String? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard text.utf8.count > 5, text.prefix(4).lowercased() == "url(", text.hasSuffix(")") else { return nil }
-    var url = text.dropFirst(4).dropLast().trimmingCharacters(in: .whitespacesAndNewlines)
-    if let quote = url.first, quote == "\"" || quote == "'" {
-      guard url.count >= 2, url.last == quote else { return nil }
-      url = String(url.dropFirst().dropLast())
-    }
-    guard !url.hasPrefix("#"), Self.isDocumentReference(url) else { return nil }
+    guard let url = urlReference(arguments: text.dropFirst(4).dropLast()), !url.hasPrefix("#"),
+      Self.isDocumentReference(url)
+    else { return nil }
     return url
   }
 

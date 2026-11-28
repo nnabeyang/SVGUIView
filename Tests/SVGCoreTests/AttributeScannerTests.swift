@@ -20,6 +20,32 @@ struct AttributeScannerTests {
     #expect(TransformList(attribute: text) == nil)
   }
 
+  /// Values of `url()` and the IDs that they reference, or `nil` for a value that isn't valid. The whitespace around
+  /// the URL is removed, also in quotes, as SVG 2 processes URLs.
+  private static let urls: [(String, String?)] = [
+    ("url(#a)", "a"),
+    ("url( #a )", "a"),
+    (##"url("#a")"##, "a"),
+    ("url('#a')", "a"),
+    ("url(' #a ')", "a"),
+    (##"url( " #a" )"##, "a"),
+    ("url('#a b')", "a b"),
+    ("url(' # a ')", " a"),
+    ("url('#a)", nil),
+    ("url(a)", nil),
+    ("url('#')", nil),
+  ]
+
+  @Test("url() references an ID in quotes or not, without the whitespace around it", arguments: urls)
+  func urlReferences(text: String, id: String?) {
+    #expect(Paint(text) == id.map { .url($0, fallback: nil) })
+    #expect(Paint(text + " red") == id.map { .url($0, fallback: .color(.named(SVGColorName(name: "red")))) })
+    #expect(SVGClipPath(description: text) == id.map { .url(url: $0) })
+    #expect(SVGMask(description: text) == id.map { .url(url: $0) })
+    #expect(SVGMarkerReference(description: text) == id.map { .url($0) })
+    #expect(SVGFilter(description: text) == id.map { .list([.url($0)]) })
+  }
+
   /// `font-family` values and their families.
   private static let familyTexts: [(String, [String])] = [
     ("a, b", ["a", "b"]),
