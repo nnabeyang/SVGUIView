@@ -202,17 +202,7 @@ struct TextDecorationLines: OptionSet, Hashable, Sendable {
 
   /// A color, which is the text of a token, or of a function with its arguments.
   private static func color(_ input: inout _CSSParser.Parser) -> ColorValue? {
-    input.skipWhitespace()
-    let start = input.position
-    guard case .success(let token) = input.next() else { return nil }
-    if case .function = token {
-      let result: Result<Void, ParseError<Never>> = input.parseNestedBlock { input in
-        while case .success = input.next() {}
-        return .success(())
-      }
-      guard case .success = result else { return nil }
-    }
-    return ColorValue(input.slice(from: start))
+    componentValueText(&input).flatMap(ColorValue.init)
   }
 }
 
@@ -566,6 +556,8 @@ struct CSSDeclarationParser: DeclarationParser {
       TransitionShorthand.declarations(css: &input)
     } else if name == MarkerShorthand.name {
       MarkerShorthand.declarations(css: &input)
+    } else if name == FontShorthand.name {
+      FontShorthand.declarations(css: &input)
     } else {
       nil
     }
@@ -650,6 +642,7 @@ struct CSSDeclarationParser: DeclarationParser {
     case AnimationShorthand.name: AnimationShorthand.longhands
     case TransitionShorthand.name: TransitionShorthand.longhands
     case MarkerShorthand.name: MarkerShorthand.longhands
+    case FontShorthand.name: FontShorthand.longhands
     default: nil
     }
   }

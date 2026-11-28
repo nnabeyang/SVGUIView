@@ -1103,6 +1103,169 @@ enum MarkerShorthand {
   }
 }
 
+/// The shorthand `font`, which sets the style, the weight, the size and the family of the font, as CSS Fonts 4
+/// defines it. It's a property of CSS only, so the attribute `font` isn't read.
+///
+/// The variant (`small-caps`), the width (such as `condensed`) and the line height are read but not kept, since
+/// SVGUIView doesn't have those properties. A system font, such as `caption`, is `system-ui` in the initial size,
+/// since its family and size are the user agent's, which browsers don't agree on.
+enum FontShorthand {
+  static let name = "font"
+
+  static var longhands: [any StyleProperty.Type] {
+    [FontStyleProperty.self, FontWeightProperty.self, FontSizeProperty.self, FontFamilyProperty.self]
+  }
+
+  private static let systemFonts: Set<String> = [
+    "caption", "icon", "menu", "message-box", "small-caption", "status-bar",
+  ]
+  private static let widths: Set<String> = [
+    "ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "semi-expanded", "expanded",
+    "extra-expanded", "ultra-expanded",
+  ]
+  /// The keywords that a family name without quotes can't have.
+  private static let reservedNames: Set<String> = [
+    "inherit", "initial", "unset", "default", "revert", "revert-layer",
+  ]
+
+  /// The declarations of the longhands, or `nil` if the value is invalid.
+  static func declarations(css input: inout _CSSParser.Parser) -> [PropertyDeclaration]? {
+    if let keyword = wideKeyword(&input) {
+      return keywordDeclarations(keyword, of: longhands)
+    }
+    let isSystemFont = attempt(&input) { input -> Bool? in
+      guard case .success(.ident(let name)) = input.next(), systemFonts.contains(name.lowercased()) else { return nil }
+      return input.isExhausted() ? true : nil
+    }
+    if isSystemFont != nil {
+      return declarations(style: .normal, weight: .normal, size: .medium, family: "system-ui")
+    }
+    var prefix = Prefix()
+    while prefix.read(&input) {}
+    guard let size = attempt(&input, fontSize) else { return nil }
+    if attempt(&input, { input -> Void? in input.expectDelim(expectedValue: "/").isSuccess ? () : nil }) != nil {
+      guard attempt(&input, lineHeight) != nil else { return nil }
+    }
+    guard let family = family(&input) else { return nil }
+    return declarations(
+      style: prefix.style ?? .normal, weight: prefix.weight ?? .normal, size: size, family: family)
+  }
+
+  private static func declarations(
+    style: FontStyle, weight: SVGUIFont.Weight, size: SVGUIFont.Size, family: String
+  ) -> [PropertyDeclaration] {
+    [
+      PropertyDeclaration(FontStyleProperty.self, .value(style)),
+      PropertyDeclaration(FontWeightProperty.self, .value(weight)),
+      PropertyDeclaration(FontSizeProperty.self, .value(size)),
+      PropertyDeclaration(FontFamilyProperty.self, .value(family)),
+    ]
+  }
+
+  /// The style, the variant, the weight and the width before the size, which come in any order, each at most once.
+  /// `normal` is one of them that hasn't come yet.
+  private struct Prefix {
+    var style: FontStyle?
+    var weight: SVGUIFont.Weight?
+    var hasVariant = false
+    var hasWidth = false
+    var normals = 0
+
+    private var count: Int {
+      normals + [style != nil, weight != nil, hasVariant, hasWidth].count(where: { $0 })
+    }
+
+    /// Reads one of them, or returns `false` with the input as it was.
+    mutating func read(_ input: inout _CSSParser.Parser) -> Bool {
+      guard count < 4 else { return false }
+      let start = input.state
+      switch input.next() {
+      case .success(.ident(let name)):
+        switch name.lowercased() {
+        case "normal":
+          normals += 1
+          return true
+        case "italic" where style == nil:
+          style = .italic
+          return true
+        case "oblique" where style == nil:
+          // An angle can follow, and another dimension is the size.
+          let angle = attempt(&input) { input -> String? in
+            guard case .success(.dimention(let dimension)) = input.next(),
+              ["deg", "grad", "rad", "turn"].contains(dimension.unit.lowercased())
+            else { return nil }
+            return input.slice(from: start.sourcePosition)
+          }
+          guard let value = FontStyleProperty.parse(angle ?? "oblique", origin: .css) else { break }
+          style = value
+          return true
+        case "small-caps" where !hasVariant:
+          hasVariant = true
+          return true
+        case let name where !hasWidth && FontShorthand.widths.contains(name):
+          hasWidth = true
+          return true
+        case let name where weight == nil && ["bold", "bolder", "lighter"].contains(name):
+          weight = FontWeightProperty.parse(name, origin: .css)
+          return true
+        default:
+          break
+        }
+      case .success(.number(let number)) where weight == nil && number.value >= 1 && number.value <= 1000:
+        weight = .number(Double(number.value))
+        return true
+      default:
+        break
+      }
+      input.reset(state: start)
+      return false
+    }
+  }
+
+  /// The size, which is one component value.
+  private static func fontSize(_ input: inout _CSSParser.Parser) -> SVGUIFont.Size? {
+    componentValueText(&input).flatMap { FontSizeProperty.parse(removingComments(from: $0), origin: .css) }
+  }
+
+  /// A line height, which is `normal`, a number, a length or a percentage.
+  private static func lineHeight(_ input: inout _CSSParser.Parser) -> Void? {
+    let start = input.state
+    switch input.next() {
+    case .success(.ident(let name)) where name.lowercased() == "normal": return ()
+    case .success(.number(let number)) where number.value >= 0: return ()
+    default: input.reset(state: start)
+    }
+    return lengthPercentage(&input, origin: .css).map { _ in () }
+  }
+
+  /// The families, which are the rest of the value: names separated by commas, each of them a string or identifiers.
+  private static func family(_ input: inout _CSSParser.Parser) -> String? {
+    input.skipWhitespace()
+    let start = input.position
+    var hasName = false
+    while true {
+      switch input.next() {
+      case .success(.quotedString) where !hasName:
+        hasName = true
+        // A string is the whole name.
+        if case .success(let token) = input.next() {
+          guard case .comma = token else { return nil }
+          hasName = false
+        }
+      case .success(.ident(let name)) where !reservedNames.contains(name.lowercased()):
+        hasName = true
+      case .success(.comma) where hasName:
+        hasName = false
+      case .failure:
+        guard hasName else { return nil }
+        return FontFamilyProperty.parse(removingComments(from: input.slice(from: start)), origin: .css)
+      default:
+        return nil
+      }
+    }
+  }
+}
+
 enum DisplayProperty: StyleProperty {
   static let id = PropertyID.display
   static let isInherited = false
