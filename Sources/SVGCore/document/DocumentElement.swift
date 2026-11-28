@@ -401,6 +401,21 @@ package struct DocumentTree: Sendable {
     return path.reduce(ElementCursor(root: root)) { $0.child(at: $1) }
   }
 
+  /// The computed values of an element without animations, from the cascade of it and its ancestors, or `nil` if the
+  /// document has no such element. Only the element and its ancestors are computed.
+  func computedStyle(of id: ElementID, stylesheet: Stylesheet) -> ComputedStyle? {
+    guard let root, let path = paths[id] else { return nil }
+    var cursor = ElementCursor(root: root)
+    var style = ComputedStyle(cascaded: cascade(element: cursor, stylesheet: stylesheet), parent: nil, root: nil)
+    let rootStyle = style
+    for index in path {
+      cursor = cursor.child(at: index)
+      style = ComputedStyle(
+        cascaded: cascade(element: cursor, stylesheet: stylesheet), parent: style, root: rootStyle)
+    }
+    return style
+  }
+
   /// The root element, or `nil` for data without an element.
   package var rootElement: ElementID? {
     root?.id

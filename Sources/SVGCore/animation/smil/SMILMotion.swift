@@ -33,11 +33,13 @@ extension SMILEffect {
     guard animation.kind == .animateMotion, let path = motionPath else { return nil }
     let measure = PathMeasure(path)
     let distance: Double
-    if animation.calcMode == .paced {
-      distance = min(max(state.progress, 0), 1) * measure.length
-    } else if let keyPoints = animation.keyPoints {
+    if let keyPoints = animation.keyPoints {
+      // A paced animation spaces the key points by their distances, and ignores the key times, as it does the values
+      // of other animations.
       if let keySplines = animation.keySplines, keySplines.count != keyPoints.count - 1 { return nil }
       distance = interpolated(keyPoints, of: SMILNumberValues()) * measure.length
+    } else if animation.calcMode == .paced {
+      distance = min(max(state.progress, 0), 1) * measure.length
     } else {
       // The values are the ends of the commands of the path, which the key times and the key splines have to fit.
       let vertices = measure.vertexDistances
@@ -70,7 +72,7 @@ extension SMILEffect {
   /// The path that the animation moves along: the path of `<mpath>`, `path`, or the points of `values`, `from`, `to`
   /// and `by`, or `nil` without one.
   private var motionPath: PathData? {
-    if let data = animation.motionPathData { return PathData(data) }
+    if let data = animation.motionPathData { return data }
     if let data = animation.attributes["path"] { return PathData(data) }
     func point(_ text: String) -> CGPoint? {
       let numbers = text.split { $0 == "," || $0.isWhitespace }.compactMap { Double($0) }

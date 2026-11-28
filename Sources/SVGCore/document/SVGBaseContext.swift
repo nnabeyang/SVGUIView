@@ -156,7 +156,7 @@ package struct SVGBaseContext: Sendable {
   /// The context of the elements made from a document and its style sheets, with the animations at time zero.
   init(document: DocumentTree, stylesheet: Stylesheet) {
     var animations = DocumentAnimations(
-      keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document), time: 0)
+      keyframes: stylesheet.keyframes, smil: SMILAnimation.animations(of: document, stylesheet: stylesheet), time: 0)
     animations.findSMILStartedAnimations(in: document, stylesheet: stylesheet)
     self.init(
       document: document, stylesheet: stylesheet,
